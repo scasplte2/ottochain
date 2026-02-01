@@ -1,0 +1,56 @@
+sequenceDiagram
+    participant Gov as Governance
+    participant Fed as Federal Reserve
+    participant Bank as Bank
+    participant Mfg as Manufacturer
+    participant Ret as Retailer
+    participant Con as Consumer
+
+    Note over Gov,Con: Economy Initialization
+
+    Gov->>Gov: initialize(policies)
+    Note over Gov: inactive → active
+    Gov->>Fed: trigger: set_monetary_policy
+    Note over Fed: inactive → active
+    Fed->>Bank: trigger: set_rates
+    Note over Bank: closed → open
+
+    Note over Gov,Con: Production Cycle
+
+    Mfg->>Mfg: produce_goods(quantity)
+    Note over Mfg: idle → producing
+    Mfg->>Mfg: complete_production()
+    Note over Mfg: producing → idle
+    Mfg->>Ret: trigger: ship_inventory
+
+    Note over Gov,Con: Consumer Activity
+
+    Con->>Bank: deposit(amount)
+    Note over Bank: open → open (self-transition)
+    Con->>Ret: purchase(item, quantity)
+    Note over Ret: stocked → stocked (self-transition)
+    Ret->>Bank: trigger: process_payment
+    Ret->>Mfg: trigger: reorder(when low)
+
+    Note over Gov,Con: Monetary Policy Cycle
+
+    Gov->>Fed: trigger: review_economy
+    Fed->>Fed: assess_indicators()
+    Fed->>Bank: trigger: adjust_rates
+    Note over Bank: rates updated
+
+    Note over Gov,Con: Governance Cycle
+
+    Gov->>Gov: propose_policy(changes)
+    Gov->>Gov: vote()
+    alt Policy Approved
+        Gov->>Fed: trigger: implement_policy
+        Gov->>Bank: trigger: update_regulations
+        Note over Gov,Con: Broadcast triggers fan out
+    end
+
+    Note over Gov,Con: Child Spawning
+
+    Con->>Bank: apply_for_loan()
+    Bank->>Bank: _spawn: LoanContract(terms)
+    Note over Bank: Creates child fiber<br/>for loan lifecycle

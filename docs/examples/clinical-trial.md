@@ -21,6 +21,10 @@ This document describes a comprehensive clinical trial workflow modeling a Phase
 
 ## Overview
 
+### Workflow Sequence
+
+![Clinical Trial Sequence Diagram](../../diagrams/clinical-trial-sequence.png)
+
 The Clinical Trial Management System models a complete Phase III clinical trial lifecycle with:
 
 - **6 interconnected state machines** coordinating the entire workflow

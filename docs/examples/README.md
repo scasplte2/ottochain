@@ -1,6 +1,6 @@
 # State Machine Examples
 
-This directory contains comprehensive real-world examples demonstrating the capabilities of the Ottochain state machine framework. Each example showcases different patterns, complexities, and use cases for building JSON-encoded deterministic state machines.
+This directory contains comprehensive real-world examples demonstrating the capabilities of the OttoChain state machine framework. Each example showcases different patterns, complexities, and use cases for building JSON-encoded deterministic state machines.
 
 ## Table of Contents
 
@@ -19,7 +19,7 @@ This directory contains comprehensive real-world examples demonstrating the capa
 
 ## Overview
 
-These examples demonstrate that Ottochain's state machine infrastructure can model complex, real-world workflows entirely through JSON configuration without custom state machine code. Each example is fully implemented, tested, and demonstrates specific advanced features.
+These examples demonstrate that OttoChain's state machine infrastructure can model complex, real-world workflows entirely through JSON configuration without custom state machine code. Each example is fully implemented, tested, and demonstrates specific advanced features.
 
 ### What You'll Find
 

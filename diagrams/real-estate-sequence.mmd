@@ -1,0 +1,62 @@
+sequenceDiagram
+    participant Alice as Alice<br/>(Seller)
+    participant Bob as Bob<br/>(Buyer)
+    participant Prop as Property
+    participant PC as Purchase Contract
+    participant Esc as Escrow
+    participant Insp as Inspection
+    participant App as Appraisal
+    participant Mtg as Mortgage
+    participant Ttl as Title
+    participant Close as Closing
+
+    Note over Prop: listed
+
+    Bob->>PC: make_offer(price, terms)
+    Note over PC: draft → pending
+
+    Alice->>PC: accept_offer()
+    Note over PC: pending → accepted
+    PC->>Esc: trigger: open_escrow
+    Note over Esc: pending → funded
+
+    PC->>Insp: trigger: start_inspection
+    Note over Insp: scheduled → in_progress
+
+    Bob->>Insp: submit_report(results)
+    alt Pass
+        Note over Insp: in_progress → passed
+    else Issues Found
+        Note over Insp: in_progress → issues_found
+        Alice->>Insp: negotiate_repairs()
+        Note over Insp: issues_found → resolved
+    end
+    Insp->>PC: trigger: inspection_cleared
+
+    PC->>App: trigger: start_appraisal
+    Bob->>App: submit_appraisal(value)
+    Note over App: ordered → completed
+    App->>PC: trigger: appraisal_cleared
+
+    Bob->>Mtg: apply(loan_details)
+    Note over Mtg: application → underwriting
+    Bob->>Mtg: submit_docs()
+    Note over Mtg: underwriting → approved
+    Mtg->>PC: trigger: financing_secured
+
+    PC->>Ttl: trigger: start_title_search
+    Alice->>Ttl: clear_title()
+    Note over Ttl: searching → clear
+    Ttl->>PC: trigger: title_cleared
+
+    Note over PC: contingencies met
+
+    PC->>Close: trigger: schedule_closing
+    Note over Close: scheduled → in_progress
+    Alice->>Close: sign_documents()
+    Bob->>Close: sign_documents()
+    Note over Close: in_progress → completed
+    Close->>Prop: trigger: transfer_ownership
+    Note over Prop: listed → sold
+    Close->>Esc: trigger: disburse
+    Note over Esc: funded → disbursed

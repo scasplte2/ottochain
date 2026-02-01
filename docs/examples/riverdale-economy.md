@@ -21,6 +21,10 @@ This document describes a comprehensive economic simulation demonstrating advanc
 
 ## Overview
 
+### Workflow Sequence
+
+![Riverdale Economy Sequence Diagram](../../diagrams/riverdale-economy-sequence.png)
+
 The Riverdale Economy simulation models a complete economic ecosystem with:
 
 - **17 machine instances** across 6 machine types

@@ -19,6 +19,10 @@ This document describes a complete fuel logistics workflow demonstrating multi-s
 
 ## Overview
 
+### Workflow Sequence
+
+![Fuel Logistics Sequence Diagram](../../diagrams/fuel-logistics-sequence.png)
+
 The Fuel Logistics example models a complete fuel delivery contract lifecycle with:
 
 - **4 interconnected state machines** coordinating the entire workflow

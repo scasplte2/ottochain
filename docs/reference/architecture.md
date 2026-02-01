@@ -43,7 +43,7 @@ The full sequence diagram is in [diagrams/processing-pipeline.mmd](../../diagram
 
 ## Layer Architecture
 
-The Ottochain metagraph runs three layers on each node:
+The OttoChain metagraph runs three layers on each node:
 
 ```
 ┌─────────────────────────────────────────┐

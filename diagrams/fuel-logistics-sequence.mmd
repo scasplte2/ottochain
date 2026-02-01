@@ -1,0 +1,49 @@
+sequenceDiagram
+    participant Alice as Alice<br/>(Buyer)
+    participant FC as Fuel Contract
+    participant SA as Supplier Approval
+    participant GPS as GPS Tracker
+    participant QI as Quality Inspection
+    participant Dave as Dave<br/>(Driver)
+    participant Charlie as Charlie<br/>(Inspector)
+
+    Note over FC: draft
+
+    Alice->>FC: create_contract(details)
+    Note over FC: draft → supplier_review
+
+    FC->>SA: trigger: start_review
+    Note over SA: pending → reviewing
+
+    Alice->>SA: approve_supplier(docs)
+    Note over SA: reviewing → approved
+    SA->>FC: trigger: supplier_approved
+    Note over FC: supplier_review → supplier_approved
+
+    Alice->>FC: activate_gps()
+    FC->>GPS: trigger: activate
+    Note over GPS: inactive → active
+    Note over FC: supplier_approved → gps_ready
+
+    Dave->>FC: start_transit()
+    FC->>GPS: trigger: start_tracking
+    Note over GPS: active → tracking
+    Note over FC: gps_ready → in_transit
+
+    loop During Transit
+        Dave->>GPS: update_location(lat, lon)
+        Note over GPS: tracking → tracking
+    end
+
+    Dave->>FC: confirm_delivery()
+    FC->>GPS: trigger: stop_tracking
+    Note over GPS: tracking → completed
+    Note over FC: in_transit → delivered
+
+    FC->>QI: trigger: start_inspection
+    Note over QI: pending → inspecting
+
+    Charlie->>QI: submit_results(pass)
+    Note over QI: inspecting → passed
+    QI->>FC: trigger: quality_approved
+    Note over FC: delivered → settled

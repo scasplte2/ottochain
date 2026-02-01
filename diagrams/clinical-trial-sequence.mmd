@@ -1,0 +1,58 @@
+sequenceDiagram
+    participant Alice as Alice<br/>(Coordinator)
+    participant TC as Trial Coordinator
+    participant PE as Patient Enrollment
+    participant Lab as Lab Results
+    participant AE as Adverse Event Monitor
+    participant RR as Regulatory Review
+    participant DS as Data Safety Board
+
+    Note over TC: setup
+
+    Alice->>TC: start_trial()
+    Note over TC: setup → recruitment
+
+    Alice->>PE: enroll_patient(data)
+    Note over PE: registered → screening
+
+    Alice->>PE: screen_patient(results)
+    Note over PE: screening → enrolled
+
+    Alice->>Lab: submit_sample(patient_data)
+    Note over Lab: pending → processing
+
+    Lab->>Lab: process_sample()
+    Note over Lab: processing → analyzed
+
+    alt Results Pass QC
+        Alice->>Lab: review_results(qc_score > 0.95)
+        Note over Lab: analyzed → approved
+    else Results Need Retest
+        Alice->>Lab: review_results(qc_score < 0.8)
+        Note over Lab: analyzed → retest_required
+    end
+
+    opt Adverse Event Detected
+        Alice->>AE: report_event(severity)
+        Note over AE: monitoring → investigating
+        AE->>TC: trigger: safety_hold
+        Note over TC: active → safety_hold
+        Alice->>AE: resolve_event()
+        Note over AE: investigating → resolved
+        AE->>TC: trigger: resume
+        Note over TC: safety_hold → active
+    end
+
+    Alice->>TC: complete_trial()
+    Note over TC: active → analysis
+
+    TC->>RR: trigger: submit_for_review
+    Note over RR: pending → under_review
+
+    Alice->>RR: submit_decision(approved)
+    Note over RR: under_review → approved
+    RR->>TC: trigger: approved
+    Note over TC: analysis → completed
+
+    TC->>DS: trigger: final_report
+    Note over DS: active → completed

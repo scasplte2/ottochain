@@ -23,6 +23,10 @@ This document describes a complete real estate transaction workflow from listing
 
 ## Overview
 
+### Workflow Sequence
+
+![Real Estate Sequence Diagram](../../diagrams/real-estate-sequence.png)
+
 A complete real estate transaction workflow demonstrating:
 
 - **8 interconnected state machines** managing the entire property lifecycle

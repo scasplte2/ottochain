@@ -1,0 +1,36 @@
+sequenceDiagram
+    participant Player as Player (Client)
+    participant SM as State Machine<br/>(Game Lifecycle)
+    participant Oracle as Script Oracle<br/>(Game Engine)
+
+    Note over SM: State: idle
+
+    Player->>SM: setup_game(playerX, playerO, gameId)
+    SM->>SM: Guard: fields present?
+    SM->>Oracle: _oracleCall: initialize(playerX, playerO)
+    Oracle->>Oracle: Create board, set players
+    Oracle-->>SM: OK (status: InProgress)
+    Note over SM: State: idle → playing
+
+    loop Each Move (self-transition on "playing")
+        Player->>SM: make_move(player, cell)
+        SM->>SM: Guard: oracle status == InProgress?
+        SM->>Oracle: _oracleCall: makeMove(player, cell)
+        Oracle->>Oracle: Validate turn, check bounds,<br/>check cell empty
+        Oracle->>Oracle: Place piece, check winner
+        Oracle-->>SM: OK (board, status, winner)
+        Note over SM: State: playing → playing
+    end
+
+    alt Game Won or Draw
+        Player->>SM: make_move(player, cell)
+        SM->>SM: Guard: oracle status != InProgress?
+        SM->>Oracle: _oracleCall: makeMove(player, cell)
+        Oracle->>Oracle: Detect win or draw
+        Oracle-->>SM: status: Won/Draw
+        SM->>SM: _emit: game_completed
+        Note over SM: State: playing → finished
+    else Cancel
+        Player->>SM: cancel_game()
+        Note over SM: State: playing → cancelled
+    end

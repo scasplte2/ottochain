@@ -1,6 +1,6 @@
 # Tic-Tac-Toe Game
 
-Complete tic-tac-toe implementation using Ottochain script oracle + state machine, demonstrating the **oracle-centric architecture** pattern.
+Complete tic-tac-toe implementation using OttoChain script oracle + state machine, demonstrating the **oracle-centric architecture** pattern.
 
 ## Table of Contents
 
@@ -15,6 +15,10 @@ Complete tic-tac-toe implementation using Ottochain script oracle + state machin
 ---
 
 ## Overview
+
+### Workflow Sequence
+
+![Tic-Tac-Toe Sequence Diagram](../../diagrams/tictactoe-sequence.png)
 
 This example demonstrates the **oracle-centric architecture** where:
 - **Script Oracle** = Game engine (holds board, enforces rules, detects wins)
