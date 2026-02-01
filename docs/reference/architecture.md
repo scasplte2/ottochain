@@ -1,6 +1,45 @@
 # Architecture
 
-Understanding the Ottochain metagraph architecture.
+Understanding the OttoChain metagraph architecture. For a high-level conceptual overview, see the [Introduction](../introduction.md).
+
+## Conceptual Architecture
+
+OttoChain's processing model centers on **fibers** — lightweight, independently-addressable computation units that live on-chain. There are two kinds:
+
+- **State Machine Fibers** — Define workflows as states + transitions with JSON Logic guards and effects
+- **Script Oracle Fibers** — Stateful computation units exposing named methods
+
+Fibers interact through triggers, dependencies, oracle calls, and parent-child spawning. See the [fiber interaction diagram](../../diagrams/fiber-interaction-patterns.png) for a visual overview.
+
+### Processing Pipeline
+
+When a client sends an event, the FiberEngine orchestrates the complete processing flow:
+
+```mermaid
+graph LR
+    A[Event] --> B[Validate]
+    B --> C[Evaluate Fiber]
+    C --> D{Triggers?}
+    D -->|Yes| E[Dispatch Triggers]
+    E --> C
+    D -->|No| F[Commit]
+    C --> G{Spawns?}
+    G -->|Yes| H[Create Children]
+    H --> D
+```
+
+The full sequence diagram is in [diagrams/processing-pipeline.mmd](../../diagrams/processing-pipeline.mmd).
+
+### Source Code Modules
+
+| Module | Path | Purpose |
+|--------|------|---------|
+| `models` | `modules/models/` | Domain types: StateMachineDefinition, Transition, FiberKind, FiberResult |
+| `shared-data` | `modules/shared-data/` | Core engine: FiberEngine, FiberEvaluator, TriggerDispatcher, SpawnProcessor |
+| `shared-test` | `modules/shared-test/` | Test utilities and fixtures |
+| `l0` | `modules/l0/` | Metagraph L0 consensus layer |
+| `l1` | `modules/l1/` | Currency L1 token layer |
+| `data_l1` | `modules/data_l1/` | Data L1 fiber processing layer |
 
 ## Layer Architecture
 
