@@ -1,55 +1,74 @@
 graph TB
-    subgraph Client["Client Layer"]
-        direction LR
-        human["👤 Human User"]
-        ai["🤖 AI Agent"]
-        api["📡 External System"]
-    end
+    human["Human User"] -->|"signed JSON"| api
+    ai["AI Agent"] -->|"signed JSON"| api
+    ext["External System"] -->|"signed JSON"| api
 
     subgraph OttoChain["OttoChain Metagraph"]
-        direction TB
 
-        subgraph DataL1["Data L1 — Fiber Processing"]
-            direction LR
-            validator["Validator"]
-            engine["FiberEngine"]
-            evaluator["FiberEvaluator"]
-            triggers["TriggerDispatcher"]
-            spawner["SpawnProcessor"]
+        subgraph DataL1["Data L1"]
+            api["REST API"]
+            l1val["L1 Validator<br/>CID uniqueness, definition<br/>structure, payload size"]
+            api --> l1val
         end
 
-        subgraph Fibers["On-Chain Fibers"]
-            direction LR
-            sm1["📋 State Machine\n(Workflow A)"]
-            sm2["📋 State Machine\n(Workflow B)"]
-            oracle1["🔮 Script Oracle\n(Business Logic)"]
-        end
+        subgraph ML0["Metagraph L0"]
 
-        subgraph L0["Metagraph L0 — Consensus"]
-            snapshots["Snapshots"]
-            state["Calculated State"]
+            l0val["L0 Validator<br/>ownership, status, access<br/>control, signature proofs"]
+
+            subgraph Combining["Combiner"]
+                fcomb["FiberCombiner<br/>CreateSM, TransitionSM, ArchiveSM"]
+                ocomb["OracleCombiner<br/>CreateOracle, InvokeOracle"]
+            end
+
+            subgraph Engine["FiberEngine"]
+                eval["FiberEvaluator<br/>guards, effects"]
+                spawn["SpawnProcessor<br/>child fiber creation"]
+                trigger["TriggerDispatcher<br/>cascading cross-fiber events"]
+                eval --> spawn
+                eval --> trigger
+                trigger -.->|"cascade"| eval
+            end
+
+            subgraph DS["DataState"]
+                direction LR
+                onchain["OnChain<br/>fiber commits, sequence<br/>numbers, log entries"]
+                calcstate["Calculated<br/>SM records, Oracle records,<br/>full state data, hashes"]
+            end
+
+            snapshot["Currency Incremental Snapshot<br/>DataApplicationPart: serialized OnChain<br/>+ data blocks + calculated state proof hash"]
         end
     end
 
-    subgraph Hypergraph["Constellation Hypergraph (Global L0)"]
-        finality["Network Finality & Global State"]
-    end
+    global["Global Incremental Snapshot<br/>Constellation Hypergraph<br/>network-wide finality"]
 
-    human -->|"JSON events"| DataL1
-    ai -->|"JSON events"| DataL1
-    api -->|"JSON events"| DataL1
+    %% Main flow
+    l1val -->|"valid updates"| l0val
+    l0val -->|"validated"| Combining
+    fcomb --> Engine
+    ocomb --> Engine
 
-    DataL1 --> Fibers
-    sm1 -.->|"trigger"| sm2
-    sm1 -.->|"_oracleCall"| oracle1
-    sm2 -.->|"depends on"| sm1
+    %% Combiner delegates to Engine, which transforms DataState atomically
+    DS -->|"current DataState"| Engine
+    Engine -->|"updated DataState"| DS
 
-    Fibers --> L0
-    L0 --> Hypergraph
+    %% After snapshot: OnChain goes to Hypergraph, Calculated stays local
+    onchain -->|"serialized into<br/>DataApplicationPart"| snapshot
+    calcstate -.->|"proof hash only"| snapshot
+    snapshot --> global
 
-    style Client fill:#e8f4e8,stroke:#4a9e4a
-    style OttoChain fill:#e8ecf4,stroke:#4a6a9e
-    style Hypergraph fill:#f4e8e8,stroke:#9e4a4a
-    style DataL1 fill:#dce8f5,stroke:#4a90d9
-    style Fibers fill:#fdf0d5,stroke:#e8a838
-    style L0 fill:#e0e0e0,stroke:#888888
+    %% Styles
+    style human fill:#e8f4e8,stroke:#4a9e4a
+    style ai fill:#e8f4e8,stroke:#4a9e4a
+    style ext fill:#e8f4e8,stroke:#4a9e4a
+    style api fill:#dce8f5,stroke:#4a90d9
+    style l1val fill:#dce8f5,stroke:#4a90d9
+    style l0val fill:#e8daf5,stroke:#7b4abf
+    style fcomb fill:#f0e6f6,stroke:#8a5ab0
+    style ocomb fill:#f0e6f6,stroke:#8a5ab0
+    style eval fill:#fff3e0,stroke:#e8a838
+    style spawn fill:#fff3e0,stroke:#e8a838
+    style trigger fill:#fff3e0,stroke:#e8a838
+    style onchain fill:#d5e8fd,stroke:#4a6a9e
+    style calcstate fill:#fdf0d5,stroke:#d4940a
+    style snapshot fill:#e0f0e0,stroke:#4a9e4a
+    style global fill:#f4e8e8,stroke:#9e4a4a
