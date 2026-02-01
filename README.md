@@ -1,36 +1,69 @@
-# Ottochain
+# OttoChain
 
-A metagraph for creating automated workflow contracts using JSON-encoded state machines and script oracles.
+A metagraph on [Constellation Network](https://constellationnetwork.io/) for creating automated workflow contracts using JSON-encoded state machines and script oracles.
+
+**[📖 Read the Introduction →](docs/introduction.md)**
+
+## What is OttoChain?
+
+OttoChain turns JSON into executable workflows on a distributed ledger. Define state machines with guards, effects, and transitions — all in JSON Logic — and deploy them without writing application code.
+
+```mermaid
+graph LR
+    A["📋 JSON Definition"] -->|deploy| B["🔗 On-Chain Fiber"]
+    B -->|events| C["⚙️ Guard → Effect → Transition"]
+    C -->|triggers| D["📋 Other Fibers"]
+    C -->|oracle calls| E["🔮 Script Oracles"]
+```
+
+### Key Capabilities
+
+- **JSON-Encoded State Machines** — Define workflows as states, transitions, guards, and effects in JSON
+- **Script Oracles** — Stateful computation units callable by state machines
+- **Cross-Machine Triggers** — One machine's transition fires events on other machines
+- **Parent-Child Spawning** — Dynamically create child machines at runtime
+- **Broadcast Triggers** — Fan out events to many machines simultaneously
+- **Gas Metering** — Bounded computation with cycle detection
+- **AI-Friendly** — LLMs read, write, and reason about JSON Logic natively
+
+## Examples
+
+| Example | Machines | What It Demonstrates |
+|---------|----------|---------------------|
+| [Tic-Tac-Toe](docs/examples/tictactoe.md) | 1 + oracle | Oracle-centric architecture pattern |
+| [Fuel Logistics](docs/examples/fuel-logistics.md) | 4 | Cross-machine triggers, GPS tracking |
+| [Clinical Trial](docs/examples/clinical-trial.md) | 6 | Multiple guards, bi-directional transitions |
+| [Real Estate](docs/examples/real-estate.md) | 8 | Self-transitions, lifecycle management |
+| [Riverdale Economy](docs/examples/riverdale-economy.md) | 17 instances | Broadcast triggers, parent-child spawning, full ecosystem |
 
 ## Quick Links
 
-- 📖 **[Documentation](docs/README.md)** - Complete documentation hub
-- 🚀 **[Getting Started](docs/guides/deployment.md)** - Deploy your first metagraph
-- 💡 **[Examples](docs/examples/README.md)** - Real-world state machine examples
-- 🧪 **[Testing Terminal](e2e-test-archive/README.md)** - Interactive CLI for testing
-- 📦 **[Deployment](deploy/README.md)** - Production deployment scripts
+- 📖 [Introduction](docs/introduction.md) — What OttoChain is and how it works
+- 📚 [Documentation Hub](docs/README.md) — All documentation
+- 💡 [Examples](docs/examples/README.md) — Real-world state machine examples
+- 🏗️ [State Machine Design Guide](docs/guides/state-machine-design.md) — How to write state machines
+- 🚀 [Deployment Guide](docs/guides/deployment.md) — Deploy your metagraph
+- 🧪 [Testing Terminal](docs/guides/terminal-usage.md) — Interactive CLI for testing
 
-## What is Ottochain?
+## Architecture
 
-Ottochain is a metagraph built on Tessellation that enables:
+OttoChain runs three layers on each node, built on Constellation's Tessellation framework:
 
-- **JSON-Encoded State Machines** - Define complex workflows without writing code
-- **Script Oracles** - Deterministic, stateful computation using JSON Logic
-- **Multi-Party Coordination** - Atomic cross-machine transactions and triggers
-- **AI-Friendly** - LLMs can generate and understand JSON Logic natively
+| Layer | Port | Purpose |
+|-------|------|---------|
+| Data L1 | 9300 | Fiber processing — events, oracle calls, validation |
+| Currency L1 | 9200 | Token transfers and balances |
+| Metagraph L0 | 9100 | Consensus, snapshots, state management |
 
-## Features
+See [Architecture Details](docs/reference/architecture.md) for the full technical breakdown.
 
-✅ State machines with guards, effects, and transitions
-✅ Script oracles with stateful JSON Logic programs
-✅ Cross-machine dependencies and triggers
-✅ Parent-child hierarchies and spawning
-✅ Structured outputs and event logging
-✅ Gas metering and cycle detection
+## Tech Stack
 
-## Learn More
+- **Scala 2.13** with cats-effect, fs2, circe
+- **Tessellation** metagraph SDK
+- **JSON Logic** with OttoChain extensions (_oracleCall, _trigger, _spawn, _emit)
+- **sbt** multi-module build
 
-- [Fuel Logistics Example](docs/examples/fuel-logistics.md) - GPS tracking, multi-stage approval
-- [Riverdale Economy Example](docs/examples/riverdale-economy.md) - 17-machine economic simulation
-- [OttoBot Project](docs/reference/README.md) - AI agent playing tic-tac-toe
-- [State Machine Design Guide](docs/guides/state-machine-design.md) - How to write state machines
+## License
+
+Apache License 2.0

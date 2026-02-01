@@ -1,50 +1,66 @@
-# Ottochain Documentation
+# OttoChain Documentation
 
-Welcome to the Ottochain documentation. This directory contains all documentation organized by purpose.
+## Start Here
 
-## 📖 Guides
+**[📖 Introduction — Understanding OttoChain](introduction.md)**
+What OttoChain is, how it works, and why JSON-encoded state machines matter.
 
-Step-by-step guides for using Ottochain:
+## 📚 Guides
 
-- **[State Machine Design Guide](guides/state-machine-design.md)** - Learn how to design and write JSON-encoded state machines
-- **[Terminal Usage Guide](guides/terminal-usage.md)** - Using the interactive CLI for testing state machines and oracles
-- **[Deployment Guide](guides/deployment.md)** - Deploy Ottochain metagraph to Digital Ocean
+Step-by-step guides for using OttoChain:
+
+| Guide | Description |
+|-------|-------------|
+| [State Machine Design](guides/state-machine-design.md) | How to design and write JSON-encoded state machines |
+| [Terminal Usage](guides/terminal-usage.md) | Interactive CLI for testing state machines and oracles |
+| [Deployment](guides/deployment.md) | Deploy an OttoChain metagraph to Digital Ocean |
 
 ## 💡 Examples
 
-Real-world examples demonstrating state machine capabilities:
+Real-world examples demonstrating state machine capabilities, from simple to complex:
 
-- **[Examples Overview](examples/README.md)** - Summary of all example workflows
-- **[Fuel Logistics](examples/fuel-logistics.md)** - GPS tracking, multi-stage approval, quality inspection
-- **[Riverdale Economy](examples/riverdale-economy.md)** - Complete economic ecosystem with 17 machine instances
-- **[Tic-Tac-Toe](examples/tictactoe/README.md)** - Simple game demonstrating oracles and state machines
+| Example | Complexity | Key Patterns |
+|---------|-----------|--------------|
+| [Tic-Tac-Toe](examples/tictactoe.md) | ⭐ | Oracle-centric architecture, self-transitions |
+| [Fuel Logistics](examples/fuel-logistics.md) | ⭐⭐ | Cross-machine triggers, GPS tracking |
+| [Clinical Trial](examples/clinical-trial.md) | ⭐⭐⭐ | Multiple guards, bi-directional transitions |
+| [Real Estate](examples/real-estate.md) | ⭐⭐⭐ | Self-transitions, lifecycle management |
+| [Riverdale Economy](examples/riverdale-economy.md) | ⭐⭐⭐⭐ | Broadcast triggers, parent-child spawning |
 
-## 🚀 Projects
-
-Active sub-projects built on Ottochain:
-
-- **[OttoBot AI Agent](reference/README.md)** - LLM-powered agent playing tic-tac-toe autonomously
+See the [Examples Overview](examples/README.md) for a detailed comparison matrix and learning path.
 
 ## 📋 Proposals
 
 Technical proposals and architectural designs:
 
-- **[State Commitment via MPT](proposals/state-commitment-mpt.md)** - Merkle Patricia Trie state commitment and cross-metagraph communication
-- **[AI Agent Protocol Layer](proposals/ai-agent-protocol-layer.md)** - JSON Logic VM as protocol layer for autonomous AI agents
-- **[EVM Comparison Analysis](proposals/evm-comparison-analysis.md)** - Analysis of feature gaps compared to EVM
+| Proposal | Description |
+|----------|-------------|
+| [State Commitment via MPT](proposals/state-commitment-mpt.md) | Merkle Patricia Trie state commitment and cross-metagraph communication |
+| [AI Agent Protocol Layer](proposals/ai-agent-protocol-layer.md) | JSON Logic VM as protocol layer for autonomous AI agents |
+| [EVM Comparison Analysis](proposals/evm-comparison-analysis.md) | Feature gap analysis compared to EVM smart contracts |
+| [AMM Proposal](proposals/amm-proposal.md) | Automated Market Maker design |
 
 ## 📚 Reference
 
 Technical reference documentation:
 
-- **[API Reference](reference/api-reference.md)** - HTTP API endpoints
-- **[Architecture](reference/architecture.md)** - System architecture overview
-- **[Deployment Guide](reference/deployment-guide.md)** - Infrastructure deployment
-- **[Script Reference](reference/script-reference.md)** - Deployment script reference
-- **[Troubleshooting](reference/troubleshooting.md)** - Common issues and solutions
+| Reference | Description |
+|-----------|-------------|
+| [API Reference](reference/api-reference.md) | HTTP API endpoints for interacting with fibers |
+| [Architecture](reference/architecture.md) | System architecture, layer details, data storage |
+| [Deployment Reference](reference/deployment-guide.md) | Infrastructure and deployment details |
+| [Script Reference](reference/script-reference.md) | Deployment and management scripts |
+| [Troubleshooting](reference/troubleshooting.md) | Common issues and solutions |
+
+## 🤖 Projects
+
+| Project | Description |
+|---------|-------------|
+| [OttoBot AI Agent](projects/ottobot/ARCHITECTURE.md) | LLM-powered agent interacting with OttoChain autonomously |
 
 ## Quick Navigation
 
 - 🏠 [Back to Main README](../README.md)
-- 🧪 [Testing Terminal](../e2e-test-archive/README.md)
+- 🧪 [E2E Test Examples](../e2e-test/examples/README.md)
 - 📦 [Deployment Scripts](../deploy/README.md)
+- 📊 [Diagrams](../diagrams/README.md)

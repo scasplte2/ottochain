@@ -1,0 +1,46 @@
+sequenceDiagram
+    participant Client
+    participant DataL1 as Data L1
+    participant Engine as FiberEngine
+    participant Eval as FiberEvaluator
+    participant Triggers as TriggerDispatcher
+    participant Spawns as SpawnProcessor
+
+    Client->>DataL1: Event (fiberId, eventType, payload, proofs)
+    DataL1->>Engine: process(fiberId, input, proofs)
+    Engine->>Engine: Lookup fiber, verify Active status
+
+    alt State Machine + Transition
+        Engine->>Eval: evaluate(smFiber, transition)
+        Eval->>Eval: Find transitions for (currentState, eventType)
+        loop For each candidate transition (first-match-wins)
+            Eval->>Eval: Evaluate guard (JSON Logic)
+            Note over Eval: Guard has access to: state, event,<br/>machineId, proofs, dependent machines
+        end
+        Eval->>Eval: Apply effect (JSON Logic)
+        Eval->>Eval: Extract triggers, spawns, emitted events
+        Eval-->>Engine: FiberResult.Success
+    else Script Oracle + MethodCall
+        Engine->>Eval: evaluate(oracleFiber, methodCall)
+        Eval->>Eval: Dispatch to named method
+        Eval->>Eval: Execute script with gas metering
+        Eval-->>Engine: FiberResult.Success + returnValue
+    end
+
+    opt Spawns requested
+        Engine->>Spawns: processSpawnsValidated(directives)
+        Spawns->>Spawns: Validate definitions, create child fibers
+        Spawns-->>Engine: List[ChildFiber]
+    end
+
+    opt Triggers exist
+        Engine->>Triggers: dispatch(triggers, updatedState)
+        loop For each trigger
+            Triggers->>Eval: evaluate(targetFiber, triggeredEvent)
+            Note over Triggers: Cascading — triggers can<br/>trigger further triggers
+        end
+        Triggers-->>Engine: Cascaded results
+    end
+
+    Engine-->>DataL1: TransactionResult.Committed | Aborted
+    DataL1-->>Client: Response (updated state, logs, gas used)

@@ -1,0 +1,73 @@
+digraph FiberInteractions {
+    graph [
+        rankdir=LR
+        bgcolor="#ffffff"
+        fontname="Helvetica"
+        label="Fiber Interaction Patterns"
+        labelloc=t
+        fontsize=18
+        pad=0.5
+    ]
+    node [
+        fontname="Helvetica"
+        fontsize=11
+        style=filled
+        shape=box
+        penwidth=1.5
+    ]
+    edge [
+        fontname="Helvetica"
+        fontsize=9
+    ]
+
+    subgraph cluster_sm {
+        label="State Machines"
+        style=dashed
+        color="#4a90d9"
+        fontcolor="#4a90d9"
+
+        sm_a [label="Machine A\n(Fuel Contract)" fillcolor="#dce8f5" color="#4a90d9"]
+        sm_b [label="Machine B\n(GPS Tracker)" fillcolor="#dce8f5" color="#4a90d9"]
+        sm_c [label="Machine C\n(Quality Check)" fillcolor="#dce8f5" color="#4a90d9"]
+        sm_parent [label="Parent Machine\n(Consumer)" fillcolor="#b8d4f0" color="#2c5f9e"]
+        sm_child [label="Child Machine\n(Auction)" fillcolor="#dce8f5" color="#4a90d9" style="filled,dashed"]
+    }
+
+    subgraph cluster_oracle {
+        label="Script Oracles"
+        style=dashed
+        color="#e8a838"
+        fontcolor="#e8a838"
+
+        oracle [label="Script Oracle\n(Game Logic)" fillcolor="#fdf0d5" color="#e8a838"]
+    }
+
+    // Cross-machine triggers
+    sm_b -> sm_a [label="trigger:\nshipment_arrived" color="#d94040" fontcolor="#d94040" style=bold]
+    sm_a -> sm_c [label="trigger:\ninspect_quality" color="#d94040" fontcolor="#d94040" style=bold]
+
+    // Dependencies (read access)
+    sm_a -> sm_b [label="depends on\n(reads state)" color="#888888" style=dashed dir=back]
+
+    // Oracle calls
+    sm_a -> oracle [label="_oracleCall\ncalculate(args)" color="#e8a838" fontcolor="#e8a838"]
+    oracle -> sm_a [label="return value" color="#e8a838" fontcolor="#e8a838" style=dashed]
+
+    // Parent-child spawning
+    sm_parent -> sm_child [label="_spawn\n(creates)" color="#50a050" fontcolor="#50a050" style=bold]
+    sm_child -> sm_parent [label="trigger:\nsale_completed" color="#d94040" fontcolor="#d94040"]
+
+    // Legend
+    subgraph cluster_legend {
+        label="Legend"
+        style=filled
+        fillcolor="#f8f8f8"
+        color="#cccccc"
+        fontsize=10
+
+        leg_trigger [label="Cross-Machine\nTrigger" shape=plaintext fontsize=9]
+        leg_dep [label="Dependency\n(Read Access)" shape=plaintext fontsize=9]
+        leg_oracle [label="Oracle Call\n& Return" shape=plaintext fontsize=9]
+        leg_spawn [label="Parent-Child\nSpawn" shape=plaintext fontsize=9]
+    }
+}

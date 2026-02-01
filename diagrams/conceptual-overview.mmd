@@ -1,0 +1,55 @@
+graph TB
+    subgraph Client["Client Layer"]
+        direction LR
+        human["👤 Human User"]
+        ai["🤖 AI Agent"]
+        api["📡 External System"]
+    end
+
+    subgraph OttoChain["OttoChain Metagraph"]
+        direction TB
+
+        subgraph DataL1["Data L1 — Fiber Processing"]
+            direction LR
+            validator["Validator"]
+            engine["FiberEngine"]
+            evaluator["FiberEvaluator"]
+            triggers["TriggerDispatcher"]
+            spawner["SpawnProcessor"]
+        end
+
+        subgraph Fibers["On-Chain Fibers"]
+            direction LR
+            sm1["📋 State Machine\n(Workflow A)"]
+            sm2["📋 State Machine\n(Workflow B)"]
+            oracle1["🔮 Script Oracle\n(Business Logic)"]
+        end
+
+        subgraph L0["Metagraph L0 — Consensus"]
+            snapshots["Snapshots"]
+            state["Calculated State"]
+        end
+    end
+
+    subgraph Hypergraph["Constellation Hypergraph (Global L0)"]
+        finality["Network Finality & Global State"]
+    end
+
+    human -->|"JSON events"| DataL1
+    ai -->|"JSON events"| DataL1
+    api -->|"JSON events"| DataL1
+
+    DataL1 --> Fibers
+    sm1 -.->|"trigger"| sm2
+    sm1 -.->|"_oracleCall"| oracle1
+    sm2 -.->|"depends on"| sm1
+
+    Fibers --> L0
+    L0 --> Hypergraph
+
+    style Client fill:#e8f4e8,stroke:#4a9e4a
+    style OttoChain fill:#e8ecf4,stroke:#4a6a9e
+    style Hypergraph fill:#f4e8e8,stroke:#9e4a4a
+    style DataL1 fill:#dce8f5,stroke:#4a90d9
+    style Fibers fill:#fdf0d5,stroke:#e8a838
+    style L0 fill:#e0e0e0,stroke:#888888
