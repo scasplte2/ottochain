@@ -1,7 +1,7 @@
 package xyz.kd5ujc.shared_data.examples
 
+import cats.effect.IO
 import cats.effect.std.UUIDGen
-import cats.effect.{IO, Resource}
 import cats.syntax.all._
 
 import io.constellationnetwork.currency.dataApplication.{DataState, L0NodeContext}
@@ -9,30 +9,32 @@ import io.constellationnetwork.ext.cats.syntax.next.catsSyntaxNext
 import io.constellationnetwork.metagraph_sdk.json_logic._
 import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
 import io.constellationnetwork.security.SecurityProvider
-import io.constellationnetwork.security.signature.Signed
 
-import xyz.kd5ujc.schema.fiber.{FiberOrdinal, _}
-import xyz.kd5ujc.schema.{CalculatedState, OnChain, Records, Updates}
+import xyz.kd5ujc.schema.fiber._
+import xyz.kd5ujc.schema.{CalculatedState, OnChain}
 import xyz.kd5ujc.shared_data.lifecycle.Combiner
 import xyz.kd5ujc.shared_data.syntax.all._
-import xyz.kd5ujc.shared_test.Mock.MockL0NodeContext
+import xyz.kd5ujc.shared_data.testkit.{DataStateTestOps, FiberBuilder, TestImports}
 import xyz.kd5ujc.shared_test.Participant._
+import xyz.kd5ujc.shared_test.TestFixture
 
+import io.circe.parser._
 import weaver.SimpleIOSuite
 
 object JsonEncodedStateMachineSuite extends SimpleIOSuite {
 
-  private val securityProviderResource: Resource[IO, SecurityProvider[IO]] = SecurityProvider.forAsync[IO]
+  import DataStateTestOps._
+  import TestImports.optionFiberRecordOps
 
   test("json-encoded: time lock contract") {
-    import io.circe.parser._
+    TestFixture.resource(Set(Alice, Bob)).use { fixture =>
+      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
+      val registry = fixture.registry
+      val ordinal = fixture.ordinal
 
-    securityProviderResource.use { implicit s =>
       for {
-        implicit0(l0ctx: L0NodeContext[IO]) <- MockL0NodeContext.make[IO]
-        registry                            <- ParticipantRegistry.create[IO](Set(Alice, Bob))
-        combiner                            <- Combiner.make[IO]().pure[IO]
-        ordinal                             <- l0ctx.getLastCurrencySnapshot.map(_.map(_.ordinal.next).get)
+        combiner <- Combiner.make[IO]().pure[IO]
 
         // Define time lock contract in JSON format
         // Uses standard JSON Logic format with operator tags
@@ -71,9 +73,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
 
         // Parse JSON into StateMachineDefinition
         parsedDef <- IO.fromEither(
-          decode[StateMachineDefinition](timeLockJson).left.map(err =>
-            new RuntimeException(s"Failed to decode JSON: $err")
-          )
+          decode[StateMachineDefinition](timeLockJson).left
+            .map(err => new RuntimeException(s"Failed to decode JSON: $err"))
         )
 
         // Verify the parsed definition structure
@@ -95,83 +96,57 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
             "beneficiary" -> StrValue("beneficiary-address")
           )
         )
-        lockHash <- (lockData: JsonLogicValue).computeDigest
 
-        lockFiber = Records.StateMachineFiberRecord(
-          fiberId = lockfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = parsedDef,
-          currentState = StateId("locked"),
-          stateData = lockData,
-          stateDataHash = lockHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Alice, Bob).map(registry.addresses),
-          status = FiberStatus.Active
-        )
+        lockFiber <- FiberBuilder(lockfiberId, ordinal, parsedDef)
+          .withState("locked")
+          .withDataValue(lockData)
+          .ownedBy(registry, Alice, Bob)
+          .build[IO]
 
         inState <- DataState(OnChain.genesis, CalculatedState.genesis).withRecord[IO](lockfiberId, lockFiber)
 
         // Try to unlock BEFORE time (should fail)
-        earlyUpdate = Updates.TransitionStateMachine(
-          lockfiberId,
-          "unlock",
-          MapValue(Map("currentTime" -> IntValue(900))),
-          FiberOrdinal.MinValue
-        )
-        earlyProof  <- registry.generateProofs(earlyUpdate, Set(Alice))
-        earlyResult <- combiner.insert(inState, Signed(earlyUpdate, earlyProof)).attempt
+        earlyResult <- inState
+          .transition(
+            lockfiberId,
+            "unlock",
+            MapValue(Map("currentTime" -> IntValue(900))),
+            Alice
+          )(registry, combiner)
+          .attempt
 
         // Verify early unlock fails
         _ = expect(earlyResult.isLeft)
 
         // Try to unlock AFTER time (should succeed)
-        validUpdate = Updates.TransitionStateMachine(
+        finalState <- inState.transition(
           lockfiberId,
           "unlock",
           MapValue(Map("currentTime" -> IntValue(1500))),
-          FiberOrdinal.MinValue
-        )
-        validProof <- registry.generateProofs(validUpdate, Set(Alice))
-        finalState <- combiner.insert(inState, Signed(validUpdate, validProof))
+          Alice
+        )(registry, combiner)
 
-        unlockedFiber = finalState.calculated.stateMachines
-          .get(lockfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        isUnlocked: Option[Boolean] = unlockedFiber.flatMap { f =>
-          f.stateData match {
-            case MapValue(m) => m.get("unlocked").collect { case BoolValue(u) => u }
-            case _           => None
-          }
-        }
-        unlockedAtTime: Option[BigInt] = unlockedFiber.flatMap { f =>
-          f.stateData match {
-            case MapValue(m) => m.get("unlockedAt").collect { case IntValue(t) => t }
-            case _           => None
-          }
-        }
+        unlockedFiber = finalState.fiberRecord(lockfiberId)
 
       } yield expect.all(
         unlockedFiber.isDefined,
         unlockedFiber.map(_.currentState).contains(StateId("unlocked")),
         unlockedFiber.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next),
-        isUnlocked.contains(true),
-        unlockedAtTime.contains(BigInt(1500))
+        unlockedFiber.extractBool("unlocked").contains(true),
+        unlockedFiber.extractInt("unlockedAt").contains(BigInt(1500))
       )
     }
   }
 
   test("json-encoded: hash time-locked contract (HTLC) with Alice and Bob") {
-    import io.circe.parser._
+    TestFixture.resource(Set(Alice, Bob)).use { fixture =>
+      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
+      val registry = fixture.registry
+      val ordinal = fixture.ordinal
 
-    securityProviderResource.use { implicit s =>
       for {
-        implicit0(l0ctx: L0NodeContext[IO]) <- MockL0NodeContext.make[IO]
-        registry                            <- ParticipantRegistry.create[IO](Set(Alice, Bob))
-        combiner                            <- Combiner.make[IO]().pure[IO]
-        ordinal                             <- l0ctx.getLastCurrencySnapshot.map(_.map(_.ordinal.next).get)
+        combiner <- Combiner.make[IO]().pure[IO]
 
         // HTLC: Alice locks funds for Bob with a secret hash
         // Bob can claim with correct preimage before timeout
@@ -252,9 +227,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
         }"""
 
         parsedDef <- IO.fromEither(
-          decode[StateMachineDefinition](htlcJson).left.map(err =>
-            new RuntimeException(s"Failed to decode HTLC JSON: $err")
-          )
+          decode[StateMachineDefinition](htlcJson).left
+            .map(err => new RuntimeException(s"Failed to decode HTLC JSON: $err"))
         )
 
         // Alice creates HTLC with secret hash
@@ -272,45 +246,36 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
             "timeout"   -> IntValue(2000) // Expires at time 2000
           )
         )
-        htlcHash <- (htlcData: JsonLogicValue).computeDigest
 
-        htlcFiber = Records.StateMachineFiberRecord(
-          fiberId = htlcfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = parsedDef,
-          currentState = StateId("pending"),
-          stateData = htlcData,
-          stateDataHash = htlcHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Alice, Bob).map(registry.addresses),
-          status = FiberStatus.Active
-        )
+        htlcFiber <- FiberBuilder(htlcfiberId, ordinal, parsedDef)
+          .withState("pending")
+          .withDataValue(htlcData)
+          .ownedBy(registry, Alice, Bob)
+          .build[IO]
 
         inState <- DataState(OnChain.genesis, CalculatedState.genesis).withRecord[IO](htlcfiberId, htlcFiber)
 
         // Test 1: Bob tries to claim with WRONG secret (should fail)
-        wrongClaimUpdate = Updates.TransitionStateMachine(
-          htlcfiberId,
-          "claim",
-          MapValue(
-            Map(
-              "secret"      -> StrValue("wrongsecret"),
-              "secretHash"  -> StrValue("wronghash"),
-              "claimant"    -> StrValue(bobAddr.toString),
-              "currentTime" -> IntValue(1000)
-            )
-          ),
-          FiberOrdinal.MinValue
-        )
-        wrongClaimProof  <- registry.generateProofs(wrongClaimUpdate, Set(Bob))
-        wrongClaimResult <- combiner.insert(inState, Signed(wrongClaimUpdate, wrongClaimProof)).attempt
+        wrongClaimResult <- inState
+          .transition(
+            htlcfiberId,
+            "claim",
+            MapValue(
+              Map(
+                "secret"      -> StrValue("wrongsecret"),
+                "secretHash"  -> StrValue("wronghash"),
+                "claimant"    -> StrValue(bobAddr.toString),
+                "currentTime" -> IntValue(1000)
+              )
+            ),
+            Bob
+          )(registry, combiner)
+          .attempt
 
         _ = expect(wrongClaimResult.isLeft)
 
         // Test 2: Bob claims with CORRECT secret BEFORE timeout (should succeed)
-        correctClaimUpdate = Updates.TransitionStateMachine(
+        claimedState <- inState.transition(
           htlcfiberId,
           "claim",
           MapValue(
@@ -321,45 +286,22 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "currentTime" -> IntValue(1500)
             )
           ),
-          FiberOrdinal.MinValue
-        )
-        correctClaimProof <- registry.generateProofs(correctClaimUpdate, Set(Bob))
-        claimedState      <- combiner.insert(inState, Signed(correctClaimUpdate, correctClaimProof))
+          Bob
+        )(registry, combiner)
 
-        claimedFiber = claimedState.calculated.stateMachines
-          .get(htlcfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        wasClaimed: Option[Boolean] = claimedFiber.flatMap { f =>
-          f.stateData match {
-            case MapValue(m) => m.get("claimed").collect { case BoolValue(c) => c }
-            case _           => None
-          }
-        }
-        claimedBy: Option[String] = claimedFiber.flatMap { f =>
-          f.stateData match {
-            case MapValue(m) => m.get("claimedBy").collect { case StrValue(cb) => cb }
-            case _           => None
-          }
-        }
-        revealedSecret: Option[String] = claimedFiber.flatMap { f =>
-          f.stateData match {
-            case MapValue(m) => m.get("secret").collect { case StrValue(s) => s }
-            case _           => None
-          }
-        }
+        claimedFiber = claimedState.fiberRecord(htlcfiberId)
 
         // Verify Bob successfully claimed
         _ = expect.all(
           claimedFiber.isDefined,
           claimedFiber.map(_.currentState).contains(StateId("claimed")),
-          wasClaimed.contains(true),
-          claimedBy.contains(bobAddr.toString),
-          revealedSecret.contains("opensesame")
+          claimedFiber.extractBool("claimed").contains(true),
+          claimedFiber.extractString("claimedBy").contains(bobAddr.toString),
+          claimedFiber.extractString("secret").contains("opensesame")
         )
 
         // Test 3: Alice tries to refund AFTER timeout on a NEW HTLC (should succeed)
-        htlcfiberId2 <- UUIDGen.randomUUID[IO]
+        htlcCid2 <- UUIDGen.randomUUID[IO]
         htlcData2 = MapValue(
           Map(
             "sender"    -> StrValue(aliceAddr.toString),
@@ -369,44 +311,35 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
             "timeout"   -> IntValue(2000)
           )
         )
-        htlcHash2 <- (htlcData2: JsonLogicValue).computeDigest
 
-        htlcFiber2 = Records.StateMachineFiberRecord(
-          fiberId = htlcfiberId2,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = parsedDef,
-          currentState = StateId("pending"),
-          stateData = htlcData2,
-          stateDataHash = htlcHash2,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Alice, Bob).map(registry.addresses),
-          status = FiberStatus.Active
-        )
+        htlcFiber2 <- FiberBuilder(htlcCid2, ordinal, parsedDef)
+          .withState("pending")
+          .withDataValue(htlcData2)
+          .ownedBy(registry, Alice, Bob)
+          .build[IO]
 
-        inState2 <- DataState(OnChain.genesis, CalculatedState.genesis).withRecord[IO](htlcfiberId2, htlcFiber2)
+        inState2 <- DataState(OnChain.genesis, CalculatedState.genesis).withRecord[IO](htlcCid2, htlcFiber2)
 
         // Alice tries to refund BEFORE timeout (should fail)
-        earlyRefundUpdate = Updates.TransitionStateMachine(
-          htlcfiberId2,
-          "refund",
-          MapValue(
-            Map(
-              "refunder"    -> StrValue(aliceAddr.toString),
-              "currentTime" -> IntValue(1500)
-            )
-          ),
-          FiberOrdinal.MinValue
-        )
-        earlyRefundProof  <- registry.generateProofs(earlyRefundUpdate, Set(Alice))
-        earlyRefundResult <- combiner.insert(inState2, Signed(earlyRefundUpdate, earlyRefundProof)).attempt
+        earlyRefundResult <- inState2
+          .transition(
+            htlcCid2,
+            "refund",
+            MapValue(
+              Map(
+                "refunder"    -> StrValue(aliceAddr.toString),
+                "currentTime" -> IntValue(1500)
+              )
+            ),
+            Alice
+          )(registry, combiner)
+          .attempt
 
         _ = expect(earlyRefundResult.isLeft)
 
         // Alice refunds AFTER timeout (should succeed)
-        refundUpdate = Updates.TransitionStateMachine(
-          htlcfiberId2,
+        refundedState <- inState2.transition(
+          htlcCid2,
           "refund",
           MapValue(
             Map(
@@ -414,55 +347,38 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "currentTime" -> IntValue(2500)
             )
           ),
-          FiberOrdinal.MinValue
-        )
-        refundProof   <- registry.generateProofs(refundUpdate, Set(Alice))
-        refundedState <- combiner.insert(inState2, Signed(refundUpdate, refundProof))
+          Alice
+        )(registry, combiner)
 
-        refundedFiber = refundedState.calculated.stateMachines
-          .get(htlcfiberId2)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        wasRefunded: Option[Boolean] = refundedFiber.flatMap { f =>
-          f.stateData match {
-            case MapValue(m) => m.get("refunded").collect { case BoolValue(r) => r }
-            case _           => None
-          }
-        }
-        refundedAt: Option[BigInt] = refundedFiber.flatMap { f =>
-          f.stateData match {
-            case MapValue(m) => m.get("refundedAt").collect { case IntValue(t) => t }
-            case _           => None
-          }
-        }
+        refundedFiber = refundedState.fiberRecord(htlcCid2)
 
       } yield expect.all(
         // Verify claim succeeded
         claimedFiber.isDefined,
         claimedFiber.map(_.currentState).contains(StateId("claimed")),
         claimedFiber.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next),
-        wasClaimed.contains(true),
-        claimedBy.contains(bobAddr.toString),
-        revealedSecret.contains("opensesame"),
+        claimedFiber.extractBool("claimed").contains(true),
+        claimedFiber.extractString("claimedBy").contains(bobAddr.toString),
+        claimedFiber.extractString("secret").contains("opensesame"),
         // Verify refund succeeded
         refundedFiber.isDefined,
         refundedFiber.map(_.currentState).contains(StateId("refunded")),
         refundedFiber.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next),
-        wasRefunded.contains(true),
-        refundedAt.contains(BigInt(2500))
+        refundedFiber.extractBool("refunded").contains(true),
+        refundedFiber.extractInt("refundedAt").contains(BigInt(2500))
       )
     }
   }
 
   test("json-encoded: supply chain with escrow, inspection, and insurance") {
-    import io.circe.parser._
+    TestFixture.resource(Set(Alice, Bob, Charlie)).use { fixture =>
+      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
+      val registry = fixture.registry
+      val ordinal = fixture.ordinal
 
-    securityProviderResource.use { implicit s =>
       for {
-        implicit0(l0ctx: L0NodeContext[IO]) <- MockL0NodeContext.make[IO]
-        registry                            <- ParticipantRegistry.create[IO](Set(Alice, Bob, Charlie))
-        combiner                            <- Combiner.make[IO]().pure[IO]
-        ordinal                             <- l0ctx.getLastCurrencySnapshot.map(_.map(_.ordinal.next).get)
+        combiner <- Combiner.make[IO]().pure[IO]
 
         orderfiberId      <- UUIDGen.randomUUID[IO]
         escrowfiberId     <- UUIDGen.randomUUID[IO]
@@ -1009,7 +925,7 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
             {
               "from": { "value": "investigating" },
               "to": { "value": "approved" },
-              "eventName": "defiberIde",
+              "eventName": "decide",
               "guard": {
                 "or": [
                   {
@@ -1055,7 +971,7 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
             {
               "from": { "value": "investigating" },
               "to": { "value": "denied" },
-              "eventName": "defiberIde",
+              "eventName": "decide",
               "guard": {
                 "!": [
                   {
@@ -1118,150 +1034,80 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
         }"""
 
         orderDef <- IO.fromEither(
-          decode[StateMachineDefinition](orderJson).left.map(err =>
-            new RuntimeException(s"Failed to decode order JSON: $err")
-          )
+          decode[StateMachineDefinition](orderJson).left
+            .map(err => new RuntimeException(s"Failed to decode order JSON: $err"))
         )
 
         escrowDef <- IO.fromEither(
-          decode[StateMachineDefinition](escrowJson).left.map(err =>
-            new RuntimeException(s"Failed to decode escrow JSON: $err")
-          )
+          decode[StateMachineDefinition](escrowJson).left
+            .map(err => new RuntimeException(s"Failed to decode escrow JSON: $err"))
         )
 
         shippingDef <- IO.fromEither(
-          decode[StateMachineDefinition](shippingJson).left.map(err =>
-            new RuntimeException(s"Failed to decode shipping JSON: $err")
-          )
+          decode[StateMachineDefinition](shippingJson).left
+            .map(err => new RuntimeException(s"Failed to decode shipping JSON: $err"))
         )
 
         inspectionDef <- IO.fromEither(
-          decode[StateMachineDefinition](inspectionJson).left.map(err =>
-            new RuntimeException(s"Failed to decode inspection JSON: $err")
-          )
+          decode[StateMachineDefinition](inspectionJson).left
+            .map(err => new RuntimeException(s"Failed to decode inspection JSON: $err"))
         )
 
         insuranceDef <- IO.fromEither(
-          decode[StateMachineDefinition](insuranceJson).left.map(err =>
-            new RuntimeException(s"Failed to decode insurance JSON: $err")
-          )
+          decode[StateMachineDefinition](insuranceJson).left
+            .map(err => new RuntimeException(s"Failed to decode insurance JSON: $err"))
         )
 
-        orderData = MapValue(
-          Map(
+        orderFiber <- FiberBuilder(orderfiberId, ordinal, orderDef)
+          .withState("placed")
+          .withData(
             "orderId" -> StrValue("ORDER-001"),
             "buyer"   -> StrValue(registry.addresses(Bob).toString),
             "seller"  -> StrValue(registry.addresses(Alice).toString),
             "amount"  -> IntValue(5000),
             "status"  -> StrValue("placed")
           )
-        )
-        orderHash <- (orderData: JsonLogicValue).computeDigest
+          .ownedBy(registry, Alice, Bob)
+          .build[IO]
 
-        escrowData = MapValue(
-          Map(
+        escrowFiber <- FiberBuilder(escrowfiberId, ordinal, escrowDef)
+          .withState("empty")
+          .withData(
             "requiredAmount" -> IntValue(5000),
             "status"         -> StrValue("empty")
           )
-        )
-        escrowHash <- (escrowData: JsonLogicValue).computeDigest
+          .ownedBy(registry, Alice, Bob)
+          .build[IO]
 
-        shippingData = MapValue(
-          Map(
+        shippingFiber <- FiberBuilder(shippingfiberId, ordinal, shippingDef)
+          .withState("pending")
+          .withData(
             "trackingNumber" -> StrValue("TRACK-12345"),
             "carrier"        -> StrValue("FastShip"),
             "status"         -> StrValue("pending")
           )
-        )
-        shippingHash <- (shippingData: JsonLogicValue).computeDigest
+          .ownedBy(registry, Alice)
+          .build[IO]
 
-        inspectionData = MapValue(
-          Map(
+        inspectionFiber <- FiberBuilder(inspectionfiberId, ordinal, inspectionDef)
+          .withState("inactive")
+          .withData(
             "inspector" -> StrValue(registry.addresses(Charlie).toString),
             "status"    -> StrValue("inactive")
           )
-        )
-        inspectionHash <- (inspectionData: JsonLogicValue).computeDigest
+          .ownedBy(registry, Charlie)
+          .build[IO]
 
-        insuranceData = MapValue(
-          Map(
+        insuranceFiber <- FiberBuilder(insurancefiberId, ordinal, insuranceDef)
+          .withState("active")
+          .withData(
             "policyNumber"   -> StrValue("INS-999"),
             "coverageAmount" -> IntValue(5000),
             "status"         -> StrValue("active"),
             "hasClaim"       -> BoolValue(false)
           )
-        )
-        insuranceHash <- (insuranceData: JsonLogicValue).computeDigest
-
-        orderFiber = Records.StateMachineFiberRecord(
-          fiberId = orderfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = orderDef,
-          currentState = StateId("placed"),
-          stateData = orderData,
-          stateDataHash = orderHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Alice, Bob).map(registry.addresses),
-          status = FiberStatus.Active
-        )
-
-        escrowFiber = Records.StateMachineFiberRecord(
-          fiberId = escrowfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = escrowDef,
-          currentState = StateId("empty"),
-          stateData = escrowData,
-          stateDataHash = escrowHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Alice, Bob).map(registry.addresses),
-          status = FiberStatus.Active
-        )
-
-        shippingFiber = Records.StateMachineFiberRecord(
-          fiberId = shippingfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = shippingDef,
-          currentState = StateId("pending"),
-          stateData = shippingData,
-          stateDataHash = shippingHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Alice).map(registry.addresses),
-          status = FiberStatus.Active
-        )
-
-        inspectionFiber = Records.StateMachineFiberRecord(
-          fiberId = inspectionfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = inspectionDef,
-          currentState = StateId("inactive"),
-          stateData = inspectionData,
-          stateDataHash = inspectionHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Charlie).map(registry.addresses),
-          status = FiberStatus.Active
-        )
-
-        insuranceFiber = Records.StateMachineFiberRecord(
-          fiberId = insurancefiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = insuranceDef,
-          currentState = StateId("active"),
-          stateData = insuranceData,
-          stateDataHash = insuranceHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Alice, Bob).map(registry.addresses),
-          status = FiberStatus.Active
-        )
+          .ownedBy(registry, Alice, Bob)
+          .build[IO]
 
         inState <- DataState(OnChain.genesis, CalculatedState.genesis).withRecords[IO](
           Map(
@@ -1273,149 +1119,120 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
           )
         )
 
-        lockFundsUpdate = Updates.TransitionStateMachine(
+        // Step 1: Lock funds in escrow
+        state1 <- inState.transition(
           escrowfiberId,
           "lock_funds",
-          MapValue(
-            Map(
-              "amount"    -> IntValue(5000),
-              "timestamp" -> IntValue(1000)
-            )
-          ),
-          FiberOrdinal.MinValue
-        )
-        lockFundsProof <- registry.generateProofs(lockFundsUpdate, Set(Bob))
-        state1         <- combiner.insert(inState, Signed(lockFundsUpdate, lockFundsProof))
+          MapValue(Map("amount" -> IntValue(5000), "timestamp" -> IntValue(1000))),
+          Bob
+        )(registry, combiner)
 
-        confirmFundingUpdate = Updates.TransitionStateMachine(
+        // Step 2: Confirm funding on order
+        state2 <- state1.transition(
           orderfiberId,
           "confirm_funding",
           MapValue(Map("timestamp" -> IntValue(1100))),
-          FiberOrdinal.MinValue
-        )
-        confirmFundingProof <- registry.generateProofs(confirmFundingUpdate, Set(Alice))
-        state2              <- combiner.insert(state1, Signed(confirmFundingUpdate, confirmFundingProof))
+          Alice
+        )(registry, combiner)
 
-        shipSeqNum = state2.calculated.stateMachines(orderfiberId).sequenceNumber
-        shipUpdate = Updates.TransitionStateMachine(
+        // Step 3: Ship order
+        state3 <- state2.transition(
           orderfiberId,
           "ship",
           MapValue(Map("timestamp" -> IntValue(1200))),
-          shipSeqNum
-        )
-        shipProof <- registry.generateProofs(shipUpdate, Set(Alice))
-        state3    <- combiner.insert(state2, Signed(shipUpdate, shipProof))
+          Alice
+        )(registry, combiner)
 
-        pickupUpdate = Updates.TransitionStateMachine(
+        // Step 4: Pickup shipping
+        state4 <- state3.transition(
           shippingfiberId,
           "pickup",
           MapValue(Map("timestamp" -> IntValue(1300))),
-          FiberOrdinal.MinValue
-        )
-        pickupProof <- registry.generateProofs(pickupUpdate, Set(Alice))
-        state4      <- combiner.insert(state3, Signed(pickupUpdate, pickupProof))
+          Alice
+        )(registry, combiner)
 
-        holdSeqNum = state4.calculated.stateMachines(escrowfiberId).sequenceNumber
-        holdUpdate = Updates.TransitionStateMachine(
+        // Step 5: Hold escrow
+        state5 <- state4.transition(
           escrowfiberId,
           "hold",
           MapValue(Map("timestamp" -> IntValue(1400))),
-          holdSeqNum
-        )
-        holdProof <- registry.generateProofs(holdUpdate, Set(Alice))
-        state5    <- combiner.insert(state4, Signed(holdUpdate, holdProof))
+          Alice
+        )(registry, combiner)
 
-        acceptShipmentSeqNum = state5.calculated.stateMachines(orderfiberId).sequenceNumber
-        acceptShipmentUpdate = Updates.TransitionStateMachine(
+        // Step 6: Accept shipment on order
+        state6 <- state5.transition(
           orderfiberId,
           "accept_shipment",
           MapValue(Map("timestamp" -> IntValue(1500))),
-          acceptShipmentSeqNum
-        )
-        acceptShipmentProof <- registry.generateProofs(acceptShipmentUpdate, Set(Alice))
-        state6              <- combiner.insert(state5, Signed(acceptShipmentUpdate, acceptShipmentProof))
+          Alice
+        )(registry, combiner)
 
-        checkpointSeqNum = state6.calculated.stateMachines(shippingfiberId).sequenceNumber
-        checkpointUpdate = Updates.TransitionStateMachine(
+        // Step 7: Checkpoint shipping
+        state7 <- state6.transition(
           shippingfiberId,
           "checkpoint",
           MapValue(Map("timestamp" -> IntValue(1600))),
-          checkpointSeqNum
-        )
-        checkpointProof <- registry.generateProofs(checkpointUpdate, Set(Alice))
-        state7          <- combiner.insert(state6, Signed(checkpointUpdate, checkpointProof))
+          Alice
+        )(registry, combiner)
 
-        enterCustomsSeqNum = state7.calculated.stateMachines(shippingfiberId).sequenceNumber
-        enterCustomsUpdate = Updates.TransitionStateMachine(
+        // Step 8: Enter customs
+        state8 <- state7.transition(
           shippingfiberId,
           "enter_customs",
           MapValue(Map("timestamp" -> IntValue(2000))),
-          enterCustomsSeqNum
-        )
-        enterCustomsProof <- registry.generateProofs(enterCustomsUpdate, Set(Alice))
-        state8            <- combiner.insert(state7, Signed(enterCustomsUpdate, enterCustomsProof))
+          Alice
+        )(registry, combiner)
 
-        clearCustomsSeqNum = state8.calculated.stateMachines(shippingfiberId).sequenceNumber
-        clearCustomsUpdate = Updates.TransitionStateMachine(
+        // Step 9: Clear customs
+        state9 <- state8.transition(
           shippingfiberId,
           "clear_customs",
           MapValue(Map("timestamp" -> IntValue(3000))),
-          clearCustomsSeqNum
-        )
-        clearCustomsProof <- registry.generateProofs(clearCustomsUpdate, Set(Alice))
-        state9            <- combiner.insert(state8, Signed(clearCustomsUpdate, clearCustomsProof))
+          Alice
+        )(registry, combiner)
 
-        deliverSeqNum = state9.calculated.stateMachines(shippingfiberId).sequenceNumber
-        deliverUpdate = Updates.TransitionStateMachine(
+        // Step 10: Deliver
+        state10 <- state9.transition(
           shippingfiberId,
           "deliver",
           MapValue(Map("timestamp" -> IntValue(4000))),
-          deliverSeqNum
-        )
-        deliverProof <- registry.generateProofs(deliverUpdate, Set(Alice))
-        state10      <- combiner.insert(state9, Signed(deliverUpdate, deliverProof))
+          Alice
+        )(registry, combiner)
 
-        confirmDeliverySeqNum = state10.calculated.stateMachines(orderfiberId).sequenceNumber
-        confirmDeliveryUpdate = Updates.TransitionStateMachine(
+        // Step 11: Confirm delivery on order
+        state11 <- state10.transition(
           orderfiberId,
           "confirm_delivery",
           MapValue(Map("timestamp" -> IntValue(4100))),
-          confirmDeliverySeqNum
-        )
-        confirmDeliveryProof <- registry.generateProofs(confirmDeliveryUpdate, Set(Alice))
-        state11              <- combiner.insert(state10, Signed(confirmDeliveryUpdate, confirmDeliveryProof))
+          Alice
+        )(registry, combiner)
 
-        scheduleUpdate = Updates.TransitionStateMachine(
+        // Step 12: Schedule inspection
+        state12 <- state11.transition(
           inspectionfiberId,
           "schedule",
           MapValue(Map("timestamp" -> IntValue(4200))),
-          FiberOrdinal.MinValue
-        )
-        scheduleProof <- registry.generateProofs(scheduleUpdate, Set(Charlie))
-        state12       <- combiner.insert(state11, Signed(scheduleUpdate, scheduleProof))
+          Charlie
+        )(registry, combiner)
 
-        startInspectionSeqNum = state12.calculated.stateMachines(orderfiberId).sequenceNumber
-        startInspectionUpdate = Updates.TransitionStateMachine(
+        // Step 13: Start inspection on order
+        state13 <- state12.transition(
           orderfiberId,
           "start_inspection",
           MapValue(Map("timestamp" -> IntValue(4300))),
-          startInspectionSeqNum
-        )
-        startInspectionProof <- registry.generateProofs(startInspectionUpdate, Set(Alice))
-        state13              <- combiner.insert(state12, Signed(startInspectionUpdate, startInspectionProof))
+          Alice
+        )(registry, combiner)
 
-        beginInspectionSeqNum = state13.calculated.stateMachines(inspectionfiberId).sequenceNumber
-        beginInspectionUpdate = Updates.TransitionStateMachine(
+        // Step 14: Begin inspection
+        state14 <- state13.transition(
           inspectionfiberId,
           "begin_inspection",
           MapValue(Map("timestamp" -> IntValue(4400))),
-          beginInspectionSeqNum
-        )
-        beginInspectionProof <- registry.generateProofs(beginInspectionUpdate, Set(Charlie))
-        state14              <- combiner.insert(state13, Signed(beginInspectionUpdate, beginInspectionProof))
+          Charlie
+        )(registry, combiner)
 
-        completeInspectionSeqNum = state14.calculated.stateMachines(inspectionfiberId).sequenceNumber
-        completeInspectionUpdate = Updates.TransitionStateMachine(
+        // Step 15: Complete inspection (passed)
+        state15 <- state14.transition(
           inspectionfiberId,
           "complete_inspection",
           MapValue(
@@ -1425,94 +1242,51 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "damaged"      -> BoolValue(false)
             )
           ),
-          completeInspectionSeqNum
-        )
-        completeInspectionProof <- registry.generateProofs(completeInspectionUpdate, Set(Charlie))
-        state15                 <- combiner.insert(state14, Signed(completeInspectionUpdate, completeInspectionProof))
+          Charlie
+        )(registry, combiner)
 
-        releaseSeqNum = state15.calculated.stateMachines(escrowfiberId).sequenceNumber
-        releaseUpdate = Updates.TransitionStateMachine(
+        // Step 16: Release escrow
+        state16 <- state15.transition(
           escrowfiberId,
           "release",
           MapValue(Map("timestamp" -> IntValue(90000))),
-          releaseSeqNum
-        )
-        releaseProof <- registry.generateProofs(releaseUpdate, Set(Alice))
-        state16      <- combiner.insert(state15, Signed(releaseUpdate, releaseProof))
+          Alice
+        )(registry, combiner)
 
-        finalizeReleaseSeqNum = state16.calculated.stateMachines(escrowfiberId).sequenceNumber
-        finalizeReleaseUpdate = Updates.TransitionStateMachine(
+        // Step 17: Finalize release
+        state17 <- state16.transition(
           escrowfiberId,
           "finalize_release",
           MapValue(Map("timestamp" -> IntValue(90100))),
-          finalizeReleaseSeqNum
-        )
-        finalizeReleaseProof <- registry.generateProofs(finalizeReleaseUpdate, Set(Alice))
-        state17              <- combiner.insert(state16, Signed(finalizeReleaseUpdate, finalizeReleaseProof))
+          Alice
+        )(registry, combiner)
 
-        completeOrderSeqNum = state17.calculated.stateMachines(orderfiberId).sequenceNumber
-        completeOrderUpdate = Updates.TransitionStateMachine(
+        // Step 18: Complete order
+        finalState <- state17.transition(
           orderfiberId,
           "complete_order",
           MapValue(Map("timestamp" -> IntValue(90200))),
-          completeOrderSeqNum
-        )
-        completeOrderProof <- registry.generateProofs(completeOrderUpdate, Set(Alice))
-        finalState         <- combiner.insert(state17, Signed(completeOrderUpdate, completeOrderProof))
+          Alice
+        )(registry, combiner)
 
-        finalOrder = finalState.calculated.stateMachines
-          .get(orderfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        finalEscrow = finalState.calculated.stateMachines
-          .get(escrowfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        finalShipping = finalState.calculated.stateMachines
-          .get(shippingfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        finalInspection = finalState.calculated.stateMachines
-          .get(inspectionfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        finalInsurance = finalState.calculated.stateMachines
-          .get(insurancefiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        orderStatus: Option[String] = finalOrder.flatMap { f =>
-          f.stateData match {
-            case MapValue(m) => m.get("status").collect { case StrValue(s) => s }
-            case _           => None
-          }
-        }
-
-        escrowStatus: Option[String] = finalEscrow.flatMap { f =>
-          f.stateData match {
-            case MapValue(m) => m.get("status").collect { case StrValue(s) => s }
-            case _           => None
-          }
-        }
-
-        inspectionResult: Option[String] = finalInspection.flatMap { f =>
-          f.stateData match {
-            case MapValue(m) => m.get("result").collect { case StrValue(r) => r }
-            case _           => None
-          }
-        }
+        finalOrder = finalState.fiberRecord(orderfiberId)
+        finalEscrow = finalState.fiberRecord(escrowfiberId)
+        finalShipping = finalState.fiberRecord(shippingfiberId)
+        finalInspection = finalState.fiberRecord(inspectionfiberId)
+        finalInsurance = finalState.fiberRecord(insurancefiberId)
 
       } yield expect.all(
         finalOrder.isDefined,
         finalOrder.map(_.currentState).contains(StateId("completed")),
-        orderStatus.contains("completed"),
+        finalOrder.extractString("status").contains("completed"),
         finalEscrow.isDefined,
         finalEscrow.map(_.currentState).contains(StateId("released")),
-        escrowStatus.contains("released"),
+        finalEscrow.extractString("status").contains("released"),
         finalShipping.isDefined,
         finalShipping.map(_.currentState).contains(StateId("delivered")),
         finalInspection.isDefined,
         finalInspection.map(_.currentState).contains(StateId("passed")),
-        inspectionResult.contains("passed"),
+        finalInspection.extractString("result").contains("passed"),
         finalInsurance.isDefined,
         finalInsurance.map(_.currentState).contains(StateId("active"))
       )
@@ -1520,16 +1294,16 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
   }
 
   test("json-encoded: multi-stream governance with voting and actions") {
-    import io.circe.parser._
+    TestFixture.resource(Set(Alice, Bob, Charlie)).use { fixture =>
+      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
+      val registry = fixture.registry
+      val ordinal = fixture.ordinal
 
-    securityProviderResource.use { implicit s =>
       for {
-        implicit0(l0ctx: L0NodeContext[IO]) <- MockL0NodeContext.make[IO]
-        registry                            <- ParticipantRegistry.create[IO](Set(Alice, Bob, Charlie))
-        combiner                            <- Combiner.make[IO]().pure[IO]
-        ordinal                             <- l0ctx.getLastCurrencySnapshot.map(_.map(_.ordinal.next).get)
+        combiner <- Combiner.make[IO]().pure[IO]
 
-        // Get proposal fiberId early so we can reference it in action stream
+        // Get proposal CID early so we can reference it in action stream
         proposalfiberId <- UUIDGen.randomUUID[IO]
 
         // Define Proposal state machine (the main management/governance stream)
@@ -1705,24 +1479,23 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
         }"""
 
         proposalDef <- IO.fromEither(
-          decode[StateMachineDefinition](proposalJson).left.map(err =>
-            new RuntimeException(s"Failed to decode proposal JSON: $err")
-          )
+          decode[StateMachineDefinition](proposalJson).left
+            .map(err => new RuntimeException(s"Failed to decode proposal JSON: $err"))
         )
 
         voterDef <- IO.fromEither(
-          decode[StateMachineDefinition](voterJson).left.map(err =>
-            new RuntimeException(s"Failed to decode voter JSON: $err")
-          )
+          decode[StateMachineDefinition](voterJson).left
+            .map(err => new RuntimeException(s"Failed to decode voter JSON: $err"))
         )
 
         actionDef <- IO.fromEither(
-          decode[StateMachineDefinition](actionJson).left.map(err =>
-            new RuntimeException(s"Failed to decode action JSON: $err")
-          )
+          decode[StateMachineDefinition](actionJson).left
+            .map(err => new RuntimeException(s"Failed to decode action JSON: $err"))
         )
-        proposalData = MapValue(
-          Map(
+
+        proposalFiber <- FiberBuilder(proposalfiberId, ordinal, proposalDef)
+          .withState("proposed")
+          .withData(
             "title"          -> StrValue("Increase treasury allocation"),
             "hasQuorum"      -> BoolValue(true),
             "votingDeadline" -> IntValue(2000),
@@ -1731,140 +1504,66 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
             "noVotes"        -> IntValue(0),
             "status"         -> StrValue("proposed")
           )
-        )
-        proposalHash <- (proposalData: JsonLogicValue).computeDigest
-
-        proposalFiber = Records.StateMachineFiberRecord(
-          fiberId = proposalfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = proposalDef,
-          currentState = StateId("proposed"),
-          stateData = proposalData,
-          stateDataHash = proposalHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Alice).map(registry.addresses),
-          status = FiberStatus.Active
-        )
+          .ownedBy(registry, Alice)
+          .build[IO]
 
         // Create voter fibers for Alice, Bob, and Charlie
         alicefiberId <- UUIDGen.randomUUID[IO]
-        aliceVoterData = MapValue(
-          Map(
+
+        aliceVoterFiber <- FiberBuilder(alicefiberId, ordinal, voterDef)
+          .withState("idle")
+          .withData(
             "voter"       -> StrValue(registry.addresses(Alice).toString),
             "votingPower" -> IntValue(1)
           )
-        )
-        aliceVoterHash <- (aliceVoterData: JsonLogicValue).computeDigest
-
-        aliceVoterFiber = Records.StateMachineFiberRecord(
-          fiberId = alicefiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = voterDef,
-          currentState = StateId("idle"),
-          stateData = aliceVoterData,
-          stateDataHash = aliceVoterHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Alice).map(registry.addresses),
-          status = FiberStatus.Active
-        )
+          .ownedBy(registry, Alice)
+          .build[IO]
 
         bobfiberId <- UUIDGen.randomUUID[IO]
-        bobVoterData = MapValue(
-          Map(
+
+        bobVoterFiber <- FiberBuilder(bobfiberId, ordinal, voterDef)
+          .withState("idle")
+          .withData(
             "voter"       -> StrValue(registry.addresses(Bob).toString),
             "votingPower" -> IntValue(1)
           )
-        )
-        bobVoterHash <- (bobVoterData: JsonLogicValue).computeDigest
-
-        bobVoterFiber = Records.StateMachineFiberRecord(
-          fiberId = bobfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = voterDef,
-          currentState = StateId("idle"),
-          stateData = bobVoterData,
-          stateDataHash = bobVoterHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Bob).map(registry.addresses),
-          status = FiberStatus.Active
-        )
+          .ownedBy(registry, Bob)
+          .build[IO]
 
         charliefiberId <- UUIDGen.randomUUID[IO]
-        charlieVoterData = MapValue(
-          Map(
+
+        charlieVoterFiber <- FiberBuilder(charliefiberId, ordinal, voterDef)
+          .withState("idle")
+          .withData(
             "voter"       -> StrValue(registry.addresses(Charlie).toString),
             "votingPower" -> IntValue(1)
           )
-        )
-        charlieVoterHash <- (charlieVoterData: JsonLogicValue).computeDigest
-
-        charlieVoterFiber = Records.StateMachineFiberRecord(
-          fiberId = charliefiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = voterDef,
-          currentState = StateId("idle"),
-          stateData = charlieVoterData,
-          stateDataHash = charlieVoterHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Charlie).map(registry.addresses),
-          status = FiberStatus.Active
-        )
+          .ownedBy(registry, Charlie)
+          .build[IO]
 
         // Create first action fiber (for early submission test - will be rejected)
         earlyActionfiberId <- UUIDGen.randomUUID[IO]
-        earlyActionData = MapValue(
-          Map(
+
+        earlyActionFiber <- FiberBuilder(earlyActionfiberId, ordinal, actionDef)
+          .withState("pending")
+          .withData(
             "proposalId" -> StrValue(proposalfiberId.toString),
             "submitter"  -> StrValue(registry.addresses(Charlie).toString)
           )
-        )
-        earlyActionHash <- (earlyActionData: JsonLogicValue).computeDigest
-
-        earlyActionFiber = Records.StateMachineFiberRecord(
-          fiberId = earlyActionfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = actionDef,
-          currentState = StateId("pending"),
-          stateData = earlyActionData,
-          stateDataHash = earlyActionHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Charlie).map(registry.addresses),
-          status = FiberStatus.Active
-        )
+          .ownedBy(registry, Charlie)
+          .build[IO]
 
         // Create second action fiber (for valid submission test)
         validActionfiberId <- UUIDGen.randomUUID[IO]
-        validActionData = MapValue(
-          Map(
+
+        validActionFiberInit <- FiberBuilder(validActionfiberId, ordinal, actionDef)
+          .withState("pending")
+          .withData(
             "proposalId" -> StrValue(proposalfiberId.toString),
             "submitter"  -> StrValue(registry.addresses(Charlie).toString)
           )
-        )
-        validActionHash <- (validActionData: JsonLogicValue).computeDigest
-
-        validActionFiberInit = Records.StateMachineFiberRecord(
-          fiberId = validActionfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = actionDef,
-          currentState = StateId("pending"),
-          stateData = validActionData,
-          stateDataHash = validActionHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Charlie).map(registry.addresses),
-          status = FiberStatus.Active
-        )
+          .ownedBy(registry, Charlie)
+          .build[IO]
 
         // Initial state with all machines (proposal, voters, and both action fibers)
         inState <- DataState(OnChain.genesis, CalculatedState.genesis).withRecords[IO](
@@ -1879,7 +1578,7 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
         )
 
         // Step 0: Try to submit action BEFORE proposal is open (should transition to rejected)
-        earlySubmitUpdate = Updates.TransitionStateMachine(
+        stateAfterEarlySubmit <- inState.transition(
           earlyActionfiberId,
           "submit",
           MapValue(
@@ -1889,52 +1588,31 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "actionData" -> StrValue("early submission data")
             )
           ),
-          FiberOrdinal.MinValue
-        )
-        earlySubmitProof      <- registry.generateProofs(earlySubmitUpdate, Set(Charlie))
-        stateAfterEarlySubmit <- combiner.insert(inState, Signed(earlySubmitUpdate, earlySubmitProof))
+          Charlie
+        )(registry, combiner)
 
-        earlyActionFiberResult = stateAfterEarlySubmit.calculated.stateMachines
-          .get(earlyActionfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        earlyRejected: Option[Boolean] = earlyActionFiberResult.flatMap { f =>
-          f.stateData match {
-            case MapValue(m) => m.get("rejected").collect { case BoolValue(r) => r }
-            case _           => None
-          }
-        }
-        earlyReason: Option[String] = earlyActionFiberResult.flatMap { f =>
-          f.stateData match {
-            case MapValue(m) => m.get("reason").collect { case StrValue(r) => r }
-            case _           => None
-          }
-        }
+        earlyActionFiberResult = stateAfterEarlySubmit.fiberRecord(earlyActionfiberId)
 
         // Verify early submission was rejected
         _ = expect.all(
           earlyActionFiberResult.isDefined,
           earlyActionFiberResult.map(_.currentState).contains(StateId("rejected")),
-          earlyRejected.contains(true),
-          earlyReason.contains("proposal not open")
+          earlyActionFiberResult.extractBool("rejected").contains(true),
+          earlyActionFiberResult.extractString("reason").contains("proposal not open")
         )
 
         // Step 1: Open the proposal (proposed -> open)
-        collectUpdate1 = Updates.TransitionStateMachine(
+        state1 <- inState.transition(
           proposalfiberId,
           "collect",
           MapValue(Map("timestamp" -> IntValue(1000))),
-          FiberOrdinal.MinValue
-        )
-        collectProof1 <- registry.generateProofs(collectUpdate1, Set(Alice))
-        state1        <- combiner.insert(inState, Signed(collectUpdate1, collectProof1))
+          Alice
+        )(registry, combiner)
 
-        proposalAfterOpen = state1.calculated.stateMachines
-          .get(proposalfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
+        proposalAfterOpen = state1.fiberRecord(proposalfiberId)
 
         // Step 1.5: Submit action AFTER proposal is open (should succeed)
-        validSubmitUpdate = Updates.TransitionStateMachine(
+        state1_5 <- state1.transition(
           validActionfiberId,
           "submit",
           MapValue(
@@ -1944,17 +1622,13 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "actionData" -> StrValue("valid submission data")
             )
           ),
-          FiberOrdinal.MinValue
-        )
-        validSubmitProof <- registry.generateProofs(validSubmitUpdate, Set(Charlie))
-        state1_5         <- combiner.insert(state1, Signed(validSubmitUpdate, validSubmitProof))
+          Charlie
+        )(registry, combiner)
 
-        validActionFiberResult = state1_5.calculated.stateMachines
-          .get(validActionfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
+        validActionFiberResult = state1_5.fiberRecord(validActionfiberId)
 
         // Step 2: Alice votes YES
-        aliceVoteUpdate = Updates.TransitionStateMachine(
+        state2 <- state1_5.transition(
           alicefiberId,
           "vote",
           MapValue(
@@ -1964,17 +1638,13 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "proposalId" -> StrValue(proposalfiberId.toString)
             )
           ),
-          FiberOrdinal.MinValue
-        )
-        aliceVoteProof <- registry.generateProofs(aliceVoteUpdate, Set(Alice))
-        state2         <- combiner.insert(state1_5, Signed(aliceVoteUpdate, aliceVoteProof))
+          Alice
+        )(registry, combiner)
 
-        aliceAfterVote = state2.calculated.stateMachines
-          .get(alicefiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
+        aliceAfterVote = state2.fiberRecord(alicefiberId)
 
         // Step 3: Bob votes YES
-        bobVoteUpdate = Updates.TransitionStateMachine(
+        state3 <- state2.transition(
           bobfiberId,
           "vote",
           MapValue(
@@ -1984,20 +1654,15 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "proposalId" -> StrValue(proposalfiberId.toString)
             )
           ),
-          FiberOrdinal.MinValue
-        )
-        bobVoteProof <- registry.generateProofs(bobVoteUpdate, Set(Bob))
-        state3       <- combiner.insert(state2, Signed(bobVoteUpdate, bobVoteProof))
+          Bob
+        )(registry, combiner)
 
-        bobAfterVote = state3.calculated.stateMachines
-          .get(bobfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
+        bobAfterVote = state3.fiberRecord(bobfiberId)
 
         // Step 4: Manually update proposal with vote counts (simulating aggregation)
         // In a real system, this would happen via cross-machine dependencies
-        proposalWithVotes = state3.calculated.stateMachines
-          .get(proposalfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
+        proposalWithVotes = state3
+          .fiberRecord(proposalfiberId)
           .map { p =>
             val updatedData = MapValue(
               Map(
@@ -2021,86 +1686,48 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
         }
 
         // Step 5: Close voting (open -> closing)
-        closeSeqNum = state4.calculated.stateMachines(proposalfiberId).sequenceNumber
-        closeUpdate = Updates.TransitionStateMachine(
+        state5 <- state4.transition(
           proposalfiberId,
           "close",
           MapValue(Map("timestamp" -> IntValue(2100))),
-          closeSeqNum
-        )
-        closeProof <- registry.generateProofs(closeUpdate, Set(Alice))
-        state5     <- combiner.insert(state4, Signed(closeUpdate, closeProof))
+          Alice
+        )(registry, combiner)
 
-        proposalAfterClose = state5.calculated.stateMachines
-          .get(proposalfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
+        proposalAfterClose = state5.fiberRecord(proposalfiberId)
 
         // Step 6: Finalize (closing -> finalized)
-        finalCollectSeqNum = state5.calculated.stateMachines(proposalfiberId).sequenceNumber
-        finalCollectUpdate = Updates.TransitionStateMachine(
+        finalState <- state5.transition(
           proposalfiberId,
           "collect",
           MapValue(Map("timestamp" -> IntValue(2200))),
-          finalCollectSeqNum
-        )
-        finalCollectProof <- registry.generateProofs(finalCollectUpdate, Set(Alice))
-        finalState        <- combiner.insert(state5, Signed(finalCollectUpdate, finalCollectProof))
+          Alice
+        )(registry, combiner)
 
-        finalProposal = finalState.calculated.stateMachines
-          .get(proposalfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        proposalResult: Option[String] = finalProposal.flatMap { f =>
-          f.stateData match {
-            case MapValue(m) => m.get("result").collect { case StrValue(r) => r }
-            case _           => None
-          }
-        }
-
-        aliceVote: Option[String] = aliceAfterVote.flatMap { f =>
-          f.stateData match {
-            case MapValue(m) => m.get("vote").collect { case StrValue(v) => v }
-            case _           => None
-          }
-        }
-
-        bobVote: Option[String] = bobAfterVote.flatMap { f =>
-          f.stateData match {
-            case MapValue(m) => m.get("vote").collect { case StrValue(v) => v }
-            case _           => None
-          }
-        }
-
-        actionSubmitted: Option[Boolean] = validActionFiberResult.flatMap { f =>
-          f.stateData match {
-            case MapValue(m) => m.get("submitted").collect { case BoolValue(s) => s }
-            case _           => None
-          }
-        }
+        finalProposal = finalState.fiberRecord(proposalfiberId)
 
       } yield expect.all(
         // Verify valid action submission succeeded when proposal was open
         validActionFiberResult.isDefined,
         validActionFiberResult.map(_.currentState).contains(StateId("submitted")),
-        actionSubmitted.contains(true),
+        validActionFiberResult.extractBool("submitted").contains(true),
         // Verify proposal opened
         proposalAfterOpen.isDefined,
         proposalAfterOpen.map(_.currentState).contains(StateId("open")),
         // Verify Alice voted
         aliceAfterVote.isDefined,
         aliceAfterVote.map(_.currentState).contains(StateId("voted")),
-        aliceVote.contains("yes"),
+        aliceAfterVote.extractString("vote").contains("yes"),
         // Verify Bob voted
         bobAfterVote.isDefined,
         bobAfterVote.map(_.currentState).contains(StateId("voted")),
-        bobVote.contains("yes"),
+        bobAfterVote.extractString("vote").contains("yes"),
         // Verify proposal closed
         proposalAfterClose.isDefined,
         proposalAfterClose.map(_.currentState).contains(StateId("closing")),
         // Verify proposal finalized with passing result
         finalProposal.isDefined,
         finalProposal.map(_.currentState).contains(StateId("finalized")),
-        proposalResult.contains("passed")
+        finalProposal.extractString("result").contains("passed")
       )
     }
   }

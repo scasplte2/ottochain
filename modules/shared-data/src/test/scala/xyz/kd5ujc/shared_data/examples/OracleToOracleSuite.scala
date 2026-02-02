@@ -1,6 +1,6 @@
 package xyz.kd5ujc.shared_data.examples
 
-import cats.effect.{IO, Resource}
+import cats.effect.IO
 import cats.syntax.all._
 
 import io.constellationnetwork.currency.dataApplication.{DataState, L0NodeContext}
@@ -12,9 +12,9 @@ import io.constellationnetwork.security.signature.Signed
 import xyz.kd5ujc.schema.fiber._
 import xyz.kd5ujc.schema.{CalculatedState, OnChain, Updates}
 import xyz.kd5ujc.shared_data.lifecycle.Combiner
-import xyz.kd5ujc.shared_test.Mock.MockL0NodeContext
-import xyz.kd5ujc.shared_test.Participant
+import xyz.kd5ujc.shared_data.testkit.DataStateTestOps
 import xyz.kd5ujc.shared_test.Participant._
+import xyz.kd5ujc.shared_test.TestFixture
 
 import io.circe.parser
 import weaver.SimpleIOSuite
@@ -30,7 +30,7 @@ import weaver.SimpleIOSuite
  */
 object OracleToOracleSuite extends SimpleIOSuite {
 
-  private val securityProviderResource: Resource[IO, SecurityProvider[IO]] = SecurityProvider.forAsync[IO]
+  import DataStateTestOps._
 
   /**
    * Inner oracle: simple calculator that adds two numbers
@@ -66,11 +66,13 @@ object OracleToOracleSuite extends SimpleIOSuite {
         |}""".stripMargin
 
   test("oracle invocation count is tracked correctly") {
-    securityProviderResource.use { implicit s =>
+    TestFixture.resource(Set(Alice, Bob)).use { fixture =>
+      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
+      val registry = fixture.registry
+
       for {
-        implicit0(l0ctx: L0NodeContext[IO]) <- MockL0NodeContext.make[IO]
-        registry                            <- Participant.ParticipantRegistry.create[IO](Set(Alice, Bob))
-        combiner                            <- Combiner.make[IO]().pure[IO]
+        combiner <- Combiner.make[IO]().pure[IO]
 
         innerfiberId <- IO.randomUUID
         innerProg    <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
@@ -110,7 +112,7 @@ object OracleToOracleSuite extends SimpleIOSuite {
         invoke2Proof <- registry.generateProofs(invoke2, Set(Bob))
         state3       <- combiner.insert(state2, Signed(invoke2, invoke2Proof))
 
-        oracle = state3.calculated.scriptOracles.get(innerfiberId)
+        oracle = state3.oracleRecord(innerfiberId)
       } yield expect.all(
         oracle.isDefined,
         oracle.map(_.sequenceNumber).contains(FiberOrdinal.unsafeApply(2L)),
@@ -120,11 +122,13 @@ object OracleToOracleSuite extends SimpleIOSuite {
   }
 
   test("oracle whitelist denies unauthorized caller") {
-    securityProviderResource.use { implicit s =>
+    TestFixture.resource(Set(Alice, Bob, Charlie)).use { fixture =>
+      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
+      val registry = fixture.registry
+
       for {
-        implicit0(l0ctx: L0NodeContext[IO]) <- MockL0NodeContext.make[IO]
-        registry                            <- Participant.ParticipantRegistry.create[IO](Set(Alice, Bob, Charlie))
-        combiner                            <- Combiner.make[IO]().pure[IO]
+        combiner <- Combiner.make[IO]().pure[IO]
 
         oracleFiberId <- IO.randomUUID
         prog          <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
@@ -154,7 +158,7 @@ object OracleToOracleSuite extends SimpleIOSuite {
         aliceProof <- registry.generateProofs(invokeAlice, Set(Alice))
         state2     <- combiner.insert(state1, Signed(invokeAlice, aliceProof))
 
-        oracleAfterAlice = state2.calculated.scriptOracles.get(oracleFiberId)
+        oracleAfterAlice = state2.oracleRecord(oracleFiberId)
 
         // Bob tries to invoke (not whitelisted) - should fail
         invokeBob = Updates.InvokeScriptOracle(
@@ -169,7 +173,7 @@ object OracleToOracleSuite extends SimpleIOSuite {
         // This should fail - Bob is not whitelisted
         bobResult <- combiner.insert(state2, Signed(invokeBob, bobProof)).attempt
 
-        oracleAfterBob = bobResult.toOption.flatMap(_.calculated.scriptOracles.get(oracleFiberId))
+        oracleAfterBob = bobResult.toOption.flatMap(_.oracleRecord(oracleFiberId))
 
       } yield expect.all(
         // Alice's invocation succeeded
@@ -181,11 +185,13 @@ object OracleToOracleSuite extends SimpleIOSuite {
   }
 
   test("multiple oracles can be invoked in sequence") {
-    securityProviderResource.use { implicit s =>
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
+      val registry = fixture.registry
+
       for {
-        implicit0(l0ctx: L0NodeContext[IO]) <- MockL0NodeContext.make[IO]
-        registry                            <- Participant.ParticipantRegistry.create[IO](Set(Alice))
-        combiner                            <- Combiner.make[IO]().pure[IO]
+        combiner <- Combiner.make[IO]().pure[IO]
 
         oracle1fiberId <- IO.randomUUID
         oracle2fiberId <- IO.randomUUID
@@ -252,8 +258,8 @@ object OracleToOracleSuite extends SimpleIOSuite {
         invokeProof3 <- registry.generateProofs(invoke3, Set(Alice))
         state5       <- combiner.insert(state4, Signed(invoke3, invokeProof3))
 
-        calculatorOracle = state5.calculated.scriptOracles.get(oracle1fiberId)
-        counterOracle = state5.calculated.scriptOracles.get(oracle2fiberId)
+        calculatorOracle = state5.oracleRecord(oracle1fiberId)
+        counterOracle = state5.oracleRecord(oracle2fiberId)
       } yield expect.all(
         calculatorOracle.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next),
         counterOracle.map(_.sequenceNumber).contains(FiberOrdinal.unsafeApply(2L)),
@@ -263,11 +269,13 @@ object OracleToOracleSuite extends SimpleIOSuite {
   }
 
   test("oracle returning valid=false causes invocation failure") {
-    securityProviderResource.use { implicit s =>
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
+      val registry = fixture.registry
+
       for {
-        implicit0(l0ctx: L0NodeContext[IO]) <- MockL0NodeContext.make[IO]
-        registry                            <- Participant.ParticipantRegistry.create[IO](Set(Alice))
-        combiner                            <- Combiner.make[IO]().pure[IO]
+        combiner <- Combiner.make[IO]().pure[IO]
 
         oracleFiberId <- IO.randomUUID
 
@@ -313,7 +321,7 @@ object OracleToOracleSuite extends SimpleIOSuite {
         validProof <- registry.generateProofs(invokeValid, Set(Alice))
         state2     <- combiner.insert(state1, Signed(invokeValid, validProof))
 
-        oracleAfterValid = state2.calculated.scriptOracles.get(oracleFiberId)
+        oracleAfterValid = state2.oracleRecord(oracleFiberId)
 
         // Invoke with amount < 100 - should fail due to valid=false
         invokeInvalid = Updates.InvokeScriptOracle(

@@ -1,37 +1,38 @@
 package xyz.kd5ujc.shared_data.examples
 
+import cats.effect.IO
 import cats.effect.std.UUIDGen
-import cats.effect.{IO, Resource}
 import cats.syntax.all._
 
 import io.constellationnetwork.currency.dataApplication.{DataState, L0NodeContext}
-import io.constellationnetwork.ext.cats.syntax.next.catsSyntaxNext
 import io.constellationnetwork.metagraph_sdk.json_logic._
-import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
 import io.constellationnetwork.security.SecurityProvider
-import io.constellationnetwork.security.signature.Signed
 
 import xyz.kd5ujc.schema.fiber._
-import xyz.kd5ujc.schema.{CalculatedState, OnChain, Records, Updates}
+import xyz.kd5ujc.schema.{CalculatedState, OnChain}
 import xyz.kd5ujc.shared_data.lifecycle.Combiner
 import xyz.kd5ujc.shared_data.syntax.all._
-import xyz.kd5ujc.shared_test.Mock.MockL0NodeContext
+import xyz.kd5ujc.shared_data.testkit.{DataStateTestOps, FiberBuilder, TestImports}
 import xyz.kd5ujc.shared_test.Participant._
+import xyz.kd5ujc.shared_test.TestFixture
 
 import io.circe.parser._
 import weaver.SimpleIOSuite
 
 object RealEstateStateMachineSuite extends SimpleIOSuite {
 
-  private val securityProviderResource: Resource[IO, SecurityProvider[IO]] = SecurityProvider.forAsync[IO]
+  import DataStateTestOps._
+  import TestImports.optionFiberRecordOps
 
   test("json-encoded: complete real estate lifecycle from contract to foreclosure") {
-    securityProviderResource.use { implicit s =>
+    TestFixture.resource(Set(Alice, Bob, Charlie, Dave, Eve, Faythe, Grace, Heidi)).use { fixture =>
+      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
+      val registry = fixture.registry
+      val ordinal = fixture.ordinal
+
       for {
-        implicit0(l0ctx: L0NodeContext[IO]) <- MockL0NodeContext.make[IO]
-        registry <- ParticipantRegistry.create[IO](Set(Alice, Bob, Charlie, Dave, Eve, Faythe, Grace, Heidi))
         combiner <- Combiner.make[IO]().pure[IO]
-        ordinal  <- l0ctx.getLastCurrencySnapshot.map(_.map(_.ordinal.next).get)
 
         propertyfiberId           <- UUIDGen.randomUUID[IO]
         contractfiberId           <- UUIDGen.randomUUID[IO]
@@ -1190,51 +1191,43 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
         }"""
 
         propertyDef <- IO.fromEither(
-          decode[StateMachineDefinition](propertyJson).left.map(err =>
-            new RuntimeException(s"Failed to decode property JSON: $err")
-          )
+          decode[StateMachineDefinition](propertyJson).left
+            .map(err => new RuntimeException(s"Failed to decode property JSON: $err"))
         )
 
         contractDef <- IO.fromEither(
-          decode[StateMachineDefinition](contractJson).left.map(err =>
-            new RuntimeException(s"Failed to decode contract JSON: $err")
-          )
+          decode[StateMachineDefinition](contractJson).left
+            .map(err => new RuntimeException(s"Failed to decode contract JSON: $err"))
         )
 
         escrowDef <- IO.fromEither(
-          decode[StateMachineDefinition](escrowJson).left.map(err =>
-            new RuntimeException(s"Failed to decode escrow JSON: $err")
-          )
+          decode[StateMachineDefinition](escrowJson).left
+            .map(err => new RuntimeException(s"Failed to decode escrow JSON: $err"))
         )
 
         inspectionDef <- IO.fromEither(
-          decode[StateMachineDefinition](inspectionJson).left.map(err =>
-            new RuntimeException(s"Failed to decode inspection JSON: $err")
-          )
+          decode[StateMachineDefinition](inspectionJson).left
+            .map(err => new RuntimeException(s"Failed to decode inspection JSON: $err"))
         )
 
         appraisalDef <- IO.fromEither(
-          decode[StateMachineDefinition](appraisalJson).left.map(err =>
-            new RuntimeException(s"Failed to decode appraisal JSON: $err")
-          )
+          decode[StateMachineDefinition](appraisalJson).left
+            .map(err => new RuntimeException(s"Failed to decode appraisal JSON: $err"))
         )
 
         mortgageDef <- IO.fromEither(
-          decode[StateMachineDefinition](mortgageJson).left.map(err =>
-            new RuntimeException(s"Failed to decode mortgage JSON: $err")
-          )
+          decode[StateMachineDefinition](mortgageJson).left
+            .map(err => new RuntimeException(s"Failed to decode mortgage JSON: $err"))
         )
 
         titleDef <- IO.fromEither(
-          decode[StateMachineDefinition](titleJson).left.map(err =>
-            new RuntimeException(s"Failed to decode title JSON: $err")
-          )
+          decode[StateMachineDefinition](titleJson).left
+            .map(err => new RuntimeException(s"Failed to decode title JSON: $err"))
         )
 
         propertyManagementDef <- IO.fromEither(
-          decode[StateMachineDefinition](propertyManagementJson).left.map(err =>
-            new RuntimeException(s"Failed to decode property management JSON: $err")
-          )
+          decode[StateMachineDefinition](propertyManagementJson).left
+            .map(err => new RuntimeException(s"Failed to decode property management JSON: $err"))
         )
 
         aliceAddr = registry.addresses(Alice)
@@ -1251,14 +1244,12 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
             "failedContracts" -> IntValue(0)
           )
         )
-        propertyHash <- (propertyData: JsonLogicValue).computeDigest
 
         contractData = MapValue(
           Map(
             "status" -> StrValue("draft")
           )
         )
-        contractHash <- (contractData: JsonLogicValue).computeDigest
 
         escrowData = MapValue(
           Map(
@@ -1268,35 +1259,30 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
             "seller"         -> StrValue(aliceAddr.toString)
           )
         )
-        escrowHash <- (escrowData: JsonLogicValue).computeDigest
 
         inspectionData = MapValue(
           Map(
             "status" -> StrValue("pending")
           )
         )
-        inspectionHash <- (inspectionData: JsonLogicValue).computeDigest
 
         appraisalData = MapValue(
           Map(
             "status" -> StrValue("pending")
           )
         )
-        appraisalHash <- (appraisalData: JsonLogicValue).computeDigest
 
         mortgageData = MapValue(
           Map(
             "status" -> StrValue("application")
           )
         )
-        mortgageHash <- (mortgageData: JsonLogicValue).computeDigest
 
         titleData = MapValue(
           Map(
             "status" -> StrValue("pending")
           )
         )
-        titleHash <- (titleData: JsonLogicValue).computeDigest
 
         propertyManagementData = MapValue(
           Map(
@@ -1304,119 +1290,54 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
             "showingCount" -> IntValue(0)
           )
         )
-        propertyManagementHash <- (propertyManagementData: JsonLogicValue).computeDigest
 
-        propertyFiber = Records.StateMachineFiberRecord(
-          fiberId = propertyfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = propertyDef,
-          currentState = StateId("for_sale"),
-          stateData = propertyData,
-          stateDataHash = propertyHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Alice).map(registry.addresses),
-          status = FiberStatus.Active
-        )
+        propertyFiber <- FiberBuilder(propertyfiberId, ordinal, propertyDef)
+          .withState("for_sale")
+          .withDataValue(propertyData)
+          .ownedBy(registry, Alice)
+          .build[IO]
 
-        contractFiber = Records.StateMachineFiberRecord(
-          fiberId = contractfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = contractDef,
-          currentState = StateId("draft"),
-          stateData = contractData,
-          stateDataHash = contractHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Alice, Bob).map(registry.addresses),
-          status = FiberStatus.Active
-        )
+        contractFiber <- FiberBuilder(contractfiberId, ordinal, contractDef)
+          .withState("draft")
+          .withDataValue(contractData)
+          .ownedBy(registry, Alice, Bob)
+          .build[IO]
 
-        escrowFiber = Records.StateMachineFiberRecord(
-          fiberId = escrowfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = escrowDef,
-          currentState = StateId("empty"),
-          stateData = escrowData,
-          stateDataHash = escrowHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Charlie).map(registry.addresses),
-          status = FiberStatus.Active
-        )
+        escrowFiber <- FiberBuilder(escrowfiberId, ordinal, escrowDef)
+          .withState("empty")
+          .withDataValue(escrowData)
+          .ownedBy(registry, Charlie)
+          .build[IO]
 
-        inspectionFiber = Records.StateMachineFiberRecord(
-          fiberId = inspectionfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = inspectionDef,
-          currentState = StateId("pending"),
-          stateData = inspectionData,
-          stateDataHash = inspectionHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Dave).map(registry.addresses),
-          status = FiberStatus.Active
-        )
+        inspectionFiber <- FiberBuilder(inspectionfiberId, ordinal, inspectionDef)
+          .withState("pending")
+          .withDataValue(inspectionData)
+          .ownedBy(registry, Dave)
+          .build[IO]
 
-        appraisalFiber = Records.StateMachineFiberRecord(
-          fiberId = appraisalfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = appraisalDef,
-          currentState = StateId("pending"),
-          stateData = appraisalData,
-          stateDataHash = appraisalHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Eve).map(registry.addresses),
-          status = FiberStatus.Active
-        )
+        appraisalFiber <- FiberBuilder(appraisalfiberId, ordinal, appraisalDef)
+          .withState("pending")
+          .withDataValue(appraisalData)
+          .ownedBy(registry, Eve)
+          .build[IO]
 
-        mortgageFiber = Records.StateMachineFiberRecord(
-          fiberId = mortgagefiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = mortgageDef,
-          currentState = StateId("application"),
-          stateData = mortgageData,
-          stateDataHash = mortgageHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Faythe).map(registry.addresses),
-          status = FiberStatus.Active
-        )
+        mortgageFiber <- FiberBuilder(mortgagefiberId, ordinal, mortgageDef)
+          .withState("application")
+          .withDataValue(mortgageData)
+          .ownedBy(registry, Faythe)
+          .build[IO]
 
-        titleFiber = Records.StateMachineFiberRecord(
-          fiberId = titlefiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = titleDef,
-          currentState = StateId("pending"),
-          stateData = titleData,
-          stateDataHash = titleHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Grace).map(registry.addresses),
-          status = FiberStatus.Active
-        )
+        titleFiber <- FiberBuilder(titlefiberId, ordinal, titleDef)
+          .withState("pending")
+          .withDataValue(titleData)
+          .ownedBy(registry, Grace)
+          .build[IO]
 
-        propertyManagementFiber = Records.StateMachineFiberRecord(
-          fiberId = propertyManagementfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = propertyManagementDef,
-          currentState = StateId("available"),
-          stateData = propertyManagementData,
-          stateDataHash = propertyManagementHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Heidi).map(registry.addresses),
-          status = FiberStatus.Active
-        )
+        propertyManagementFiber <- FiberBuilder(propertyManagementfiberId, ordinal, propertyManagementDef)
+          .withState("available")
+          .withDataValue(propertyManagementData)
+          .ownedBy(registry, Heidi)
+          .build[IO]
 
         inState <- DataState(OnChain.genesis, CalculatedState.genesis).withRecords[IO](
           Map(
@@ -1433,7 +1354,7 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
 
         // PHASE 1: CONTRACT PHASE
         // Step 1: Sign contract
-        signContractUpdate = Updates.TransitionStateMachine(
+        state1 <- inState.transition(
           contractfiberId,
           "sign",
           MapValue(
@@ -1448,13 +1369,12 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
               "closingDate"   -> IntValue(3000)
             )
           ),
-          FiberOrdinal.MinValue
-        )
-        signContractProof <- registry.generateProofs(signContractUpdate, Set(Alice, Bob))
-        state1            <- combiner.insert(inState, Signed(signContractUpdate, signContractProof))
+          Alice,
+          Bob
+        )(registry, combiner)
 
         // Step 2: Accept offer on property
-        acceptOfferUpdate = Updates.TransitionStateMachine(
+        state2 <- state1.transition(
           propertyfiberId,
           "accept_offer",
           MapValue(
@@ -1464,13 +1384,11 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
               "buyerId"     -> StrValue(bobAddr.toString)
             )
           ),
-          FiberOrdinal.MinValue
-        )
-        acceptOfferProof <- registry.generateProofs(acceptOfferUpdate, Set(Alice))
-        state2           <- combiner.insert(state1, Signed(acceptOfferUpdate, acceptOfferProof))
+          Alice
+        )(registry, combiner)
 
         // Step 3: Deposit earnest money
-        depositUpdate = Updates.TransitionStateMachine(
+        state3 <- state2.transition(
           escrowfiberId,
           "deposit",
           MapValue(
@@ -1479,46 +1397,36 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
               "amount"    -> IntValue(10000)
             )
           ),
-          FiberOrdinal.MinValue
-        )
-        depositProof <- registry.generateProofs(depositUpdate, Set(Bob))
-        state3       <- combiner.insert(state2, Signed(depositUpdate, depositProof))
+          Bob
+        )(registry, combiner)
 
         // Step 4: Hold escrow
-        holdEscrowSeqNum = state3.calculated.stateMachines(escrowfiberId).sequenceNumber
-        holdEscrowUpdate = Updates.TransitionStateMachine(
+        state4 <- state3.transition(
           escrowfiberId,
           "hold",
           MapValue(Map("timestamp" -> IntValue(1300))),
-          holdEscrowSeqNum
-        )
-        holdEscrowProof <- registry.generateProofs(holdEscrowUpdate, Set(Charlie))
-        state4          <- combiner.insert(state3, Signed(holdEscrowUpdate, holdEscrowProof))
+          Charlie
+        )(registry, combiner)
 
         // Step 5: Enter contingency period
-        enterContingencySeqNum = state4.calculated.stateMachines(contractfiberId).sequenceNumber
-        enterContingencyUpdate = Updates.TransitionStateMachine(
+        state5 <- state4.transition(
           contractfiberId,
           "enter_contingency",
           MapValue(Map("timestamp" -> IntValue(1400))),
-          enterContingencySeqNum
-        )
-        enterContingencyProof <- registry.generateProofs(enterContingencyUpdate, Set(Alice, Bob))
-        state5                <- combiner.insert(state4, Signed(enterContingencyUpdate, enterContingencyProof))
+          Alice,
+          Bob
+        )(registry, combiner)
 
         // PHASE 2: CONTINGENCY PHASE
         // Step 6: Schedule and complete inspection
-        scheduleInspectionUpdate = Updates.TransitionStateMachine(
+        state6 <- state5.transition(
           inspectionfiberId,
           "schedule",
           MapValue(Map("inspectionDate" -> IntValue(1500))),
-          FiberOrdinal.MinValue
-        )
-        scheduleInspectionProof <- registry.generateProofs(scheduleInspectionUpdate, Set(Dave))
-        state6                  <- combiner.insert(state5, Signed(scheduleInspectionUpdate, scheduleInspectionProof))
+          Dave
+        )(registry, combiner)
 
-        completeInspectionSeqNum = state6.calculated.stateMachines(inspectionfiberId).sequenceNumber
-        completeInspectionUpdate = Updates.TransitionStateMachine(
+        state7 <- state6.transition(
           inspectionfiberId,
           "complete",
           MapValue(
@@ -1527,13 +1435,10 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
               "issues"    -> IntValue(1)
             )
           ),
-          completeInspectionSeqNum
-        )
-        completeInspectionProof <- registry.generateProofs(completeInspectionUpdate, Set(Dave))
-        state7                  <- combiner.insert(state6, Signed(completeInspectionUpdate, completeInspectionProof))
+          Dave
+        )(registry, combiner)
 
-        approveInspectionSeqNum = state7.calculated.stateMachines(inspectionfiberId).sequenceNumber
-        approveInspectionUpdate = Updates.TransitionStateMachine(
+        state8 <- state7.transition(
           inspectionfiberId,
           "approve",
           MapValue(
@@ -1542,13 +1447,11 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
               "repairsAgreed" -> BoolValue(true)
             )
           ),
-          approveInspectionSeqNum
-        )
-        approveInspectionProof <- registry.generateProofs(approveInspectionUpdate, Set(Dave))
-        state8                 <- combiner.insert(state7, Signed(approveInspectionUpdate, approveInspectionProof))
+          Dave
+        )(registry, combiner)
 
         // Step 7: Order and complete appraisal
-        orderAppraisalUpdate = Updates.TransitionStateMachine(
+        state9 <- state8.transition(
           appraisalfiberId,
           "order",
           MapValue(
@@ -1557,13 +1460,10 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
               "purchasePrice" -> IntValue(500000)
             )
           ),
-          FiberOrdinal.MinValue
-        )
-        orderAppraisalProof <- registry.generateProofs(orderAppraisalUpdate, Set(Eve))
-        state9              <- combiner.insert(state8, Signed(orderAppraisalUpdate, orderAppraisalProof))
+          Eve
+        )(registry, combiner)
 
-        completeAppraisalSeqNum = state9.calculated.stateMachines(appraisalfiberId).sequenceNumber
-        completeAppraisalUpdate = Updates.TransitionStateMachine(
+        state10 <- state9.transition(
           appraisalfiberId,
           "complete",
           MapValue(
@@ -1572,23 +1472,18 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
               "appraisedValue" -> IntValue(510000)
             )
           ),
-          completeAppraisalSeqNum
-        )
-        completeAppraisalProof <- registry.generateProofs(completeAppraisalUpdate, Set(Eve))
-        state10                <- combiner.insert(state9, Signed(completeAppraisalUpdate, completeAppraisalProof))
+          Eve
+        )(registry, combiner)
 
-        reviewAppraisalSeqNum = state10.calculated.stateMachines(appraisalfiberId).sequenceNumber
-        reviewAppraisalUpdate = Updates.TransitionStateMachine(
+        state11 <- state10.transition(
           appraisalfiberId,
           "review",
           MapValue(Map("timestamp" -> IntValue(2000))),
-          reviewAppraisalSeqNum
-        )
-        reviewAppraisalProof <- registry.generateProofs(reviewAppraisalUpdate, Set(Eve))
-        state11              <- combiner.insert(state10, Signed(reviewAppraisalUpdate, reviewAppraisalProof))
+          Eve
+        )(registry, combiner)
 
         // Step 8: Submit and approve mortgage
-        submitMortgageUpdate = Updates.TransitionStateMachine(
+        state12 <- state11.transition(
           mortgagefiberId,
           "submit",
           MapValue(
@@ -1599,13 +1494,10 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
               "borrower"   -> StrValue(bobAddr.toString)
             )
           ),
-          FiberOrdinal.MinValue
-        )
-        submitMortgageProof <- registry.generateProofs(submitMortgageUpdate, Set(Faythe))
-        state12             <- combiner.insert(state11, Signed(submitMortgageUpdate, submitMortgageProof))
+          Faythe
+        )(registry, combiner)
 
-        underwriteMortgageSeqNum = state12.calculated.stateMachines(mortgagefiberId).sequenceNumber
-        underwriteMortgageUpdate = Updates.TransitionStateMachine(
+        state13 <- state12.transition(
           mortgagefiberId,
           "underwrite",
           MapValue(
@@ -1617,35 +1509,27 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
               "term"         -> IntValue(360)
             )
           ),
-          underwriteMortgageSeqNum
-        )
-        underwriteMortgageProof <- registry.generateProofs(underwriteMortgageUpdate, Set(Faythe))
-        state13                 <- combiner.insert(state12, Signed(underwriteMortgageUpdate, underwriteMortgageProof))
+          Faythe
+        )(registry, combiner)
 
         // Step 9: Pass all contingencies
-        passContingenciesSeqNum = state13.calculated.stateMachines(propertyfiberId).sequenceNumber
-        passContingenciesUpdate = Updates.TransitionStateMachine(
+        state14 <- state13.transition(
           propertyfiberId,
           "pass_contingencies",
           MapValue(Map("timestamp" -> IntValue(2300))),
-          passContingenciesSeqNum
-        )
-        passContingenciesProof <- registry.generateProofs(passContingenciesUpdate, Set(Alice))
-        state14                <- combiner.insert(state13, Signed(passContingenciesUpdate, passContingenciesProof))
+          Alice
+        )(registry, combiner)
 
         // PHASE 3: CLOSING PHASE
         // Step 10: Title search and transfer
-        searchTitleUpdate = Updates.TransitionStateMachine(
+        state15 <- state14.transition(
           titlefiberId,
           "search",
           MapValue(Map("timestamp" -> IntValue(2400))),
-          FiberOrdinal.MinValue
-        )
-        searchTitleProof <- registry.generateProofs(searchTitleUpdate, Set(Grace))
-        state15          <- combiner.insert(state14, Signed(searchTitleUpdate, searchTitleProof))
+          Grace
+        )(registry, combiner)
 
-        completeSearchSeqNum = state15.calculated.stateMachines(titlefiberId).sequenceNumber
-        completeSearchUpdate = Updates.TransitionStateMachine(
+        state16 <- state15.transition(
           titlefiberId,
           "complete_search",
           MapValue(
@@ -1654,23 +1538,17 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
               "issuesFound" -> IntValue(0)
             )
           ),
-          completeSearchSeqNum
-        )
-        completeSearchProof <- registry.generateProofs(completeSearchUpdate, Set(Grace))
-        state16             <- combiner.insert(state15, Signed(completeSearchUpdate, completeSearchProof))
+          Grace
+        )(registry, combiner)
 
-        insureTitleSeqNum = state16.calculated.stateMachines(titlefiberId).sequenceNumber
-        insureTitleUpdate = Updates.TransitionStateMachine(
+        state17 <- state16.transition(
           titlefiberId,
           "insure",
           MapValue(Map("timestamp" -> IntValue(2600))),
-          insureTitleSeqNum
-        )
-        insureTitleProof <- registry.generateProofs(insureTitleUpdate, Set(Grace))
-        state17          <- combiner.insert(state16, Signed(insureTitleUpdate, insureTitleProof))
+          Grace
+        )(registry, combiner)
 
-        transferTitleSeqNum = state17.calculated.stateMachines(titlefiberId).sequenceNumber
-        transferTitleUpdate = Updates.TransitionStateMachine(
+        state18 <- state17.transition(
           titlefiberId,
           "transfer",
           MapValue(
@@ -1680,69 +1558,47 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
               "toOwner"   -> StrValue(bobAddr.toString)
             )
           ),
-          transferTitleSeqNum
-        )
-        transferTitleProof <- registry.generateProofs(transferTitleUpdate, Set(Grace))
-        state18            <- combiner.insert(state17, Signed(transferTitleUpdate, transferTitleProof))
+          Grace
+        )(registry, combiner)
 
         // Step 11: Disburse and close escrow
-        disburseEscrowSeqNum = state18.calculated.stateMachines(escrowfiberId).sequenceNumber
-        disburseEscrowUpdate = Updates.TransitionStateMachine(
+        state19 <- state18.transition(
           escrowfiberId,
           "disburse",
           MapValue(Map("timestamp" -> IntValue(2800))),
-          disburseEscrowSeqNum
-        )
-        disburseEscrowProof <- registry.generateProofs(disburseEscrowUpdate, Set(Charlie))
-        state19             <- combiner.insert(state18, Signed(disburseEscrowUpdate, disburseEscrowProof))
+          Charlie
+        )(registry, combiner)
 
-        closeEscrowSeqNum = state19.calculated.stateMachines(escrowfiberId).sequenceNumber
-        closeEscrowUpdate = Updates.TransitionStateMachine(
+        state20 <- state19.transition(
           escrowfiberId,
           "close",
           MapValue(Map("timestamp" -> IntValue(2900))),
-          closeEscrowSeqNum
-        )
-        closeEscrowProof <- registry.generateProofs(closeEscrowUpdate, Set(Charlie))
-        state20          <- combiner.insert(state19, Signed(closeEscrowUpdate, closeEscrowProof))
+          Charlie
+        )(registry, combiner)
 
         // Step 12: Close sale on property (triggers mortgage activation)
-        closeSaleSeqNum = state20.calculated.stateMachines(propertyfiberId).sequenceNumber
-        closeSaleUpdate = Updates.TransitionStateMachine(
+        state21 <- state20.transition(
           propertyfiberId,
           "close_sale",
           MapValue(Map("timestamp" -> IntValue(3000))),
-          closeSaleSeqNum
-        )
-        closeSaleProof <- registry.generateProofs(closeSaleUpdate, Set(Alice))
-        state21        <- combiner.insert(state20, Signed(closeSaleUpdate, closeSaleProof))
+          Alice
+        )(registry, combiner)
 
         // Verify mortgage was activated by trigger
-        mortgageAfterClose = state21.calculated.stateMachines
-          .get(mortgagefiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        mortgageStatus: Option[String] = mortgageAfterClose.flatMap { f =>
-          f.stateData match {
-            case MapValue(m) => m.get("status").collect { case StrValue(s) => s }
-            case _           => None
-          }
-        }
+        mortgageAfterClose = state21.fiberRecord(mortgagefiberId)
+        mortgageStatus = mortgageAfterClose.extractString("status")
 
         // Step 13: Close contract
-        closeContractSeqNum = state21.calculated.stateMachines(contractfiberId).sequenceNumber
-        closeContractUpdate = Updates.TransitionStateMachine(
+        state22 <- state21.transition(
           contractfiberId,
           "close",
           MapValue(Map("timestamp" -> IntValue(3100))),
-          closeContractSeqNum
-        )
-        closeContractProof <- registry.generateProofs(closeContractUpdate, Set(Alice, Bob))
-        state22            <- combiner.insert(state21, Signed(closeContractUpdate, closeContractProof))
+          Alice,
+          Bob
+        )(registry, combiner)
 
         // PHASE 4: OWNERSHIP PHASE - Make first mortgage payment
-        firstPaymentSeqNum = state22.calculated.stateMachines(mortgagefiberId).sequenceNumber
-        firstPaymentUpdate = Updates.TransitionStateMachine(
+        state23 <- state22.transition(
           mortgagefiberId,
           "first_payment",
           MapValue(
@@ -1751,91 +1607,38 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
               "principalPaid" -> IntValue(500)
             )
           ),
-          firstPaymentSeqNum
-        )
-        firstPaymentProof <- registry.generateProofs(firstPaymentUpdate, Set(Bob))
-        state23           <- combiner.insert(state22, Signed(firstPaymentUpdate, firstPaymentProof))
+          Bob
+        )(registry, combiner)
 
-        mortgageAfterFirstPayment = state23.calculated.stateMachines
-          .get(mortgagefiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
+        mortgageAfterFirstPayment = state23.fiberRecord(mortgagefiberId)
 
-        propertyAfterSale = state23.calculated.stateMachines
-          .get(propertyfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
+        propertyAfterSale = state23.fiberRecord(propertyfiberId)
 
-        propertyOwner: Option[String] = propertyAfterSale.flatMap { f =>
-          f.stateData match {
-            case MapValue(m) => m.get("owner").collect { case StrValue(o) => o }
-            case _           => None
-          }
-        }
-
-        propertyStatus: Option[String] = propertyAfterSale.flatMap { f =>
-          f.stateData match {
-            case MapValue(m) => m.get("status").collect { case StrValue(s) => s }
-            case _           => None
-          }
-        }
-
-        mortgageBalance: Option[BigInt] = mortgageAfterFirstPayment.flatMap { f =>
-          f.stateData match {
-            case MapValue(m) => m.get("principalBalance").collect { case IntValue(b) => b }
-            case _           => None
-          }
-        }
+        propertyOwner = propertyAfterSale.extractString("owner")
+        propertyStatus = propertyAfterSale.extractString("status")
+        mortgageBalance = mortgageAfterFirstPayment.extractInt("principalBalance")
 
       } yield expect.all(
         // Verify contract signed
-        state1.calculated.stateMachines.get(contractfiberId).exists {
-          case r: Records.StateMachineFiberRecord => r.currentState == StateId("signed")
-          case _                                  => false
-        },
+        state1.fiberRecord(contractfiberId).map(_.currentState).contains(StateId("signed")),
         // Verify property under contract
-        state2.calculated.stateMachines.get(propertyfiberId).exists {
-          case r: Records.StateMachineFiberRecord => r.currentState == StateId("under_contract")
-          case _                                  => false
-        },
+        state2.fiberRecord(propertyfiberId).map(_.currentState).contains(StateId("under_contract")),
         // Verify escrow funded
-        state3.calculated.stateMachines.get(escrowfiberId).exists {
-          case r: Records.StateMachineFiberRecord => r.currentState == StateId("funded")
-          case _                                  => false
-        },
+        state3.fiberRecord(escrowfiberId).map(_.currentState).contains(StateId("funded")),
         // Verify contract in contingency
-        state5.calculated.stateMachines.get(contractfiberId).exists {
-          case r: Records.StateMachineFiberRecord => r.currentState == StateId("contingent")
-          case _                                  => false
-        },
+        state5.fiberRecord(contractfiberId).map(_.currentState).contains(StateId("contingent")),
         // Verify inspection passed with repairs
-        state8.calculated.stateMachines.get(inspectionfiberId).exists {
-          case r: Records.StateMachineFiberRecord => r.currentState == StateId("passed_with_repairs")
-          case _                                  => false
-        },
+        state8.fiberRecord(inspectionfiberId).map(_.currentState).contains(StateId("passed_with_repairs")),
         // Verify appraisal approved
-        state11.calculated.stateMachines.get(appraisalfiberId).exists {
-          case r: Records.StateMachineFiberRecord => r.currentState == StateId("approved")
-          case _                                  => false
-        },
+        state11.fiberRecord(appraisalfiberId).map(_.currentState).contains(StateId("approved")),
         // Verify mortgage approved
-        state13.calculated.stateMachines.get(mortgagefiberId).exists {
-          case r: Records.StateMachineFiberRecord => r.currentState == StateId("approved")
-          case _                                  => false
-        },
+        state13.fiberRecord(mortgagefiberId).map(_.currentState).contains(StateId("approved")),
         // Verify property pending sale
-        state14.calculated.stateMachines.get(propertyfiberId).exists {
-          case r: Records.StateMachineFiberRecord => r.currentState == StateId("pending_sale")
-          case _                                  => false
-        },
+        state14.fiberRecord(propertyfiberId).map(_.currentState).contains(StateId("pending_sale")),
         // Verify title transferred
-        state18.calculated.stateMachines.get(titlefiberId).exists {
-          case r: Records.StateMachineFiberRecord => r.currentState == StateId("transferred")
-          case _                                  => false
-        },
+        state18.fiberRecord(titlefiberId).map(_.currentState).contains(StateId("transferred")),
         // Verify escrow closed
-        state20.calculated.stateMachines.get(escrowfiberId).exists {
-          case r: Records.StateMachineFiberRecord => r.currentState == StateId("closed")
-          case _                                  => false
-        },
+        state20.fiberRecord(escrowfiberId).map(_.currentState).contains(StateId("closed")),
         // Verify property ownership transferred and now owned by Bob
         propertyAfterSale.isDefined,
         propertyAfterSale.map(_.currentState).contains(StateId("owned")),
@@ -1849,10 +1652,7 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
         mortgageAfterFirstPayment.map(_.currentState).contains(StateId("current")),
         mortgageBalance.contains(BigInt(399500)), // 400000 - 500
         // Verify contract executed
-        state22.calculated.stateMachines.get(contractfiberId).exists {
-          case r: Records.StateMachineFiberRecord => r.currentState == StateId("executed")
-          case _                                  => false
-        }
+        state22.fiberRecord(contractfiberId).map(_.currentState).contains(StateId("executed"))
       )
     }
   }

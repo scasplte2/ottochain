@@ -1,37 +1,38 @@
 package xyz.kd5ujc.shared_data.examples
 
+import cats.effect.IO
 import cats.effect.std.UUIDGen
-import cats.effect.{IO, Resource}
 import cats.syntax.all._
 
 import io.constellationnetwork.currency.dataApplication.{DataState, L0NodeContext}
-import io.constellationnetwork.ext.cats.syntax.next.catsSyntaxNext
 import io.constellationnetwork.metagraph_sdk.json_logic._
-import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
 import io.constellationnetwork.security.SecurityProvider
-import io.constellationnetwork.security.signature.Signed
 
 import xyz.kd5ujc.schema.fiber._
-import xyz.kd5ujc.schema.{CalculatedState, OnChain, Records, Updates}
+import xyz.kd5ujc.schema.{CalculatedState, OnChain}
 import xyz.kd5ujc.shared_data.lifecycle.Combiner
 import xyz.kd5ujc.shared_data.syntax.all._
-import xyz.kd5ujc.shared_test.Mock.MockL0NodeContext
+import xyz.kd5ujc.shared_data.testkit.{DataStateTestOps, FiberBuilder, TestImports}
 import xyz.kd5ujc.shared_test.Participant._
+import xyz.kd5ujc.shared_test.TestFixture
 
 import io.circe.parser._
 import weaver.SimpleIOSuite
 
 object ClinicalTrialStateMachineSuite extends SimpleIOSuite {
 
-  private val securityProviderResource: Resource[IO, SecurityProvider[IO]] = SecurityProvider.forAsync[IO]
+  import DataStateTestOps._
+  import TestImports.optionFiberRecordOps
 
   test("json-encoded: clinical trial with multi-party coordination and bi-directional transitions") {
-    securityProviderResource.use { implicit s =>
+    TestFixture.resource(Set(Alice, Bob, Charlie, Dave, Eve)).use { fixture =>
+      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
+      val registry = fixture.registry
+      val ordinal = fixture.ordinal
+
       for {
-        implicit0(l0ctx: L0NodeContext[IO]) <- MockL0NodeContext.make[IO]
-        registry                            <- ParticipantRegistry.create[IO](Set(Alice, Bob, Charlie, Dave, Eve))
-        combiner                            <- Combiner.make[IO]().pure[IO]
-        ordinal                             <- l0ctx.getLastCurrencySnapshot.map(_.map(_.ordinal.next).get)
+        combiner <- Combiner.make[IO]().pure[IO]
 
         trialfiberId        <- UUIDGen.randomUUID[IO]
         patientfiberId      <- UUIDGen.randomUUID[IO]
@@ -870,43 +871,38 @@ object ClinicalTrialStateMachineSuite extends SimpleIOSuite {
         }"""
 
         trialDef <- IO.fromEither(
-          decode[StateMachineDefinition](trialJson).left.map(err =>
-            new RuntimeException(s"Failed to decode trial JSON: $err")
-          )
+          decode[StateMachineDefinition](trialJson).left
+            .map(err => new RuntimeException(s"Failed to decode trial JSON: $err"))
         )
 
         patientDef <- IO.fromEither(
-          decode[StateMachineDefinition](patientJson).left.map(err =>
-            new RuntimeException(s"Failed to decode patient JSON: $err")
-          )
+          decode[StateMachineDefinition](patientJson).left
+            .map(err => new RuntimeException(s"Failed to decode patient JSON: $err"))
         )
 
         labDef <- IO.fromEither(
-          decode[StateMachineDefinition](labJson).left.map(err =>
-            new RuntimeException(s"Failed to decode lab JSON: $err")
-          )
+          decode[StateMachineDefinition](labJson).left
+            .map(err => new RuntimeException(s"Failed to decode lab JSON: $err"))
         )
 
         adverseEventDef <- IO.fromEither(
-          decode[StateMachineDefinition](adverseEventJson).left.map(err =>
-            new RuntimeException(s"Failed to decode adverse event JSON: $err")
-          )
+          decode[StateMachineDefinition](adverseEventJson).left
+            .map(err => new RuntimeException(s"Failed to decode adverse event JSON: $err"))
         )
 
         regulatorDef <- IO.fromEither(
-          decode[StateMachineDefinition](regulatorJson).left.map(err =>
-            new RuntimeException(s"Failed to decode regulator JSON: $err")
-          )
+          decode[StateMachineDefinition](regulatorJson).left
+            .map(err => new RuntimeException(s"Failed to decode regulator JSON: $err"))
         )
 
         insuranceDef <- IO.fromEither(
-          decode[StateMachineDefinition](insuranceJson).left.map(err =>
-            new RuntimeException(s"Failed to decode insurance JSON: $err")
-          )
+          decode[StateMachineDefinition](insuranceJson).left
+            .map(err => new RuntimeException(s"Failed to decode insurance JSON: $err"))
         )
 
-        trialData = MapValue(
-          Map(
+        trialFiber <- FiberBuilder(trialfiberId, ordinal, trialDef)
+          .withState("recruiting")
+          .withData(
             "trialName"       -> StrValue("Phase III Cancer Treatment Trial"),
             "minParticipants" -> IntValue(1),
             "enrolledCount"   -> IntValue(1),
@@ -914,140 +910,61 @@ object ClinicalTrialStateMachineSuite extends SimpleIOSuite {
             "phase"           -> IntValue(0),
             "status"          -> StrValue("recruiting")
           )
-        )
-        trialHash <- (trialData: JsonLogicValue).computeDigest
+          .ownedBy(registry, Alice)
+          .build[IO]
 
-        patientData = MapValue(
-          Map(
+        patientFiber <- FiberBuilder(patientfiberId, ordinal, patientDef)
+          .withState("screening")
+          .withData(
             "patientName"  -> StrValue("John Doe"),
             "patientEmail" -> StrValue("john.doe@example.com"),
             "status"       -> StrValue("screening")
           )
-        )
-        patientHash <- (patientData: JsonLogicValue).computeDigest
+          .ownedBy(registry, Bob)
+          .build[IO]
 
-        labData = MapValue(
-          Map(
+        labFiber <- FiberBuilder(labfiberId, ordinal, labDef)
+          .withState("idle")
+          .withData(
             "labName"      -> StrValue("Central Lab"),
             "sampleStatus" -> StrValue("idle"),
             "passRate"     -> IntValue(100),
             "retestCount"  -> IntValue(0)
           )
-        )
-        labHash <- (labData: JsonLogicValue).computeDigest
+          .ownedBy(registry, Charlie)
+          .build[IO]
 
-        adverseEventData = MapValue(
-          Map(
+        adverseEventFiber <- FiberBuilder(adverseEventfiberId, ordinal, adverseEventDef)
+          .withState("monitoring")
+          .withData(
             "status"           -> StrValue("monitoring"),
             "hasCriticalEvent" -> BoolValue(false),
             "resolved"         -> BoolValue(true)
           )
-        )
-        adverseEventHash <- (adverseEventData: JsonLogicValue).computeDigest
+          .ownedBy(registry, Dave)
+          .build[IO]
 
-        regulatorData = MapValue(
-          Map(
+        regulatorFiber <- FiberBuilder(regulatorfiberId, ordinal, regulatorDef)
+          .withState("approved")
+          .withData(
             "regulatorName"       -> StrValue("FDA"),
             "status"              -> StrValue("approved"),
             "allowResume"         -> BoolValue(true),
             "terminationRequired" -> BoolValue(false)
           )
-        )
-        regulatorHash <- (regulatorData: JsonLogicValue).computeDigest
+          .ownedBy(registry, Eve)
+          .build[IO]
 
-        insuranceData = MapValue(
-          Map(
+        insuranceFiber <- FiberBuilder(insurancefiberId, ordinal, insuranceDef)
+          .withState("active")
+          .withData(
             "policyNumber"   -> StrValue("POL-123456"),
             "coverage"       -> IntValue(100000),
             "coverageActive" -> BoolValue(true),
             "status"         -> StrValue("active")
           )
-        )
-        insuranceHash <- (insuranceData: JsonLogicValue).computeDigest
-
-        trialFiber = Records.StateMachineFiberRecord(
-          fiberId = trialfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = trialDef,
-          currentState = StateId("recruiting"),
-          stateData = trialData,
-          stateDataHash = trialHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Alice).map(registry.addresses),
-          status = FiberStatus.Active
-        )
-
-        patientFiber = Records.StateMachineFiberRecord(
-          fiberId = patientfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = patientDef,
-          currentState = StateId("screening"),
-          stateData = patientData,
-          stateDataHash = patientHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Bob).map(registry.addresses),
-          status = FiberStatus.Active
-        )
-
-        labFiber = Records.StateMachineFiberRecord(
-          fiberId = labfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = labDef,
-          currentState = StateId("idle"),
-          stateData = labData,
-          stateDataHash = labHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Charlie).map(registry.addresses),
-          status = FiberStatus.Active
-        )
-
-        adverseEventFiber = Records.StateMachineFiberRecord(
-          fiberId = adverseEventfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = adverseEventDef,
-          currentState = StateId("monitoring"),
-          stateData = adverseEventData,
-          stateDataHash = adverseEventHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Dave).map(registry.addresses),
-          status = FiberStatus.Active
-        )
-
-        regulatorFiber = Records.StateMachineFiberRecord(
-          fiberId = regulatorfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = regulatorDef,
-          currentState = StateId("approved"),
-          stateData = regulatorData,
-          stateDataHash = regulatorHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Eve).map(registry.addresses),
-          status = FiberStatus.Active
-        )
-
-        insuranceFiber = Records.StateMachineFiberRecord(
-          fiberId = insurancefiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = insuranceDef,
-          currentState = StateId("active"),
-          stateData = insuranceData,
-          stateDataHash = insuranceHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Alice, Bob).map(registry.addresses),
-          status = FiberStatus.Active
-        )
+          .ownedBy(registry, Alice, Bob)
+          .build[IO]
 
         inState <- DataState(OnChain.genesis, CalculatedState.genesis).withRecords[IO](
           Map(
@@ -1061,7 +978,7 @@ object ClinicalTrialStateMachineSuite extends SimpleIOSuite {
         )
 
         // Step 1: Enroll patient
-        enrollUpdate = Updates.TransitionStateMachine(
+        state1 <- inState.transition(
           patientfiberId,
           "enroll",
           MapValue(
@@ -1072,79 +989,56 @@ object ClinicalTrialStateMachineSuite extends SimpleIOSuite {
               "patientName"   -> StrValue("John Doe")
             )
           ),
-          FiberOrdinal.MinValue
-        )
-        enrollProof <- registry.generateProofs(enrollUpdate, Set(Bob))
-        state1      <- combiner.insert(inState, Signed(enrollUpdate, enrollProof))
+          Bob
+        )(registry, combiner)
 
         // Step 2: Start trial
-        startTrialUpdate = Updates.TransitionStateMachine(
+        state2 <- state1.transition(
           trialfiberId,
           "start_trial",
           MapValue(Map("timestamp" -> IntValue(1100))),
-          FiberOrdinal.MinValue
-        )
-        startTrialProof <- registry.generateProofs(startTrialUpdate, Set(Alice))
-        state2          <- combiner.insert(state1, Signed(startTrialUpdate, startTrialProof))
+          Alice
+        )(registry, combiner)
 
         // Step 3: Activate patient
-        activateSeqNum = state2.calculated.stateMachines(patientfiberId).sequenceNumber
-        activateUpdate = Updates.TransitionStateMachine(
+        state3 <- state2.transition(
           patientfiberId,
           "activate",
           MapValue(Map("timestamp" -> IntValue(1200))),
-          activateSeqNum
-        )
-        activateProof <- registry.generateProofs(activateUpdate, Set(Bob))
-        state3        <- combiner.insert(state2, Signed(activateUpdate, activateProof))
+          Bob
+        )(registry, combiner)
 
         // Step 4: Schedule visit
-        scheduleVisitSeqNum = state3.calculated.stateMachines(patientfiberId).sequenceNumber
-        scheduleVisitUpdate = Updates.TransitionStateMachine(
+        state4 <- state3.transition(
           patientfiberId,
           "schedule_visit",
           MapValue(Map("visitTime" -> IntValue(2000))),
-          scheduleVisitSeqNum
-        )
-        scheduleVisitProof <- registry.generateProofs(scheduleVisitUpdate, Set(Bob))
-        state4             <- combiner.insert(state3, Signed(scheduleVisitUpdate, scheduleVisitProof))
+          Bob
+        )(registry, combiner)
 
         // Step 5: Lab receives sample
-        receiveSampleUpdate = Updates.TransitionStateMachine(
+        state5 <- state4.transition(
           labfiberId,
           "receive_sample",
           MapValue(Map("timestamp" -> IntValue(2100))),
-          FiberOrdinal.MinValue
-        )
-        receiveSampleProof <- registry.generateProofs(receiveSampleUpdate, Set(Charlie))
-        state5             <- combiner.insert(state4, Signed(receiveSampleUpdate, receiveSampleProof))
+          Charlie
+        )(registry, combiner)
 
         // Step 6: Complete visit (triggers lab processing)
-        completeVisitSeqNum = state5.calculated.stateMachines(patientfiberId).sequenceNumber
-        completeVisitUpdate = Updates.TransitionStateMachine(
+        state6 <- state5.transition(
           patientfiberId,
           "complete_visit",
           MapValue(Map("timestamp" -> IntValue(2200))),
-          completeVisitSeqNum
-        )
-        completeVisitProof <- registry.generateProofs(completeVisitUpdate, Set(Bob))
-        state6             <- combiner.insert(state5, Signed(completeVisitUpdate, completeVisitProof))
+          Bob
+        )(registry, combiner)
 
         // Verify trigger fired and lab is now processing
-        labAfterTrigger = state6.calculated.stateMachines
-          .get(labfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
+        labAfterTrigger = state6.fiberRecord(labfiberId)
 
-        labProcessingStatus: Option[String] = labAfterTrigger.flatMap { f =>
-          f.stateData match {
-            case MapValue(m) => m.get("status").collect { case StrValue(s) => s }
-            case _           => None
-          }
-        }
+        labProcessingStatus = labAfterTrigger.extractString("status")
 
         // Step 7: Complete lab processing with high quality (passed)
-        completeLabSeqNum = state6.calculated.stateMachines(labfiberId).sequenceNumber
-        completeLabUpdate = Updates.TransitionStateMachine(
+        state7 <- state6.transition(
           labfiberId,
           "complete",
           MapValue(
@@ -1155,88 +1049,38 @@ object ClinicalTrialStateMachineSuite extends SimpleIOSuite {
               "biomarkerLevel" -> IntValue(50)
             )
           ),
-          completeLabSeqNum
-        )
-        completeLabProof <- registry.generateProofs(completeLabUpdate, Set(Charlie))
-        state7           <- combiner.insert(state6, Signed(completeLabUpdate, completeLabProof))
+          Charlie
+        )(registry, combiner)
 
-        labAfterComplete = state7.calculated.stateMachines
-          .get(labfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        labResult: Option[String] = labAfterComplete.flatMap { f =>
-          f.stateData match {
-            case MapValue(m) => m.get("result").collect { case StrValue(r) => r }
-            case _           => None
-          }
-        }
+        labAfterComplete = state7.fiberRecord(labfiberId)
+        labResult = labAfterComplete.extractString("result")
 
         // Step 8: Patient continues after passed result
-        continueSeqNum = state7.calculated.stateMachines(patientfiberId).sequenceNumber
-        continueUpdate = Updates.TransitionStateMachine(
+        state8 <- state7.transition(
           patientfiberId,
           "continue",
           MapValue(Map("timestamp" -> IntValue(2400))),
-          continueSeqNum
-        )
-        continueProof <- registry.generateProofs(continueUpdate, Set(Bob))
-        state8        <- combiner.insert(state7, Signed(continueUpdate, continueProof))
+          Bob
+        )(registry, combiner)
 
-        patientAfterContinue = state8.calculated.stateMachines
-          .get(patientfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
+        patientAfterContinue = state8.fiberRecord(patientfiberId)
+        patientStatus = patientAfterContinue.extractString("status")
+        patientVisitCount = patientAfterContinue.extractInt("visitCount")
 
-        patientStatus: Option[String] = patientAfterContinue.flatMap { f =>
-          f.stateData match {
-            case MapValue(m) => m.get("status").collect { case StrValue(s) => s }
-            case _           => None
-          }
-        }
-
-        patientVisitCount: Option[BigInt] = patientAfterContinue.flatMap { f =>
-          f.stateData match {
-            case MapValue(m) => m.get("visitCount").collect { case IntValue(c) => c }
-            case _           => None
-          }
-        }
-
-        trialAfterVisit = state8.calculated.stateMachines
-          .get(trialfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        trialStatus: Option[String] = trialAfterVisit.flatMap { f =>
-          f.stateData match {
-            case MapValue(m) => m.get("status").collect { case StrValue(s) => s }
-            case _           => None
-          }
-        }
+        trialAfterVisit = state8.fiberRecord(trialfiberId)
+        trialStatus = trialAfterVisit.extractString("status")
 
       } yield expect.all(
         // Verify patient enrollment succeeded
-        state1.calculated.stateMachines.get(patientfiberId).exists {
-          case r: Records.StateMachineFiberRecord => r.currentState == StateId("enrolled")
-          case _                                  => false
-        },
+        state1.fiberRecord(patientfiberId).map(_.currentState).contains(StateId("enrolled")),
         // Verify trial started
-        state2.calculated.stateMachines.get(trialfiberId).exists {
-          case r: Records.StateMachineFiberRecord => r.currentState == StateId("active")
-          case _                                  => false
-        },
+        state2.fiberRecord(trialfiberId).map(_.currentState).contains(StateId("active")),
         // Verify patient activated
-        state3.calculated.stateMachines.get(patientfiberId).exists {
-          case r: Records.StateMachineFiberRecord => r.currentState == StateId("active")
-          case _                                  => false
-        },
+        state3.fiberRecord(patientfiberId).map(_.currentState).contains(StateId("active")),
         // Verify visit scheduled
-        state4.calculated.stateMachines.get(patientfiberId).exists {
-          case r: Records.StateMachineFiberRecord => r.currentState == StateId("visit_scheduled")
-          case _                                  => false
-        },
+        state4.fiberRecord(patientfiberId).map(_.currentState).contains(StateId("visit_scheduled")),
         // Verify lab received sample
-        state5.calculated.stateMachines.get(labfiberId).exists {
-          case r: Records.StateMachineFiberRecord => r.currentState == StateId("sample_received")
-          case _                                  => false
-        },
+        state5.fiberRecord(labfiberId).map(_.currentState).contains(StateId("sample_received")),
         // Verify trigger fired: lab is processing after visit completion
         labAfterTrigger.isDefined,
         labProcessingStatus.contains("processing"),

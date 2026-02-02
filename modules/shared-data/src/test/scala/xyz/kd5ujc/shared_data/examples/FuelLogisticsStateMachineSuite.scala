@@ -1,38 +1,38 @@
 package xyz.kd5ujc.shared_data.examples
 
+import cats.effect.IO
 import cats.effect.std.UUIDGen
-import cats.effect.{IO, Resource}
 import cats.syntax.all._
 
 import io.constellationnetwork.currency.dataApplication.{DataState, L0NodeContext}
-import io.constellationnetwork.ext.cats.syntax.next.catsSyntaxNext
 import io.constellationnetwork.metagraph_sdk.json_logic._
-import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
 import io.constellationnetwork.security.SecurityProvider
-import io.constellationnetwork.security.signature.Signed
 
 import xyz.kd5ujc.schema.fiber._
-import xyz.kd5ujc.schema.{CalculatedState, OnChain, Records, Updates}
+import xyz.kd5ujc.schema.{CalculatedState, OnChain}
 import xyz.kd5ujc.shared_data.lifecycle.Combiner
 import xyz.kd5ujc.shared_data.syntax.all._
-import xyz.kd5ujc.shared_test.Mock.MockL0NodeContext
+import xyz.kd5ujc.shared_data.testkit.{DataStateTestOps, FiberBuilder, TestImports}
 import xyz.kd5ujc.shared_test.Participant._
+import xyz.kd5ujc.shared_test.TestFixture
 
+import io.circe.parser._
 import weaver.SimpleIOSuite
 
 object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
 
-  private val securityProviderResource: Resource[IO, SecurityProvider[IO]] = SecurityProvider.forAsync[IO]
+  import DataStateTestOps._
+  import TestImports.optionFiberRecordOps
 
   test("fuel logistics: complete contract lifecycle with GPS tracking") {
-    import io.circe.parser._
+    TestFixture.resource(Set(Alice, Bob, Charlie, Dave)).use { fixture =>
+      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
+      val registry = fixture.registry
+      val ordinal = fixture.ordinal
 
-    securityProviderResource.use { implicit s =>
       for {
-        implicit0(l0ctx: L0NodeContext[IO]) <- MockL0NodeContext.make[IO]
-        registry                            <- ParticipantRegistry.create[IO](Set(Alice, Bob, Charlie, Dave))
-        combiner                            <- Combiner.make[IO]().pure[IO]
-        ordinal                             <- l0ctx.getLastCurrencySnapshot.map(_.map(_.ordinal.next).get)
+        combiner <- Combiner.make[IO]().pure[IO]
 
         contractfiberId   <- UUIDGen.randomUUID[IO]
         gpsTrackerfiberId <- UUIDGen.randomUUID[IO]
@@ -502,31 +502,26 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
         }"""
 
         contractDef <- IO.fromEither(
-          decode[StateMachineDefinition](contractJson).left.map(err =>
-            new RuntimeException(s"Failed to decode contract JSON: $err")
-          )
+          decode[StateMachineDefinition](contractJson).left
+            .map(err => new RuntimeException(s"Failed to decode contract JSON: $err"))
         )
-
         gpsTrackerDef <- IO.fromEither(
-          decode[StateMachineDefinition](gpsTrackerJson).left.map(err =>
-            new RuntimeException(s"Failed to decode GPS tracker JSON: $err")
-          )
+          decode[StateMachineDefinition](gpsTrackerJson).left
+            .map(err => new RuntimeException(s"Failed to decode GPS tracker JSON: $err"))
         )
-
         supplierDef <- IO.fromEither(
-          decode[StateMachineDefinition](supplierApprovalJson).left.map(err =>
-            new RuntimeException(s"Failed to decode supplier JSON: $err")
-          )
+          decode[StateMachineDefinition](supplierApprovalJson).left
+            .map(err => new RuntimeException(s"Failed to decode supplier JSON: $err"))
         )
-
         inspectionDef <- IO.fromEither(
-          decode[StateMachineDefinition](qualityInspectionJson).left.map(err =>
-            new RuntimeException(s"Failed to decode inspection JSON: $err")
-          )
+          decode[StateMachineDefinition](qualityInspectionJson).left
+            .map(err => new RuntimeException(s"Failed to decode inspection JSON: $err"))
         )
 
-        contractData = MapValue(
-          Map(
+        // Build fiber records using FiberBuilder
+        contractFiber <- FiberBuilder(contractfiberId, ordinal, contractDef)
+          .withState("draft")
+          .withData(
             "contractId"    -> StrValue("FC-2025-001"),
             "buyer"         -> StrValue(registry.addresses(Alice).toString),
             "fuelType"      -> StrValue("Diesel"),
@@ -534,89 +529,27 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
             "pricePerLiter" -> IntValue(2),
             "status"        -> StrValue("draft")
           )
-        )
-        contractHash <- (contractData: JsonLogicValue).computeDigest
+          .ownedBy(registry, Alice, Bob)
+          .build[IO]
 
-        gpsTrackerData = MapValue(
-          Map(
-            "trackerId" -> StrValue("GPS-TRACKER-001"),
-            "status"    -> StrValue("inactive")
-          )
-        )
-        gpsTrackerHash <- (gpsTrackerData: JsonLogicValue).computeDigest
+        gpsTrackerFiber <- FiberBuilder(gpsTrackerfiberId, ordinal, gpsTrackerDef)
+          .withData("trackerId" -> StrValue("GPS-TRACKER-001"), "status" -> StrValue("inactive"))
+          .ownedBy(registry, Alice)
+          .build[IO]
 
-        supplierData = MapValue(
-          Map(
+        supplierFiber <- FiberBuilder(supplierfiberId, ordinal, supplierDef)
+          .withData(
             "supplierName" -> StrValue("Global Fuel Co"),
             "supplierId"   -> StrValue("SUP-001"),
             "status"       -> StrValue("pending")
           )
-        )
-        supplierHash <- (supplierData: JsonLogicValue).computeDigest
+          .ownedBy(registry, Bob)
+          .build[IO]
 
-        inspectionData = MapValue(
-          Map(
-            "contractRef" -> StrValue("FC-2025-001"),
-            "status"      -> StrValue("pending")
-          )
-        )
-        inspectionHash <- (inspectionData: JsonLogicValue).computeDigest
-
-        contractFiber = Records.StateMachineFiberRecord(
-          fiberId = contractfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = contractDef,
-          currentState = StateId("draft"),
-          stateData = contractData,
-          stateDataHash = contractHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Alice, Bob).map(registry.addresses),
-          status = FiberStatus.Active
-        )
-
-        gpsTrackerFiber = Records.StateMachineFiberRecord(
-          fiberId = gpsTrackerfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = gpsTrackerDef,
-          currentState = StateId("inactive"),
-          stateData = gpsTrackerData,
-          stateDataHash = gpsTrackerHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Alice).map(registry.addresses),
-          status = FiberStatus.Active
-        )
-
-        supplierFiber = Records.StateMachineFiberRecord(
-          fiberId = supplierfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = supplierDef,
-          currentState = StateId("pending"),
-          stateData = supplierData,
-          stateDataHash = supplierHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Bob).map(registry.addresses),
-          status = FiberStatus.Active
-        )
-
-        inspectionFiber = Records.StateMachineFiberRecord(
-          fiberId = inspectionfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = inspectionDef,
-          currentState = StateId("pending"),
-          stateData = inspectionData,
-          stateDataHash = inspectionHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Charlie).map(registry.addresses),
-          status = FiberStatus.Active
-        )
+        inspectionFiber <- FiberBuilder(inspectionfiberId, ordinal, inspectionDef)
+          .withData("contractRef" -> StrValue("FC-2025-001"), "status" -> StrValue("pending"))
+          .ownedBy(registry, Charlie)
+          .build[IO]
 
         inState <- DataState(OnChain.genesis, CalculatedState.genesis).withRecords[IO](
           Map(
@@ -628,17 +561,15 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
         )
 
         // STEP 1: Submit contract for approval
-        submitUpdate = Updates.TransitionStateMachine(
+        state1 <- inState.transition(
           contractfiberId,
           "submit_for_approval",
           MapValue(Map("timestamp" -> IntValue(1000))),
-          FiberOrdinal.MinValue
-        )
-        submitProof <- registry.generateProofs(submitUpdate, Set(Alice))
-        state1      <- combiner.insert(inState, Signed(submitUpdate, submitProof))
+          Alice
+        )(registry, combiner)
 
         // STEP 2: Begin supplier review
-        beginReviewUpdate = Updates.TransitionStateMachine(
+        state2 <- state1.transition(
           supplierfiberId,
           "begin_review",
           MapValue(
@@ -647,14 +578,11 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
               "reviewer"  -> StrValue(registry.addresses(Bob).toString)
             )
           ),
-          FiberOrdinal.MinValue
-        )
-        beginReviewProof <- registry.generateProofs(beginReviewUpdate, Set(Bob))
-        state2           <- combiner.insert(state1, Signed(beginReviewUpdate, beginReviewProof))
+          Bob
+        )(registry, combiner)
 
         // STEP 3: Approve supplier
-        approveSupplierSeqNum = state2.calculated.stateMachines(supplierfiberId).sequenceNumber
-        approveSupplierUpdate = Updates.TransitionStateMachine(
+        state3 <- state2.transition(
           supplierfiberId,
           "approve",
           MapValue(
@@ -665,40 +593,27 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
               "approver"        -> StrValue(registry.addresses(Bob).toString)
             )
           ),
-          approveSupplierSeqNum
-        )
-        approveSupplierProof <- registry.generateProofs(approveSupplierUpdate, Set(Bob))
-        state3               <- combiner.insert(state2, Signed(approveSupplierUpdate, approveSupplierProof))
+          Bob
+        )(registry, combiner)
 
         // STEP 4: Contract receives supplier approval
-        supplierApprovedSeqNum = state3.calculated.stateMachines(contractfiberId).sequenceNumber
-        supplierApprovedUpdate = Updates.TransitionStateMachine(
+        state4 <- state3.transition(
           contractfiberId,
           "supplier_approved",
           MapValue(Map("timestamp" -> IntValue(1300))),
-          supplierApprovedSeqNum
-        )
-        supplierApprovedProof <- registry.generateProofs(supplierApprovedUpdate, Set(Alice))
-        state4                <- combiner.insert(state3, Signed(supplierApprovedUpdate, supplierApprovedProof))
+          Alice
+        )(registry, combiner)
 
         // STEP 5: Activate GPS tracker
-        activateGpsUpdate = Updates.TransitionStateMachine(
+        state5 <- state4.transition(
           gpsTrackerfiberId,
           "activate",
-          MapValue(
-            Map(
-              "timestamp" -> IntValue(1400),
-              "vehicleId" -> StrValue("TRUCK-42")
-            )
-          ),
-          FiberOrdinal.MinValue
-        )
-        activateGpsProof <- registry.generateProofs(activateGpsUpdate, Set(Alice))
-        state5           <- combiner.insert(state4, Signed(activateGpsUpdate, activateGpsProof))
+          MapValue(Map("timestamp" -> IntValue(1400), "vehicleId" -> StrValue("TRUCK-42"))),
+          Alice
+        )(registry, combiner)
 
         // STEP 6: Prepare shipment (contract checks GPS is active)
-        prepareShipmentSeqNum = state5.calculated.stateMachines(contractfiberId).sequenceNumber
-        prepareShipmentUpdate = Updates.TransitionStateMachine(
+        state6 <- state5.transition(
           contractfiberId,
           "prepare_shipment",
           MapValue(
@@ -708,14 +623,11 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
               "driverId"  -> StrValue(registry.addresses(Dave).toString)
             )
           ),
-          prepareShipmentSeqNum
-        )
-        prepareShipmentProof <- registry.generateProofs(prepareShipmentUpdate, Set(Alice))
-        state6               <- combiner.insert(state5, Signed(prepareShipmentUpdate, prepareShipmentProof))
+          Alice
+        )(registry, combiner)
 
         // STEP 7: Start GPS tracking
-        startTrackingSeqNum = state6.calculated.stateMachines(gpsTrackerfiberId).sequenceNumber
-        startTrackingUpdate = Updates.TransitionStateMachine(
+        state7 <- state6.transition(
           gpsTrackerfiberId,
           "start_tracking",
           MapValue(
@@ -725,30 +637,19 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
               "longitude" -> IntValue(-74_0060)
             )
           ),
-          startTrackingSeqNum
-        )
-        startTrackingProof <- registry.generateProofs(startTrackingUpdate, Set(Alice))
-        state7             <- combiner.insert(state6, Signed(startTrackingUpdate, startTrackingProof))
+          Alice
+        )(registry, combiner)
 
         // STEP 8: Begin transit (contract checks GPS is tracking)
-        beginTransitSeqNum = state7.calculated.stateMachines(contractfiberId).sequenceNumber
-        beginTransitUpdate = Updates.TransitionStateMachine(
+        state8 <- state7.transition(
           contractfiberId,
           "begin_transit",
-          MapValue(
-            Map(
-              "timestamp"        -> IntValue(1700),
-              "estimatedArrival" -> IntValue(3000)
-            )
-          ),
-          beginTransitSeqNum
-        )
-        beginTransitProof <- registry.generateProofs(beginTransitUpdate, Set(Alice))
-        state8            <- combiner.insert(state7, Signed(beginTransitUpdate, beginTransitProof))
+          MapValue(Map("timestamp" -> IntValue(1700), "estimatedArrival" -> IntValue(3000))),
+          Alice
+        )(registry, combiner)
 
-        // STEP 9-11: Log GPS positions during transit
-        logPosition1SeqNum = state8.calculated.stateMachines(gpsTrackerfiberId).sequenceNumber
-        logPosition1Update = Updates.TransitionStateMachine(
+        // STEPS 9-11: Log GPS positions during transit
+        state9 <- state8.transition(
           gpsTrackerfiberId,
           "log_position",
           MapValue(
@@ -759,13 +660,10 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
               "distanceDelta" -> IntValue(5)
             )
           ),
-          logPosition1SeqNum
-        )
-        logPosition1Proof <- registry.generateProofs(logPosition1Update, Set(Alice))
-        state9            <- combiner.insert(state8, Signed(logPosition1Update, logPosition1Proof))
+          Alice
+        )(registry, combiner)
 
-        logPosition2SeqNum = state9.calculated.stateMachines(gpsTrackerfiberId).sequenceNumber
-        logPosition2Update = Updates.TransitionStateMachine(
+        state10 <- state9.transition(
           gpsTrackerfiberId,
           "log_position",
           MapValue(
@@ -776,13 +674,10 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
               "distanceDelta" -> IntValue(8)
             )
           ),
-          logPosition2SeqNum
-        )
-        logPosition2Proof <- registry.generateProofs(logPosition2Update, Set(Alice))
-        state10           <- combiner.insert(state9, Signed(logPosition2Update, logPosition2Proof))
+          Alice
+        )(registry, combiner)
 
-        logPosition3SeqNum = state10.calculated.stateMachines(gpsTrackerfiberId).sequenceNumber
-        logPosition3Update = Updates.TransitionStateMachine(
+        state11 <- state10.transition(
           gpsTrackerfiberId,
           "log_position",
           MapValue(
@@ -793,35 +688,27 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
               "distanceDelta" -> IntValue(12)
             )
           ),
-          logPosition3SeqNum
-        )
-        logPosition3Proof <- registry.generateProofs(logPosition3Update, Set(Alice))
-        state11           <- combiner.insert(state10, Signed(logPosition3Update, logPosition3Proof))
+          Alice
+        )(registry, combiner)
 
         // STEP 12: Stop GPS tracking
-        stopTrackingSeqNum = state11.calculated.stateMachines(gpsTrackerfiberId).sequenceNumber
-        stopTrackingUpdate = Updates.TransitionStateMachine(
+        state12 <- state11.transition(
           gpsTrackerfiberId,
           "stop_tracking",
           MapValue(Map("timestamp" -> IntValue(2500))),
-          stopTrackingSeqNum
-        )
-        stopTrackingProof <- registry.generateProofs(stopTrackingUpdate, Set(Alice))
-        state12           <- combiner.insert(state11, Signed(stopTrackingUpdate, stopTrackingProof))
+          Alice
+        )(registry, combiner)
 
         // STEP 13: Confirm delivery (contract checks GPS stopped and has data)
-        confirmDeliverySeqNum = state12.calculated.stateMachines(contractfiberId).sequenceNumber
-        confirmDeliveryUpdate = Updates.TransitionStateMachine(
+        state13 <- state12.transition(
           contractfiberId,
           "confirm_delivery",
           MapValue(Map("timestamp" -> IntValue(2600))),
-          confirmDeliverySeqNum
-        )
-        confirmDeliveryProof <- registry.generateProofs(confirmDeliveryUpdate, Set(Alice))
-        state13              <- combiner.insert(state12, Signed(confirmDeliveryUpdate, confirmDeliveryProof))
+          Alice
+        )(registry, combiner)
 
         // STEP 14: Schedule quality inspection
-        scheduleInspectionUpdate = Updates.TransitionStateMachine(
+        state14 <- state13.transition(
           inspectionfiberId,
           "schedule",
           MapValue(
@@ -830,36 +717,27 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
               "inspector" -> StrValue(registry.addresses(Charlie).toString)
             )
           ),
-          FiberOrdinal.MinValue
-        )
-        scheduleInspectionProof <- registry.generateProofs(scheduleInspectionUpdate, Set(Charlie))
-        state14                 <- combiner.insert(state13, Signed(scheduleInspectionUpdate, scheduleInspectionProof))
+          Charlie
+        )(registry, combiner)
 
         // STEP 15: Contract initiates inspection
-        initiateInspectionSeqNum = state14.calculated.stateMachines(contractfiberId).sequenceNumber
-        initiateInspectionUpdate = Updates.TransitionStateMachine(
+        state15 <- state14.transition(
           contractfiberId,
           "initiate_inspection",
           MapValue(Map("timestamp" -> IntValue(2800))),
-          initiateInspectionSeqNum
-        )
-        initiateInspectionProof <- registry.generateProofs(initiateInspectionUpdate, Set(Alice))
-        state15                 <- combiner.insert(state14, Signed(initiateInspectionUpdate, initiateInspectionProof))
+          Alice
+        )(registry, combiner)
 
         // STEP 16: Begin inspection
-        beginInspectionSeqNum = state15.calculated.stateMachines(inspectionfiberId).sequenceNumber
-        beginInspectionUpdate = Updates.TransitionStateMachine(
+        state16 <- state15.transition(
           inspectionfiberId,
           "begin_inspection",
           MapValue(Map("timestamp" -> IntValue(2900))),
-          beginInspectionSeqNum
-        )
-        beginInspectionProof <- registry.generateProofs(beginInspectionUpdate, Set(Charlie))
-        state16              <- combiner.insert(state15, Signed(beginInspectionUpdate, beginInspectionProof))
+          Charlie
+        )(registry, combiner)
 
         // STEP 17: Complete inspection (passed)
-        completeInspectionSeqNum = state16.calculated.stateMachines(inspectionfiberId).sequenceNumber
-        completeInspectionUpdate = Updates.TransitionStateMachine(
+        state17 <- state16.transition(
           inspectionfiberId,
           "complete",
           MapValue(
@@ -870,36 +748,27 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
               "reportId"              -> StrValue("QC-REPORT-001")
             )
           ),
-          completeInspectionSeqNum
-        )
-        completeInspectionProof <- registry.generateProofs(completeInspectionUpdate, Set(Charlie))
-        state17                 <- combiner.insert(state16, Signed(completeInspectionUpdate, completeInspectionProof))
+          Charlie
+        )(registry, combiner)
 
         // STEP 18: Contract receives inspection completion
-        inspectionCompleteSeqNum = state17.calculated.stateMachines(contractfiberId).sequenceNumber
-        inspectionCompleteUpdate = Updates.TransitionStateMachine(
+        state18 <- state17.transition(
           contractfiberId,
           "inspection_complete",
           MapValue(Map("timestamp" -> IntValue(3100))),
-          inspectionCompleteSeqNum
-        )
-        inspectionCompleteProof <- registry.generateProofs(inspectionCompleteUpdate, Set(Alice))
-        state18                 <- combiner.insert(state17, Signed(inspectionCompleteUpdate, inspectionCompleteProof))
+          Alice
+        )(registry, combiner)
 
         // STEP 19: Initiate settlement
-        initiateSettlementSeqNum = state18.calculated.stateMachines(contractfiberId).sequenceNumber
-        initiateSettlementUpdate = Updates.TransitionStateMachine(
+        state19 <- state18.transition(
           contractfiberId,
           "initiate_settlement",
           MapValue(Map("timestamp" -> IntValue(3200))),
-          initiateSettlementSeqNum
-        )
-        initiateSettlementProof <- registry.generateProofs(initiateSettlementUpdate, Set(Alice))
-        state19                 <- combiner.insert(state18, Signed(initiateSettlementUpdate, initiateSettlementProof))
+          Alice
+        )(registry, combiner)
 
         // STEP 20: Finalize settlement
-        finalizeSettlementSeqNum = state19.calculated.stateMachines(contractfiberId).sequenceNumber
-        finalizeSettlementUpdate = Updates.TransitionStateMachine(
+        finalState <- state19.transition(
           contractfiberId,
           "finalize_settlement",
           MapValue(
@@ -908,76 +777,29 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
               "paymentConfirmation" -> IntValue(10000)
             )
           ),
-          finalizeSettlementSeqNum
-        )
-        finalizeSettlementProof <- registry.generateProofs(finalizeSettlementUpdate, Set(Alice))
-        finalState              <- combiner.insert(state19, Signed(finalizeSettlementUpdate, finalizeSettlementProof))
+          Alice
+        )(registry, combiner)
 
-        finalContract = finalState.calculated.stateMachines
-          .get(contractfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        finalGpsTracker = finalState.calculated.stateMachines
-          .get(gpsTrackerfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        finalSupplier = finalState.calculated.stateMachines
-          .get(supplierfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        finalInspection = finalState.calculated.stateMachines
-          .get(inspectionfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        contractStatus: Option[String] = finalContract.flatMap { f =>
-          f.stateData match {
-            case MapValue(m) => m.get("status").collect { case StrValue(s) => s }
-            case _           => None
-          }
-        }
-
-        gpsDataPointCount: Option[BigInt] = finalGpsTracker.flatMap { f =>
-          f.stateData match {
-            case MapValue(m) => m.get("dataPointCount").collect { case IntValue(c) => c }
-            case _           => None
-          }
-        }
-
-        totalDistance: Option[BigInt] = finalGpsTracker.flatMap { f =>
-          f.stateData match {
-            case MapValue(m) => m.get("totalDistance").collect { case IntValue(d) => d }
-            case _           => None
-          }
-        }
-
-        qualityScore: Option[BigInt] = finalInspection.flatMap { f =>
-          f.stateData match {
-            case MapValue(m) => m.get("qualityScore").collect { case IntValue(q) => q }
-            case _           => None
-          }
-        }
-
-        contractCompleted: Option[Boolean] = finalContract.flatMap { f =>
-          f.stateData match {
-            case MapValue(m) => m.get("contractCompleted").collect { case BoolValue(c) => c }
-            case _           => None
-          }
-        }
+        // Verify final state using fiberRecord lookups and FiberExtractors
+        finalContract = finalState.fiberRecord(contractfiberId)
+        finalGpsTracker = finalState.fiberRecord(gpsTrackerfiberId)
+        finalSupplier = finalState.fiberRecord(supplierfiberId)
+        finalInspection = finalState.fiberRecord(inspectionfiberId)
 
       } yield expect.all(
         finalContract.isDefined,
         finalContract.map(_.currentState).contains(StateId("settled")),
-        contractStatus.contains("settled"),
-        contractCompleted.contains(true),
+        finalContract.extractString("status").contains("settled"),
+        finalContract.extractBool("contractCompleted").contains(true),
         finalGpsTracker.isDefined,
         finalGpsTracker.map(_.currentState).contains(StateId("stopped")),
-        gpsDataPointCount.contains(BigInt(4)),
-        totalDistance.contains(BigInt(25)),
+        finalGpsTracker.extractInt("dataPointCount").contains(BigInt(4)),
+        finalGpsTracker.extractInt("totalDistance").contains(BigInt(25)),
         finalSupplier.isDefined,
         finalSupplier.map(_.currentState).contains(StateId("approved")),
         finalInspection.isDefined,
         finalInspection.map(_.currentState).contains(StateId("passed")),
-        qualityScore.contains(BigInt(95))
+        finalInspection.extractInt("qualityScore").contains(BigInt(95))
       )
     }
   }

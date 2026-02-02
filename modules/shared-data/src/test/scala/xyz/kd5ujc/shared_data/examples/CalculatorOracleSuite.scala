@@ -1,6 +1,6 @@
 package xyz.kd5ujc.shared_data.examples
 
-import cats.effect.{IO, Resource}
+import cats.effect.IO
 import cats.syntax.all._
 
 import io.constellationnetwork.currency.dataApplication.{DataState, L0NodeContext}
@@ -12,9 +12,9 @@ import io.constellationnetwork.security.signature.Signed
 import xyz.kd5ujc.schema.fiber._
 import xyz.kd5ujc.schema.{CalculatedState, OnChain, Updates}
 import xyz.kd5ujc.shared_data.lifecycle.Combiner
-import xyz.kd5ujc.shared_test.Mock.MockL0NodeContext
-import xyz.kd5ujc.shared_test.Participant
+import xyz.kd5ujc.shared_data.testkit.DataStateTestOps
 import xyz.kd5ujc.shared_test.Participant._
+import xyz.kd5ujc.shared_test.TestFixture
 
 import io.circe.parser
 import weaver.SimpleIOSuite
@@ -25,7 +25,7 @@ import weaver.SimpleIOSuite
  */
 object CalculatorOracleSuite extends SimpleIOSuite {
 
-  private val securityProviderResource: Resource[IO, SecurityProvider[IO]] = SecurityProvider.forAsync[IO]
+  import DataStateTestOps._
 
   // Calculator Oracle definition (stateless) - matches e2e definition
   private val calculatorScript =
@@ -44,17 +44,19 @@ object CalculatorOracleSuite extends SimpleIOSuite {
        |}""".stripMargin
 
   test("add operation (10 + 5 = 15)") {
-    securityProviderResource.use { implicit s =>
-      for {
-        implicit0(l0ctx: L0NodeContext[IO]) <- MockL0NodeContext.make[IO]
-        registry                            <- Participant.ParticipantRegistry.create[IO](Set(Alice))
-        combiner                            <- Combiner.make[IO]().pure[IO]
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
+      val registry = fixture.registry
 
-        fiberId <- IO.randomUUID
-        prog    <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
+      for {
+        combiner <- Combiner.make[IO]().pure[IO]
+
+        cid  <- IO.randomUUID
+        prog <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
 
         createOracle = Updates.CreateScriptOracle(
-          fiberId = fiberId,
+          fiberId = cid,
           scriptProgram = prog,
           initialState = None,
           accessControl = AccessControlPolicy.Public
@@ -67,7 +69,7 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         )
 
         invokeOracle = Updates.InvokeScriptOracle(
-          fiberId = fiberId,
+          fiberId = cid,
           method = "add",
           args = MapValue(Map("a" -> IntValue(10), "b" -> IntValue(5))),
           targetSequenceNumber = FiberOrdinal.MinValue
@@ -76,7 +78,7 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         invokeProof <- registry.generateProofs(invokeOracle, Set(Alice))
         state2      <- combiner.insert(state1, Signed(invokeOracle, invokeProof))
 
-        oracle = state2.calculated.scriptOracles.get(fiberId)
+        oracle = state2.oracleRecord(cid)
         result = oracle.flatMap(_.lastInvocation.map(_.result))
       } yield expect.all(
         oracle.isDefined,
@@ -87,17 +89,19 @@ object CalculatorOracleSuite extends SimpleIOSuite {
   }
 
   test("subtract operation (20 - 8 = 12)") {
-    securityProviderResource.use { implicit s =>
-      for {
-        implicit0(l0ctx: L0NodeContext[IO]) <- MockL0NodeContext.make[IO]
-        registry                            <- Participant.ParticipantRegistry.create[IO](Set(Alice))
-        combiner                            <- Combiner.make[IO]().pure[IO]
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
+      val registry = fixture.registry
 
-        fiberId <- IO.randomUUID
-        prog    <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
+      for {
+        combiner <- Combiner.make[IO]().pure[IO]
+
+        cid  <- IO.randomUUID
+        prog <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
 
         createOracle = Updates.CreateScriptOracle(
-          fiberId = fiberId,
+          fiberId = cid,
           scriptProgram = prog,
           initialState = None,
           accessControl = AccessControlPolicy.Public
@@ -110,7 +114,7 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         )
 
         invokeOracle = Updates.InvokeScriptOracle(
-          fiberId = fiberId,
+          fiberId = cid,
           method = "subtract",
           args = MapValue(Map("a" -> IntValue(20), "b" -> IntValue(8))),
           targetSequenceNumber = FiberOrdinal.MinValue
@@ -119,7 +123,7 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         invokeProof <- registry.generateProofs(invokeOracle, Set(Alice))
         state2      <- combiner.insert(state1, Signed(invokeOracle, invokeProof))
 
-        oracle = state2.calculated.scriptOracles.get(fiberId)
+        oracle = state2.oracleRecord(cid)
         result = oracle.flatMap(_.lastInvocation.map(_.result))
       } yield expect.all(
         oracle.isDefined,
@@ -129,17 +133,19 @@ object CalculatorOracleSuite extends SimpleIOSuite {
   }
 
   test("multiply operation (7 * 6 = 42)") {
-    securityProviderResource.use { implicit s =>
-      for {
-        implicit0(l0ctx: L0NodeContext[IO]) <- MockL0NodeContext.make[IO]
-        registry                            <- Participant.ParticipantRegistry.create[IO](Set(Alice))
-        combiner                            <- Combiner.make[IO]().pure[IO]
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
+      val registry = fixture.registry
 
-        fiberId <- IO.randomUUID
-        prog    <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
+      for {
+        combiner <- Combiner.make[IO]().pure[IO]
+
+        cid  <- IO.randomUUID
+        prog <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
 
         createOracle = Updates.CreateScriptOracle(
-          fiberId = fiberId,
+          fiberId = cid,
           scriptProgram = prog,
           initialState = None,
           accessControl = AccessControlPolicy.Public
@@ -152,7 +158,7 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         )
 
         invokeOracle = Updates.InvokeScriptOracle(
-          fiberId = fiberId,
+          fiberId = cid,
           method = "multiply",
           args = MapValue(Map("a" -> IntValue(7), "b" -> IntValue(6))),
           targetSequenceNumber = FiberOrdinal.MinValue
@@ -161,7 +167,7 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         invokeProof <- registry.generateProofs(invokeOracle, Set(Alice))
         state2      <- combiner.insert(state1, Signed(invokeOracle, invokeProof))
 
-        oracle = state2.calculated.scriptOracles.get(fiberId)
+        oracle = state2.oracleRecord(cid)
         result = oracle.flatMap(_.lastInvocation.map(_.result))
       } yield expect.all(
         oracle.isDefined,
@@ -171,17 +177,19 @@ object CalculatorOracleSuite extends SimpleIOSuite {
   }
 
   test("divide operation (100 / 4 = 25)") {
-    securityProviderResource.use { implicit s =>
-      for {
-        implicit0(l0ctx: L0NodeContext[IO]) <- MockL0NodeContext.make[IO]
-        registry                            <- Participant.ParticipantRegistry.create[IO](Set(Alice))
-        combiner                            <- Combiner.make[IO]().pure[IO]
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
+      val registry = fixture.registry
 
-        fiberId <- IO.randomUUID
-        prog    <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
+      for {
+        combiner <- Combiner.make[IO]().pure[IO]
+
+        cid  <- IO.randomUUID
+        prog <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
 
         createOracle = Updates.CreateScriptOracle(
-          fiberId = fiberId,
+          fiberId = cid,
           scriptProgram = prog,
           initialState = None,
           accessControl = AccessControlPolicy.Public
@@ -194,7 +202,7 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         )
 
         invokeOracle = Updates.InvokeScriptOracle(
-          fiberId = fiberId,
+          fiberId = cid,
           method = "divide",
           args = MapValue(Map("a" -> IntValue(100), "b" -> IntValue(4))),
           targetSequenceNumber = FiberOrdinal.MinValue
@@ -203,7 +211,7 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         invokeProof <- registry.generateProofs(invokeOracle, Set(Alice))
         state2      <- combiner.insert(state1, Signed(invokeOracle, invokeProof))
 
-        oracle = state2.calculated.scriptOracles.get(fiberId)
+        oracle = state2.oracleRecord(cid)
         result = oracle.flatMap(_.lastInvocation.map(_.result))
       } yield expect.all(
         oracle.isDefined,
@@ -213,17 +221,19 @@ object CalculatorOracleSuite extends SimpleIOSuite {
   }
 
   test("unknown method returns null") {
-    securityProviderResource.use { implicit s =>
-      for {
-        implicit0(l0ctx: L0NodeContext[IO]) <- MockL0NodeContext.make[IO]
-        registry                            <- Participant.ParticipantRegistry.create[IO](Set(Alice))
-        combiner                            <- Combiner.make[IO]().pure[IO]
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
+      val registry = fixture.registry
 
-        fiberId <- IO.randomUUID
-        prog    <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
+      for {
+        combiner <- Combiner.make[IO]().pure[IO]
+
+        cid  <- IO.randomUUID
+        prog <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
 
         createOracle = Updates.CreateScriptOracle(
-          fiberId = fiberId,
+          fiberId = cid,
           scriptProgram = prog,
           initialState = None,
           accessControl = AccessControlPolicy.Public
@@ -236,7 +246,7 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         )
 
         invokeOracle = Updates.InvokeScriptOracle(
-          fiberId = fiberId,
+          fiberId = cid,
           method = "unknownMethod",
           args = MapValue(Map("a" -> IntValue(1), "b" -> IntValue(2))),
           targetSequenceNumber = FiberOrdinal.MinValue
@@ -245,7 +255,7 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         invokeProof <- registry.generateProofs(invokeOracle, Set(Alice))
         state2      <- combiner.insert(state1, Signed(invokeOracle, invokeProof))
 
-        oracle = state2.calculated.scriptOracles.get(fiberId)
+        oracle = state2.oracleRecord(cid)
         result = oracle.flatMap(_.lastInvocation.map(_.result))
       } yield expect.all(
         oracle.isDefined,
@@ -255,17 +265,19 @@ object CalculatorOracleSuite extends SimpleIOSuite {
   }
 
   test("multiple invocations are logged") {
-    securityProviderResource.use { implicit s =>
-      for {
-        implicit0(l0ctx: L0NodeContext[IO]) <- MockL0NodeContext.make[IO]
-        registry                            <- Participant.ParticipantRegistry.create[IO](Set(Alice))
-        combiner                            <- Combiner.make[IO]().pure[IO]
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
+      val registry = fixture.registry
 
-        fiberId <- IO.randomUUID
-        prog    <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
+      for {
+        combiner <- Combiner.make[IO]().pure[IO]
+
+        cid  <- IO.randomUUID
+        prog <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
 
         createOracle = Updates.CreateScriptOracle(
-          fiberId = fiberId,
+          fiberId = cid,
           scriptProgram = prog,
           initialState = None,
           accessControl = AccessControlPolicy.Public
@@ -279,7 +291,7 @@ object CalculatorOracleSuite extends SimpleIOSuite {
 
         // First invocation: add
         invoke1 = Updates.InvokeScriptOracle(
-          fiberId,
+          cid,
           "add",
           MapValue(Map("a" -> IntValue(1), "b" -> IntValue(2))),
           FiberOrdinal.MinValue
@@ -289,25 +301,25 @@ object CalculatorOracleSuite extends SimpleIOSuite {
 
         // Second invocation: multiply
         invoke2 = Updates.InvokeScriptOracle(
-          fiberId,
+          cid,
           "multiply",
           MapValue(Map("a" -> IntValue(3), "b" -> IntValue(4))),
-          state1.calculated.scriptOracles(fiberId).sequenceNumber
+          state1.calculated.scriptOracles(cid).sequenceNumber
         )
         proof2 <- registry.generateProofs(invoke2, Set(Alice))
         state2 <- combiner.insert(state1, Signed(invoke2, proof2))
 
         // Third invocation: subtract
         invoke3 = Updates.InvokeScriptOracle(
-          fiberId,
+          cid,
           "subtract",
           MapValue(Map("a" -> IntValue(10), "b" -> IntValue(5))),
-          state2.calculated.scriptOracles(fiberId).sequenceNumber
+          state2.calculated.scriptOracles(cid).sequenceNumber
         )
         proof3 <- registry.generateProofs(invoke3, Set(Alice))
         state3 <- combiner.insert(state2, Signed(invoke3, proof3))
 
-        oracle = state3.calculated.scriptOracles.get(fiberId)
+        oracle = state3.oracleRecord(cid)
       } yield expect.all(
         oracle.map(_.sequenceNumber).contains(FiberOrdinal.unsafeApply(3L)),
         oracle.flatMap(_.lastInvocation).isDefined
@@ -316,17 +328,19 @@ object CalculatorOracleSuite extends SimpleIOSuite {
   }
 
   test("invocation by different signer (Public access)") {
-    securityProviderResource.use { implicit s =>
-      for {
-        implicit0(l0ctx: L0NodeContext[IO]) <- MockL0NodeContext.make[IO]
-        registry                            <- Participant.ParticipantRegistry.create[IO](Set(Alice, Bob))
-        combiner                            <- Combiner.make[IO]().pure[IO]
+    TestFixture.resource(Set(Alice, Bob)).use { fixture =>
+      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
+      val registry = fixture.registry
 
-        fiberId <- IO.randomUUID
-        prog    <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
+      for {
+        combiner <- Combiner.make[IO]().pure[IO]
+
+        cid  <- IO.randomUUID
+        prog <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
 
         createOracle = Updates.CreateScriptOracle(
-          fiberId = fiberId,
+          fiberId = cid,
           scriptProgram = prog,
           initialState = None,
           accessControl = AccessControlPolicy.Public
@@ -340,7 +354,7 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         )
 
         invokeOracle = Updates.InvokeScriptOracle(
-          fiberId = fiberId,
+          fiberId = cid,
           method = "add",
           args = MapValue(Map("a" -> IntValue(5), "b" -> IntValue(3))),
           targetSequenceNumber = FiberOrdinal.MinValue
@@ -350,7 +364,7 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         invokeProof <- registry.generateProofs(invokeOracle, Set(Bob))
         state2      <- combiner.insert(state1, Signed(invokeOracle, invokeProof))
 
-        oracle = state2.calculated.scriptOracles.get(fiberId)
+        oracle = state2.oracleRecord(cid)
         result = oracle.flatMap(_.lastInvocation.map(_.result))
       } yield expect.all(
         oracle.isDefined,

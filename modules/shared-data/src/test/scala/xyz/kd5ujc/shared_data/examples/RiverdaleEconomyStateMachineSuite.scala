@@ -2,23 +2,22 @@ package xyz.kd5ujc.shared_data.examples
 
 import java.util.UUID
 
+import cats.effect.IO
 import cats.effect.std.UUIDGen
-import cats.effect.{IO, Resource}
 import cats.syntax.all._
 
 import io.constellationnetwork.currency.dataApplication.{DataState, L0NodeContext}
 import io.constellationnetwork.ext.cats.syntax.next.catsSyntaxNext
 import io.constellationnetwork.metagraph_sdk.json_logic._
-import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
 import io.constellationnetwork.security.SecurityProvider
-import io.constellationnetwork.security.signature.Signed
 
-import xyz.kd5ujc.schema.fiber.{FiberOrdinal, _}
-import xyz.kd5ujc.schema.{CalculatedState, OnChain, Records, Updates}
+import xyz.kd5ujc.schema.fiber._
+import xyz.kd5ujc.schema.{CalculatedState, OnChain}
 import xyz.kd5ujc.shared_data.lifecycle.Combiner
 import xyz.kd5ujc.shared_data.syntax.all._
-import xyz.kd5ujc.shared_test.Mock.MockL0NodeContext
+import xyz.kd5ujc.shared_data.testkit.{DataStateTestOps, FiberBuilder, TestImports}
 import xyz.kd5ujc.shared_test.Participant._
+import xyz.kd5ujc.shared_test.TestFixture
 
 import io.circe.parser._
 import weaver.SimpleIOSuite
@@ -38,7 +37,8 @@ import weaver.scalacheck.Checkers
  */
 object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
 
-  private val securityProviderResource: Resource[IO, SecurityProvider[IO]] = SecurityProvider.forAsync[IO]
+  import DataStateTestOps._
+  import TestImports.optionFiberRecordOps
 
   // Helper function to decode JSON to StateMachineDefinition
   private def decodeStateMachine(json: String): IO[StateMachineDefinition] =
@@ -1111,8 +1111,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
       ]
     }"""
 
-  def federalReserveStateMachineJson(bankfiberIds: Set[UUID]): String = {
-    val bankTriggers = bankfiberIds
+  def federalReserveStateMachineJson(bankCids: Set[UUID]): String = {
+    val bankTriggers = bankCids
       .map { bankfiberId =>
         s"""{
         "targetMachineId": "$bankfiberId",
@@ -1125,7 +1125,7 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
       }
       .mkString("[", ",", "]")
 
-    val stressTestTriggers = bankfiberIds
+    val stressTestTriggers = bankCids
       .map { bankfiberId =>
         s"""{
         "targetMachineId": "$bankfiberId",
@@ -1229,15 +1229,15 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
   }
 
   def governanceStateMachineJson(
-    manufacturerfiberIds: Set[UUID],
-    retailerfiberIds:     Set[UUID],
-    consumerfiberIds:     Set[UUID]
+    manufacturerCids: Set[UUID],
+    retailerCids:     Set[UUID],
+    consumerCids:     Set[UUID]
   ): String = {
-    val allTaxpayerfiberIds = manufacturerfiberIds ++ retailerfiberIds ++ consumerfiberIds
-    val taxCollectionTriggers = allTaxpayerfiberIds
-      .map { fiberId =>
+    val allTaxpayerCids = manufacturerCids ++ retailerCids ++ consumerCids
+    val taxCollectionTriggers = allTaxpayerCids
+      .map { cid =>
         s"""{
-        "targetMachineId": "$fiberId",
+        "targetMachineId": "$cid",
         "eventName": "pay_taxes",
         "payload": {
           "taxPeriod": { "var": "event.taxPeriod" },
@@ -1268,7 +1268,7 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
             "taxPeriod": { "var": "event.taxPeriod" },
             "taxRate": { "var": "event.taxRate" },
             "collectionInitiatedAt": { "var": "event.timestamp" },
-            "expectedTaxpayers": ${allTaxpayerfiberIds.size},
+            "expectedTaxpayers": ${allTaxpayerCids.size},
             "taxpayersCompliant": 0
           },
           "dependencies": []
@@ -1358,2190 +1358,1480 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
   }
 
   test("riverdale-economy: complex economic simulation with many participants") {
-    securityProviderResource.use { implicit s =>
-      for {
-        implicit0(l0ctx: L0NodeContext[IO]) <- MockL0NodeContext.make[IO]
-
-        // Create registry with all 26 participants (Alice through Zoe)
-        registry <- ParticipantRegistry.create[IO](
-          Set(
-            Alice,
-            Bob,
-            Charlie,
-            Dave,
-            Eve,
-            Faythe,
-            Grace,
-            Heidi,
-            Ivan,
-            Judy,
-            Karl,
-            Lance,
-            Mallory,
-            Niaj,
-            Oscar,
-            Peggy,
-            Quentin,
-            Ruth,
-            Sybil,
-            Trent,
-            Ursula,
-            Victor,
-            Walter,
-            Xavier,
-            Yolanda,
-            Zoe
-          )
+    TestFixture
+      .resource(
+        Set(
+          Alice,
+          Bob,
+          Charlie,
+          Dave,
+          Eve,
+          Faythe,
+          Grace,
+          Heidi,
+          Ivan,
+          Judy,
+          Karl,
+          Lance,
+          Mallory,
+          Niaj,
+          Oscar,
+          Peggy,
+          Quentin,
+          Ruth,
+          Sybil,
+          Trent,
+          Ursula,
+          Victor,
+          Walter,
+          Xavier,
+          Yolanda,
+          Zoe
         )
-        combiner <- Combiner.make[IO]().pure[IO]
-        ordinal  <- l0ctx.getLastCurrencySnapshot.map(_.map(_.ordinal.next).get)
-
-        // Generate UUIDs for all 26 participants
-        alicefiberId   <- UUIDGen.randomUUID[IO]
-        bobfiberId     <- UUIDGen.randomUUID[IO]
-        charliefiberId <- UUIDGen.randomUUID[IO]
-        davefiberId    <- UUIDGen.randomUUID[IO]
-        evefiberId     <- UUIDGen.randomUUID[IO]
-
-        faythefiberId <- UUIDGen.randomUUID[IO]
-        gracefiberId  <- UUIDGen.randomUUID[IO]
-        heidifiberId  <- UUIDGen.randomUUID[IO]
-        ivanfiberId   <- UUIDGen.randomUUID[IO]
-        judyfiberId   <- UUIDGen.randomUUID[IO]
-        karlfiberId   <- UUIDGen.randomUUID[IO]
-
-        lancefiberId   <- UUIDGen.randomUUID[IO]
-        malloryfiberId <- UUIDGen.randomUUID[IO]
-        niajfiberId    <- UUIDGen.randomUUID[IO]
-
-        oscarfiberId   <- UUIDGen.randomUUID[IO]
-        peggyfiberId   <- UUIDGen.randomUUID[IO]
-        quentinfiberId <- UUIDGen.randomUUID[IO]
-
-        ruthfiberId   <- UUIDGen.randomUUID[IO]
-        sybilfiberId  <- UUIDGen.randomUUID[IO]
-        trentfiberId  <- UUIDGen.randomUUID[IO]
-        ursulafiberId <- UUIDGen.randomUUID[IO]
-        victorfiberId <- UUIDGen.randomUUID[IO]
-        walterfiberId <- UUIDGen.randomUUID[IO]
-
-        xavierfiberId  <- UUIDGen.randomUUID[IO]
-        yolandafiberId <- UUIDGen.randomUUID[IO]
-        zoefiberId     <- UUIDGen.randomUUID[IO]
-
-        // Create initial state data for each participant type
-        manufacturerInitialData = MapValue(
-          Map(
-            "rawMaterials"      -> IntValue(1000),
-            "inventory"         -> IntValue(420),
-            "maxInventory"      -> IntValue(500),
-            "requiredMaterials" -> IntValue(50),
-            "batchSize"         -> IntValue(0),
-            "totalProduced"     -> IntValue(0),
-            "shipmentCount"     -> IntValue(0),
-            "taxesPaid"         -> FloatValue(0.0),
-            "status"            -> StrValue("idle")
-          )
-        )
-
-        retailerInitialData = MapValue(
-          Map(
-            "stock"            -> IntValue(15),
-            "reorderThreshold" -> IntValue(20),
-            "reorderQuantity"  -> IntValue(100),
-            "revenue"          -> IntValue(0),
-            "salesCount"       -> IntValue(0),
-            "pricePerUnit"     -> IntValue(10),
-            "taxesPaid"        -> FloatValue(0.0),
-            "status"           -> StrValue("open")
-          )
-        )
-
-        platformInitialData = MapValue(
-          Map(
-            "responseTime" -> IntValue(100),
-            "capacity"     -> IntValue(1000),
-            "transactions" -> IntValue(0),
-            "status"       -> StrValue("active")
-          )
-        )
-
-        bankInitialData = MapValue(
-          Map(
-            "baseRate"              -> FloatValue(0.04),
-            "availableCapital"      -> IntValue(1000000),
-            "activeLoans"           -> IntValue(0),
-            "defaultedLoans"        -> IntValue(0),
-            "loanPortfolio"         -> IntValue(0),
-            "reserveCapital"        -> IntValue(100000),
-            "minCreditScore"        -> IntValue(600),
-            "riskPremium"           -> FloatValue(0.02),
-            "defaultRate"           -> FloatValue(0.0),
-            "missedPaymentCount"    -> IntValue(0),
-            "totalPaymentsReceived" -> IntValue(0),
-            "status"                -> StrValue("operating")
-          )
-        )
-
-        consumerInitialData = MapValue(
-          Map(
-            "balance"           -> IntValue(5000),
-            "serviceRevenue"    -> IntValue(0),
-            "loanBalance"       -> IntValue(0),
-            "purchaseCount"     -> IntValue(0),
-            "servicesProvided"  -> IntValue(0),
-            "activeListings"    -> IntValue(0),
-            "marketplaceSales"  -> IntValue(0),
-            "serviceType"       -> StrValue("software_development"),
-            "monthlyPayment"    -> IntValue(300),
-            "missedPayments"    -> IntValue(0),
-            "paymentsRemaining" -> IntValue(36),
-            "taxesPaid"         -> FloatValue(0.0),
-            "status"            -> StrValue("active")
-          )
-        )
-
-        fedInitialData = MapValue(
-          Map(
-            "baseRate"              -> FloatValue(0.04),
-            "inflationRate"         -> FloatValue(0.02),
-            "unemploymentRate"      -> FloatValue(0.04),
-            "gdpGrowth"             -> FloatValue(0.03),
-            "emergencyLoansIssued"  -> IntValue(0),
-            "totalEmergencyLending" -> IntValue(0),
-            "rateChangeCount"       -> IntValue(0),
-            "status"                -> StrValue("stable")
-          )
-        )
-
-        governanceInitialData = MapValue(
-          Map(
-            "investigationsActive" -> IntValue(0),
-            "enforcementActions"   -> IntValue(0),
-            "totalTaxesCollected"  -> IntValue(0),
-            "taxpayersCompliant"   -> IntValue(0),
-            "expectedTaxpayers"    -> IntValue(0)
-          )
-        )
-
-        // Create state machine definitions from JSON
-        manufacturerDef <- decodeStateMachine(manufacturerStateMachineJson())
-        bankDef         <- decodeStateMachine(bankStateMachineJson(yolandafiberId.toString))
-        consumerDef     <- decodeStateMachine(consumerStateMachineJson())
-        fedDef <- decodeStateMachine(federalReserveStateMachineJson(Set(oscarfiberId, peggyfiberId, quentinfiberId)))
-        governanceDef <- decodeStateMachine(
-          governanceStateMachineJson(
-            Set(alicefiberId, bobfiberId, charliefiberId, davefiberId),
-            Set(heidifiberId, gracefiberId, ivanfiberId),
-            Set(ruthfiberId, sybilfiberId, victorfiberId)
-          )
-        )
-
-        // Initialize manufacturer fibers
-        aliceHash <- (manufacturerInitialData: JsonLogicValue).computeDigest
-        aliceFiber = Records.StateMachineFiberRecord(
-          fiberId = alicefiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = manufacturerDef,
-          currentState = StateId("idle"),
-          stateData = manufacturerInitialData.copy(value =
-            manufacturerInitialData.value + ("businessName" -> StrValue("SteelCore Manufacturing"))
-          ),
-          stateDataHash = aliceHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Alice).map(registry.addresses),
-          status = FiberStatus.Active
-        )
-
-        bobHash <- (manufacturerInitialData: JsonLogicValue).computeDigest
-        bobFiber = Records.StateMachineFiberRecord(
-          fiberId = bobfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = manufacturerDef,
-          currentState = StateId("idle"),
-          stateData = manufacturerInitialData.copy(value =
-            manufacturerInitialData.value + ("businessName" -> StrValue("AgriGrow Farms"))
-          ),
-          stateDataHash = bobHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Bob).map(registry.addresses),
-          status = FiberStatus.Active
-        )
-
-        charlieInitialData = manufacturerInitialData.copy(value =
-          manufacturerInitialData.value ++ Map(
-            "rawMaterials" -> IntValue(40), // Below required materials threshold
-            "businessName" -> StrValue("TechParts Inc")
-          )
-        )
-        charlieHash <- (charlieInitialData: JsonLogicValue).computeDigest
-        charlieFiber = Records.StateMachineFiberRecord(
-          fiberId = charliefiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = manufacturerDef,
-          currentState = StateId("idle"),
-          stateData = charlieInitialData,
-          stateDataHash = charlieHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Charlie).map(registry.addresses),
-          status = FiberStatus.Active
-        )
-
-        // Initialize retailer fibers (with dependencies on manufacturers)
-        heidiRetailerDef <- decodeStateMachine(retailerStateMachineJson(alicefiberId.toString, niajfiberId.toString))
-        heidiData = retailerInitialData.copy(value =
-          retailerInitialData.value + ("businessName" -> StrValue("QuickFix Hardware"))
-        )
-        heidiHash <- (heidiData: JsonLogicValue).computeDigest
-        heidiFiber = Records.StateMachineFiberRecord(
-          fiberId = heidifiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = heidiRetailerDef,
-          currentState = StateId("open"),
-          stateData = heidiData,
-          stateDataHash = heidiHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Heidi).map(registry.addresses),
-          status = FiberStatus.Active
-        )
-
-        // Initialize platform fibers
-        niajData = platformInitialData.copy(value =
-          platformInitialData.value + ("businessName" -> StrValue("PayFlow Processing"))
-        )
-        niajHash <- (niajData: JsonLogicValue).computeDigest
-        niajFiber = Records.StateMachineFiberRecord(
-          fiberId = niajfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = manufacturerDef, // Simplified for test
-          currentState = StateId("idle"),
-          stateData = niajData,
-          stateDataHash = niajHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Niaj).map(registry.addresses),
-          status = FiberStatus.Active
-        )
-
-        // Initialize bank fibers
-        oscarHash <- (bankInitialData: JsonLogicValue).computeDigest
-        oscarFiber = Records.StateMachineFiberRecord(
-          fiberId = oscarfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = bankDef,
-          currentState = StateId("operating"),
-          stateData = bankInitialData.copy(value =
-            bankInitialData.value + ("businessName" -> StrValue("Riverdale National Bank"))
-          ),
-          stateDataHash = oscarHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Oscar).map(registry.addresses),
-          status = FiberStatus.Active
-        )
-
-        peggyHash <- (bankInitialData: JsonLogicValue).computeDigest
-        peggyFiber = Records.StateMachineFiberRecord(
-          fiberId = peggyfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = bankDef,
-          currentState = StateId("operating"),
-          stateData =
-            bankInitialData.copy(value = bankInitialData.value + ("businessName" -> StrValue("SecureCredit Union"))),
-          stateDataHash = peggyHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Peggy).map(registry.addresses),
-          status = FiberStatus.Active
-        )
-
-        quentinHash <- (bankInitialData: JsonLogicValue).computeDigest
-        quentinFiber = Records.StateMachineFiberRecord(
-          fiberId = quentinfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = bankDef,
-          currentState = StateId("operating"),
-          stateData = bankInitialData.copy(value =
-            bankInitialData.value + ("businessName" -> StrValue("VentureForward Capital"))
-          ),
-          stateDataHash = quentinHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Quentin).map(registry.addresses),
-          status = FiberStatus.Active
-        )
-
-        // Initialize consumer fibers
-        ruthHash <- (consumerInitialData: JsonLogicValue).computeDigest
-        ruthFiber = Records.StateMachineFiberRecord(
-          fiberId = ruthfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = consumerDef,
-          currentState = StateId("active"),
-          stateData = consumerInitialData.copy(value =
-            consumerInitialData.value + ("name" -> StrValue("Ruth - Software Developer"))
-          ),
-          stateDataHash = ruthHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Ruth).map(registry.addresses),
-          status = FiberStatus.Active
-        )
-
-        sybilInitialData = consumerInitialData.copy(value =
-          consumerInitialData.value ++ Map(
-            "balance" -> IntValue(3000), // Lower balance than Ruth
-            "name"    -> StrValue("Sybil - Crafts Seller")
-          )
-        )
-        sybilHash <- (sybilInitialData: JsonLogicValue).computeDigest
-        sybilFiber = Records.StateMachineFiberRecord(
-          fiberId = sybilfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = consumerDef,
-          currentState = StateId("active"),
-          stateData = sybilInitialData,
-          stateDataHash = sybilHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Sybil).map(registry.addresses),
-          status = FiberStatus.Active
-        )
-
-        victorInitialData = consumerInitialData.copy(value =
-          consumerInitialData.value ++ Map(
-            "balance" -> IntValue(10000), // High balance for bidding
-            "name"    -> StrValue("Victor - Collector")
-          )
-        )
-        victorHash <- (victorInitialData: JsonLogicValue).computeDigest
-        victorFiber = Records.StateMachineFiberRecord(
-          fiberId = victorfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = consumerDef,
-          currentState = StateId("active"),
-          stateData = victorInitialData,
-          stateDataHash = victorHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Victor).map(registry.addresses),
-          status = FiberStatus.Active
-        )
-
-        // Initialize Federal Reserve fiber
-        yolandaHash <- (fedInitialData: JsonLogicValue).computeDigest
-        yolandaFiber = Records.StateMachineFiberRecord(
-          fiberId = yolandafiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = fedDef,
-          currentState = StateId("stable"),
-          stateData =
-            fedInitialData.copy(value = fedInitialData.value + ("name" -> StrValue("Federal Reserve Branch"))),
-          stateDataHash = yolandaHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Yolanda).map(registry.addresses),
-          status = FiberStatus.Active
-        )
-
-        // Initialize Governance fiber
-        xavierHash <- (governanceInitialData: JsonLogicValue).computeDigest
-        xavierFiber = Records.StateMachineFiberRecord(
-          fiberId = xavierfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = governanceDef,
-          currentState = StateId("monitoring"),
-          stateData = governanceInitialData.copy(value =
-            governanceInitialData.value + ("name" -> StrValue("Riverdale Governance"))
-          ),
-          stateDataHash = xavierHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Xavier).map(registry.addresses),
-          status = FiberStatus.Active
-        )
-
-        // Create initial state with key participants
-        initialState <- DataState(OnChain.genesis, CalculatedState.genesis).withRecords[IO](
-          Map(
-            alicefiberId   -> aliceFiber,
-            bobfiberId     -> bobFiber,
-            charliefiberId -> charlieFiber,
-            heidifiberId   -> heidiFiber,
-            niajfiberId    -> niajFiber,
-            oscarfiberId   -> oscarFiber,
-            peggyfiberId   -> peggyFiber,
-            quentinfiberId -> quentinFiber,
-            ruthfiberId    -> ruthFiber,
-            sybilfiberId   -> sybilFiber,
-            victorfiberId  -> victorFiber,
-            xavierfiberId  -> xavierFiber,
-            yolandafiberId -> yolandaFiber
-          )
-        )
-
-        // ========================================
-        // PHASE 1: NORMAL ECONOMIC ACTIVITY
-        // ========================================
-
-        // Event 1: Federal Reserve quarterly meeting (high inflation scenario)
-        update1 = Updates.TransitionStateMachine(
-          yolandafiberId,
-          "quarterly_meeting",
-          MapValue(
-            Map(
-              "timestamp"        -> IntValue(1000),
-              "inflationRate"    -> FloatValue(0.03), // Above 0.025 threshold triggers rate increase
-              "unemploymentRate" -> FloatValue(0.04),
-              "gdpGrowth"        -> FloatValue(0.03)
-            )
-          ),
-          FiberOrdinal.MinValue
-        )
-        proof1 <- registry.generateProofs(update1, Set(Yolanda))
-        state1 <- combiner.insert(initialState, Signed(update1, proof1))
-
-        // Event 2: Fed sets rate (returns to stable, broadcasts rate_adjustment to all banks)
-        seqNum2 = state1.calculated.stateMachines(yolandafiberId).sequenceNumber
-        update2 = Updates.TransitionStateMachine(
-          yolandafiberId,
-          "set_rate",
-          MapValue(Map("timestamp" -> IntValue(1050))),
-          seqNum2
-        )
-        proof2 <- registry.generateProofs(update2, Set(Yolanda))
-        state2 <- combiner.insert(state1, Signed(update2, proof2))
-
-        // Event 3: Alice schedules production
-        update3 = Updates.TransitionStateMachine(
-          alicefiberId,
-          "schedule_production",
-          MapValue(
-            Map(
-              "timestamp" -> IntValue(1100),
-              "batchSize" -> IntValue(100)
-            )
-          ),
-          FiberOrdinal.MinValue
-        )
-        proof3 <- registry.generateProofs(update3, Set(Alice))
-        state3 <- combiner.insert(state2, Signed(update3, proof3))
-
-        // Event 4: Alice starts production
-        seqNum4 = state3.calculated.stateMachines(alicefiberId).sequenceNumber
-        update4 = Updates.TransitionStateMachine(
-          alicefiberId,
-          "start_production",
-          MapValue(Map("timestamp" -> IntValue(1200))),
-          seqNum4
-        )
-        proof4 <- registry.generateProofs(update4, Set(Alice))
-        state4 <- combiner.insert(state3, Signed(update4, proof4))
-
-        // Event 5: Alice completes batch
-        seqNum5 = state4.calculated.stateMachines(alicefiberId).sequenceNumber
-        update5 = Updates.TransitionStateMachine(
-          alicefiberId,
-          "complete_batch",
-          MapValue(Map("timestamp" -> IntValue(2000))),
-          seqNum5
-        )
-        proof5 <- registry.generateProofs(update5, Set(Alice))
-        state5 <- combiner.insert(state4, Signed(update5, proof5))
-
-        // Event 6: Heidi checks inventory (should trigger order to Alice)
-        update6 = Updates.TransitionStateMachine(
-          heidifiberId,
-          "check_inventory",
-          MapValue(
-            Map(
-              "timestamp"  -> IntValue(2100),
-              "shipmentId" -> StrValue("SHIP-001")
-            )
-          ),
-          FiberOrdinal.MinValue
-        )
-        proof6 <- registry.generateProofs(update6, Set(Heidi))
-        state6 <- combiner.insert(state5, Signed(update6, proof6))
-
-        // Verify Heidi's state changed to inventory_low
-        heidiFiberAfterCheck = state6.calculated.stateMachines
-          .get(heidifiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        // Event 7: Ruth applies for loan from Oscar
-        seqNum7 = state6.calculated.stateMachines(oscarfiberId).sequenceNumber
-        update7 = Updates.TransitionStateMachine(
-          oscarfiberId,
-          "apply_loan",
-          MapValue(
-            Map(
-              "timestamp"   -> IntValue(2200),
-              "applicantId" -> StrValue(ruthfiberId.toString),
-              "loanAmount"  -> IntValue(10000),
-              "creditScore" -> IntValue(720),
-              "dti"         -> FloatValue(0.35)
-            )
-          ),
-          seqNum7
-        )
-        proof7 <- registry.generateProofs(update7, Set(Oscar))
-        state7 <- combiner.insert(state6, Signed(update7, proof7))
-
-        // Event 8: Oscar underwrites loan (Fed must be in stable state)
-        seqNum8 = state7.calculated.stateMachines(oscarfiberId).sequenceNumber
-        update8 = Updates.TransitionStateMachine(
-          oscarfiberId,
-          "underwrite",
-          MapValue(Map("timestamp" -> IntValue(2300))),
-          seqNum8
-        )
-        proof8 <- registry.generateProofs(update8, Set(Oscar))
-        state8 <- combiner.insert(state7, Signed(update8, proof8))
-
-        // ========================================
-        // PHASE 2: SUPPLY CHAIN DISRUPTION
-        // ========================================
-
-        // Event 9: Supply shortage at Charlie's TechParts
-        update9 = Updates.TransitionStateMachine(
-          charliefiberId,
-          "check_materials",
-          MapValue(Map("timestamp" -> IntValue(3000))),
-          FiberOrdinal.MinValue
-        )
-        proof9 <- registry.generateProofs(update9, Set(Charlie))
-        state9 <- combiner.insert(state8, Signed(update9, proof9))
-
-        // Verify Charlie entered supply_shortage state
-        charlieFiberAfterShortage = state9.calculated.stateMachines
-          .get(charliefiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        // ========================================
-        // PHASE 3: BOB PRODUCTION CYCLE
-        // ========================================
-
-        // Event 10: Bob schedules production
-        update10 = Updates.TransitionStateMachine(
-          bobfiberId,
-          "schedule_production",
-          MapValue(
-            Map(
-              "timestamp" -> IntValue(3100),
-              "batchSize" -> IntValue(80)
-            )
-          ),
-          FiberOrdinal.MinValue
-        )
-        proof10 <- registry.generateProofs(update10, Set(Bob))
-        state10 <- combiner.insert(state9, Signed(update10, proof10))
-
-        // Event 11: Bob starts production
-        seqNum11 = state10.calculated.stateMachines(bobfiberId).sequenceNumber
-        update11 = Updates.TransitionStateMachine(
-          bobfiberId,
-          "start_production",
-          MapValue(Map("timestamp" -> IntValue(3200))),
-          seqNum11
-        )
-        proof11 <- registry.generateProofs(update11, Set(Bob))
-        state11 <- combiner.insert(state10, Signed(update11, proof11))
-
-        // Event 12: Bob completes batch
-        seqNum12 = state11.calculated.stateMachines(bobfiberId).sequenceNumber
-        update12 = Updates.TransitionStateMachine(
-          bobfiberId,
-          "complete_batch",
-          MapValue(Map("timestamp" -> IntValue(4000))),
-          seqNum12
-        )
-        proof12 <- registry.generateProofs(update12, Set(Bob))
-        state12 <- combiner.insert(state11, Signed(update12, proof12))
-
-        // ========================================
-        // PHASE 4: GRACE RETAILER CROSS-CHAIN
-        // ========================================
-
-        // Initialize Grace (retailer depending on Bob's farm)
-        graceRetailerDef <- decodeStateMachine(retailerStateMachineJson(bobfiberId.toString, niajfiberId.toString))
-        graceData = retailerInitialData.copy(value =
-          retailerInitialData.value + ("businessName" -> StrValue("FreshFoods Market"))
-        )
-        graceHash <- (graceData: JsonLogicValue).computeDigest
-        graceFiber = Records.StateMachineFiberRecord(
-          fiberId = gracefiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = graceRetailerDef,
-          currentState = StateId("open"),
-          stateData = graceData,
-          stateDataHash = graceHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Grace).map(registry.addresses),
-          status = FiberStatus.Active
-        )
-
-        // Add Grace to the state
-        state13 <- state12.withRecord[IO](gracefiberId, graceFiber)
-
-        // Event 13: Grace checks inventory (triggers order to Bob)
-        update13 = Updates.TransitionStateMachine(
-          gracefiberId,
-          "check_inventory",
-          MapValue(
-            Map(
-              "timestamp"  -> IntValue(4100),
-              "shipmentId" -> StrValue("SHIP-002")
-            )
-          ),
-          FiberOrdinal.MinValue
-        )
-        proof13 <- registry.generateProofs(update13, Set(Grace))
-        state14 <- combiner.insert(state13, Signed(update13, proof13))
-
-        // ========================================
-        // PHASE 5: RUTH CONSUMER SHOPPING
-        // ========================================
-
-        // Event 14: Heidi reopens after restocking
-        seqNum14 = state14.calculated.stateMachines(heidifiberId).sequenceNumber
-        update14 = Updates.TransitionStateMachine(
-          heidifiberId,
-          "reopen",
-          MapValue(Map("timestamp" -> IntValue(4150))),
-          seqNum14
-        )
-        proof14 <- registry.generateProofs(update14, Set(Heidi))
-        state15 <- combiner.insert(state14, Signed(update14, proof14))
-
-        // Event 15: Ruth browses products at Heidi's store
-        seqNum15 = state15.calculated.stateMachines(ruthfiberId).sequenceNumber
-        update15 = Updates.TransitionStateMachine(
-          ruthfiberId,
-          "browse_products",
-          MapValue(
-            Map(
-              "timestamp"    -> IntValue(4200),
-              "retailerId"   -> StrValue(heidifiberId.toString),
-              "expectedCost" -> IntValue(50),
-              "quantity"     -> IntValue(5)
-            )
-          ),
-          seqNum15
-        )
-        proof15 <- registry.generateProofs(update15, Set(Ruth))
-        state16 <- combiner.insert(state15, Signed(update15, proof15))
-
-        // ========================================
-        // PHASE 6: SYBIL CONSUMER DELINQUENCY
-        // ========================================
-
-        // Event 16: Sybil applies for loan from Peggy
-        seqNum16 = state16.calculated.stateMachines(peggyfiberId).sequenceNumber
-        update16 = Updates.TransitionStateMachine(
-          peggyfiberId,
-          "apply_loan",
-          MapValue(
-            Map(
-              "timestamp"   -> IntValue(4300),
-              "applicantId" -> StrValue(sybilfiberId.toString),
-              "loanAmount"  -> IntValue(5000),
-              "creditScore" -> IntValue(640),
-              "dti"         -> FloatValue(0.42)
-            )
-          ),
-          seqNum16
-        )
-        proof16 <- registry.generateProofs(update16, Set(Peggy))
-        state17 <- combiner.insert(state16, Signed(update16, proof16))
-
-        // Event 17: Peggy underwrites loan for Sybil
-        seqNum17 = state17.calculated.stateMachines(peggyfiberId).sequenceNumber
-        update17 = Updates.TransitionStateMachine(
-          peggyfiberId,
-          "underwrite",
-          MapValue(Map("timestamp" -> IntValue(4400))),
-          seqNum17
-        )
-        proof17 <- registry.generateProofs(update17, Set(Peggy))
-        state18 <- combiner.insert(state17, Signed(update17, proof17))
-        // Event 18: Sybil checks payment (misses payment - timestamp way past nextPaymentDue)
-        seqNum18 = state18.calculated.stateMachines(sybilfiberId).sequenceNumber
-        update18 = Updates.TransitionStateMachine(
-          sybilfiberId,
-          "check_payment",
-          MapValue(Map("timestamp" -> IntValue(7100000))), // Way past due date (2592000 + 4400 = 2596400)
-          seqNum18
-        )
-        proof18 <- registry.generateProofs(update18, Set(Sybil))
-        state19 <- combiner.insert(state18, Signed(update18, proof18))
-
-        // ========================================
-        // PHASE 7: STRESS TEST SCENARIO
-        // ========================================
-
-        // Event 19: Fed initiates stress test due to high market volatility
-        seqNum19 = state19.calculated.stateMachines(yolandafiberId).sequenceNumber
-        update19 = Updates.TransitionStateMachine(
-          yolandafiberId,
-          "initiate_stress_test",
-          MapValue(
-            Map(
-              "timestamp"        -> IntValue(7200000),
-              "marketVolatility" -> FloatValue(0.35), // Above 0.30 threshold
-              "systemicRisk"     -> FloatValue(0.45)
-            )
-          ),
-          seqNum19
-        )
-        proof19 <- registry.generateProofs(update19, Set(Yolanda))
-        state20 <- combiner.insert(state19, Signed(update19, proof19))
-
-        // Event 20: Oscar completes stress test (passes - good capital ratio)
-        seqNum20 = state20.calculated.stateMachines(oscarfiberId).sequenceNumber
-        update20 = Updates.TransitionStateMachine(
-          oscarfiberId,
-          "complete_stress_test",
-          MapValue(Map("timestamp" -> IntValue(7300000))),
-          seqNum20
-        )
-        proof20 <- registry.generateProofs(update20, Set(Oscar))
-        state21 <- combiner.insert(state20, Signed(update20, proof20))
-
-        // Event 21: Peggy completes stress test (passes - good capital ratio)
-        seqNum21 = state21.calculated.stateMachines(peggyfiberId).sequenceNumber
-        update21 = Updates.TransitionStateMachine(
-          peggyfiberId,
-          "complete_stress_test",
-          MapValue(Map("timestamp" -> IntValue(7300050))),
-          seqNum21
-        )
-        proof21 <- registry.generateProofs(update21, Set(Peggy))
-        state22 <- combiner.insert(state21, Signed(update21, proof21))
-
-        // Event 22: Quentin completes stress test (passes - good capital ratio)
-        seqNum22 = state22.calculated.stateMachines(quentinfiberId).sequenceNumber
-        update22 = Updates.TransitionStateMachine(
-          quentinfiberId,
-          "complete_stress_test",
-          MapValue(Map("timestamp" -> IntValue(7300100))),
-          seqNum22
-        )
-        proof22 <- registry.generateProofs(update22, Set(Quentin))
-        state23 <- combiner.insert(state22, Signed(update22, proof22))
-
-        // ========================================
-        // PHASE 8: HEIDI HOLIDAY SALE
-        // ========================================
-
-        // Event 23: Heidi starts holiday sale (20% discount)
-        seqNum23 = state23.calculated.stateMachines(heidifiberId).sequenceNumber
-        update23 = Updates.TransitionStateMachine(
-          heidifiberId,
-          "start_sale",
-          MapValue(
-            Map(
-              "timestamp"    -> IntValue(7400000),
-              "season"       -> StrValue("holiday"),
-              "discountRate" -> FloatValue(0.20)
-            )
-          ),
-          seqNum23
-        )
-        proof23 <- registry.generateProofs(update23, Set(Heidi))
-        state24 <- combiner.insert(state23, Signed(update23, proof23))
-
-        // Capture stress test state for validation
-        oscarFiberAfterStressTest = state23.calculated.stateMachines
-          .get(oscarfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        peggyFiberAfterStressTest = state23.calculated.stateMachines
-          .get(peggyfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        quentinFiberAfterStressTest = state23.calculated.stateMachines
-          .get(quentinfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        yolandaFiberAfterStressTest = state23.calculated.stateMachines
-          .get(yolandafiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        // Capture holiday sale state for validation
-        heidiFiberAfterSale = state24.calculated.stateMachines
-          .get(heidifiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        // ========================================
-        // PHASE 9: C2C MARKETPLACE (AUCTION)
-        // ========================================
-
-        auctionfiberId <- UUIDGen.randomUUID[IO]
-
-        // Event 24: Sybil lists handmade craft item for auction (spawns auction child machine)
-        seqNum24 = state24.calculated.stateMachines(sybilfiberId).sequenceNumber
-        update24 = Updates.TransitionStateMachine(
-          sybilfiberId,
-          "list_item",
-          MapValue(
-            Map(
-              "auctionId"    -> StrValue(auctionfiberId.toString),
-              "itemName"     -> StrValue("Handmade Ceramic Vase"),
-              "reservePrice" -> IntValue(500),
-              "timestamp"    -> IntValue(7500000)
-            )
-          ),
-          seqNum24
-        )
-        proof24 <- registry.generateProofs(update24, Set(Sybil))
-        state25 <- combiner.insert(state24, Signed(update24, proof24))
-
-        // Event 25: Victor places bid on Sybil's auction (bid exceeds reserve price)
-        update25 = Updates.TransitionStateMachine(
-          auctionfiberId,
-          "place_bid",
-          MapValue(
-            Map(
-              "bidAmount" -> IntValue(750),
-              "bidderId"  -> StrValue(victorfiberId.toString),
-              "timestamp" -> IntValue(7600000)
-            )
-          ),
-          FiberOrdinal.MinValue
-        )
-        proof25 <- registry.generateProofs(update25, Set(Victor))
-        state26 <- combiner.insert(state25, Signed(update25, proof25))
-
-        // Event 26: Auction accepts bid (triggers sale_completed to Sybil)
-        seqNum26 = state26.calculated.stateMachines(auctionfiberId).sequenceNumber
-        update26 = Updates.TransitionStateMachine(
-          auctionfiberId,
-          "accept_bid",
-          MapValue(Map("timestamp" -> IntValue(7700000))),
-          seqNum26
-        )
-        proof26 <- registry.generateProofs(update26, Set(Sybil))
-        state27 <- combiner.insert(state26, Signed(update26, proof26))
-
-        // Capture C2C marketplace state for validation
-        auctionFiberAfterBidAccepted = state27.calculated.stateMachines
-          .get(auctionfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        sybilFiberAfterSale = state27.calculated.stateMachines
-          .get(sybilfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        // ========================================
-        // PHASE 10: RUTH MAKES LOAN PAYMENT
-        // ========================================
-
-        // Event 27: Ruth makes first loan payment to Oscar
-        seqNum27 = state27.calculated.stateMachines(ruthfiberId).sequenceNumber
-        update27 = Updates.TransitionStateMachine(
-          ruthfiberId,
-          "make_payment",
-          MapValue(Map("timestamp" -> IntValue(7750000))),
-          seqNum27
-        )
-        proof27 <- registry.generateProofs(update27, Set(Ruth))
-        state28 <- combiner.insert(state27, Signed(update27, proof27))
-
-        // ========================================
-        // PHASE 11: SECOND AUCTION (Victor sells)
-        // ========================================
-
-        auction2fiberId <- UUIDGen.randomUUID[IO]
-
-        // Event 28: Victor lists antique item for auction
-        update28 = Updates.TransitionStateMachine(
-          victorfiberId,
-          "list_item",
-          MapValue(
-            Map(
-              "auctionId"    -> StrValue(auction2fiberId.toString),
-              "itemName"     -> StrValue("Vintage Watch Collection"),
-              "reservePrice" -> IntValue(2000),
-              "timestamp"    -> IntValue(7800000)
-            )
-          ),
-          FiberOrdinal.MinValue
-        )
-        proof28 <- registry.generateProofs(update28, Set(Victor))
-        state29 <- combiner.insert(state28, Signed(update28, proof28))
-
-        // Event 29: Ruth places bid on Victor's auction (using loan proceeds)
-        update29 = Updates.TransitionStateMachine(
-          auction2fiberId,
-          "place_bid",
-          MapValue(
-            Map(
-              "bidAmount" -> IntValue(2500),
-              "bidderId"  -> StrValue(ruthfiberId.toString),
-              "timestamp" -> IntValue(7900000)
-            )
-          ),
-          FiberOrdinal.MinValue
-        )
-        proof29 <- registry.generateProofs(update29, Set(Ruth))
-        state30 <- combiner.insert(state29, Signed(update29, proof29))
-
-        // Event 30: Victor accepts Ruth's bid
-        seqNum30 = state30.calculated.stateMachines(auction2fiberId).sequenceNumber
-        update30 = Updates.TransitionStateMachine(
-          auction2fiberId,
-          "accept_bid",
-          MapValue(Map("timestamp" -> IntValue(8000000))),
-          seqNum30
-        )
-        proof30 <- registry.generateProofs(update30, Set(Victor))
-        state31 <- combiner.insert(state30, Signed(update30, proof30))
-
-        // ========================================
-        // PHASE 12: ADDITIONAL MANUFACTURER CYCLES
-        // ========================================
-
-        // Event 31: Dave (new manufacturer) initialization and production
-        daveRetailerDef <- decodeStateMachine(manufacturerStateMachineJson())
-        daveData = manufacturerInitialData.copy(value =
-          manufacturerInitialData.value + ("businessName" -> StrValue("TextileWorks Co"))
-        )
-        daveHash <- (daveData: JsonLogicValue).computeDigest
-        daveFiber = Records.StateMachineFiberRecord(
-          fiberId = davefiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = daveRetailerDef,
-          currentState = StateId("idle"),
-          stateData = daveData,
-          stateDataHash = daveHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Dave).map(registry.addresses),
-          status = FiberStatus.Active
-        )
-
-        // Add Dave to the state
-        state32 <- state31.withRecord[IO](davefiberId, daveFiber)
-
-        // Event 32: Dave schedules production
-        update32 = Updates.TransitionStateMachine(
-          davefiberId,
-          "schedule_production",
-          MapValue(
-            Map(
-              "timestamp" -> IntValue(8100000),
-              "batchSize" -> IntValue(150)
-            )
-          ),
-          FiberOrdinal.MinValue
-        )
-        proof32 <- registry.generateProofs(update32, Set(Dave))
-        state33 <- combiner.insert(state32, Signed(update32, proof32))
-
-        // Event 33: Dave starts production
-        seqNum33 = state33.calculated.stateMachines(davefiberId).sequenceNumber
-        update33 = Updates.TransitionStateMachine(
-          davefiberId,
-          "start_production",
-          MapValue(Map("timestamp" -> IntValue(8200000))),
-          seqNum33
-        )
-        proof33 <- registry.generateProofs(update33, Set(Dave))
-        state34 <- combiner.insert(state33, Signed(update33, proof33))
-
-        // Event 34: Dave completes production
-        seqNum34 = state34.calculated.stateMachines(davefiberId).sequenceNumber
-        update34 = Updates.TransitionStateMachine(
-          davefiberId,
-          "complete_batch",
-          MapValue(Map("timestamp" -> IntValue(8300000))),
-          seqNum34
-        )
-        proof34 <- registry.generateProofs(update34, Set(Dave))
-        state35 <- combiner.insert(state34, Signed(update34, proof34))
-
-        // ========================================
-        // PHASE 13: IVAN RETAILER (DEPENDS ON DAVE)
-        // ========================================
-
-        // Event 35: Ivan retailer initialization
-        ivanRetailerDef <- decodeStateMachine(retailerStateMachineJson(davefiberId.toString, niajfiberId.toString))
-        ivanData = retailerInitialData.copy(value =
-          retailerInitialData.value + ("businessName" -> StrValue("StyleHub Boutique"))
-        )
-        ivanHash <- (ivanData: JsonLogicValue).computeDigest
-        ivanFiber = Records.StateMachineFiberRecord(
-          fiberId = ivanfiberId,
-          creationOrdinal = ordinal,
-          previousUpdateOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          definition = ivanRetailerDef,
-          currentState = StateId("open"),
-          stateData = ivanData,
-          stateDataHash = ivanHash,
-          sequenceNumber = FiberOrdinal.MinValue,
-          owners = Set(Ivan).map(registry.addresses),
-          status = FiberStatus.Active
-        )
-
-        // Add Ivan to the state
-        state36 <- state35.withRecord[IO](ivanfiberId, ivanFiber)
-
-        // Event 36: Ivan checks inventory (triggers order to Dave)
-        update36 = Updates.TransitionStateMachine(
-          ivanfiberId,
-          "check_inventory",
-          MapValue(
-            Map(
-              "timestamp"  -> IntValue(8400000),
-              "shipmentId" -> StrValue("SHIP-003")
-            )
-          ),
-          FiberOrdinal.MinValue
-        )
-        proof36 <- registry.generateProofs(update36, Set(Ivan))
-        state37 <- combiner.insert(state36, Signed(update36, proof36))
-
-        // ========================================
-        // PHASE 14: CONSUMER SERVICE PROVISION
-        // ========================================
-
-        // Event 37: Ruth provides freelance service (earns income)
-        seqNum37 = state37.calculated.stateMachines(ruthfiberId).sequenceNumber
-        update37 = Updates.TransitionStateMachine(
-          ruthfiberId,
-          "provide_service",
-          MapValue(
-            Map(
-              "timestamp"        -> IntValue(8500000),
-              "requestedService" -> StrValue("software_development"),
-              "payment"          -> IntValue(3000)
-            )
-          ),
-          seqNum37
-        )
-        proof37 <- registry.generateProofs(update37, Set(Ruth))
-        state38 <- combiner.insert(state37, Signed(update37, proof37))
-
-        // ========================================
-        // PHASE 15: MORE CONSUMER SHOPPING
-        // ========================================
-
-        // Event 38: Victor shops at Grace's FreshFoods Market
-        seqNum38 = state38.calculated.stateMachines(victorfiberId).sequenceNumber
-        update38 = Updates.TransitionStateMachine(
-          victorfiberId,
-          "browse_products",
-          MapValue(
-            Map(
-              "timestamp"    -> IntValue(8600000),
-              "retailerId"   -> StrValue(gracefiberId.toString),
-              "expectedCost" -> IntValue(100),
-              "quantity"     -> IntValue(10)
-            )
-          ),
-          seqNum38
-        )
-        proof38 <- registry.generateProofs(update38, Set(Victor))
-        state39 <- combiner.insert(state38, Signed(update38, proof38))
-
-        // Event 39: Grace reopens after restocking
-        seqNum39 = state39.calculated.stateMachines(gracefiberId).sequenceNumber
-        update39 = Updates.TransitionStateMachine(
-          gracefiberId,
-          "reopen",
-          MapValue(Map("timestamp" -> IntValue(8650000))),
-          seqNum39
-        )
-        proof39 <- registry.generateProofs(update39, Set(Grace))
-        state40 <- combiner.insert(state39, Signed(update39, proof39))
-
-        // Event 40: Ivan reopens after restocking from Dave
-        seqNum40 = state40.calculated.stateMachines(ivanfiberId).sequenceNumber
-        update40 = Updates.TransitionStateMachine(
-          ivanfiberId,
-          "reopen",
-          MapValue(Map("timestamp" -> IntValue(8700000))),
-          seqNum40
-        )
-        proof40 <- registry.generateProofs(update40, Set(Ivan))
-        state41 <- combiner.insert(state40, Signed(update40, proof40))
-
-        // ========================================
-        // PHASE 16: ADDITIONAL ECONOMIC ACTIVITY
-        // ========================================
-
-        // Event 41: Alice schedules another production batch
-        seqNum41 = state41.calculated.stateMachines(alicefiberId).sequenceNumber
-        update41 = Updates.TransitionStateMachine(
-          alicefiberId,
-          "schedule_production",
-          MapValue(
-            Map(
-              "timestamp" -> IntValue(8800000),
-              "batchSize" -> IntValue(80)
-            )
-          ),
-          seqNum41
-        )
-        proof41 <- registry.generateProofs(update41, Set(Alice))
-        state42 <- combiner.insert(state41, Signed(update41, proof41))
-
-        // Event 42: Alice starts second production run
-        seqNum42 = state42.calculated.stateMachines(alicefiberId).sequenceNumber
-        update42 = Updates.TransitionStateMachine(
-          alicefiberId,
-          "start_production",
-          MapValue(Map("timestamp" -> IntValue(8900000))),
-          seqNum42
-        )
-        proof42 <- registry.generateProofs(update42, Set(Alice))
-        state43 <- combiner.insert(state42, Signed(update42, proof42))
-
-        // Event 43: Alice completes second batch
-        seqNum43 = state43.calculated.stateMachines(alicefiberId).sequenceNumber
-        update43 = Updates.TransitionStateMachine(
-          alicefiberId,
-          "complete_batch",
-          MapValue(Map("timestamp" -> IntValue(9000000))),
-          seqNum43
-        )
-        proof43 <- registry.generateProofs(update43, Set(Alice))
-        state44 <- combiner.insert(state43, Signed(update43, proof43))
-
-        // ========================================
-        // PHASE 17: TAX COLLECTION
-        // ========================================
-
-        // Instead of broadcasting to all 10 taxpayers at once (which would exceed execution depth),
-        // we send individual pay_taxes events to each taxpayer.
-
-        taxPayload = MapValue(
-          Map(
-            "taxPeriod"      -> StrValue("Q4-2024"),
-            "taxRate"        -> FloatValue(0.05),
-            "collectionDate" -> IntValue(9100000),
-            "governanceId"   -> StrValue(xavierfiberId.toString)
-          )
-        )
-
-        // Event 44: Alice pays taxes
-        seqNum44 = state44.calculated.stateMachines(alicefiberId).sequenceNumber
-        update44 = Updates.TransitionStateMachine(alicefiberId, "pay_taxes", taxPayload, seqNum44)
-        proof44 <- registry.generateProofs(update44, Set(Alice))
-        state45 <- combiner.insert(state44, Signed(update44, proof44))
-
-        // Event 45: Bob pays taxes
-        seqNum45 = state45.calculated.stateMachines(bobfiberId).sequenceNumber
-        update45 = Updates.TransitionStateMachine(bobfiberId, "pay_taxes", taxPayload, seqNum45)
-        proof45 <- registry.generateProofs(update45, Set(Bob))
-        state46 <- combiner.insert(state45, Signed(update45, proof45))
-
-        // Event 46: Charlie pays taxes
-        seqNum46 = state46.calculated.stateMachines(charliefiberId).sequenceNumber
-        update46 = Updates.TransitionStateMachine(charliefiberId, "pay_taxes", taxPayload, seqNum46)
-        proof46 <- registry.generateProofs(update46, Set(Charlie))
-        state47 <- combiner.insert(state46, Signed(update46, proof46))
-
-        // Event 47: Dave pays taxes
-        seqNum47 = state47.calculated.stateMachines(davefiberId).sequenceNumber
-        update47 = Updates.TransitionStateMachine(davefiberId, "pay_taxes", taxPayload, seqNum47)
-        proof47 <- registry.generateProofs(update47, Set(Dave))
-        state48 <- combiner.insert(state47, Signed(update47, proof47))
-
-        // Event 48: Heidi pays taxes
-        seqNum48 = state48.calculated.stateMachines(heidifiberId).sequenceNumber
-        update48 = Updates.TransitionStateMachine(heidifiberId, "pay_taxes", taxPayload, seqNum48)
-        proof48 <- registry.generateProofs(update48, Set(Heidi))
-        state49 <- combiner.insert(state48, Signed(update48, proof48))
-
-        // Event 49: Grace pays taxes
-        seqNum49 = state49.calculated.stateMachines(gracefiberId).sequenceNumber
-        update49 = Updates.TransitionStateMachine(gracefiberId, "pay_taxes", taxPayload, seqNum49)
-        proof49 <- registry.generateProofs(update49, Set(Grace))
-        state50 <- combiner.insert(state49, Signed(update49, proof49))
-
-        // Event 50: Ivan pays taxes
-        seqNum50 = state50.calculated.stateMachines(ivanfiberId).sequenceNumber
-        update50 = Updates.TransitionStateMachine(ivanfiberId, "pay_taxes", taxPayload, seqNum50)
-        proof50 <- registry.generateProofs(update50, Set(Ivan))
-        state51 <- combiner.insert(state50, Signed(update50, proof50))
-
-        // Event 51: Ruth pays taxes
-        seqNum51 = state51.calculated.stateMachines(ruthfiberId).sequenceNumber
-        update51 = Updates.TransitionStateMachine(ruthfiberId, "pay_taxes", taxPayload, seqNum51)
-        proof51 <- registry.generateProofs(update51, Set(Ruth))
-        state52 <- combiner.insert(state51, Signed(update51, proof51))
-
-        // Event 52: Sybil pays taxes
-        seqNum52 = state52.calculated.stateMachines(sybilfiberId).sequenceNumber
-        update52 = Updates.TransitionStateMachine(sybilfiberId, "pay_taxes", taxPayload, seqNum52)
-        proof52 <- registry.generateProofs(update52, Set(Sybil))
-        state53 <- combiner.insert(state52, Signed(update52, proof52))
-
-        // Event 53: Victor pays taxes
-        seqNum53 = state53.calculated.stateMachines(victorfiberId).sequenceNumber
-        update53 = Updates.TransitionStateMachine(victorfiberId, "pay_taxes", taxPayload, seqNum53)
-        proof53 <- registry.generateProofs(update53, Set(Victor))
-        state54 <- combiner.insert(state53, Signed(update53, proof53))
-
-        // ========================================
-        // FINAL VALIDATIONS
-        // ========================================
-
-        // Extract final states for validation (use state54 to include all tax payments)
-        finalAliceFiber = state54.calculated.stateMachines
-          .get(alicefiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        finalBobFiber = state54.calculated.stateMachines
-          .get(bobfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        finalCharlieFiber = state54.calculated.stateMachines
-          .get(charliefiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        finalDaveFiber = state54.calculated.stateMachines
-          .get(davefiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        finalGraceFiber = state54.calculated.stateMachines
-          .get(gracefiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        finalHeidiFiber = state54.calculated.stateMachines
-          .get(heidifiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        finalIvanFiber = state54.calculated.stateMachines
-          .get(ivanfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        finalOscarFiber = state54.calculated.stateMachines
-          .get(oscarfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        finalPeggyFiber = state54.calculated.stateMachines
-          .get(peggyfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        finalQuentinFiber = state54.calculated.stateMachines
-          .get(quentinfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        finalRuthFiber = state54.calculated.stateMachines
-          .get(ruthfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        finalSybilFiber = state54.calculated.stateMachines
-          .get(sybilfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        finalVictorFiber = state54.calculated.stateMachines
-          .get(victorfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        finalYolandaFiber = state54.calculated.stateMachines
-          .get(yolandafiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        // Extract auction states
-        finalAuction1Fiber = state54.calculated.stateMachines
-          .get(auctionfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        finalAuction2Fiber = state54.calculated.stateMachines
-          .get(auction2fiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        // Extract intermediate states for Ruth's payment
-        ruthAfterPayment = state28.calculated.stateMachines
-          .get(ruthfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        oscarAfterPayment = state28.calculated.stateMachines
-          .get(oscarfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        // Extract states after Ruth's service provision
-        ruthAfterService = state38.calculated.stateMachines
-          .get(ruthfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        // Extract states for Ivan and Dave supply chain
-        ivanAfterInventoryCheck = state37.calculated.stateMachines
-          .get(ivanfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        daveAfterFulfillment = state37.calculated.stateMachines
-          .get(davefiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        // Extract Xavier's final state after tax collection
-        finalXavierFiber = state54.calculated.stateMachines
-          .get(xavierfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-        // Extract Niaj's final state
-        finalNiajFiber = state54.calculated.stateMachines
-          .get(niajfiberId)
-          .collect { case r: Records.StateMachineFiberRecord => r }
-
-      } yield expect.all(
-        // Verify all participants exist
-        finalAliceFiber.isDefined,
-        finalHeidiFiber.isDefined,
-        finalOscarFiber.isDefined,
-        finalRuthFiber.isDefined,
-        finalCharlieFiber.isDefined,
-        finalYolandaFiber.isDefined,
-
-        // ========================================
-        // NIAJ (PLATFORM) COMPREHENSIVE VALIDATIONS
-        // ========================================
-
-        // Verify Niaj (Platform) exists
-        finalNiajFiber.isDefined,
-
-        // Verify Niaj remained in idle state (no events processed)
-        finalNiajFiber.map(_.currentState).contains(StateId("idle")),
-
-        // Verify Niaj's sequence number is 0 (passive participant, no events)
-        finalNiajFiber.map(_.sequenceNumber).exists(_ == FiberOrdinal.MinValue),
-
-        // Verify Niaj's transaction count is still 0
-        finalNiajFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("transactions").collect { case IntValue(t) => t }
-              case _           => None
-            }
-          }
-          .exists(_ == 0),
-
-        // Verify Niaj's status is still active
-        finalNiajFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("status").collect { case StrValue(s) => s }
-              case _           => None
-            }
-          }
-          .contains("active"),
-
-        // Verify state transitions
-        finalAliceFiber.map(_.sequenceNumber).exists(_ > FiberOrdinal.MinValue),
-        finalOscarFiber
-          .map(_.currentState)
-          .contains(
-            StateId("loan_servicing")
-          ), // Oscar underwrote the loan successfully (Fed was stable), then completed stress test
-        finalCharlieFiber.map(_.currentState).contains(StateId("supply_shortage")),
-        finalYolandaFiber
-          .map(_.currentState)
-          .contains(StateId("stress_testing")), // Fed is in stress_testing state
-
-        // Verify Ruth received loan funding and is in debt_current state
-        finalRuthFiber.map(_.currentState).contains(StateId("debt_current")),
-
-        // Verify cross-machine triggers fired - Heidi goes from open -> inventory_low -> stocking in same snapshot
-        heidiFiberAfterCheck.map(_.currentState).contains(StateId("stocking")),
-
-        // Verify Charlie's supply shortage was detected
-        charlieFiberAfterShortage.map(_.currentState).contains(StateId("supply_shortage")),
-
-        // Verify Bob's production cycle
-        finalBobFiber.map(_.currentState).contains(StateId("shipping")), // Bob fulfilled Grace's order
-        finalBobFiber
-          .map(_.sequenceNumber)
-          .exists(_ == FiberOrdinal.unsafeApply(5L)), // 5 events: schedule, start, complete, fulfill_order, pay_taxes
-        finalBobFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("inventory").collect { case IntValue(i) => i }
-              case _           => None
-            }
-          }
-          .exists(_ == 400), // 500 - 100 = 400 (after fulfilling order)
-
-        // Verify Grace cross-chain order
-        finalGraceFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("stock").collect { case IntValue(s) => s }
-              case _           => None
-            }
-          }
-          .exists(_ == 105), // 15 (initial) + 100 (restock from Bob) - 10 (sold to Victor while stocking) = 105
-
-        // Verify Ruth's shopping
-        finalRuthFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("purchaseCount").collect { case IntValue(c) => c }
-              case _           => None
-            }
-          }
-          .exists(_ == 1), // Ruth made 1 purchase
-
-        // Ruth's balance: 5000 + 10000 (loan) - 50 (purchase) - 300 (payment) + 3000 (service) = 17650
-        finalRuthFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("balance").collect { case IntValue(b) => b }
-              case _           => None
-            }
-          }
-          .exists(_ == 17650),
-
-        // Verify Heidi processed the sale
-        finalHeidiFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("salesCount").collect { case IntValue(c) => c }
-              case _           => None
-            }
-          }
-          .exists(_ >= 1), // Heidi made at least 1 sale
-
-        // Heidi's revenue increased (5 items * 10 per unit = 50)
-        finalHeidiFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("revenue").collect { case IntValue(r) => r }
-              case _           => None
-            }
-          }
-          .exists(_ == 50),
-
-        // Heidi's stock decreased (stock after restocking from Alice, then sold 5 to Ruth)
-        finalHeidiFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("stock").collect { case IntValue(s) => s }
-              case _           => None
-            }
-          }
-          .exists(_ == 110), // 115 (after restocking) - 5 (sold to Ruth) = 110
-
-        // Verify Peggy and Quentin banks received rate_adjustment from Fed (Event 2)
-        finalPeggyFiber.map(_.sequenceNumber).exists(_ >= FiberOrdinal.MinValue.next), // Peggy received rate_adjustment
-        finalPeggyFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("baseRate").collect { case FloatValue(r) => r }
-              case _           => None
-            }
-          }
-          .exists(_ == 0.0425), // 0.04 + 0.0025 = 0.0425 (after rate increase)
-
-        finalQuentinFiber
-          .map(_.sequenceNumber)
-          .exists(_ >= FiberOrdinal.MinValue.next), // Quentin received rate_adjustment
-        finalQuentinFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("baseRate").collect { case FloatValue(r) => r }
-              case _           => None
-            }
-          }
-          .exists(_ == 0.0425), // 0.04 + 0.0025 = 0.0425 (after rate increase)
-
-        // Verify Sybil's delinquency
-        finalSybilFiber.map(_.currentState).contains(StateId("debt_delinquent")),
-        finalSybilFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("missedPayments").collect { case IntValue(mp) => mp }
-              case _           => None
-            }
-          }
-          .exists(_ >= 1), // Sybil missed at least 1 payment
-
-        // Verify stress test execution - banks should have completed stress test and returned to original states
-        yolandaFiberAfterStressTest
-          .map(_.currentState)
-          .contains(StateId("stress_testing")), // Fed is still in stress_testing state
-        oscarFiberAfterStressTest
-          .map(_.currentState)
-          .contains(StateId("loan_servicing")), // Oscar returned to loan_servicing (has activeLoans > 0)
-        peggyFiberAfterStressTest
-          .map(_.currentState)
-          .contains(StateId("loan_servicing")), // Peggy returned to loan_servicing (has activeLoans > 0)
-        quentinFiberAfterStressTest
-          .map(_.currentState)
-          .contains(StateId("operating")), // Quentin returned to operating (has activeLoans == 0)
-
-        // Verify banks passed the stress test
-        oscarFiberAfterStressTest
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("stressTestPassed").collect { case BoolValue(p) => p }
-              case _           => None
-            }
-          }
-          .getOrElse(false),
-        peggyFiberAfterStressTest
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("stressTestPassed").collect { case BoolValue(p) => p }
-              case _           => None
-            }
-          }
-          .getOrElse(false),
-        quentinFiberAfterStressTest
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("stressTestPassed").collect { case BoolValue(p) => p }
-              case _           => None
-            }
-          }
-          .getOrElse(false),
-
-        // Verify Heidi's holiday sale
-        heidiFiberAfterSale
-          .map(_.currentState)
-          .contains(StateId("sale_active")), // Heidi entered sale_active state
-        heidiFiberAfterSale
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("discountRate").collect { case FloatValue(d) => d }
-              case _           => None
-            }
-          }
-          .exists(_ == 0.20), // 20% discount rate
-
-        // ========================================
-        // C2C MARKETPLACE VALIDATIONS
-        // ========================================
-
-        // Verify auction child machine was spawned and exists
-        auctionFiberAfterBidAccepted.isDefined,
-
-        // Verify auction reached "sold" final state
-        auctionFiberAfterBidAccepted.map(_.currentState).contains(StateId("sold")),
-
-        // Verify auction has correct parent relationship
-        auctionFiberAfterBidAccepted.flatMap(_.parentFiberId).contains(sybilfiberId),
-
-        // Verify auction recorded Victor as highest bidder
-        auctionFiberAfterBidAccepted
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("highestBidder").collect { case StrValue(s) => s }
-              case _           => None
-            }
-          }
-          .contains(victorfiberId.toString),
-
-        // Verify auction recorded winning bid amount (750)
-        auctionFiberAfterBidAccepted
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("highestBid").collect { case IntValue(b) => b }
-              case _           => None
-            }
-          }
-          .exists(_ == 750),
-
-        // Verify auction recorded item name
-        auctionFiberAfterBidAccepted
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("itemName").collect { case StrValue(s) => s }
-              case _           => None
-            }
-          }
-          .contains("Handmade Ceramic Vase"),
-
-        // Verify Sybil remained in "debt_delinquent" state after sale completed (delinquency doesn't clear just from earning money)
-        sybilFiberAfterSale.map(_.currentState).contains(StateId("debt_delinquent")),
-
-        // Verify Sybil's balance increased by bid amount (8000 after loan + 750 sale = 8750)
-        sybilFiberAfterSale
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("balance").collect { case IntValue(b) => b }
-              case _           => None
-            }
-          }
-          .exists(_ == 8750),
-
-        // Verify Sybil's marketplaceSales counter incremented
-        sybilFiberAfterSale
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("marketplaceSales").collect { case IntValue(s) => s }
-              case _           => None
-            }
-          }
-          .exists(_ == 1),
-
-        // Verify Sybil's activeListings decreased back to 0
-        sybilFiberAfterSale
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("activeListings").collect { case IntValue(a) => a }
-              case _           => None
-            }
-          }
-          .exists(_ == 0),
-
-        // Verify Victor still exists in active state
-        finalVictorFiber.isDefined,
-        finalVictorFiber.map(_.currentState).contains(StateId("active")),
-
-        // ========================================
-        // AUCTION 2 (VICTOR'S AUCTION) VALIDATIONS
-        // ========================================
-
-        // Verify Victor's auction child machine was spawned and exists
-        finalAuction2Fiber.isDefined,
-
-        // Verify auction reached "sold" final state
-        finalAuction2Fiber.map(_.currentState).contains(StateId("sold")),
-
-        // Verify auction has correct parent relationship (Victor)
-        finalAuction2Fiber.flatMap(_.parentFiberId).contains(victorfiberId),
-
-        // Verify auction recorded Ruth as highest bidder
-        finalAuction2Fiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("highestBidder").collect { case StrValue(s) => s }
-              case _           => None
-            }
-          }
-          .contains(ruthfiberId.toString),
-
-        // Verify auction recorded winning bid amount (2500)
-        finalAuction2Fiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("highestBid").collect { case IntValue(b) => b }
-              case _           => None
-            }
-          }
-          .exists(_ == 2500),
-
-        // Verify auction recorded item name
-        finalAuction2Fiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("itemName").collect { case StrValue(s) => s }
-              case _           => None
-            }
-          }
-          .contains("Vintage Watch Collection"),
-
-        // Verify auction reserve price was met
-        finalAuction2Fiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("reservePrice").collect { case IntValue(r) => r }
-              case _           => None
-            }
-          }
-          .exists(_ == 2000),
-
-        // ========================================
-        // STATE44 VALIDATIONS (Alice's Second Production Run)
-        // ========================================
-
-        // Verify Alice completed second production cycle and reached inventory_full state
-        finalAliceFiber.map(_.currentState).contains(StateId("inventory_full")),
-
-        // Verify Alice's sequence number increased by 3 (schedule, start, complete)
-        finalAliceFiber.map(_.sequenceNumber).exists(_ >= FiberOrdinal.unsafeApply(3L)),
-
-        // Verify Alice's raw materials: 1000 - 50 (first cycle) - 50 (second cycle) = 900
-        finalAliceFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("rawMaterials").collect { case IntValue(r) => r }
-              case _           => None
-            }
-          }
-          .exists(_ == 900),
-
-        // Verify Alice's inventory: 420 + 100 (first batch) - 100 (shipped to Heidi) + 80 (second batch) = 500
-        finalAliceFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("inventory").collect { case IntValue(i) => i }
-              case _           => None
-            }
-          }
-          .exists(_ == 500),
-
-        // Verify Alice's total produced: 100 (first batch) + 80 (second batch) = 180
-        finalAliceFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("totalProduced").collect { case IntValue(t) => t }
-              case _           => None
-            }
-          }
-          .exists(_ == 180),
-
-        // Verify Alice's batchSize was set correctly in schedule_production event
-        finalAliceFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("batchSize").collect { case IntValue(b) => b }
-              case _           => None
-            }
-          }
-          .exists(_ == 80),
-
-        // Verify Alice reached max inventory capacity
-        finalAliceFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) =>
-                for {
-                  inventory    <- m.get("inventory").collect { case IntValue(i) => i }
-                  maxInventory <- m.get("maxInventory").collect { case IntValue(m) => m }
-                } yield inventory >= maxInventory
-              case _ => None
-            }
-          }
-          .getOrElse(false),
-
-        // ========================================
-        // XAVIER GOVERNANCE TAX COLLECTION VALIDATIONS
-        // ========================================
-
-        // Verify Xavier exists
-        finalXavierFiber.isDefined,
-
-        // Verify Xavier returned to monitoring state after all taxpayers paid
-        finalXavierFiber.map(_.currentState).contains(StateId("monitoring")),
-
-        // Verify Xavier received tax payments (sequence number incremented)
-        finalXavierFiber.map(_.sequenceNumber).exists(_ > FiberOrdinal.MinValue),
-
-        // Verify Xavier collected taxes from all 10 taxpayers
-        finalXavierFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("taxpayersCompliant").collect { case IntValue(c) => c }
-              case _           => None
-            }
-          }
-          .exists(_ == 10),
-
-        // Verify Xavier's total tax collection is correct (9 + 4 + 0 + 7.5 + 2.5 + 5 + 0 + 150 + 0 + 0 = 178)
-        finalXavierFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("totalTaxesCollected").collect { case FloatValue(t) => t }
-              case _           => None
-            }
-          }
-          .exists(_ == 178.0),
-
-        // Verify Alice processed the pay_taxes trigger and paid taxes
-        finalAliceFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("taxesPaid").collect { case FloatValue(t) => t }
-              case _           => None
-            }
-          }
-          .exists(_ > 0.0),
-
-        // Verify Alice's last tax payment was calculated correctly (180 * 0.05 = 9.0)
-        finalAliceFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("lastTaxPayment").collect { case FloatValue(t) => t }
-              case _           => None
-            }
-          }
-          .exists(_ == 9.0),
-
-        // ========================================
-        // VERIFY ALL 10 TAXPAYERS PAID TAXES
-        // ========================================
-
-        // Manufacturers (Alice, Bob, Charlie, Dave) - tax based on totalProduced
-        finalAliceFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("taxesPaid").collect { case FloatValue(t) => t }
-              case _           => None
-            }
-          }
-          .exists(_ == 9.0), // 180 * 0.05 = 9.0
-
-        finalBobFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("taxesPaid").collect { case FloatValue(t) => t }
-              case _           => None
-            }
-          }
-          .exists(_ == 4.0), // 80 * 0.05 = 4.0
-
-        finalCharlieFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("taxesPaid").collect { case FloatValue(t) => t }
-              case _           => None
-            }
-          }
-          .exists(_ == 0.0), // 0 * 0.05 = 0.0 (Charlie didn't produce due to material shortage)
-
-        // ========================================
-        // CHARLIE (MANUFACTURER) COMPREHENSIVE VALIDATIONS
-        // ========================================
-
-        // Verify Charlie exists
-        finalCharlieFiber.isDefined,
-
-        // Verify Charlie is in supply_shortage state (insufficient raw materials)
-        finalCharlieFiber.map(_.currentState).contains(StateId("supply_shortage")),
-
-        // Verify Charlie's sequence number (check_materials, pay_taxes)
-        finalCharlieFiber.map(_.sequenceNumber).exists(_ == FiberOrdinal.unsafeApply(2L)),
-
-        // Verify Charlie's raw materials unchanged (40 - insufficient for production)
-        finalCharlieFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("rawMaterials").collect { case IntValue(r) => r }
-              case _           => None
-            }
-          }
-          .exists(_ == 40),
-
-        // Verify Charlie's totalProduced is still 0 (no production due to shortage)
-        finalCharlieFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("totalProduced").collect { case IntValue(t) => t }
-              case _           => None
-            }
-          }
-          .exists(_ == 0),
-
-        // Verify Charlie's inventory unchanged (420 - no production occurred)
-        finalCharlieFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("inventory").collect { case IntValue(i) => i }
-              case _           => None
-            }
-          }
-          .exists(_ == 420),
-
-        // Verify Charlie's lastTaxPeriod was set
-        finalCharlieFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("lastTaxPeriod").collect { case StrValue(s) => s }
-              case _           => None
-            }
-          }
-          .contains("Q4-2024"),
-        finalDaveFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("taxesPaid").collect { case FloatValue(t) => t }
-              case _           => None
-            }
-          }
-          .exists(_ == 7.5), // 150 * 0.05 = 7.5 (now with full decimal precision!)
-
-        // ========================================
-        // DAVE (MANUFACTURER) COMPREHENSIVE VALIDATIONS
-        // ========================================
-
-        // Verify Dave exists
-        finalDaveFiber.isDefined,
-
-        // Verify Dave completed production cycle (schedule -> start -> complete)
-        finalDaveFiber.map(_.currentState).contains(StateId("shipping")),
-
-        // Verify Dave's sequence number reflects all events (schedule, start, complete, fulfill_order, pay_taxes)
-        finalDaveFiber.map(_.sequenceNumber).exists(_ == FiberOrdinal.unsafeApply(5L)),
-
-        // Verify Dave's inventory: 420 (initial) + 150 (produced) - 100 (shipped to Ivan) = 470
-        finalDaveFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("inventory").collect { case IntValue(i) => i }
-              case _           => None
-            }
-          }
-          .exists(_ == 470),
-
-        // Verify Dave's totalProduced matches batchSize
-        finalDaveFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("totalProduced").collect { case IntValue(t) => t }
-              case _           => None
-            }
-          }
-          .exists(_ == 150),
-
-        // Verify Dave consumed raw materials: 1000 (initial) - 50 (required for production) = 950
-        finalDaveFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("rawMaterials").collect { case IntValue(r) => r }
-              case _           => None
-            }
-          }
-          .exists(_ == 950),
-
-        // Verify Dave fulfilled Ivan's order (shipmentCount incremented)
-        finalDaveFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("shipmentCount").collect { case IntValue(s) => s }
-              case _           => None
-            }
-          }
-          .exists(_ == 1),
-
-        // Verify Dave's lastTaxPeriod was set
-        finalDaveFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("lastTaxPeriod").collect { case StrValue(s) => s }
-              case _           => None
-            }
-          }
-          .contains("Q4-2024"),
-
-        // Retailers (Heidi, Grace, Ivan) - tax based on revenue
-        finalHeidiFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("taxesPaid").collect { case FloatValue(t) => t }
-              case _           => None
-            }
-          }
-          .exists(_ == 2.5), // 50 * 0.05 = 2.5 (now with full decimal precision!)
-
-        finalGraceFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("taxesPaid").collect { case FloatValue(t) => t }
-              case _           => None
-            }
-          }
-          .exists(_ == 5.0), // 100 * 0.05 = 5.0
-
-        // ========================================
-        // GRACE (RETAILER) COMPREHENSIVE VALIDATIONS
-        // ========================================
-
-        // Verify Grace exists
-        finalGraceFiber.isDefined,
-
-        // Verify Grace returned to open state after restocking
-        finalGraceFiber.map(_.currentState).contains(StateId("open")),
-
-        // Verify Grace's sequence number (check_inventory, receive_shipment, reopen, process_sale, pay_taxes)
-        finalGraceFiber.map(_.sequenceNumber).exists(_ == FiberOrdinal.unsafeApply(5L)),
-
-        // Verify Grace's revenue from Victor's purchase (10 items * 10 per unit = 100)
-        finalGraceFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("revenue").collect { case IntValue(r) => r }
-              case _           => None
-            }
-          }
-          .exists(_ == 100),
-
-        // Verify Grace's salesCount incremented
-        finalGraceFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("salesCount").collect { case IntValue(s) => s }
-              case _           => None
-            }
-          }
-          .exists(_ == 1),
-
-        // Verify Grace's lastTaxPeriod was set
-        finalGraceFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("lastTaxPeriod").collect { case StrValue(s) => s }
-              case _           => None
-            }
-          }
-          .contains("Q4-2024"),
-        finalIvanFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("taxesPaid").collect { case FloatValue(t) => t }
-              case _           => None
-            }
-          }
-          .exists(_ == 0.0), // 0 * 0.05 = 0.0 (Ivan has no revenue yet)
-
-        // ========================================
-        // IVAN (RETAILER) COMPREHENSIVE VALIDATIONS
-        // ========================================
-
-        // Verify Ivan exists
-        finalIvanFiber.isDefined,
-
-        // Verify Ivan returned to open state after restocking
-        finalIvanFiber.map(_.currentState).contains(StateId("open")),
-
-        // Verify Ivan's sequence number (check_inventory, receive_shipment, reopen, pay_taxes)
-        finalIvanFiber.map(_.sequenceNumber).exists(_ == FiberOrdinal.unsafeApply(4L)),
-
-        // Verify Ivan's stock after restocking from Dave (15 initial + 100 restock = 115)
-        finalIvanFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("stock").collect { case IntValue(s) => s }
-              case _           => None
-            }
-          }
-          .exists(_ == 115),
-
-        // Verify Ivan has zero revenue (no sales yet)
-        finalIvanFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("revenue").collect { case IntValue(r) => r }
-              case _           => None
-            }
-          }
-          .exists(_ == 0),
-
-        // Verify Ivan has zero sales count
-        finalIvanFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("salesCount").collect { case IntValue(s) => s }
-              case _           => None
-            }
-          }
-          .exists(_ == 0),
-
-        // Verify Ivan's lastTaxPeriod was set
-        finalIvanFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("lastTaxPeriod").collect { case StrValue(s) => s }
-              case _           => None
-            }
-          }
-          .contains("Q4-2024"),
-
-        // Consumers (Ruth, Sybil, Victor) - tax based on serviceRevenue
-        finalRuthFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("taxesPaid").collect { case FloatValue(t) => t }
-              case _           => None
-            }
-          }
-          .exists(_ == 150.0), // 3000 * 0.05 = 150.0
-
-        finalSybilFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("taxesPaid").collect { case FloatValue(t) => t }
-              case _           => None
-            }
-          }
-          .exists(_ == 0.0), // 0 * 0.05 = 0.0 (Sybil has no service revenue)
-
-        finalVictorFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("taxesPaid").collect { case FloatValue(t) => t }
-              case _           => None
-            }
-          }
-          .exists(_ == 0.0), // 0 * 0.05 = 0.0 (Victor has no service revenue)
-
-        // Verify all taxpayers have the lastTaxPeriod field set
-        finalAliceFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("lastTaxPeriod").collect { case StrValue(s) => s }
-              case _           => None
-            }
-          }
-          .contains("Q4-2024"),
-        finalBobFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("lastTaxPeriod").collect { case StrValue(s) => s }
-              case _           => None
-            }
-          }
-          .contains("Q4-2024"),
-        finalRuthFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("lastTaxPeriod").collect { case StrValue(s) => s }
-              case _           => None
-            }
-          }
-          .contains("Q4-2024"),
-
-        // Verify remaining taxpayers have lastTaxPeriod set
-        finalHeidiFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("lastTaxPeriod").collect { case StrValue(s) => s }
-              case _           => None
-            }
-          }
-          .contains("Q4-2024"),
-        finalSybilFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("lastTaxPeriod").collect { case StrValue(s) => s }
-              case _           => None
-            }
-          }
-          .contains("Q4-2024"),
-        finalVictorFiber
-          .flatMap { f =>
-            f.stateData match {
-              case MapValue(m) => m.get("lastTaxPeriod").collect { case StrValue(s) => s }
-              case _           => None
-            }
-          }
-          .contains("Q4-2024")
       )
-    }
+      .use { fixture =>
+        implicit val s: SecurityProvider[IO] = fixture.securityProvider
+        implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
+        val registry = fixture.registry
+        val ordinal = fixture.ordinal
+
+        for {
+          combiner <- Combiner.make[IO]().pure[IO]
+
+          // Generate UUIDs for all 26 participants
+          alicefiberId   <- UUIDGen.randomUUID[IO]
+          bobfiberId     <- UUIDGen.randomUUID[IO]
+          charliefiberId <- UUIDGen.randomUUID[IO]
+          davefiberId    <- UUIDGen.randomUUID[IO]
+          evefiberId     <- UUIDGen.randomUUID[IO]
+
+          faythefiberId <- UUIDGen.randomUUID[IO]
+          gracefiberId  <- UUIDGen.randomUUID[IO]
+          heidifiberId  <- UUIDGen.randomUUID[IO]
+          ivanfiberId   <- UUIDGen.randomUUID[IO]
+          judyfiberId   <- UUIDGen.randomUUID[IO]
+          karlfiberId   <- UUIDGen.randomUUID[IO]
+
+          lancefiberId   <- UUIDGen.randomUUID[IO]
+          malloryfiberId <- UUIDGen.randomUUID[IO]
+          niajfiberId    <- UUIDGen.randomUUID[IO]
+
+          oscarfiberId   <- UUIDGen.randomUUID[IO]
+          peggyfiberId   <- UUIDGen.randomUUID[IO]
+          quentinfiberId <- UUIDGen.randomUUID[IO]
+
+          ruthfiberId   <- UUIDGen.randomUUID[IO]
+          sybilfiberId  <- UUIDGen.randomUUID[IO]
+          trentfiberId  <- UUIDGen.randomUUID[IO]
+          ursulafiberId <- UUIDGen.randomUUID[IO]
+          victorfiberId <- UUIDGen.randomUUID[IO]
+          walterfiberId <- UUIDGen.randomUUID[IO]
+
+          xavierfiberId  <- UUIDGen.randomUUID[IO]
+          yolandafiberId <- UUIDGen.randomUUID[IO]
+          zoefiberId     <- UUIDGen.randomUUID[IO]
+
+          // Create initial state data for each participant type
+          manufacturerInitialData = MapValue(
+            Map(
+              "rawMaterials"      -> IntValue(1000),
+              "inventory"         -> IntValue(420),
+              "maxInventory"      -> IntValue(500),
+              "requiredMaterials" -> IntValue(50),
+              "batchSize"         -> IntValue(0),
+              "totalProduced"     -> IntValue(0),
+              "shipmentCount"     -> IntValue(0),
+              "taxesPaid"         -> FloatValue(0.0),
+              "status"            -> StrValue("idle")
+            )
+          )
+
+          retailerInitialData = MapValue(
+            Map(
+              "stock"            -> IntValue(15),
+              "reorderThreshold" -> IntValue(20),
+              "reorderQuantity"  -> IntValue(100),
+              "revenue"          -> IntValue(0),
+              "salesCount"       -> IntValue(0),
+              "pricePerUnit"     -> IntValue(10),
+              "taxesPaid"        -> FloatValue(0.0),
+              "status"           -> StrValue("open")
+            )
+          )
+
+          platformInitialData = MapValue(
+            Map(
+              "responseTime" -> IntValue(100),
+              "capacity"     -> IntValue(1000),
+              "transactions" -> IntValue(0),
+              "status"       -> StrValue("active")
+            )
+          )
+
+          bankInitialData = MapValue(
+            Map(
+              "baseRate"              -> FloatValue(0.04),
+              "availableCapital"      -> IntValue(1000000),
+              "activeLoans"           -> IntValue(0),
+              "defaultedLoans"        -> IntValue(0),
+              "loanPortfolio"         -> IntValue(0),
+              "reserveCapital"        -> IntValue(100000),
+              "minCreditScore"        -> IntValue(600),
+              "riskPremium"           -> FloatValue(0.02),
+              "defaultRate"           -> FloatValue(0.0),
+              "missedPaymentCount"    -> IntValue(0),
+              "totalPaymentsReceived" -> IntValue(0),
+              "status"                -> StrValue("operating")
+            )
+          )
+
+          consumerInitialData = MapValue(
+            Map(
+              "balance"           -> IntValue(5000),
+              "serviceRevenue"    -> IntValue(0),
+              "loanBalance"       -> IntValue(0),
+              "purchaseCount"     -> IntValue(0),
+              "servicesProvided"  -> IntValue(0),
+              "activeListings"    -> IntValue(0),
+              "marketplaceSales"  -> IntValue(0),
+              "serviceType"       -> StrValue("software_development"),
+              "monthlyPayment"    -> IntValue(300),
+              "missedPayments"    -> IntValue(0),
+              "paymentsRemaining" -> IntValue(36),
+              "taxesPaid"         -> FloatValue(0.0),
+              "status"            -> StrValue("active")
+            )
+          )
+
+          fedInitialData = MapValue(
+            Map(
+              "baseRate"              -> FloatValue(0.04),
+              "inflationRate"         -> FloatValue(0.02),
+              "unemploymentRate"      -> FloatValue(0.04),
+              "gdpGrowth"             -> FloatValue(0.03),
+              "emergencyLoansIssued"  -> IntValue(0),
+              "totalEmergencyLending" -> IntValue(0),
+              "rateChangeCount"       -> IntValue(0),
+              "status"                -> StrValue("stable")
+            )
+          )
+
+          governanceInitialData = MapValue(
+            Map(
+              "investigationsActive" -> IntValue(0),
+              "enforcementActions"   -> IntValue(0),
+              "totalTaxesCollected"  -> IntValue(0),
+              "taxpayersCompliant"   -> IntValue(0),
+              "expectedTaxpayers"    -> IntValue(0)
+            )
+          )
+
+          // Create state machine definitions from JSON
+          manufacturerDef <- decodeStateMachine(manufacturerStateMachineJson())
+          bankDef         <- decodeStateMachine(bankStateMachineJson(yolandafiberId.toString))
+          consumerDef     <- decodeStateMachine(consumerStateMachineJson())
+          fedDef <- decodeStateMachine(federalReserveStateMachineJson(Set(oscarfiberId, peggyfiberId, quentinfiberId)))
+          governanceDef <- decodeStateMachine(
+            governanceStateMachineJson(
+              Set(alicefiberId, bobfiberId, charliefiberId, davefiberId),
+              Set(heidifiberId, gracefiberId, ivanfiberId),
+              Set(ruthfiberId, sybilfiberId, victorfiberId)
+            )
+          )
+
+          // Initialize manufacturer fibers using FiberBuilder
+          aliceFiber <- FiberBuilder(alicefiberId, ordinal, manufacturerDef)
+            .withState("idle")
+            .withDataValue(
+              manufacturerInitialData
+                .copy(value = manufacturerInitialData.value + ("businessName" -> StrValue("SteelCore Manufacturing")))
+            )
+            .ownedBy(registry, Alice)
+            .build[IO]
+
+          bobFiber <- FiberBuilder(bobfiberId, ordinal, manufacturerDef)
+            .withState("idle")
+            .withDataValue(
+              manufacturerInitialData
+                .copy(value = manufacturerInitialData.value + ("businessName" -> StrValue("AgriGrow Farms")))
+            )
+            .ownedBy(registry, Bob)
+            .build[IO]
+
+          charlieInitialData = manufacturerInitialData.copy(value =
+            manufacturerInitialData.value ++ Map(
+              "rawMaterials" -> IntValue(40), // Below required materials threshold
+              "businessName" -> StrValue("TechParts Inc")
+            )
+          )
+          charlieFiber <- FiberBuilder(charliefiberId, ordinal, manufacturerDef)
+            .withState("idle")
+            .withDataValue(charlieInitialData)
+            .ownedBy(registry, Charlie)
+            .build[IO]
+
+          // Initialize retailer fibers (with dependencies on manufacturers)
+          heidiRetailerDef <- decodeStateMachine(retailerStateMachineJson(alicefiberId.toString, niajfiberId.toString))
+          heidiData = retailerInitialData
+            .copy(value = retailerInitialData.value + ("businessName" -> StrValue("QuickFix Hardware")))
+          heidiFiber <- FiberBuilder(heidifiberId, ordinal, heidiRetailerDef)
+            .withState("open")
+            .withDataValue(heidiData)
+            .ownedBy(registry, Heidi)
+            .build[IO]
+
+          // Initialize platform fibers
+          niajData = platformInitialData
+            .copy(value = platformInitialData.value + ("businessName" -> StrValue("PayFlow Processing")))
+          niajFiber <- FiberBuilder(niajfiberId, ordinal, manufacturerDef) // Simplified for test
+            .withState("idle")
+            .withDataValue(niajData)
+            .ownedBy(registry, Niaj)
+            .build[IO]
+
+          // Initialize bank fibers
+          oscarFiber <- FiberBuilder(oscarfiberId, ordinal, bankDef)
+            .withState("operating")
+            .withDataValue(
+              bankInitialData
+                .copy(value = bankInitialData.value + ("businessName" -> StrValue("Riverdale National Bank")))
+            )
+            .ownedBy(registry, Oscar)
+            .build[IO]
+
+          peggyFiber <- FiberBuilder(peggyfiberId, ordinal, bankDef)
+            .withState("operating")
+            .withDataValue(
+              bankInitialData.copy(value = bankInitialData.value + ("businessName" -> StrValue("SecureCredit Union")))
+            )
+            .ownedBy(registry, Peggy)
+            .build[IO]
+
+          quentinFiber <- FiberBuilder(quentinfiberId, ordinal, bankDef)
+            .withState("operating")
+            .withDataValue(
+              bankInitialData
+                .copy(value = bankInitialData.value + ("businessName" -> StrValue("VentureForward Capital")))
+            )
+            .ownedBy(registry, Quentin)
+            .build[IO]
+
+          // Initialize consumer fibers
+          ruthFiber <- FiberBuilder(ruthfiberId, ordinal, consumerDef)
+            .withState("active")
+            .withDataValue(
+              consumerInitialData
+                .copy(value = consumerInitialData.value + ("name" -> StrValue("Ruth - Software Developer")))
+            )
+            .ownedBy(registry, Ruth)
+            .build[IO]
+
+          sybilInitialData = consumerInitialData.copy(value =
+            consumerInitialData.value ++ Map(
+              "balance" -> IntValue(3000), // Lower balance than Ruth
+              "name"    -> StrValue("Sybil - Crafts Seller")
+            )
+          )
+          sybilFiber <- FiberBuilder(sybilfiberId, ordinal, consumerDef)
+            .withState("active")
+            .withDataValue(sybilInitialData)
+            .ownedBy(registry, Sybil)
+            .build[IO]
+
+          victorInitialData = consumerInitialData.copy(value =
+            consumerInitialData.value ++ Map(
+              "balance" -> IntValue(10000), // High balance for bidding
+              "name"    -> StrValue("Victor - Collector")
+            )
+          )
+          victorFiber <- FiberBuilder(victorfiberId, ordinal, consumerDef)
+            .withState("active")
+            .withDataValue(victorInitialData)
+            .ownedBy(registry, Victor)
+            .build[IO]
+
+          // Initialize Federal Reserve fiber
+          yolandaFiber <- FiberBuilder(yolandafiberId, ordinal, fedDef)
+            .withState("stable")
+            .withDataValue(
+              fedInitialData.copy(value = fedInitialData.value + ("name" -> StrValue("Federal Reserve Branch")))
+            )
+            .ownedBy(registry, Yolanda)
+            .build[IO]
+
+          // Initialize Governance fiber
+          xavierFiber <- FiberBuilder(xavierfiberId, ordinal, governanceDef)
+            .withState("monitoring")
+            .withDataValue(
+              governanceInitialData
+                .copy(value = governanceInitialData.value + ("name" -> StrValue("Riverdale Governance")))
+            )
+            .ownedBy(registry, Xavier)
+            .build[IO]
+
+          // Create initial state with key participants
+          initialState <- DataState(OnChain.genesis, CalculatedState.genesis).withRecords[IO](
+            Map(
+              alicefiberId   -> aliceFiber,
+              bobfiberId     -> bobFiber,
+              charliefiberId -> charlieFiber,
+              heidifiberId   -> heidiFiber,
+              niajfiberId    -> niajFiber,
+              oscarfiberId   -> oscarFiber,
+              peggyfiberId   -> peggyFiber,
+              quentinfiberId -> quentinFiber,
+              ruthfiberId    -> ruthFiber,
+              sybilfiberId   -> sybilFiber,
+              victorfiberId  -> victorFiber,
+              xavierfiberId  -> xavierFiber,
+              yolandafiberId -> yolandaFiber
+            )
+          )
+
+          // ========================================
+          // PHASE 1: NORMAL ECONOMIC ACTIVITY
+          // ========================================
+
+          // Event 1: Federal Reserve quarterly meeting (high inflation scenario)
+          state1 <- initialState.transition(
+            yolandafiberId,
+            "quarterly_meeting",
+            MapValue(
+              Map(
+                "timestamp"        -> IntValue(1000),
+                "inflationRate"    -> FloatValue(0.03), // Above 0.025 threshold triggers rate increase
+                "unemploymentRate" -> FloatValue(0.04),
+                "gdpGrowth"        -> FloatValue(0.03)
+              )
+            ),
+            Yolanda
+          )(registry, combiner)
+
+          // Event 2: Fed sets rate (returns to stable, broadcasts rate_adjustment to all banks)
+          state2 <- state1.transition(
+            yolandafiberId,
+            "set_rate",
+            MapValue(Map("timestamp" -> IntValue(1050))),
+            Yolanda
+          )(registry, combiner)
+
+          // Event 3: Alice schedules production
+          state3 <- state2.transition(
+            alicefiberId,
+            "schedule_production",
+            MapValue(
+              Map(
+                "timestamp" -> IntValue(1100),
+                "batchSize" -> IntValue(100)
+              )
+            ),
+            Alice
+          )(registry, combiner)
+
+          // Event 4: Alice starts production
+          state4 <- state3.transition(
+            alicefiberId,
+            "start_production",
+            MapValue(Map("timestamp" -> IntValue(1200))),
+            Alice
+          )(registry, combiner)
+
+          // Event 5: Alice completes batch
+          state5 <- state4.transition(
+            alicefiberId,
+            "complete_batch",
+            MapValue(Map("timestamp" -> IntValue(2000))),
+            Alice
+          )(registry, combiner)
+
+          // Event 6: Heidi checks inventory (should trigger order to Alice)
+          state6 <- state5.transition(
+            heidifiberId,
+            "check_inventory",
+            MapValue(
+              Map(
+                "timestamp"  -> IntValue(2100),
+                "shipmentId" -> StrValue("SHIP-001")
+              )
+            ),
+            Heidi
+          )(registry, combiner)
+
+          // Verify Heidi's state changed to inventory_low
+          heidiFiberAfterCheck = state6.fiberRecord(heidifiberId)
+
+          // Event 7: Ruth applies for loan from Oscar
+          state7 <- state6.transition(
+            oscarfiberId,
+            "apply_loan",
+            MapValue(
+              Map(
+                "timestamp"   -> IntValue(2200),
+                "applicantId" -> StrValue(ruthfiberId.toString),
+                "loanAmount"  -> IntValue(10000),
+                "creditScore" -> IntValue(720),
+                "dti"         -> FloatValue(0.35)
+              )
+            ),
+            Oscar
+          )(registry, combiner)
+
+          // Event 8: Oscar underwrites loan (Fed must be in stable state)
+          state8 <- state7.transition(
+            oscarfiberId,
+            "underwrite",
+            MapValue(Map("timestamp" -> IntValue(2300))),
+            Oscar
+          )(registry, combiner)
+
+          // ========================================
+          // PHASE 2: SUPPLY CHAIN DISRUPTION
+          // ========================================
+
+          // Event 9: Supply shortage at Charlie's TechParts
+          state9 <- state8.transition(
+            charliefiberId,
+            "check_materials",
+            MapValue(Map("timestamp" -> IntValue(3000))),
+            Charlie
+          )(registry, combiner)
+
+          // Verify Charlie entered supply_shortage state
+          charlieFiberAfterShortage = state9.fiberRecord(charliefiberId)
+
+          // ========================================
+          // PHASE 3: BOB PRODUCTION CYCLE
+          // ========================================
+
+          // Event 10: Bob schedules production
+          state10 <- state9.transition(
+            bobfiberId,
+            "schedule_production",
+            MapValue(
+              Map(
+                "timestamp" -> IntValue(3100),
+                "batchSize" -> IntValue(80)
+              )
+            ),
+            Bob
+          )(registry, combiner)
+
+          // Event 11: Bob starts production
+          state11 <- state10.transition(
+            bobfiberId,
+            "start_production",
+            MapValue(Map("timestamp" -> IntValue(3200))),
+            Bob
+          )(registry, combiner)
+
+          // Event 12: Bob completes batch
+          state12 <- state11.transition(
+            bobfiberId,
+            "complete_batch",
+            MapValue(Map("timestamp" -> IntValue(4000))),
+            Bob
+          )(registry, combiner)
+
+          // ========================================
+          // PHASE 4: GRACE RETAILER CROSS-CHAIN
+          // ========================================
+
+          // Initialize Grace (retailer depending on Bob's farm)
+          graceRetailerDef <- decodeStateMachine(retailerStateMachineJson(bobfiberId.toString, niajfiberId.toString))
+          graceData = retailerInitialData
+            .copy(value = retailerInitialData.value + ("businessName" -> StrValue("FreshFoods Market")))
+          graceFiber <- FiberBuilder(gracefiberId, ordinal, graceRetailerDef)
+            .withState("open")
+            .withDataValue(graceData)
+            .ownedBy(registry, Grace)
+            .build[IO]
+
+          // Add Grace to the state
+          state13 <- state12.withRecord[IO](gracefiberId, graceFiber)
+
+          // Event 13: Grace checks inventory (triggers order to Bob)
+          state14 <- state13.transition(
+            gracefiberId,
+            "check_inventory",
+            MapValue(
+              Map(
+                "timestamp"  -> IntValue(4100),
+                "shipmentId" -> StrValue("SHIP-002")
+              )
+            ),
+            Grace
+          )(registry, combiner)
+
+          // ========================================
+          // PHASE 5: RUTH CONSUMER SHOPPING
+          // ========================================
+
+          // Event 14: Heidi reopens after restocking
+          state15 <- state14.transition(
+            heidifiberId,
+            "reopen",
+            MapValue(Map("timestamp" -> IntValue(4150))),
+            Heidi
+          )(registry, combiner)
+
+          // Event 15: Ruth browses products at Heidi's store
+          state16 <- state15.transition(
+            ruthfiberId,
+            "browse_products",
+            MapValue(
+              Map(
+                "timestamp"    -> IntValue(4200),
+                "retailerId"   -> StrValue(heidifiberId.toString),
+                "expectedCost" -> IntValue(50),
+                "quantity"     -> IntValue(5)
+              )
+            ),
+            Ruth
+          )(registry, combiner)
+
+          // ========================================
+          // PHASE 6: SYBIL CONSUMER DELINQUENCY
+          // ========================================
+
+          // Event 16: Sybil applies for loan from Peggy
+          state17 <- state16.transition(
+            peggyfiberId,
+            "apply_loan",
+            MapValue(
+              Map(
+                "timestamp"   -> IntValue(4300),
+                "applicantId" -> StrValue(sybilfiberId.toString),
+                "loanAmount"  -> IntValue(5000),
+                "creditScore" -> IntValue(640),
+                "dti"         -> FloatValue(0.42)
+              )
+            ),
+            Peggy
+          )(registry, combiner)
+
+          // Event 17: Peggy underwrites loan for Sybil
+          state18 <- state17.transition(
+            peggyfiberId,
+            "underwrite",
+            MapValue(Map("timestamp" -> IntValue(4400))),
+            Peggy
+          )(registry, combiner)
+
+          // Event 18: Sybil checks payment (misses payment - timestamp way past nextPaymentDue)
+          state19 <- state18.transition(
+            sybilfiberId,
+            "check_payment",
+            MapValue(Map("timestamp" -> IntValue(7100000))), // Way past due date (2592000 + 4400 = 2596400)
+            Sybil
+          )(registry, combiner)
+
+          // ========================================
+          // PHASE 7: STRESS TEST SCENARIO
+          // ========================================
+
+          // Event 19: Fed initiates stress test due to high market volatility
+          state20 <- state19.transition(
+            yolandafiberId,
+            "initiate_stress_test",
+            MapValue(
+              Map(
+                "timestamp"        -> IntValue(7200000),
+                "marketVolatility" -> FloatValue(0.35), // Above 0.30 threshold
+                "systemicRisk"     -> FloatValue(0.45)
+              )
+            ),
+            Yolanda
+          )(registry, combiner)
+
+          // Event 20: Oscar completes stress test (passes - good capital ratio)
+          state21 <- state20.transition(
+            oscarfiberId,
+            "complete_stress_test",
+            MapValue(Map("timestamp" -> IntValue(7300000))),
+            Oscar
+          )(registry, combiner)
+
+          // Event 21: Peggy completes stress test (passes - good capital ratio)
+          state22 <- state21.transition(
+            peggyfiberId,
+            "complete_stress_test",
+            MapValue(Map("timestamp" -> IntValue(7300050))),
+            Peggy
+          )(registry, combiner)
+
+          // Event 22: Quentin completes stress test (passes - good capital ratio)
+          state23 <- state22.transition(
+            quentinfiberId,
+            "complete_stress_test",
+            MapValue(Map("timestamp" -> IntValue(7300100))),
+            Quentin
+          )(registry, combiner)
+
+          // ========================================
+          // PHASE 8: HEIDI HOLIDAY SALE
+          // ========================================
+
+          // Event 23: Heidi starts holiday sale (20% discount)
+          state24 <- state23.transition(
+            heidifiberId,
+            "start_sale",
+            MapValue(
+              Map(
+                "timestamp"    -> IntValue(7400000),
+                "season"       -> StrValue("holiday"),
+                "discountRate" -> FloatValue(0.20)
+              )
+            ),
+            Heidi
+          )(registry, combiner)
+
+          // Capture stress test state for validation
+          oscarFiberAfterStressTest = state23.fiberRecord(oscarfiberId)
+          peggyFiberAfterStressTest = state23.fiberRecord(peggyfiberId)
+          quentinFiberAfterStressTest = state23.fiberRecord(quentinfiberId)
+          yolandaFiberAfterStressTest = state23.fiberRecord(yolandafiberId)
+
+          // Capture holiday sale state for validation
+          heidiFiberAfterSale = state24.fiberRecord(heidifiberId)
+
+          // ========================================
+          // PHASE 9: C2C MARKETPLACE (AUCTION)
+          // ========================================
+
+          auctionfiberId <- UUIDGen.randomUUID[IO]
+
+          // Event 24: Sybil lists handmade craft item for auction (spawns auction child machine)
+          state25 <- state24.transition(
+            sybilfiberId,
+            "list_item",
+            MapValue(
+              Map(
+                "auctionId"    -> StrValue(auctionfiberId.toString),
+                "itemName"     -> StrValue("Handmade Ceramic Vase"),
+                "reservePrice" -> IntValue(500),
+                "timestamp"    -> IntValue(7500000)
+              )
+            ),
+            Sybil
+          )(registry, combiner)
+
+          // Event 25: Victor places bid on Sybil's auction (bid exceeds reserve price)
+          state26 <- state25.transition(
+            auctionfiberId,
+            "place_bid",
+            MapValue(
+              Map(
+                "bidAmount" -> IntValue(750),
+                "bidderId"  -> StrValue(victorfiberId.toString),
+                "timestamp" -> IntValue(7600000)
+              )
+            ),
+            Victor
+          )(registry, combiner)
+
+          // Event 26: Auction accepts bid (triggers sale_completed to Sybil)
+          state27 <- state26.transition(
+            auctionfiberId,
+            "accept_bid",
+            MapValue(Map("timestamp" -> IntValue(7700000))),
+            Sybil
+          )(registry, combiner)
+
+          // Capture C2C marketplace state for validation
+          auctionFiberAfterBidAccepted = state27.fiberRecord(auctionfiberId)
+          sybilFiberAfterSale = state27.fiberRecord(sybilfiberId)
+
+          // ========================================
+          // PHASE 10: RUTH MAKES LOAN PAYMENT
+          // ========================================
+
+          // Event 27: Ruth makes first loan payment to Oscar
+          state28 <- state27.transition(
+            ruthfiberId,
+            "make_payment",
+            MapValue(Map("timestamp" -> IntValue(7750000))),
+            Ruth
+          )(registry, combiner)
+
+          // ========================================
+          // PHASE 11: SECOND AUCTION (Victor sells)
+          // ========================================
+
+          auction2fiberId <- UUIDGen.randomUUID[IO]
+
+          // Event 28: Victor lists antique item for auction
+          state29 <- state28.transition(
+            victorfiberId,
+            "list_item",
+            MapValue(
+              Map(
+                "auctionId"    -> StrValue(auction2fiberId.toString),
+                "itemName"     -> StrValue("Vintage Watch Collection"),
+                "reservePrice" -> IntValue(2000),
+                "timestamp"    -> IntValue(7800000)
+              )
+            ),
+            Victor
+          )(registry, combiner)
+
+          // Event 29: Ruth places bid on Victor's auction (using loan proceeds)
+          state30 <- state29.transition(
+            auction2fiberId,
+            "place_bid",
+            MapValue(
+              Map(
+                "bidAmount" -> IntValue(2500),
+                "bidderId"  -> StrValue(ruthfiberId.toString),
+                "timestamp" -> IntValue(7900000)
+              )
+            ),
+            Ruth
+          )(registry, combiner)
+
+          // Event 30: Victor accepts Ruth's bid
+          state31 <- state30.transition(
+            auction2fiberId,
+            "accept_bid",
+            MapValue(Map("timestamp" -> IntValue(8000000))),
+            Victor
+          )(registry, combiner)
+
+          // ========================================
+          // PHASE 12: ADDITIONAL MANUFACTURER CYCLES
+          // ========================================
+
+          // Event 31: Dave (new manufacturer) initialization and production
+          daveRetailerDef <- decodeStateMachine(manufacturerStateMachineJson())
+          daveData = manufacturerInitialData
+            .copy(value = manufacturerInitialData.value + ("businessName" -> StrValue("TextileWorks Co")))
+          daveFiber <- FiberBuilder(davefiberId, ordinal, daveRetailerDef)
+            .withState("idle")
+            .withDataValue(daveData)
+            .ownedBy(registry, Dave)
+            .build[IO]
+
+          // Add Dave to the state
+          state32 <- state31.withRecord[IO](davefiberId, daveFiber)
+
+          // Event 32: Dave schedules production
+          state33 <- state32.transition(
+            davefiberId,
+            "schedule_production",
+            MapValue(
+              Map(
+                "timestamp" -> IntValue(8100000),
+                "batchSize" -> IntValue(150)
+              )
+            ),
+            Dave
+          )(registry, combiner)
+
+          // Event 33: Dave starts production
+          state34 <- state33.transition(
+            davefiberId,
+            "start_production",
+            MapValue(Map("timestamp" -> IntValue(8200000))),
+            Dave
+          )(registry, combiner)
+
+          // Event 34: Dave completes production
+          state35 <- state34.transition(
+            davefiberId,
+            "complete_batch",
+            MapValue(Map("timestamp" -> IntValue(8300000))),
+            Dave
+          )(registry, combiner)
+
+          // ========================================
+          // PHASE 13: IVAN RETAILER (DEPENDS ON DAVE)
+          // ========================================
+
+          // Event 35: Ivan retailer initialization
+          ivanRetailerDef <- decodeStateMachine(retailerStateMachineJson(davefiberId.toString, niajfiberId.toString))
+          ivanData = retailerInitialData
+            .copy(value = retailerInitialData.value + ("businessName" -> StrValue("StyleHub Boutique")))
+          ivanFiber <- FiberBuilder(ivanfiberId, ordinal, ivanRetailerDef)
+            .withState("open")
+            .withDataValue(ivanData)
+            .ownedBy(registry, Ivan)
+            .build[IO]
+
+          // Add Ivan to the state
+          state36 <- state35.withRecord[IO](ivanfiberId, ivanFiber)
+
+          // Event 36: Ivan checks inventory (triggers order to Dave)
+          state37 <- state36.transition(
+            ivanfiberId,
+            "check_inventory",
+            MapValue(
+              Map(
+                "timestamp"  -> IntValue(8400000),
+                "shipmentId" -> StrValue("SHIP-003")
+              )
+            ),
+            Ivan
+          )(registry, combiner)
+
+          // ========================================
+          // PHASE 14: CONSUMER SERVICE PROVISION
+          // ========================================
+
+          // Event 37: Ruth provides freelance service (earns income)
+          state38 <- state37.transition(
+            ruthfiberId,
+            "provide_service",
+            MapValue(
+              Map(
+                "timestamp"        -> IntValue(8500000),
+                "requestedService" -> StrValue("software_development"),
+                "payment"          -> IntValue(3000)
+              )
+            ),
+            Ruth
+          )(registry, combiner)
+
+          // ========================================
+          // PHASE 15: MORE CONSUMER SHOPPING
+          // ========================================
+
+          // Event 38: Victor shops at Grace's FreshFoods Market
+          state39 <- state38.transition(
+            victorfiberId,
+            "browse_products",
+            MapValue(
+              Map(
+                "timestamp"    -> IntValue(8600000),
+                "retailerId"   -> StrValue(gracefiberId.toString),
+                "expectedCost" -> IntValue(100),
+                "quantity"     -> IntValue(10)
+              )
+            ),
+            Victor
+          )(registry, combiner)
+
+          // Event 39: Grace reopens after restocking
+          state40 <- state39.transition(
+            gracefiberId,
+            "reopen",
+            MapValue(Map("timestamp" -> IntValue(8650000))),
+            Grace
+          )(registry, combiner)
+
+          // Event 40: Ivan reopens after restocking from Dave
+          state41 <- state40.transition(
+            ivanfiberId,
+            "reopen",
+            MapValue(Map("timestamp" -> IntValue(8700000))),
+            Ivan
+          )(registry, combiner)
+
+          // ========================================
+          // PHASE 16: ADDITIONAL ECONOMIC ACTIVITY
+          // ========================================
+
+          // Event 41: Alice schedules another production batch
+          state42 <- state41.transition(
+            alicefiberId,
+            "schedule_production",
+            MapValue(
+              Map(
+                "timestamp" -> IntValue(8800000),
+                "batchSize" -> IntValue(80)
+              )
+            ),
+            Alice
+          )(registry, combiner)
+
+          // Event 42: Alice starts second production run
+          state43 <- state42.transition(
+            alicefiberId,
+            "start_production",
+            MapValue(Map("timestamp" -> IntValue(8900000))),
+            Alice
+          )(registry, combiner)
+
+          // Event 43: Alice completes second batch
+          state44 <- state43.transition(
+            alicefiberId,
+            "complete_batch",
+            MapValue(Map("timestamp" -> IntValue(9000000))),
+            Alice
+          )(registry, combiner)
+
+          // ========================================
+          // PHASE 17: TAX COLLECTION
+          // ========================================
+
+          // Instead of broadcasting to all 10 taxpayers at once (which would exceed execution depth),
+          // we send individual pay_taxes events to each taxpayer.
+
+          taxPayload = MapValue(
+            Map(
+              "taxPeriod"      -> StrValue("Q4-2024"),
+              "taxRate"        -> FloatValue(0.05),
+              "collectionDate" -> IntValue(9100000),
+              "governanceId"   -> StrValue(xavierfiberId.toString)
+            )
+          )
+
+          // Event 44: Alice pays taxes
+          state45 <- state44.transition(alicefiberId, "pay_taxes", taxPayload, Alice)(registry, combiner)
+
+          // Event 45: Bob pays taxes
+          state46 <- state45.transition(bobfiberId, "pay_taxes", taxPayload, Bob)(registry, combiner)
+
+          // Event 46: Charlie pays taxes
+          state47 <- state46.transition(charliefiberId, "pay_taxes", taxPayload, Charlie)(registry, combiner)
+
+          // Event 47: Dave pays taxes
+          state48 <- state47.transition(davefiberId, "pay_taxes", taxPayload, Dave)(registry, combiner)
+
+          // Event 48: Heidi pays taxes
+          state49 <- state48.transition(heidifiberId, "pay_taxes", taxPayload, Heidi)(registry, combiner)
+
+          // Event 49: Grace pays taxes
+          state50 <- state49.transition(gracefiberId, "pay_taxes", taxPayload, Grace)(registry, combiner)
+
+          // Event 50: Ivan pays taxes
+          state51 <- state50.transition(ivanfiberId, "pay_taxes", taxPayload, Ivan)(registry, combiner)
+
+          // Event 51: Ruth pays taxes
+          state52 <- state51.transition(ruthfiberId, "pay_taxes", taxPayload, Ruth)(registry, combiner)
+
+          // Event 52: Sybil pays taxes
+          state53 <- state52.transition(sybilfiberId, "pay_taxes", taxPayload, Sybil)(registry, combiner)
+
+          // Event 53: Victor pays taxes
+          state54 <- state53.transition(victorfiberId, "pay_taxes", taxPayload, Victor)(registry, combiner)
+
+          // ========================================
+          // FINAL VALIDATIONS
+          // ========================================
+
+          // Extract final states for validation (use state54 to include all tax payments)
+          finalAliceFiber = state54.fiberRecord(alicefiberId)
+          finalBobFiber = state54.fiberRecord(bobfiberId)
+          finalCharlieFiber = state54.fiberRecord(charliefiberId)
+          finalDaveFiber = state54.fiberRecord(davefiberId)
+          finalGraceFiber = state54.fiberRecord(gracefiberId)
+          finalHeidiFiber = state54.fiberRecord(heidifiberId)
+          finalIvanFiber = state54.fiberRecord(ivanfiberId)
+          finalOscarFiber = state54.fiberRecord(oscarfiberId)
+          finalPeggyFiber = state54.fiberRecord(peggyfiberId)
+          finalQuentinFiber = state54.fiberRecord(quentinfiberId)
+          finalRuthFiber = state54.fiberRecord(ruthfiberId)
+          finalSybilFiber = state54.fiberRecord(sybilfiberId)
+          finalVictorFiber = state54.fiberRecord(victorfiberId)
+          finalYolandaFiber = state54.fiberRecord(yolandafiberId)
+
+          // Extract auction states
+          finalAuction1Fiber = state54.fiberRecord(auctionfiberId)
+          finalAuction2Fiber = state54.fiberRecord(auction2fiberId)
+
+          // Extract intermediate states for Ruth's payment
+          ruthAfterPayment = state28.fiberRecord(ruthfiberId)
+          oscarAfterPayment = state28.fiberRecord(oscarfiberId)
+
+          // Extract states after Ruth's service provision
+          ruthAfterService = state38.fiberRecord(ruthfiberId)
+
+          // Extract states for Ivan and Dave supply chain
+          ivanAfterInventoryCheck = state37.fiberRecord(ivanfiberId)
+          daveAfterFulfillment = state37.fiberRecord(davefiberId)
+
+          // Extract Xavier's final state after tax collection
+          finalXavierFiber = state54.fiberRecord(xavierfiberId)
+
+          // Extract Niaj's final state
+          finalNiajFiber = state54.fiberRecord(niajfiberId)
+
+        } yield expect.all(
+          // Verify all participants exist
+          finalAliceFiber.isDefined,
+          finalHeidiFiber.isDefined,
+          finalOscarFiber.isDefined,
+          finalRuthFiber.isDefined,
+          finalCharlieFiber.isDefined,
+          finalYolandaFiber.isDefined,
+
+          // ========================================
+          // NIAJ (PLATFORM) COMPREHENSIVE VALIDATIONS
+          // ========================================
+
+          // Verify Niaj (Platform) exists
+          finalNiajFiber.isDefined,
+
+          // Verify Niaj remained in idle state (no events processed)
+          finalNiajFiber.map(_.currentState).contains(StateId("idle")),
+
+          // Verify Niaj's sequence number is 0 (passive participant, no events)
+          finalNiajFiber.map(_.sequenceNumber).exists(_ == FiberOrdinal.MinValue),
+
+          // Verify Niaj's transaction count is still 0
+          finalNiajFiber.extractInt("transactions").exists(_ == 0),
+
+          // Verify Niaj's status is still active
+          finalNiajFiber.extractString("status").contains("active"),
+
+          // Verify state transitions
+          finalAliceFiber.map(_.sequenceNumber).exists(_ > FiberOrdinal.MinValue),
+          finalOscarFiber
+            .map(_.currentState)
+            .contains(
+              StateId("loan_servicing")
+            ), // Oscar underwrote the loan successfully (Fed was stable), then completed stress test
+          finalCharlieFiber.map(_.currentState).contains(StateId("supply_shortage")),
+          finalYolandaFiber
+            .map(_.currentState)
+            .contains(StateId("stress_testing")), // Fed is in stress_testing state
+
+          // Verify Ruth received loan funding and is in debt_current state
+          finalRuthFiber.map(_.currentState).contains(StateId("debt_current")),
+
+          // Verify cross-machine triggers fired - Heidi goes from open -> inventory_low -> stocking in same snapshot
+          heidiFiberAfterCheck.map(_.currentState).contains(StateId("stocking")),
+
+          // Verify Charlie's supply shortage was detected
+          charlieFiberAfterShortage.map(_.currentState).contains(StateId("supply_shortage")),
+
+          // Verify Bob's production cycle
+          finalBobFiber.map(_.currentState).contains(StateId("shipping")), // Bob fulfilled Grace's order
+          finalBobFiber
+            .map(_.sequenceNumber)
+            .exists(_ == FiberOrdinal.unsafeApply(5L)), // 5 events: schedule, start, complete, fulfill_order, pay_taxes
+          finalBobFiber.extractInt("inventory").exists(_ == 400), // 500 - 100 = 400 (after fulfilling order)
+
+          // Verify Grace cross-chain order
+          finalGraceFiber
+            .extractInt("stock")
+            .exists(_ == 105), // 15 (initial) + 100 (restock from Bob) - 10 (sold to Victor while stocking) = 105
+
+          // Verify Ruth's shopping
+          finalRuthFiber.extractInt("purchaseCount").exists(_ == 1), // Ruth made 1 purchase
+
+          // Ruth's balance: 5000 + 10000 (loan) - 50 (purchase) - 300 (payment) + 3000 (service) = 17650
+          finalRuthFiber.extractInt("balance").exists(_ == 17650),
+
+          // Verify Heidi processed the sale
+          finalHeidiFiber.extractInt("salesCount").exists(_ >= 1), // Heidi made at least 1 sale
+
+          // Heidi's revenue increased (5 items * 10 per unit = 50)
+          finalHeidiFiber.extractInt("revenue").exists(_ == 50),
+
+          // Heidi's stock decreased (stock after restocking from Alice, then sold 5 to Ruth)
+          finalHeidiFiber.extractInt("stock").exists(_ == 110), // 115 (after restocking) - 5 (sold to Ruth) = 110
+
+          // Verify Peggy and Quentin banks received rate_adjustment from Fed (Event 2)
+          finalPeggyFiber
+            .map(_.sequenceNumber)
+            .exists(_ >= FiberOrdinal.MinValue.next), // Peggy received rate_adjustment
+          finalPeggyFiber
+            .flatMap { f =>
+              f.stateData match {
+                case MapValue(m) => m.get("baseRate").collect { case FloatValue(r) => r }
+                case _           => None
+              }
+            }
+            .exists(_ == 0.0425), // 0.04 + 0.0025 = 0.0425 (after rate increase)
+
+          finalQuentinFiber
+            .map(_.sequenceNumber)
+            .exists(_ >= FiberOrdinal.MinValue.next), // Quentin received rate_adjustment
+          finalQuentinFiber
+            .flatMap { f =>
+              f.stateData match {
+                case MapValue(m) => m.get("baseRate").collect { case FloatValue(r) => r }
+                case _           => None
+              }
+            }
+            .exists(_ == 0.0425), // 0.04 + 0.0025 = 0.0425 (after rate increase)
+
+          // Verify Sybil's delinquency
+          finalSybilFiber.map(_.currentState).contains(StateId("debt_delinquent")),
+          finalSybilFiber.extractInt("missedPayments").exists(_ >= 1), // Sybil missed at least 1 payment
+
+          // Verify stress test execution - banks should have completed stress test and returned to original states
+          yolandaFiberAfterStressTest
+            .map(_.currentState)
+            .contains(StateId("stress_testing")), // Fed is still in stress_testing state
+          oscarFiberAfterStressTest
+            .map(_.currentState)
+            .contains(StateId("loan_servicing")), // Oscar returned to loan_servicing (has activeLoans > 0)
+          peggyFiberAfterStressTest
+            .map(_.currentState)
+            .contains(StateId("loan_servicing")), // Peggy returned to loan_servicing (has activeLoans > 0)
+          quentinFiberAfterStressTest
+            .map(_.currentState)
+            .contains(StateId("operating")), // Quentin returned to operating (has activeLoans == 0)
+
+          // Verify banks passed the stress test
+          oscarFiberAfterStressTest.extractBool("stressTestPassed").getOrElse(false),
+          peggyFiberAfterStressTest.extractBool("stressTestPassed").getOrElse(false),
+          quentinFiberAfterStressTest.extractBool("stressTestPassed").getOrElse(false),
+
+          // Verify Heidi's holiday sale
+          heidiFiberAfterSale
+            .map(_.currentState)
+            .contains(StateId("sale_active")), // Heidi entered sale_active state
+          heidiFiberAfterSale
+            .flatMap { f =>
+              f.stateData match {
+                case MapValue(m) => m.get("discountRate").collect { case FloatValue(d) => d }
+                case _           => None
+              }
+            }
+            .exists(_ == 0.20), // 20% discount rate
+
+          // ========================================
+          // C2C MARKETPLACE VALIDATIONS
+          // ========================================
+
+          // Verify auction child machine was spawned and exists
+          auctionFiberAfterBidAccepted.isDefined,
+
+          // Verify auction reached "sold" final state
+          auctionFiberAfterBidAccepted.map(_.currentState).contains(StateId("sold")),
+
+          // Verify auction has correct parent relationship
+          auctionFiberAfterBidAccepted.flatMap(_.parentFiberId).contains(sybilfiberId),
+
+          // Verify auction recorded Victor as highest bidder
+          auctionFiberAfterBidAccepted.extractString("highestBidder").contains(victorfiberId.toString),
+
+          // Verify auction recorded winning bid amount (750)
+          auctionFiberAfterBidAccepted.extractInt("highestBid").exists(_ == 750),
+
+          // Verify auction recorded item name
+          auctionFiberAfterBidAccepted.extractString("itemName").contains("Handmade Ceramic Vase"),
+
+          // Verify Sybil remained in "debt_delinquent" state after sale completed (delinquency doesn't clear just from earning money)
+          sybilFiberAfterSale.map(_.currentState).contains(StateId("debt_delinquent")),
+
+          // Verify Sybil's balance increased by bid amount (8000 after loan + 750 sale = 8750)
+          sybilFiberAfterSale.extractInt("balance").exists(_ == 8750),
+
+          // Verify Sybil's marketplaceSales counter incremented
+          sybilFiberAfterSale.extractInt("marketplaceSales").exists(_ == 1),
+
+          // Verify Sybil's activeListings decreased back to 0
+          sybilFiberAfterSale.extractInt("activeListings").exists(_ == 0),
+
+          // Verify Victor still exists in active state
+          finalVictorFiber.isDefined,
+          finalVictorFiber.map(_.currentState).contains(StateId("active")),
+
+          // ========================================
+          // AUCTION 2 (VICTOR'S AUCTION) VALIDATIONS
+          // ========================================
+
+          // Verify Victor's auction child machine was spawned and exists
+          finalAuction2Fiber.isDefined,
+
+          // Verify auction reached "sold" final state
+          finalAuction2Fiber.map(_.currentState).contains(StateId("sold")),
+
+          // Verify auction has correct parent relationship (Victor)
+          finalAuction2Fiber.flatMap(_.parentFiberId).contains(victorfiberId),
+
+          // Verify auction recorded Ruth as highest bidder
+          finalAuction2Fiber.extractString("highestBidder").contains(ruthfiberId.toString),
+
+          // Verify auction recorded winning bid amount (2500)
+          finalAuction2Fiber.extractInt("highestBid").exists(_ == 2500),
+
+          // Verify auction recorded item name
+          finalAuction2Fiber.extractString("itemName").contains("Vintage Watch Collection"),
+
+          // Verify auction reserve price was met
+          finalAuction2Fiber.extractInt("reservePrice").exists(_ == 2000),
+
+          // ========================================
+          // STATE44 VALIDATIONS (Alice's Second Production Run)
+          // ========================================
+
+          // Verify Alice completed second production cycle and reached inventory_full state
+          finalAliceFiber.map(_.currentState).contains(StateId("inventory_full")),
+
+          // Verify Alice's sequence number increased by 3 (schedule, start, complete)
+          finalAliceFiber.map(_.sequenceNumber).exists(_ >= FiberOrdinal.unsafeApply(3L)),
+
+          // Verify Alice's raw materials: 1000 - 50 (first cycle) - 50 (second cycle) = 900
+          finalAliceFiber.extractInt("rawMaterials").exists(_ == 900),
+
+          // Verify Alice's inventory: 420 + 100 (first batch) - 100 (shipped to Heidi) + 80 (second batch) = 500
+          finalAliceFiber.extractInt("inventory").exists(_ == 500),
+
+          // Verify Alice's total produced: 100 (first batch) + 80 (second batch) = 180
+          finalAliceFiber.extractInt("totalProduced").exists(_ == 180),
+
+          // Verify Alice's batchSize was set correctly in schedule_production event
+          finalAliceFiber.extractInt("batchSize").exists(_ == 80),
+
+          // Verify Alice reached max inventory capacity
+          finalAliceFiber
+            .flatMap { f =>
+              f.stateData match {
+                case MapValue(m) =>
+                  for {
+                    inventory    <- m.get("inventory").collect { case IntValue(i) => i }
+                    maxInventory <- m.get("maxInventory").collect { case IntValue(m) => m }
+                  } yield inventory >= maxInventory
+                case _ => None
+              }
+            }
+            .getOrElse(false),
+
+          // ========================================
+          // XAVIER GOVERNANCE TAX COLLECTION VALIDATIONS
+          // ========================================
+
+          // Verify Xavier exists
+          finalXavierFiber.isDefined,
+
+          // Verify Xavier returned to monitoring state after all taxpayers paid
+          finalXavierFiber.map(_.currentState).contains(StateId("monitoring")),
+
+          // Verify Xavier received tax payments (sequence number incremented)
+          finalXavierFiber.map(_.sequenceNumber).exists(_ > FiberOrdinal.MinValue),
+
+          // Verify Xavier collected taxes from all 10 taxpayers
+          finalXavierFiber.extractInt("taxpayersCompliant").exists(_ == 10),
+
+          // Verify Xavier's total tax collection is correct (9 + 4 + 0 + 7.5 + 2.5 + 5 + 0 + 150 + 0 + 0 = 178)
+          finalXavierFiber
+            .flatMap { f =>
+              f.stateData match {
+                case MapValue(m) => m.get("totalTaxesCollected").collect { case FloatValue(t) => t }
+                case _           => None
+              }
+            }
+            .exists(_ == 178.0),
+
+          // Verify Alice processed the pay_taxes trigger and paid taxes
+          finalAliceFiber
+            .flatMap { f =>
+              f.stateData match {
+                case MapValue(m) => m.get("taxesPaid").collect { case FloatValue(t) => t }
+                case _           => None
+              }
+            }
+            .exists(_ > 0.0),
+
+          // Verify Alice's last tax payment was calculated correctly (180 * 0.05 = 9.0)
+          finalAliceFiber
+            .flatMap { f =>
+              f.stateData match {
+                case MapValue(m) => m.get("lastTaxPayment").collect { case FloatValue(t) => t }
+                case _           => None
+              }
+            }
+            .exists(_ == 9.0),
+
+          // ========================================
+          // VERIFY ALL 10 TAXPAYERS PAID TAXES
+          // ========================================
+
+          // Manufacturers (Alice, Bob, Charlie, Dave) - tax based on totalProduced
+          finalAliceFiber
+            .flatMap { f =>
+              f.stateData match {
+                case MapValue(m) => m.get("taxesPaid").collect { case FloatValue(t) => t }
+                case _           => None
+              }
+            }
+            .exists(_ == 9.0), // 180 * 0.05 = 9.0
+
+          finalBobFiber
+            .flatMap { f =>
+              f.stateData match {
+                case MapValue(m) => m.get("taxesPaid").collect { case FloatValue(t) => t }
+                case _           => None
+              }
+            }
+            .exists(_ == 4.0), // 80 * 0.05 = 4.0
+
+          finalCharlieFiber
+            .flatMap { f =>
+              f.stateData match {
+                case MapValue(m) => m.get("taxesPaid").collect { case FloatValue(t) => t }
+                case _           => None
+              }
+            }
+            .exists(_ == 0.0), // 0 * 0.05 = 0.0 (Charlie didn't produce due to material shortage)
+
+          // ========================================
+          // CHARLIE (MANUFACTURER) COMPREHENSIVE VALIDATIONS
+          // ========================================
+
+          // Verify Charlie exists
+          finalCharlieFiber.isDefined,
+
+          // Verify Charlie is in supply_shortage state (insufficient raw materials)
+          finalCharlieFiber.map(_.currentState).contains(StateId("supply_shortage")),
+
+          // Verify Charlie's sequence number (check_materials, pay_taxes)
+          finalCharlieFiber.map(_.sequenceNumber).exists(_ == FiberOrdinal.unsafeApply(2L)),
+
+          // Verify Charlie's raw materials unchanged (40 - insufficient for production)
+          finalCharlieFiber.extractInt("rawMaterials").exists(_ == 40),
+
+          // Verify Charlie's totalProduced is still 0 (no production due to shortage)
+          finalCharlieFiber.extractInt("totalProduced").exists(_ == 0),
+
+          // Verify Charlie's inventory unchanged (420 - no production occurred)
+          finalCharlieFiber.extractInt("inventory").exists(_ == 420),
+
+          // Verify Charlie's lastTaxPeriod was set
+          finalCharlieFiber.extractString("lastTaxPeriod").contains("Q4-2024"),
+          finalDaveFiber
+            .flatMap { f =>
+              f.stateData match {
+                case MapValue(m) => m.get("taxesPaid").collect { case FloatValue(t) => t }
+                case _           => None
+              }
+            }
+            .exists(_ == 7.5), // 150 * 0.05 = 7.5 (now with full decimal precision!)
+
+          // ========================================
+          // DAVE (MANUFACTURER) COMPREHENSIVE VALIDATIONS
+          // ========================================
+
+          // Verify Dave exists
+          finalDaveFiber.isDefined,
+
+          // Verify Dave completed production cycle (schedule -> start -> complete)
+          finalDaveFiber.map(_.currentState).contains(StateId("shipping")),
+
+          // Verify Dave's sequence number reflects all events (schedule, start, complete, fulfill_order, pay_taxes)
+          finalDaveFiber.map(_.sequenceNumber).exists(_ == FiberOrdinal.unsafeApply(5L)),
+
+          // Verify Dave's inventory: 420 (initial) + 150 (produced) - 100 (shipped to Ivan) = 470
+          finalDaveFiber.extractInt("inventory").exists(_ == 470),
+
+          // Verify Dave's totalProduced matches batchSize
+          finalDaveFiber.extractInt("totalProduced").exists(_ == 150),
+
+          // Verify Dave consumed raw materials: 1000 (initial) - 50 (required for production) = 950
+          finalDaveFiber.extractInt("rawMaterials").exists(_ == 950),
+
+          // Verify Dave fulfilled Ivan's order (shipmentCount incremented)
+          finalDaveFiber.extractInt("shipmentCount").exists(_ == 1),
+
+          // Verify Dave's lastTaxPeriod was set
+          finalDaveFiber.extractString("lastTaxPeriod").contains("Q4-2024"),
+
+          // Retailers (Heidi, Grace, Ivan) - tax based on revenue
+          finalHeidiFiber
+            .flatMap { f =>
+              f.stateData match {
+                case MapValue(m) => m.get("taxesPaid").collect { case FloatValue(t) => t }
+                case _           => None
+              }
+            }
+            .exists(_ == 2.5), // 50 * 0.05 = 2.5 (now with full decimal precision!)
+
+          finalGraceFiber
+            .flatMap { f =>
+              f.stateData match {
+                case MapValue(m) => m.get("taxesPaid").collect { case FloatValue(t) => t }
+                case _           => None
+              }
+            }
+            .exists(_ == 5.0), // 100 * 0.05 = 5.0
+
+          // ========================================
+          // GRACE (RETAILER) COMPREHENSIVE VALIDATIONS
+          // ========================================
+
+          // Verify Grace exists
+          finalGraceFiber.isDefined,
+
+          // Verify Grace returned to open state after restocking
+          finalGraceFiber.map(_.currentState).contains(StateId("open")),
+
+          // Verify Grace's sequence number (check_inventory, receive_shipment, reopen, process_sale, pay_taxes)
+          finalGraceFiber.map(_.sequenceNumber).exists(_ == FiberOrdinal.unsafeApply(5L)),
+
+          // Verify Grace's revenue from Victor's purchase (10 items * 10 per unit = 100)
+          finalGraceFiber.extractInt("revenue").exists(_ == 100),
+
+          // Verify Grace's salesCount incremented
+          finalGraceFiber.extractInt("salesCount").exists(_ == 1),
+
+          // Verify Grace's lastTaxPeriod was set
+          finalGraceFiber.extractString("lastTaxPeriod").contains("Q4-2024"),
+          finalIvanFiber
+            .flatMap { f =>
+              f.stateData match {
+                case MapValue(m) => m.get("taxesPaid").collect { case FloatValue(t) => t }
+                case _           => None
+              }
+            }
+            .exists(_ == 0.0), // 0 * 0.05 = 0.0 (Ivan has no revenue yet)
+
+          // ========================================
+          // IVAN (RETAILER) COMPREHENSIVE VALIDATIONS
+          // ========================================
+
+          // Verify Ivan exists
+          finalIvanFiber.isDefined,
+
+          // Verify Ivan returned to open state after restocking
+          finalIvanFiber.map(_.currentState).contains(StateId("open")),
+
+          // Verify Ivan's sequence number (check_inventory, receive_shipment, reopen, pay_taxes)
+          finalIvanFiber.map(_.sequenceNumber).exists(_ == FiberOrdinal.unsafeApply(4L)),
+
+          // Verify Ivan's stock after restocking from Dave (15 initial + 100 restock = 115)
+          finalIvanFiber.extractInt("stock").exists(_ == 115),
+
+          // Verify Ivan has zero revenue (no sales yet)
+          finalIvanFiber.extractInt("revenue").exists(_ == 0),
+
+          // Verify Ivan has zero sales count
+          finalIvanFiber.extractInt("salesCount").exists(_ == 0),
+
+          // Verify Ivan's lastTaxPeriod was set
+          finalIvanFiber.extractString("lastTaxPeriod").contains("Q4-2024"),
+
+          // Consumers (Ruth, Sybil, Victor) - tax based on serviceRevenue
+          finalRuthFiber
+            .flatMap { f =>
+              f.stateData match {
+                case MapValue(m) => m.get("taxesPaid").collect { case FloatValue(t) => t }
+                case _           => None
+              }
+            }
+            .exists(_ == 150.0), // 3000 * 0.05 = 150.0
+
+          finalSybilFiber
+            .flatMap { f =>
+              f.stateData match {
+                case MapValue(m) => m.get("taxesPaid").collect { case FloatValue(t) => t }
+                case _           => None
+              }
+            }
+            .exists(_ == 0.0), // 0 * 0.05 = 0.0 (Sybil has no service revenue)
+
+          finalVictorFiber
+            .flatMap { f =>
+              f.stateData match {
+                case MapValue(m) => m.get("taxesPaid").collect { case FloatValue(t) => t }
+                case _           => None
+              }
+            }
+            .exists(_ == 0.0), // 0 * 0.05 = 0.0 (Victor has no service revenue)
+
+          // Verify all taxpayers have the lastTaxPeriod field set
+          finalAliceFiber.extractString("lastTaxPeriod").contains("Q4-2024"),
+          finalBobFiber.extractString("lastTaxPeriod").contains("Q4-2024"),
+          finalRuthFiber.extractString("lastTaxPeriod").contains("Q4-2024"),
+
+          // Verify remaining taxpayers have lastTaxPeriod set
+          finalHeidiFiber.extractString("lastTaxPeriod").contains("Q4-2024"),
+          finalSybilFiber.extractString("lastTaxPeriod").contains("Q4-2024"),
+          finalVictorFiber.extractString("lastTaxPeriod").contains("Q4-2024")
+        )
+      }
   }
 }

@@ -40,7 +40,7 @@ lazy val commonSettings = Seq(
     Libraries.pureconfigCore,
     Libraries.pureconfigCats
   )
-) ++ Defaults.itSettings
+)
 
 lazy val commonTestSettings = Seq(
   testFrameworks += new TestFramework("weaver.framework.CatsEffect"),

@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  # Validate commit messages follow Conventional Commits
+  conventional-commits:
+    name: Conventional Commits
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate PR commits
+        shell: bash
+        run: |
+          # Get commits in this PR
+          COMMITS=$(git log --format="%s" origin/${{ github.base_ref }}..${{ github.event.pull_request.head.sha }})
+
+          # Conventional commit pattern
+          PATTERN="^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?(!)?: .+"
+
+          FAILED=0
+          while IFS= read -r MSG; do
+            if [[ -z "$MSG" ]]; then
+              continue
+            fi
+            if ! echo "$MSG" | grep -qE "$PATTERN"; then
+              echo "❌ Non-conventional commit: $MSG"
+              FAILED=1
+            else
+              echo "✅ $MSG"
+            fi
+          done <<< "$COMMITS"
+
+          if [[ $FAILED -eq 1 ]]; then
+            echo ""
+            echo "Commits must follow Conventional Commits: https://www.conventionalcommits.org"
+            echo "Format: <type>[optional scope]: <description>"
+            echo "Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert"
+            exit 1
+          fi
+
+  # Code quality: formatting and linting
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'sbt'
+
+      - name: Set up sbt
+        uses: sbt/setup-sbt@v1
+
+      - name: Check formatting (scalafmt)
+        run: sbt scalafmtCheckAll
+
+      - name: Check linting (scalafix)
+        run: sbt "scalafixAll --check"
+
+  # Unit tests
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'sbt'
+
+      - name: Set up sbt
+        uses: sbt/setup-sbt@v1
+
+      - name: Run unit tests
+        run: sbt sharedData/test
+
+      - name: Test report summary
+        if: always()
+        run: |
+          echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+          if [ $? -eq 0 ]; then
+            echo "✅ All tests passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Some tests failed" >> $GITHUB_STEP_SUMMARY
+          fi
