@@ -2,7 +2,7 @@ package xyz.kd5ujc.shared_data.fiber
 
 import cats.data.{ReaderT, StateT}
 import cats.mtl.{Ask, Stateful}
-import cats.{~>, Applicative, Monad}
+import cats.{Applicative, Monad, ~>}
 
 import xyz.kd5ujc.schema.fiber.FiberContext
 

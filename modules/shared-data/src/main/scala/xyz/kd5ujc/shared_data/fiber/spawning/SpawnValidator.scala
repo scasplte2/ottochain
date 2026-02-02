@@ -6,7 +6,7 @@ import cats.data.{NonEmptyList, Validated, ValidatedNel}
 import cats.effect.Async
 import cats.mtl.{Ask, Stateful}
 import cats.syntax.all._
-import cats.{~>, Monad}
+import cats.{Monad, ~>}
 
 import io.constellationnetwork.metagraph_sdk.json_logic.JsonLogicValue
 import io.constellationnetwork.metagraph_sdk.json_logic.core.{ArrayValue, StrValue}
