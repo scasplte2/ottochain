@@ -186,7 +186,7 @@ object NftMarketplaceSuite extends SimpleIOSuite {
           ]
         }"""
 
-        nftListingDef <- IO.fromEither(
+        _nftListingDef <- IO.fromEither(
           decode[StateMachineDefinition](nftListingJson).left
             .map(err => new RuntimeException(s"Failed to decode NFT listing JSON: $err"))
         )

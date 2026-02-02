@@ -51,20 +51,6 @@ object OracleToOracleSuite extends SimpleIOSuite {
    * NOTE: This test documents expected behavior. The actual implementation
    * may need to support oracle-to-oracle calls in the script.
    */
-  private def outerOracleScript(innerOracleId: String) =
-    s"""|{
-        |  "if": [
-        |    { "==": [{ "var": "method" }, "doubleAdd"] },
-        |    {
-        |      "*": [
-        |        { "var": "args.value" },
-        |        2
-        |      ]
-        |    },
-        |    0
-        |  ]
-        |}""".stripMargin
-
   test("oracle invocation count is tracked correctly") {
     TestFixture.resource(Set(Alice, Bob)).use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider

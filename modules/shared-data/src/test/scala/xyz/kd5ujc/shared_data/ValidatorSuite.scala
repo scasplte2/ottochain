@@ -214,7 +214,7 @@ object ValidatorSuite extends SimpleIOSuite {
   test("fiberIdNotUsed: new fiber ID accepted") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         validator <- Validator.make[IO]
         fiberId   <- UUIDGen.randomUUID[IO]
@@ -228,7 +228,7 @@ object ValidatorSuite extends SimpleIOSuite {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
         validator <- Validator.make[IO]
@@ -252,7 +252,7 @@ object ValidatorSuite extends SimpleIOSuite {
   test("validStateMachineDefinition: empty definition rejected") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         validator <- Validator.make[IO]
         fiberId   <- UUIDGen.randomUUID[IO]
@@ -266,7 +266,7 @@ object ValidatorSuite extends SimpleIOSuite {
   test("validStateMachineDefinition: invalid initial state rejected") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         validator <- Validator.make[IO]
         fiberId   <- UUIDGen.randomUUID[IO]
@@ -280,7 +280,7 @@ object ValidatorSuite extends SimpleIOSuite {
   test("validStateMachineDefinition: invalid transition 'from' state rejected") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         validator <- Validator.make[IO]
         fiberId   <- UUIDGen.randomUUID[IO]
@@ -294,7 +294,7 @@ object ValidatorSuite extends SimpleIOSuite {
   test("validStateMachineDefinition: invalid transition 'to' state rejected") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         validator <- Validator.make[IO]
         fiberId   <- UUIDGen.randomUUID[IO]
@@ -308,7 +308,7 @@ object ValidatorSuite extends SimpleIOSuite {
   test("validStateMachineDefinition: duplicate transitions rejected") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         validator <- Validator.make[IO]
         fiberId   <- UUIDGen.randomUUID[IO]
@@ -322,7 +322,7 @@ object ValidatorSuite extends SimpleIOSuite {
   test("validStateMachineDefinition: ambiguous transitions rejected") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         validator <- Validator.make[IO]
         fiberId   <- UUIDGen.randomUUID[IO]
@@ -338,7 +338,7 @@ object ValidatorSuite extends SimpleIOSuite {
   test("initialDataIsMapValue: MapValue accepted") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         validator <- Validator.make[IO]
         fiberId   <- UUIDGen.randomUUID[IO]
@@ -352,7 +352,7 @@ object ValidatorSuite extends SimpleIOSuite {
   test("initialDataIsMapValue: non-MapValue rejected") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         validator <- Validator.make[IO]
         fiberId   <- UUIDGen.randomUUID[IO]
@@ -369,7 +369,7 @@ object ValidatorSuite extends SimpleIOSuite {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
         validator <- Validator.make[IO]
@@ -392,7 +392,7 @@ object ValidatorSuite extends SimpleIOSuite {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         validator <- Validator.make[IO]
         fiberId   <- UUIDGen.randomUUID[IO]
@@ -415,7 +415,7 @@ object ValidatorSuite extends SimpleIOSuite {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
         validator <- Validator.make[IO]
@@ -439,7 +439,7 @@ object ValidatorSuite extends SimpleIOSuite {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
         validator <- Validator.make[IO]
@@ -465,7 +465,7 @@ object ValidatorSuite extends SimpleIOSuite {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
         validator <- Validator.make[IO]
@@ -488,7 +488,7 @@ object ValidatorSuite extends SimpleIOSuite {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
         validator <- Validator.make[IO]
@@ -518,7 +518,7 @@ object ValidatorSuite extends SimpleIOSuite {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
         validator <- Validator.make[IO]
@@ -541,7 +541,7 @@ object ValidatorSuite extends SimpleIOSuite {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
         validator <- Validator.make[IO]
@@ -567,7 +567,7 @@ object ValidatorSuite extends SimpleIOSuite {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
         validator <- Validator.make[IO]
@@ -590,7 +590,7 @@ object ValidatorSuite extends SimpleIOSuite {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
         validator <- Validator.make[IO]
@@ -616,7 +616,7 @@ object ValidatorSuite extends SimpleIOSuite {
   test("initialStateIsMapValueOrNull: None accepted") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         validator <- Validator.make[IO]
         fiberId   <- UUIDGen.randomUUID[IO]
@@ -630,7 +630,7 @@ object ValidatorSuite extends SimpleIOSuite {
   test("initialStateIsMapValueOrNull: MapValue accepted") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         validator <- Validator.make[IO]
         fiberId   <- UUIDGen.randomUUID[IO]
@@ -648,7 +648,7 @@ object ValidatorSuite extends SimpleIOSuite {
   test("initialStateIsMapValueOrNull: non-MapValue rejected") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         validator <- Validator.make[IO]
         fiberId   <- UUIDGen.randomUUID[IO]
@@ -669,7 +669,7 @@ object ValidatorSuite extends SimpleIOSuite {
   test("parentFiberExistsInOnChain: non-existent parent rejected") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         validator <- Validator.make[IO]
         fiberId   <- UUIDGen.randomUUID[IO]
@@ -686,7 +686,7 @@ object ValidatorSuite extends SimpleIOSuite {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
         validator <- Validator.make[IO]
@@ -715,7 +715,7 @@ object ValidatorSuite extends SimpleIOSuite {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
         validator <- Validator.make[IO]
@@ -741,7 +741,7 @@ object ValidatorSuite extends SimpleIOSuite {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
         validator <- Validator.make[IO]
@@ -764,7 +764,7 @@ object ValidatorSuite extends SimpleIOSuite {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
         validator <- Validator.make[IO]
@@ -792,7 +792,7 @@ object ValidatorSuite extends SimpleIOSuite {
     TestFixture.resource(Set(Alice, Bob, Charlie)).use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
         validator <- Validator.make[IO]
@@ -822,7 +822,7 @@ object ValidatorSuite extends SimpleIOSuite {
   test("definitionWithinLimits: too many states rejected (>100)") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         validator <- Validator.make[IO]
         fiberId   <- UUIDGen.randomUUID[IO]
@@ -836,7 +836,7 @@ object ValidatorSuite extends SimpleIOSuite {
   test("definitionWithinLimits: exactly 100 states accepted") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         validator <- Validator.make[IO]
         fiberId   <- UUIDGen.randomUUID[IO]
@@ -849,7 +849,7 @@ object ValidatorSuite extends SimpleIOSuite {
   test("definitionWithinLimits: too many transitions rejected (>500)") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         validator <- Validator.make[IO]
         fiberId   <- UUIDGen.randomUUID[IO]
@@ -863,7 +863,7 @@ object ValidatorSuite extends SimpleIOSuite {
   test("definitionWithinLimits: exactly 500 transitions accepted") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         validator <- Validator.make[IO]
         fiberId   <- UUIDGen.randomUUID[IO]
@@ -876,7 +876,7 @@ object ValidatorSuite extends SimpleIOSuite {
   test("definitionWithinLimits: too many transitions per state rejected (>20)") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         validator <- Validator.make[IO]
         fiberId   <- UUIDGen.randomUUID[IO]
@@ -891,7 +891,7 @@ object ValidatorSuite extends SimpleIOSuite {
   test("definitionWithinLimits: exactly 20 transitions per state accepted") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         validator <- Validator.make[IO]
         fiberId   <- UUIDGen.randomUUID[IO]

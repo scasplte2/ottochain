@@ -189,7 +189,7 @@ object TicTacToeGameSuite extends SimpleIOSuite {
     registry: ParticipantRegistry[IO],
     combiner: CombinerService
   )(implicit
-    s:     SecurityProvider[IO],
+    _s:    SecurityProvider[IO],
     l0ctx: L0NodeContext[IO]
   ): IO[(DataState[OnChain, CalculatedState], UUID, UUID)] =
     for {
