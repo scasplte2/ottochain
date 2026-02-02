@@ -8,6 +8,7 @@ import io.constellationnetwork.metagraph_sdk.json_logic._
 import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
 import io.constellationnetwork.schema.SnapshotOrdinal
 import io.constellationnetwork.schema.address.Address
+
 import xyz.kd5ujc.schema.Records
 import xyz.kd5ujc.schema.fiber._
 import xyz.kd5ujc.shared_test.Participant
