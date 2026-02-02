@@ -1420,16 +1420,16 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           peggyfiberId   <- UUIDGen.randomUUID[IO]
           quentinfiberId <- UUIDGen.randomUUID[IO]
 
-          ruthfiberId   <- UUIDGen.randomUUID[IO]
-          sybilfiberId  <- UUIDGen.randomUUID[IO]
-          trentfiberId  <- UUIDGen.randomUUID[IO]
-          ursulafiberId <- UUIDGen.randomUUID[IO]
-          victorfiberId <- UUIDGen.randomUUID[IO]
-          walterfiberId <- UUIDGen.randomUUID[IO]
+          ruthfiberId    <- UUIDGen.randomUUID[IO]
+          sybilfiberId   <- UUIDGen.randomUUID[IO]
+          trentfiberId   <- UUIDGen.randomUUID[IO]
+          _ursulafiberId <- UUIDGen.randomUUID[IO]
+          victorfiberId  <- UUIDGen.randomUUID[IO]
+          _walterfiberId <- UUIDGen.randomUUID[IO]
 
           xavierfiberId  <- UUIDGen.randomUUID[IO]
           yolandafiberId <- UUIDGen.randomUUID[IO]
-          zoefiberId     <- UUIDGen.randomUUID[IO]
+          _zoefiberId    <- UUIDGen.randomUUID[IO]
 
           // Create initial state data for each participant type
           manufacturerInitialData = MapValue(
@@ -2325,19 +2325,19 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           finalYolandaFiber = state54.fiberRecord(yolandafiberId)
 
           // Extract auction states
-          finalAuction1Fiber = state54.fiberRecord(auctionfiberId)
+          _finalAuction1Fiber = state54.fiberRecord(auctionfiberId)
           finalAuction2Fiber = state54.fiberRecord(auction2fiberId)
 
           // Extract intermediate states for Ruth's payment
-          ruthAfterPayment = state28.fiberRecord(ruthfiberId)
-          oscarAfterPayment = state28.fiberRecord(oscarfiberId)
+          _ruthAfterPayment = state28.fiberRecord(ruthfiberId)
+          _oscarAfterPayment = state28.fiberRecord(oscarfiberId)
 
           // Extract states after Ruth's service provision
-          ruthAfterService = state38.fiberRecord(ruthfiberId)
+          _ruthAfterService = state38.fiberRecord(ruthfiberId)
 
           // Extract states for Ivan and Dave supply chain
-          ivanAfterInventoryCheck = state37.fiberRecord(ivanfiberId)
-          daveAfterFulfillment = state37.fiberRecord(davefiberId)
+          _ivanAfterInventoryCheck = state37.fiberRecord(ivanfiberId)
+          _daveAfterFulfillment = state37.fiberRecord(davefiberId)
 
           // Extract Xavier's final state after tax collection
           finalXavierFiber = state54.fiberRecord(xavierfiberId)

@@ -8,8 +8,6 @@ import io.constellationnetwork.metagraph_sdk.json_logic._
 import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
 import io.constellationnetwork.schema.SnapshotOrdinal
 import io.constellationnetwork.schema.address.Address
-import io.constellationnetwork.security.SecurityProvider
-
 import xyz.kd5ujc.schema.Records
 import xyz.kd5ujc.schema.fiber._
 import xyz.kd5ujc.shared_test.Participant
@@ -76,7 +74,7 @@ case class FiberBuilder private (
    *
    * @return IO containing the constructed StateMachineFiberRecord
    */
-  def build[F[_]: Async: SecurityProvider]: F[Records.StateMachineFiberRecord] = {
+  def build[F[_]: Async]: F[Records.StateMachineFiberRecord] = {
     import cats.syntax.functor._
     (stateData: JsonLogicValue).computeDigest.map { hash =>
       Records.StateMachineFiberRecord(

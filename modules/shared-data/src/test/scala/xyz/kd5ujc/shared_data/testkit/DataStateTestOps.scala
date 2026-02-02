@@ -8,7 +8,6 @@ import cats.syntax.all._
 import io.constellationnetwork.currency.dataApplication.{DataState, L0NodeContext}
 import io.constellationnetwork.metagraph_sdk.json_logic._
 import io.constellationnetwork.metagraph_sdk.lifecycle.CombinerService
-import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.Signed
 
 import xyz.kd5ujc.schema.Updates.OttochainMessage
@@ -51,7 +50,7 @@ object DataStateTestOps {
      * @param combiner  Combiner service for state insertion
      * @return New DataState after the transition
      */
-    def transition[F[_]: Async: SecurityProvider](
+    def transition[F[_]: Async](
       fiberId: UUID,
       event:   String,
       payload: JsonLogicValue,
@@ -86,7 +85,7 @@ object DataStateTestOps {
      * @param signers Participants who sign the transaction
      * @param fields  Payload fields as key-value pairs
      */
-    def transitionWith[F[_]: Async: SecurityProvider](
+    def transitionWith[F[_]: Async](
       fiberId: UUID,
       event:   String,
       signers: Set[Participant],
