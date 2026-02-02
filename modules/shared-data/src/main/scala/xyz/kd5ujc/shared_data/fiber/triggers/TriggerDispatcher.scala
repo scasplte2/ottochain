@@ -3,7 +3,7 @@ package xyz.kd5ujc.shared_data.fiber.triggers
 import cats.effect.Async
 import cats.mtl.{Ask, Stateful}
 import cats.syntax.all._
-import cats.{~>, Monad}
+import cats.{Monad, ~>}
 
 import io.constellationnetwork.security.SecurityProvider
 
