@@ -31,7 +31,7 @@ export const generator = ({ cid, options }: { cid: string; wallets?: unknown; op
 
   // US-6: cid → fiberId
   return {
-    InvokeScriptOracle: {
+    InvokeScript: {
       fiberId: cid,
       method: options.method,
       args,
@@ -42,8 +42,8 @@ export const generator = ({ cid, options }: { cid: string; wallets?: unknown; op
 
 export const validator = async ({ cid, statesMap, options, ml0Urls }: { cid: string; statesMap: StatesMap; options: InvokeOracleOptions; wallets?: unknown; ml0Urls?: string[] }) => {
   for (const [url, { initial, final }] of Object.entries(statesMap)) {
-    const initialRecord = initial?.state?.scriptOracles?.[cid];
-    const finalRecord = final?.state?.scriptOracles?.[cid];
+    const initialRecord = initial?.state?.scripts?.[cid];
+    const finalRecord = final?.state?.scripts?.[cid];
 
     if (!initialRecord) {
       throw new Error(

@@ -29,7 +29,7 @@ export const generator = ({ cid, options }: { cid: string; wallets?: unknown; op
     );
   }
 
-  // Build the CreateScriptOracle message
+  // Build the CreateScript message
   // Always include initialState (null if absent) to match server's canonical form.
   // The server re-encodes Option[JsonLogicValue] = None as "initialState": null,
   // so omitting the field would cause a signature mismatch.
@@ -40,12 +40,12 @@ export const generator = ({ cid, options }: { cid: string; wallets?: unknown; op
     accessControl: oracleDefinition.accessControl,
   };
 
-  return { CreateScriptOracle: createMsg } as unknown as OttochainMessage;
+  return { CreateScript: createMsg } as unknown as OttochainMessage;
 };
 
 export const validator = ({ cid, statesMap }: { cid: string; statesMap: StatesMap }) => {
   for (const [url, { final }] of Object.entries(statesMap)) {
-    const finalRecord = final?.state?.scriptOracles?.[cid];
+    const finalRecord = final?.state?.scripts?.[cid];
 
     if (!finalRecord) {
       throw new Error(

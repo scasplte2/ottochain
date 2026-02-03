@@ -74,7 +74,7 @@ export default (context: Record<string, unknown>) => {
         to: { value: 'playing' },
         eventName: 'make_move',
         guard: {
-          '===': [{ var: `scriptOracles.${oracleFiberId}.state.status` }, 'InProgress'],
+          '===': [{ var: `scripts.${oracleFiberId}.state.status` }, 'InProgress'],
         },
         effect: {
           _oracleCall: {
@@ -100,8 +100,8 @@ export default (context: Record<string, unknown>) => {
         eventName: 'make_move',
         guard: {
           or: [
-            { '===': [{ var: `scriptOracles.${oracleFiberId}.state.status` }, 'Won'] },
-            { '===': [{ var: `scriptOracles.${oracleFiberId}.state.status` }, 'Draw'] },
+            { '===': [{ var: `scripts.${oracleFiberId}.state.status` }, 'Won'] },
+            { '===': [{ var: `scripts.${oracleFiberId}.state.status` }, 'Draw'] },
           ],
         },
         effect: {
@@ -113,17 +113,17 @@ export default (context: Record<string, unknown>) => {
               cell: { var: 'event.cell' },
             },
           },
-          finalStatus: { var: `scriptOracles.${oracleFiberId}.state.status` },
-          winner: { var: `scriptOracles.${oracleFiberId}.state.winner` },
-          finalBoard: { var: `scriptOracles.${oracleFiberId}.state.board` },
+          finalStatus: { var: `scripts.${oracleFiberId}.state.status` },
+          winner: { var: `scripts.${oracleFiberId}.state.winner` },
+          finalBoard: { var: `scripts.${oracleFiberId}.state.board` },
           _emit: [
             {
               name: 'game_completed',
               data: {
                 gameId: { var: 'state.gameId' },
-                winner: { var: `scriptOracles.${oracleFiberId}.state.winner` },
-                status: { var: `scriptOracles.${oracleFiberId}.state.status` },
-                moveCount: { var: `scriptOracles.${oracleFiberId}.state.moveCount` },
+                winner: { var: `scripts.${oracleFiberId}.state.winner` },
+                status: { var: `scripts.${oracleFiberId}.state.status` },
+                moveCount: { var: `scripts.${oracleFiberId}.state.moveCount` },
               },
             },
           ],
@@ -138,8 +138,8 @@ export default (context: Record<string, unknown>) => {
         eventName: 'reset_board',
         guard: {
           or: [
-            { '===': [{ var: `scriptOracles.${oracleFiberId}.state.status` }, 'Won'] },
-            { '===': [{ var: `scriptOracles.${oracleFiberId}.state.status` }, 'Draw'] },
+            { '===': [{ var: `scripts.${oracleFiberId}.state.status` }, 'Won'] },
+            { '===': [{ var: `scripts.${oracleFiberId}.state.status` }, 'Draw'] },
           ],
         },
         effect: {
