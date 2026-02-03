@@ -101,7 +101,7 @@ object TokenEscrowSuite extends SimpleIOSuite {
         )
 
         fundProof <- registry.generateProofs(fundEvent, Set(Alice))
-        state2      <- combiner.insert(state1, Signed(fundEvent, fundProof))
+        state2    <- combiner.insert(state1, Signed(fundEvent, fundProof))
 
         releaseEvent = Updates.TransitionStateMachine(
           fiberId = cid,
@@ -111,13 +111,17 @@ object TokenEscrowSuite extends SimpleIOSuite {
         )
 
         releaseProof <- registry.generateProofs(releaseEvent, Set(Alice))
-        state3      <- combiner.insert(state2, Signed(releaseEvent, releaseProof))
+        state3       <- combiner.insert(state2, Signed(releaseEvent, releaseProof))
 
         oracle = state3.stateMachineRecord(cid)
         result = oracle.flatMap(_.lastInvocation.map(_.result))
       } yield expect.all(
         oracle.isDefined,
-        result.contains(MapValue(Map("depositor" -> StringValue("alice"), "amount" -> IntValue(100), "beneficiary" -> StringValue("bob")))),
+        result.contains(
+          MapValue(
+            Map("depositor" -> StringValue("alice"), "amount" -> IntValue(100), "beneficiary" -> StringValue("bob"))
+          )
+        ),
         oracle.map(_.sequenceNumber).contains(FiberOrdinal.unsafeApply(2L))
       )
     }
@@ -156,7 +160,7 @@ object TokenEscrowSuite extends SimpleIOSuite {
         )
 
         fundProof <- registry.generateProofs(fundEvent, Set(Alice))
-        state2      <- combiner.insert(state1, Signed(fundEvent, fundProof))
+        state2    <- combiner.insert(state1, Signed(fundEvent, fundProof))
 
         refundEvent = Updates.TransitionStateMachine(
           fiberId = cid,
