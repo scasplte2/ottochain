@@ -68,7 +68,7 @@ object VotingSuite extends SimpleIOSuite {
         """
 
         machineDef <- IO.fromEither(decode[StateMachineDefinition](machineJson))
-        initialData = MapValue(Map("candidates" -> ArrayValue(Array.empty)))
+        initialData = MapValue(Map("candidates" -> ArrayValue(List.empty)))
 
         // Create the state machine
         createOp = Updates.CreateStateMachine(fiberId, machineDef, initialData)
