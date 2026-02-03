@@ -1,0 +1,21 @@
+{
+  "name": "Voting",
+  "description": "Simple voting with start and end flows",
+  "type": "state-machine",
+  "definition": "definition.json",
+  "initialData": "initial-data.json",
+  "events": [
+    { "name": "startVoting", "file": "event-start-voting.json", "from": "pending", "to": "voting" },
+    { "name": "endVoting", "file": "event-end-voting.json", "from": "voting", "to": "completed" }
+  ],
+  "testFlows": [
+    {
+      "name": "Happy path - complete voting",
+      "steps": [
+        { "action": "create", "definition": "definition.json", "initialData": "initial-data.json" },
+        { "action": "processEvent", "event": "event-start-voting.json", "expectedState": "voting" },
+        { "action": "processEvent", "event": "event-end-voting.json", "expectedState": "completed" }
+      ]
+    }
+  ]
+}

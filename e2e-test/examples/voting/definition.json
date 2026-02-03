@@ -1,0 +1,30 @@
+{
+  "states": {
+    "pending": { "id": { "value": "pending" }, "isFinal": false, "metadata": null },
+    "voting": { "id": { "value": "voting" }, "isFinal": false, "metadata": null },
+    "completed": { "id": { "value": "completed" }, "isFinal": true, "metadata": null }
+  },
+  "initialState": { "value": "pending" },
+  "transitions": [
+    {
+      "from": { "value": "pending" },
+      "to": { "value": "voting" },
+      "eventName": "startVoting",
+      "guard": { "==": [1, 1] },
+      "effect": { "merge": [{ "var": "state" }, { "candidates": { "var": "event.candidates" } }] },
+      "dependencies": []
+    },
+    {
+      "from": { "value": "voting" },
+      "to": { "value": "completed" },
+      "eventName": "endVoting",
+      "guard": { "==": [1, 1] },
+      "effect": { "var": "state" },
+      "dependencies": []
+    }
+  ],
+  "metadata": {
+    "name": "Voting",
+    "description": "A simple voting state machine"
+  }
+}
