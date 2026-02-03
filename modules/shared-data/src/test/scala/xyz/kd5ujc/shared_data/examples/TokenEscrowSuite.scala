@@ -80,7 +80,7 @@ object TokenEscrowSuite extends SimpleIOSuite {
         cid  <- IO.randomUUID
         prog <- IO.fromEither(parser.parse(tokenEscrowScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateStateMachine(
+        createOracle = Updates.CreateScriptOracle(
           fiberId = cid,
           scriptProgram = prog,
           initialState = None,
@@ -93,27 +93,27 @@ object TokenEscrowSuite extends SimpleIOSuite {
           Signed(createOracle, createProof)
         )
 
-        fundEvent = Updates.TransitionStateMachine(
+        fundEvent = Updates.InvokeScriptOracle(
           fiberId = cid,
-          event = "fund",
-          payload = MapValue(Map("depositor" -> StringValue("alice"), "amount" -> IntValue(100))),
+          method = "fund",
+          args = MapValue(Map("depositor" -> StringValue("alice"), "amount" -> IntValue(100))),
           targetSequenceNumber = FiberOrdinal.MinValue
         )
 
         fundProof <- registry.generateProofs(fundEvent, Set(Alice))
         state2    <- combiner.insert(state1, Signed(fundEvent, fundProof))
 
-        releaseEvent = Updates.TransitionStateMachine(
+        releaseEvent = Updates.InvokeScriptOracle(
           fiberId = cid,
-          event = "release",
-          payload = MapValue(Map("beneficiary" -> StringValue("bob"))),
+          method = "release",
+          args = MapValue(Map("beneficiary" -> StringValue("bob"))),
           targetSequenceNumber = FiberOrdinal.MinValue.next
         )
 
         releaseProof <- registry.generateProofs(releaseEvent, Set(Alice))
         state3       <- combiner.insert(state2, Signed(releaseEvent, releaseProof))
 
-        oracle = state3.stateMachineRecord(cid)
+        oracle = state3.oracleRecord(cid)
         result = oracle.flatMap(_.lastInvocation.map(_.result))
       } yield expect.all(
         oracle.isDefined,
@@ -162,10 +162,10 @@ object TokenEscrowSuite extends SimpleIOSuite {
         fundProof <- registry.generateProofs(fundEvent, Set(Alice))
         state2    <- combiner.insert(state1, Signed(fundEvent, fundProof))
 
-        refundEvent = Updates.TransitionStateMachine(
+        refundEvent = Updates.InvokeScriptOracle(
           fiberId = cid,
-          event = "refund",
-          payload = MapValue(Map()),
+          method = "refund",
+          args = MapValue(Map()),
           targetSequenceNumber = FiberOrdinal.MinValue.next
         )
 
