@@ -1,0 +1,30 @@
+{
+  "name": "Token Escrow",
+  "description": "Simple escrow with deposit, release, and refund flows",
+  "type": "state-machine",
+  "definition": "definition.json",
+  "initialData": "initial-data.json",
+  "events": [
+    { "name": "fund", "file": "event-fund.json", "from": "pending", "to": "funded" },
+    { "name": "release", "file": "event-release.json", "from": "funded", "to": "released" },
+    { "name": "refund", "file": "event-refund.json", "from": "funded", "to": "refunded" }
+  ],
+  "testFlows": [
+    {
+      "name": "Happy path - release",
+      "steps": [
+        { "action": "create", "definition": "definition.json", "initialData": "initial-data.json" },
+        { "action": "processEvent", "event": "event-fund.json", "expectedState": "funded" },
+        { "action": "processEvent", "event": "event-release.json", "expectedState": "released" }
+      ]
+    },
+    {
+      "name": "Refund path",
+      "steps": [
+        { "action": "create", "definition": "definition.json", "initialData": "initial-data.json" },
+        { "action": "processEvent", "event": "event-fund.json", "expectedState": "funded" },
+        { "action": "processEvent", "event": "event-refund.json", "expectedState": "refunded" }
+      ]
+    }
+  ]
+}
