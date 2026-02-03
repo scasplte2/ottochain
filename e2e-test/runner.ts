@@ -36,16 +36,66 @@ function parseArgs() {
     waitTime: '5',
     retryDelay: '5',
     maxRetries: '20',
+    parallel: 'true',
   };
 
   for (let i = 0; i < args.length; i++) {
-    if (args[i].startsWith('--') && i + 1 < args.length) {
+    if (args[i] === '--sequential') {
+      opts.parallel = 'false';
+    } else if (args[i].startsWith('--') && i + 1 < args.length) {
       opts[args[i].slice(2)] = args[i + 1];
       i++;
     }
   }
 
   return opts;
+}
+
+// ---------------------------------------------------------------------------
+// Buffered logger — captures output per flow to avoid interleaved output
+// ---------------------------------------------------------------------------
+
+class FlowLogger {
+  private lines: string[] = [];
+  private currentLine = '';
+  public readonly tag: string;
+
+  constructor(tag: string) {
+    this.tag = tag;
+  }
+
+  write(text: string): void {
+    this.currentLine += text;
+    if (text.includes('\n')) {
+      const parts = this.currentLine.split('\n');
+      // All but the last part are complete lines
+      for (let i = 0; i < parts.length - 1; i++) {
+        this.lines.push(parts[i]);
+      }
+      this.currentLine = parts[parts.length - 1];
+    }
+  }
+
+  log(...args: unknown[]): void {
+    const text = args.map(String).join(' ');
+    if (this.currentLine) {
+      this.lines.push(this.currentLine + text);
+      this.currentLine = '';
+    } else {
+      this.lines.push(text);
+    }
+  }
+
+  flush(): void {
+    if (this.currentLine) {
+      this.lines.push(this.currentLine);
+      this.currentLine = '';
+    }
+    if (this.lines.length > 0) {
+      console.log(this.lines.join('\n'));
+      this.lines = [];
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -173,29 +223,31 @@ async function waitForMl0Confirmation(
   predicate: (data: unknown) => boolean,
   maxRetries: number,
   retryDelayMs: number,
-  label: string
+  label: string,
+  log?: FlowLogger
 ): Promise<void> {
   const url = `${ml0BaseUrl}/data-application/v1/${entityPath}`;
   const client = new HttpClient(url);
-  process.stdout.write(`\n      ⏳ ML0 confirm ${label}`);
+  const w = log ? (s: string) => log.write(s) : (s: string) => process.stdout.write(s);
+  w(`\n      ⏳ ML0 confirm ${label}`);
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const data = await client.get<unknown>('');
       if (predicate(data)) {
-        process.stdout.write(' ✓\n');
+        w(' ✓\n');
         return;
       }
     } catch {
       // Entity may not exist yet — continue polling
     }
-    process.stdout.write('.');
+    w('.');
     if (attempt < maxRetries) {
       await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
     }
   }
 
-  process.stdout.write(' ✗\n');
+  w(' ✗\n');
   throw new Error(
     `ML0 confirmation timed out for ${label} at ${url} after ${maxRetries} attempts`
   );
@@ -215,12 +267,14 @@ async function waitForDl1Sync(
   expectedSeqNum: number | null,
   maxRetries: number,
   retryDelayMs: number,
-  label: string
+  label: string,
+  log?: FlowLogger
 ): Promise<void> {
   const url = `${dl1BaseUrl}/data-application/v1/onchain`;
   const client = new HttpClient(url);
   const seqLabel = expectedSeqNum === null ? 'exists' : `seq≥${expectedSeqNum}`;
-  process.stdout.write(`      ⏳ DL1 sync ${fiberId.slice(0, 8)}… (${seqLabel})`);
+  const w = log ? (s: string) => log.write(s) : (s: string) => process.stdout.write(s);
+  w(`      ⏳ DL1 sync ${fiberId.slice(0, 8)}… (${seqLabel})`);
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -232,12 +286,11 @@ async function waitForDl1Sync(
         const commit = onChain.fiberCommits[fiberId];
         if (commit) {
           if (expectedSeqNum === null) {
-            // Create step — just need the fiber to exist in DL1's OnChain
-            process.stdout.write(' ✓\n');
+            w(' ✓\n');
             return;
           }
           if (commit.sequenceNumber !== undefined && commit.sequenceNumber >= expectedSeqNum) {
-            process.stdout.write(' ✓\n');
+            w(' ✓\n');
             return;
           }
         }
@@ -245,13 +298,13 @@ async function waitForDl1Sync(
     } catch {
       // DL1 may not be ready yet — continue polling
     }
-    process.stdout.write('.');
+    w('.');
     if (attempt < maxRetries) {
       await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
     }
   }
 
-  process.stdout.write(' ✗\n');
+  w(' ✗\n');
   throw new Error(
     `DL1 sync timed out for ${label} at ${url} after ${maxRetries} attempts ` +
       `(waiting for fiberId=${fiberId} seqNum=${expectedSeqNum ?? 'exists'})`
@@ -332,8 +385,11 @@ async function runFlow(
   dl1Urls: string[],
   maxRetries: number,
   retryDelayMs: number,
-  waitTimeMs: number
+  waitTimeMs: number,
+  log?: FlowLogger
 ): Promise<{ passed: boolean; error?: string; failedStep?: number }> {
+  const w = log ? (s: string) => log.write(s) : (s: string) => process.stdout.write(s);
+  const l = log ? (...a: unknown[]) => log.log(...a) : (...a: unknown[]) => console.log(...a);
   const session = {
     cid: crypto.randomUUID(),
     oracleFiberId: null as string | null,
@@ -342,7 +398,7 @@ async function runFlow(
   for (let i = 0; i < flow.steps.length; i++) {
     const step = flow.steps[i];
     const stepLabel = `[Step ${i + 1}/${flow.steps.length}]`;
-    process.stdout.write(`  ${stepLabel} ${step.action}...`);
+    w(`  ${stepLabel} ${step.action}...`);
 
     try {
       let generator: GeneratorFn;
@@ -527,7 +583,7 @@ async function runFlow(
           if (sendAttempt >= maxRetries || !errMsg.includes('400')) {
             throw sendErr;
           }
-          process.stdout.write(` (retry ${sendAttempt}/${maxRetries})...`);
+          w(` (retry ${sendAttempt}/${maxRetries})...`);
           await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
 
           // Re-generate the message so the next attempt has a fresh content hash.
@@ -572,7 +628,8 @@ async function runFlow(
         },
         maxRetries,
         retryDelayMs,
-        `${step.action} on ${activeCid}`
+        `${step.action} on ${activeCid}`,
+        log
       );
 
       // Wait for DL1 OnChain state to catch up with ML0.
@@ -601,7 +658,8 @@ async function runFlow(
           expectedSeqNum,
           maxRetries,
           retryDelayMs,
-          `${step.action} DL1 sync for ${activeCid}`
+          `${step.action} DL1 sync for ${activeCid}`,
+          log
         );
       }
 
@@ -621,9 +679,9 @@ async function runFlow(
         ml0Urls
       );
 
-      console.log(' \x1b[32mOK\x1b[0m');
+      l(' \x1b[32mOK\x1b[0m');
     } catch (error) {
-      console.log(' \x1b[31mFAIL\x1b[0m');
+      l(' \x1b[31mFAIL\x1b[0m');
       return {
         passed: false,
         error: (error as Error).message,
@@ -639,10 +697,22 @@ async function runFlow(
 // Main
 // ---------------------------------------------------------------------------
 
+type FlowResult = {
+  example: string;
+  flow: string;
+  steps: number;
+  passed: boolean;
+  error?: string;
+  failedStep?: number;
+  durationMs: number;
+};
+
 async function main() {
   const opts = parseArgs();
+  const parallel = opts.parallel !== 'false';
 
-  console.log('\x1b[36m=== Ottochain E2E Test Runner ===\x1b[0m\n');
+  console.log('\x1b[36m=== Ottochain E2E Test Runner ===\x1b[0m');
+  console.log(`Mode: ${parallel ? 'parallel' : 'sequential'}\n`);
 
   // Setup environment
   const env = getMetagraphEnv(opts.target);
@@ -667,26 +737,84 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(
-    `Found ${examples.length} example(s): ${examples.map((e) => e.dir).join(', ')}\n`
-  );
-
-  // Run all flows
-  const results: Array<{
-    example: string;
-    flow: string;
-    steps: number;
-    passed: boolean;
-    error?: string;
-    failedStep?: number;
-  }> = [];
-
+  // Collect all (example, flow) pairs
+  const flowPairs: Array<{ example: Example; flow: TestFlow }> = [];
   for (const example of examples) {
     for (const flow of example.testFlows) {
+      flowPairs.push({ example, flow });
+    }
+  }
+
+  console.log(
+    `Found ${examples.length} example(s), ${flowPairs.length} flow(s): ${examples.map((e) => e.dir).join(', ')}\n`
+  );
+
+  const startTime = Date.now();
+  let results: FlowResult[];
+
+  if (parallel) {
+    // -----------------------------------------------------------------------
+    // Parallel mode: run all flows concurrently with buffered output
+    // -----------------------------------------------------------------------
+    console.log(`Launching ${flowPairs.length} flows in parallel…\n`);
+
+    const promises = flowPairs.map(async ({ example, flow }) => {
+      const tag = `${example.dir}/${flow.name}`;
+      const logger = new FlowLogger(tag);
+      logger.log(
+        `\x1b[36m[${example.dir}]\x1b[0m Running: ${flow.name} (${flow.steps.length} steps)`
+      );
+
+      const flowStart = Date.now();
+      const result = await runFlow(
+        example,
+        flow,
+        env,
+        wallets,
+        ml0Urls,
+        ml0Env,
+        dl1Urls,
+        maxRetries,
+        retryDelayMs,
+        waitTimeMs,
+        logger
+      );
+      const durationMs = Date.now() - flowStart;
+
+      if (result.passed) {
+        logger.log(`  \x1b[32mPASS: ${flow.name}\x1b[0m (${(durationMs / 1000).toFixed(1)}s)`);
+      } else {
+        logger.log(
+          `  \x1b[31mFAIL: ${flow.name}\x1b[0m (step ${result.failedStep}, ${(durationMs / 1000).toFixed(1)}s)`
+        );
+        logger.log(`  Error: ${result.error}`);
+      }
+
+      // Flush buffered output as a single block (avoids interleaving)
+      logger.flush();
+
+      return {
+        example: example.dir,
+        flow: flow.name,
+        steps: flow.steps.length,
+        durationMs,
+        ...result,
+      } satisfies FlowResult;
+    });
+
+    results = await Promise.all(promises);
+  } else {
+    // -----------------------------------------------------------------------
+    // Sequential mode: same as original behavior (no buffering needed)
+    // -----------------------------------------------------------------------
+    results = [];
+
+    for (const { example, flow } of flowPairs) {
       console.log(
         `\x1b[36m[${example.dir}]\x1b[0m Running: ${flow.name} (${flow.steps.length} steps)`
       );
 
+      const flowStart = Date.now();
       const result = await runFlow(
         example,
         flow,
@@ -699,16 +827,18 @@ async function main() {
         retryDelayMs,
         waitTimeMs
       );
+      const durationMs = Date.now() - flowStart;
 
       results.push({
         example: example.dir,
         flow: flow.name,
         steps: flow.steps.length,
+        durationMs,
         ...result,
       });
 
       if (result.passed) {
-        console.log(`  \x1b[32mPASS: ${flow.name}\x1b[0m\n`);
+        console.log(`  \x1b[32mPASS: ${flow.name}\x1b[0m (${(durationMs / 1000).toFixed(1)}s)\n`);
       } else {
         console.log(
           `  \x1b[31mFAIL: ${flow.name}\x1b[0m (step ${result.failedStep})`
@@ -718,12 +848,16 @@ async function main() {
     }
   }
 
+  const totalDurationMs = Date.now() - startTime;
+
   // Summary
   const passed = results.filter((r) => r.passed).length;
   const failed = results.filter((r) => !r.passed).length;
   const total = results.length;
 
-  console.log('\x1b[36m=== Results ===\x1b[0m');
+  console.log('\n\x1b[36m=== Results ===\x1b[0m');
+  console.log(`Mode:   ${parallel ? 'parallel' : 'sequential'}`);
+  console.log(`Total:  ${(totalDurationMs / 1000).toFixed(1)}s`);
   console.log(`Passed: ${passed}/${total}`);
   console.log(`Failed: ${failed}/${total}`);
 
