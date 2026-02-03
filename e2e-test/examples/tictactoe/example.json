@@ -31,7 +31,7 @@
       "name": "X wins with top row",
       "description": "Play a game where X wins by completing the top row (cells 0, 1, 2)",
       "steps": [
-        { "action": "createOracle", "definition": "script-definition.json" },
+        { "action": "createScript", "definition": "script-definition.json" },
         { "action": "createStateMachine", "definition": "sm-definition.ts", "initialData": "sm-initial-data.ts" },
         { "action": "processEvent", "event": "event-start-game.ts" },
         { "action": "processEvent", "event": "event-move.ts", "eventData": { "player": "X", "cell": 0 } },
@@ -45,7 +45,7 @@
       "name": "O wins with left column",
       "description": "Play a game where O wins by completing the left column (cells 0, 3, 6)",
       "steps": [
-        { "action": "createOracle", "definition": "script-definition.json" },
+        { "action": "createScript", "definition": "script-definition.json" },
         { "action": "createStateMachine", "definition": "sm-definition.ts", "initialData": "sm-initial-data.ts" },
         { "action": "processEvent", "event": "event-start-game.ts" },
         { "action": "processEvent", "event": "event-move.ts", "eventData": { "player": "X", "cell": 1 } },
@@ -60,7 +60,7 @@
       "name": "Draw game",
       "description": "Play a game that ends in a draw",
       "steps": [
-        { "action": "createOracle", "definition": "script-definition.json" },
+        { "action": "createScript", "definition": "script-definition.json" },
         { "action": "createStateMachine", "definition": "sm-definition.ts", "initialData": "sm-initial-data.ts" },
         { "action": "processEvent", "event": "event-start-game.ts" },
         { "action": "processEvent", "event": "event-move.ts", "eventData": { "player": "X", "cell": 0 } },

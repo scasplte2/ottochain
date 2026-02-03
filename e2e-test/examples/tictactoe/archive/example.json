@@ -69,7 +69,7 @@
       "name": "X wins with top row",
       "description": "Play a game where X wins by completing the top row (cells 0, 1, 2)",
       "steps": [
-        { "action": "createOracle", "definition": "script-definition.json" },
+        { "action": "createScript", "definition": "script-definition.json" },
         { "action": "createStateMachine", "definition": "sm-definition.json", "initialData": "sm-initial-data.json" },
         { "action": "processEvent", "event": "event-start-game.json" },
         { "action": "processEvent", "event": "event-move.json", "eventData": { "player": "X", "cell": 0 } },

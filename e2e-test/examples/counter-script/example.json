@@ -28,7 +28,7 @@
       "name": "Basic counter operations",
       "description": "Create oracle, increment twice, decrement once, reset",
       "steps": [
-        { "action": "createOracle", "definition": "definition.json" },
+        { "action": "createScript", "definition": "definition.json" },
         { "action": "invoke", "method": "increment" },
         { "action": "invoke", "method": "increment" },
         { "action": "invoke", "method": "decrement" },
