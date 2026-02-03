@@ -86,7 +86,7 @@ object VotingSuite extends SimpleIOSuite {
           FiberOrdinal.MinValue
         )
         startVotingProof <- fixture.registry.generateProofs(startVotingOp, Set(Alice))
-        state2    <- combiner.insert(state1, Signed(startVotingOp, startVotingProof))
+        state2           <- combiner.insert(state1, Signed(startVotingOp, startVotingProof))
 
         // End the voting
         endVotingOp = Updates.TransitionStateMachine(
@@ -96,7 +96,7 @@ object VotingSuite extends SimpleIOSuite {
           FiberOrdinal.unsafeApply(1L)
         )
         endVotingProof <- fixture.registry.generateProofs(endVotingOp, Set(Alice))
-        state3       <- combiner.insert(state2, Signed(endVotingOp, endVotingProof))
+        state3         <- combiner.insert(state2, Signed(endVotingOp, endVotingProof))
 
         // Verify final state
         finalMachine = state3.calculated.stateMachines
