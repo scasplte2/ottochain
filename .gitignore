@@ -132,3 +132,4 @@ htmlcov/
 .ipynb_checkpoints/
 poetry.lock
 .venv/
+.aider*

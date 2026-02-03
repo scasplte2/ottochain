@@ -7,7 +7,7 @@ import java.security.{KeyFactory, KeyPair}
 import cats.effect.Sync
 import cats.implicits.{toFlatMapOps, toFunctorOps}
 
-import io.constellationnetwork.security.{key, SecurityProvider}
+import io.constellationnetwork.security.{SecurityProvider, key}
 
 import org.bouncycastle.jce.ECNamedCurveTable
 import org.bouncycastle.jce.spec.ECNamedCurveParameterSpec
