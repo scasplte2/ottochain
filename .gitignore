@@ -42,6 +42,8 @@ project/project/
 node_modules/
 .npm/
 package-lock.json
+!e2e-test/package-lock.json
+!sdk/package-lock.json
 yarn.lock
 dist/
 out/

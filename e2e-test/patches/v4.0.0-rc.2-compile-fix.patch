@@ -1,0 +1,13 @@
+diff --git a/modules/node-shared/src/main/scala/io/constellationnetwork/node/shared/infrastructure/snapshot/managers/global/GlobalSnapshotStateChannelEventsProcessor.scala b/modules/node-shared/src/main/scala/io/constellationnetwork/node/shared/infrastructure/snapshot/managers/global/GlobalSnapshotStateChannelEventsProcessor.scala
+index 7f310399..ea984ca1 100644
+--- a/modules/node-shared/src/main/scala/io/constellationnetwork/node/shared/infrastructure/snapshot/managers/global/GlobalSnapshotStateChannelEventsProcessor.scala
++++ b/modules/node-shared/src/main/scala/io/constellationnetwork/node/shared/infrastructure/snapshot/managers/global/GlobalSnapshotStateChannelEventsProcessor.scala
+@@ -59,7 +59,7 @@ object GlobalSnapshotStateChannelEventsProcessor {
+     currencySnapshotContextFns: CurrencySnapshotContextFunctions[F],
+     jsonBrotliBinarySerializer: JsonBrotliBinarySerializer[F],
+     feeCalculator: FeeCalculator[F]
+-  ) =
++  ): GlobalSnapshotStateChannelEventsProcessor[F] =
+     new GlobalSnapshotStateChannelEventsProcessor[F] {
+       private val logger = Slf4jLogger.getLoggerFromClass[F](GlobalSnapshotStateChannelEventsProcessor.getClass)
+ 

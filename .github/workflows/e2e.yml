@@ -1,0 +1,105 @@
+name: E2E Tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  TESSELLATION_VERSION: "4.0.0-rc.2"
+
+jobs:
+  e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'sbt'
+
+      - name: Set up sbt
+        uses: sbt/setup-sbt@v1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      - name: Clone tessellation
+        run: |
+          git clone --depth 1 --branch "v${TESSELLATION_VERSION}" \
+            https://github.com/Constellation-Labs/tessellation.git tessellation
+
+      - name: Apply tessellation compile fix
+        working-directory: tessellation
+        run: git apply ../e2e-test/patches/v4.0.0-rc.2-compile-fix.patch
+
+      - name: Start cluster
+        working-directory: tessellation
+        run: |
+          export TESSELLATION_VERSION="${TESSELLATION_VERSION}"
+          just up --metagraph="${GITHUB_WORKSPACE}" --dl1 --data
+
+      - name: Wait for cluster health
+        run: |
+          wait_for_node() {
+            local name=$1 port=$2
+            for i in $(seq 1 60); do
+              if curl -sf "http://localhost:${port}/node/info" 2>/dev/null | grep -q '"state":"Ready"'; then
+                echo "  $name (port $port): Ready"
+                return 0
+              fi
+              sleep 2
+            done
+            echo "  $name (port $port): TIMEOUT" && return 1
+          }
+          
+          echo "Waiting for nodes..."
+          wait_for_node "GL0" 9000
+          wait_for_node "ML0" 9200
+          wait_for_node "DL1-0" 9400
+          wait_for_node "DL1-1" 9410
+          wait_for_node "DL1-2" 9420
+
+      - name: Build SDK
+        working-directory: sdk
+        run: |
+          npm install
+          npm run build
+
+      - name: Install E2E dependencies
+        working-directory: e2e-test
+        run: npm ci
+
+      - name: Run E2E tests
+        working-directory: e2e-test
+        run: npm test
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          echo "=== GL0 ===" >> $GITHUB_STEP_SUMMARY
+          docker logs gl0-0 --tail 50 2>&1 >> $GITHUB_STEP_SUMMARY || true
+          echo "=== ML0 ===" >> $GITHUB_STEP_SUMMARY
+          docker logs ml0-0 --tail 50 2>&1 >> $GITHUB_STEP_SUMMARY || true
+          echo "=== DL1-0 ===" >> $GITHUB_STEP_SUMMARY
+          docker logs dl1-0 --tail 50 2>&1 >> $GITHUB_STEP_SUMMARY || true
+
+      - name: Cleanup
+        if: always()
+        working-directory: tessellation
+        run: just down || docker compose down -v || true
