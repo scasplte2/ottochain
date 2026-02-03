@@ -82,7 +82,7 @@ object VotingSuite extends SimpleIOSuite {
         startVotingOp = Updates.TransitionStateMachine(
           fiberId,
           "startVoting",
-          MapValue(Map("candidates" -> ArrayValue(Array(StrValue("Alice"), StrValue("Bob"))))),
+          MapValue(Map("candidates" -> ArrayValue(List(StrValue("Alice"), StrValue("Bob"))))),
           FiberOrdinal.MinValue
         )
         startVotingProof <- fixture.registry.generateProofs(startVotingOp, Set(Alice))
