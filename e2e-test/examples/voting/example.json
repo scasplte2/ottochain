@@ -5,16 +5,16 @@
   "definition": "definition.json",
   "initialData": "initial-data.json",
   "events": [
-    { "name": "startVoting", "file": "event-start-voting.json", "from": "pending", "to": "voting" },
-    { "name": "endVoting", "file": "event-end-voting.json", "from": "voting", "to": "completed" }
+    { "name": "startVoting", "file": "event-start-voting.ts", "from": "pending", "to": "voting" },
+    { "name": "endVoting", "file": "event-end-voting.ts", "from": "voting", "to": "completed" }
   ],
   "testFlows": [
     {
       "name": "Happy path - complete voting",
       "steps": [
         { "action": "create", "definition": "definition.json", "initialData": "initial-data.json" },
-        { "action": "processEvent", "event": "event-start-voting.json", "expectedState": "voting" },
-        { "action": "processEvent", "event": "event-end-voting.json", "expectedState": "completed" }
+        { "action": "processEvent", "event": "event-start-voting.ts", "expectedState": "voting" },
+        { "action": "processEvent", "event": "event-end-voting.ts", "expectedState": "completed" }
       ]
     }
   ]
