@@ -413,8 +413,11 @@ async function runFlow(
       };
 
       // Determine which fiber this step targets and fetch its current sequence number
+      // Script actions (createScript, invokeScript, invoke) use the /oracles/ endpoint
       const isOracleStep =
-        (step.action as string).includes('Oracle') || step.action === 'invoke';
+        (step.action as string).includes('Oracle') ||
+        (step.action as string).includes('Script') ||
+        step.action === 'invoke';
       const isCreateStep =
         step.action === 'create' ||
         step.action === 'createStateMachine' ||
