@@ -55,7 +55,7 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         cid  <- IO.randomUUID
         prog <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = cid,
           scriptProgram = prog,
           initialState = None,
@@ -68,7 +68,7 @@ object CalculatorOracleSuite extends SimpleIOSuite {
           Signed(createOracle, createProof)
         )
 
-        invokeOracle = Updates.InvokeScriptOracle(
+        invokeOracle = Updates.InvokeScript(
           fiberId = cid,
           method = "add",
           args = MapValue(Map("a" -> IntValue(10), "b" -> IntValue(5))),
@@ -100,7 +100,7 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         cid  <- IO.randomUUID
         prog <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = cid,
           scriptProgram = prog,
           initialState = None,
@@ -113,7 +113,7 @@ object CalculatorOracleSuite extends SimpleIOSuite {
           Signed(createOracle, createProof)
         )
 
-        invokeOracle = Updates.InvokeScriptOracle(
+        invokeOracle = Updates.InvokeScript(
           fiberId = cid,
           method = "subtract",
           args = MapValue(Map("a" -> IntValue(20), "b" -> IntValue(8))),
@@ -144,7 +144,7 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         cid  <- IO.randomUUID
         prog <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = cid,
           scriptProgram = prog,
           initialState = None,
@@ -157,7 +157,7 @@ object CalculatorOracleSuite extends SimpleIOSuite {
           Signed(createOracle, createProof)
         )
 
-        invokeOracle = Updates.InvokeScriptOracle(
+        invokeOracle = Updates.InvokeScript(
           fiberId = cid,
           method = "multiply",
           args = MapValue(Map("a" -> IntValue(7), "b" -> IntValue(6))),
@@ -188,7 +188,7 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         cid  <- IO.randomUUID
         prog <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = cid,
           scriptProgram = prog,
           initialState = None,
@@ -201,7 +201,7 @@ object CalculatorOracleSuite extends SimpleIOSuite {
           Signed(createOracle, createProof)
         )
 
-        invokeOracle = Updates.InvokeScriptOracle(
+        invokeOracle = Updates.InvokeScript(
           fiberId = cid,
           method = "divide",
           args = MapValue(Map("a" -> IntValue(100), "b" -> IntValue(4))),
@@ -232,7 +232,7 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         cid  <- IO.randomUUID
         prog <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = cid,
           scriptProgram = prog,
           initialState = None,
@@ -245,7 +245,7 @@ object CalculatorOracleSuite extends SimpleIOSuite {
           Signed(createOracle, createProof)
         )
 
-        invokeOracle = Updates.InvokeScriptOracle(
+        invokeOracle = Updates.InvokeScript(
           fiberId = cid,
           method = "unknownMethod",
           args = MapValue(Map("a" -> IntValue(1), "b" -> IntValue(2))),
@@ -276,7 +276,7 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         cid  <- IO.randomUUID
         prog <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = cid,
           scriptProgram = prog,
           initialState = None,
@@ -290,7 +290,7 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         )
 
         // First invocation: add
-        invoke1 = Updates.InvokeScriptOracle(
+        invoke1 = Updates.InvokeScript(
           cid,
           "add",
           MapValue(Map("a" -> IntValue(1), "b" -> IntValue(2))),
@@ -300,21 +300,21 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         state1 <- combiner.insert(state0, Signed(invoke1, proof1))
 
         // Second invocation: multiply
-        invoke2 = Updates.InvokeScriptOracle(
+        invoke2 = Updates.InvokeScript(
           cid,
           "multiply",
           MapValue(Map("a" -> IntValue(3), "b" -> IntValue(4))),
-          state1.calculated.scriptOracles(cid).sequenceNumber
+          state1.calculated.scripts(cid).sequenceNumber
         )
         proof2 <- registry.generateProofs(invoke2, Set(Alice))
         state2 <- combiner.insert(state1, Signed(invoke2, proof2))
 
         // Third invocation: subtract
-        invoke3 = Updates.InvokeScriptOracle(
+        invoke3 = Updates.InvokeScript(
           cid,
           "subtract",
           MapValue(Map("a" -> IntValue(10), "b" -> IntValue(5))),
-          state2.calculated.scriptOracles(cid).sequenceNumber
+          state2.calculated.scripts(cid).sequenceNumber
         )
         proof3 <- registry.generateProofs(invoke3, Set(Alice))
         state3 <- combiner.insert(state2, Signed(invoke3, proof3))
@@ -339,7 +339,7 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         cid  <- IO.randomUUID
         prog <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = cid,
           scriptProgram = prog,
           initialState = None,
@@ -353,7 +353,7 @@ object CalculatorOracleSuite extends SimpleIOSuite {
           Signed(createOracle, createProof)
         )
 
-        invokeOracle = Updates.InvokeScriptOracle(
+        invokeOracle = Updates.InvokeScript(
           fiberId = cid,
           method = "add",
           args = MapValue(Map("a" -> IntValue(5), "b" -> IntValue(3))),

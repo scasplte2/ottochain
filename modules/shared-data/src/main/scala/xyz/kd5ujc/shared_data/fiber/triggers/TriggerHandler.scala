@@ -18,7 +18,7 @@ import xyz.kd5ujc.schema.fiber.FiberLogEntry.{EventReceipt, OracleInvocation}
 import xyz.kd5ujc.schema.fiber._
 import xyz.kd5ujc.schema.{CalculatedState, Records}
 import xyz.kd5ujc.shared_data.fiber.core._
-import xyz.kd5ujc.shared_data.fiber.evaluation.{FiberEvaluator, OracleProcessor}
+import xyz.kd5ujc.shared_data.fiber.evaluation.{FiberEvaluator, ScriptProcessor}
 import xyz.kd5ujc.shared_data.syntax.all._
 
 /**
@@ -27,7 +27,7 @@ import xyz.kd5ujc.shared_data.syntax.all._
  *
  * Dispatches to appropriate handler based on fiber type:
  * - StateMachineFiberRecord: delegates to FiberEvaluator for guard/effect evaluation
- * - ScriptOracleFiberRecord: evaluates script directly with gas metering
+ * - ScriptFiberRecord: evaluates script directly with gas metering
  */
 trait TriggerHandler[G[_]] {
 
@@ -51,7 +51,7 @@ object TriggerHandler {
           new StateMachineTriggerHandler[F, G](state)
             .handle(trigger, fiber, state)
 
-        case _: Records.ScriptOracleFiberRecord =>
+        case _: Records.ScriptFiberRecord =>
           new OracleTriggerHandler[F, G]()
             .handle(trigger, fiber, state)
       }
@@ -72,7 +72,7 @@ class StateMachineTriggerHandler[F[_]: Async: SecurityProvider, G[_]: Monad](
       case other =>
         (TriggerHandlerResult.Failed(
           FailureReason
-            .FiberInputMismatch(other.fiberId, FiberKind.ScriptOracle, InputKind.Transition)
+            .FiberInputMismatch(other.fiberId, FiberKind.Script, InputKind.Transition)
         ): TriggerHandlerResult).pure[G]
     }
 
@@ -139,7 +139,7 @@ class OracleTriggerHandler[F[_]: Async, G[_]: Monad]()(implicit
     state:   CalculatedState
   ): G[TriggerHandlerResult] =
     fiber match {
-      case oracle: Records.ScriptOracleFiberRecord =>
+      case oracle: Records.ScriptFiberRecord =>
         handleOracle(trigger, oracle, state)
       case other =>
         (TriggerHandlerResult.Failed(
@@ -149,7 +149,7 @@ class OracleTriggerHandler[F[_]: Async, G[_]: Monad]()(implicit
 
   private def handleOracle(
     trigger: FiberTrigger,
-    oracle:  Records.ScriptOracleFiberRecord,
+    oracle:  Records.ScriptFiberRecord,
     state:   CalculatedState
   ): G[TriggerHandlerResult] = {
     type OracleET[A] = EitherT[G, TriggerHandlerResult, A]
@@ -165,7 +165,7 @@ class OracleTriggerHandler[F[_]: Async, G[_]: Monad]()(implicit
       )
 
       _ <- EitherT[G, TriggerHandlerResult, Unit](
-        OracleProcessor.validateAccess(oracle.accessControl, callerAddress, oracle.fiberId, state).liftTo[G].map {
+        ScriptProcessor.validateAccess(oracle.accessControl, callerAddress, oracle.fiberId, state).liftTo[G].map {
           case Right(_)     => Right(())
           case Left(reason) => Left(TriggerHandlerResult.Failed(reason))
         }
@@ -208,7 +208,7 @@ class OracleTriggerHandler[F[_]: Async, G[_]: Monad]()(implicit
       evaluationResult = scriptResult.value
 
       stateAndResult <- EitherT.liftF[G, TriggerHandlerResult, (Option[JsonLogicValue], JsonLogicValue)](
-        OracleProcessor.extractStateAndResult(evaluationResult).liftTo[G]
+        ScriptProcessor.extractStateAndResult(evaluationResult).liftTo[G]
       )
       (newStateData, returnValue) = stateAndResult
 

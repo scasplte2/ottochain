@@ -12,7 +12,7 @@ import derevo.derive
 @derive(encoder, decoder)
 case class CalculatedState(
   stateMachines: SortedMap[UUID, Records.StateMachineFiberRecord],
-  scriptOracles: SortedMap[UUID, Records.ScriptOracleFiberRecord]
+  scripts:       SortedMap[UUID, Records.ScriptFiberRecord]
 ) extends DataCalculatedState
 
 object CalculatedState {

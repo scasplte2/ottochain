@@ -1,6 +1,6 @@
 # Ottochain Terminal
 
-Interactive CLI for testing Ottochain state machines and script oracles. This terminal provides a comprehensive testing framework with transaction generation, signing, sending, and validation.
+Interactive CLI for testing Ottochain state machines and scripts. This terminal provides a comprehensive testing framework with transaction generation, signing, sending, and validation.
 
 ## Table of Contents
 
@@ -21,7 +21,7 @@ Interactive CLI for testing Ottochain state machines and script oracles. This te
 The Ottochain Terminal provides a command-line interface for:
 
 - **State Machine Management**: Create, process events, and archive state machine fibers
-- **Script Oracle Management**: Create and invoke script oracles
+- **Script Management**: Create and invoke scripts
 - **Full Testing Cycle**: Fetch initial state, send transactions, and validate final state
 - **CI/CD Ready**: Subcommand-based architecture suitable for automated testing
 
@@ -128,7 +128,7 @@ node terminal.js sm archive \
 
 #### `oracle create` (alias: `or create`)
 
-Create a new script oracle.
+Create a new script.
 
 **Required Options:**
 - `--oracle <path>`: Path to oracle definition JSON file
@@ -141,7 +141,7 @@ node terminal.js oracle create \
 
 #### `oracle invoke` (alias: `or invoke`)
 
-Invoke a method on an existing script oracle.
+Invoke a method on an existing script.
 
 **Required Options:**
 - `--method <name>`: Method name to invoke

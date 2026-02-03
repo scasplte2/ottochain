@@ -18,7 +18,7 @@ import xyz.kd5ujc.schema._
 import xyz.kd5ujc.schema.fiber.{FiberOrdinal, _}
 import xyz.kd5ujc.shared_data.syntax.all._
 
-object OracleProcessor {
+object ScriptProcessor {
 
   def extractStateAndResult[F[_]: Async](
     evaluationResult: JsonLogicValue
@@ -40,16 +40,16 @@ object OracleProcessor {
         (other.some, other).pure[F]
     }
 
-  def createScriptOracle[F[_]: Async: SecurityProvider](
+  def createScript[F[_]: Async: SecurityProvider](
     current:        DataState[OnChain, CalculatedState],
-    update:         Signed[Updates.CreateScriptOracle],
+    update:         Signed[Updates.CreateScript],
     currentOrdinal: SnapshotOrdinal
   ): F[DataState[OnChain, CalculatedState]] = for {
     owners <- update.proofs.toList.traverse(_.id.toAddress).map(Set.from)
 
     stateDataHashOpt <- update.initialState.traverse[F, Hash](_.computeDigest)
 
-    oracleRecord = Records.ScriptOracleFiberRecord(
+    oracleRecord = Records.ScriptFiberRecord(
       fiberId = update.fiberId,
       creationOrdinal = currentOrdinal,
       latestUpdateOrdinal = currentOrdinal,

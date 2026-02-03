@@ -18,13 +18,13 @@ import xyz.kd5ujc.shared_data.lifecycle.validate.ValidationResult
 import xyz.kd5ujc.shared_data.syntax.all._
 
 /**
- * Validation rules specific to script oracle operations.
+ * Validation rules specific to script operations.
  *
  * Organized by validation layer:
  * - L1: Structural validations that can run at Data-L1 with only OnChain state
  * - L0: Contextual validations that require CalculatedState and/or signature proofs
  */
-object OracleRules {
+object ScriptRules {
 
   // ============================================================================
   // L1 Rules - Structural validations (Data-L1 layer, OnChain state only)
@@ -54,7 +54,7 @@ object OracleRules {
       state:    CalculatedState
     ): F[ValidationResult] = (for {
       oracle <- EitherT.fromOption[F](
-        state.scriptOracles.get(oracleId),
+        state.scripts.get(oracleId),
         Errors.OracleNotFound(oracleId): DataApplicationValidationError
       )
       callerAddresses <- EitherT.liftF(proofs.toList.traverse(_.id.toAddress))
@@ -74,7 +74,7 @@ object OracleRules {
       oracleId: UUID,
       state:    CalculatedState
     ): F[ValidationResult] =
-      state.scriptOracles
+      state.scripts
         .get(oracleId)
         .fold(
           (Errors.OracleNotFound(oracleId): DataApplicationValidationError).invalidNec[Unit].pure[F]

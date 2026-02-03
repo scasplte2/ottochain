@@ -43,7 +43,7 @@ object Records {
   ) extends FiberRecord
 
   @derive(encoder, decoder)
-  final case class ScriptOracleFiberRecord(
+  final case class ScriptFiberRecord(
     fiberId:             UUID,
     creationOrdinal:     SnapshotOrdinal,
     latestUpdateOrdinal: SnapshotOrdinal,

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Otto Agent-Bridge is a microservice that enables an LLM agent (Otto the Otter) to autonomously play tic-tac-toe against itself using Ottochain's state machine and script oracle infrastructure.
+The Otto Agent-Bridge is a microservice that enables an LLM agent (Otto the Otter) to autonomously play tic-tac-toe against itself using Ottochain's state machine and script infrastructure.
 
 ## System Architecture
 
@@ -37,7 +37,7 @@ The Otto Agent-Bridge is a microservice that enables an LLM agent (Otto the Otte
 │  (Your existing L1/L0 nodes)                 │
 │                                              │
 │  ┌────────────────────────────────────────┐ │
-│  │  Script Oracle (Game Engine)           │ │
+│  │  Script (Game Engine)           │ │
 │  │  - Board state (9 cells)               │ │
 │  │  - Player addresses                    │ │
 │  │  - Move validation                     │ │
@@ -102,7 +102,7 @@ The Otto Agent-Bridge is a microservice that enables an LLM agent (Otto the Otte
   - Inject tool definitions into system prompt
   - Parse tool calls from LLM responses
 
-### 4. Script Oracle (Game Engine)
+### 4. Script (Game Engine)
 
 **Role**: Deterministic tic-tac-toe game engine
 

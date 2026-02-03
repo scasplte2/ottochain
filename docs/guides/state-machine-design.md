@@ -37,7 +37,7 @@ When your guards and effects execute, they have access to a context object with 
   },
   "parent": {...},            // Parent machine context (if any)
   "children": {...},          // Child machines (if any)
-  "scriptOracles": {...}      // Dependent oracles (if any)
+  "scripts": {...}      // Dependent oracles (if any)
 }
 ```
 

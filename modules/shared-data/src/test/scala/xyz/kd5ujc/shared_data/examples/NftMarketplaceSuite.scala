@@ -93,7 +93,7 @@ object NftMarketplaceSuite extends SimpleIOSuite {
         royaltyOracleData = MapValue(Map("totalRoyalties" -> IntValue(0)))
         royaltyHash <- (royaltyOracleData: JsonLogicValue).computeDigest
 
-        royaltyOracle = Records.ScriptOracleFiberRecord(
+        royaltyOracle = Records.ScriptFiberRecord(
           fiberId = royaltyOracleId,
           creationOrdinal = ordinal,
           latestUpdateOrdinal = ordinal,

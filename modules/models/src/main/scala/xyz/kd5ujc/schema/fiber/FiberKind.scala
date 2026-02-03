@@ -6,7 +6,7 @@ sealed trait FiberKind extends EnumEntry
 
 object FiberKind extends Enum[FiberKind] with CirceEnum[FiberKind] {
   case object StateMachine extends FiberKind
-  case object ScriptOracle extends FiberKind
+  case object Script extends FiberKind
 
   val values: IndexedSeq[FiberKind] = findValues
 }

@@ -65,7 +65,7 @@ object ReservedKeys {
   val MACHINES = "machines"
   val PARENT = "parent"
   val CHILDREN = "children"
-  val SCRIPT_ORACLES = "scriptOracles"
+  val SCRIPT_ORACLES = "scripts"
 
   // Emitted Event Keys - Used in parseEmittedEvent for user-defined event emission
   val NAME = "name"

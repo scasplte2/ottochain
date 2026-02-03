@@ -28,7 +28,7 @@ import xyz.kd5ujc.schema.{CalculatedState, Records}
  * - parent: parent fiber data (if any)
  * - children: child fiber data
  * - machines: dependent machine states
- * - scriptOracles: dependent oracle states
+ * - scripts: dependent oracle states
  *
  * For oracles, context includes:
  * - _method: method name
@@ -81,12 +81,12 @@ object ContextProvider {
               Async[F].raiseError(new RuntimeException("Cannot use MethodCall input with StateMachineFiberRecord"))
           }
 
-        case oracle: Records.ScriptOracleFiberRecord =>
+        case oracle: Records.ScriptFiberRecord =>
           input match {
             case _: FiberInput.MethodCall =>
               buildOracleContext(oracle, input.key, input.content)
             case _: FiberInput.Transition =>
-              Async[F].raiseError(new RuntimeException("Cannot use Transition input with ScriptOracleFiberRecord"))
+              Async[F].raiseError(new RuntimeException("Cannot use Transition input with ScriptFiberRecord"))
           }
       }
 
@@ -124,7 +124,7 @@ object ContextProvider {
       // === Oracle Context ===
 
       private def buildOracleContext(
-        oracle: Records.ScriptOracleFiberRecord,
+        oracle: Records.ScriptFiberRecord,
         method: String,
         args:   JsonLogicValue
       ): F[JsonLogicValue] =
@@ -217,7 +217,7 @@ object ContextProvider {
         )
 
       private def buildOraclesContext(dependencies: Set[UUID]): F[MapValue] =
-        resolveFibers(dependencies, calculatedState.scriptOracles.get, buildOracleSummary)
+        resolveFibers(dependencies, calculatedState.scripts.get, buildOracleSummary)
 
       // === Summary Builders (reused across contexts) ===
 
@@ -236,7 +236,7 @@ object ContextProvider {
         MapValue(fullMap)
       }
 
-      private def buildOracleSummary(oracle: Records.ScriptOracleFiberRecord): MapValue =
+      private def buildOracleSummary(oracle: Records.ScriptFiberRecord): MapValue =
         MapValue(
           Map(
             ReservedKeys.STATE           -> oracle.stateData.getOrElse(NullValue),

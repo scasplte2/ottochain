@@ -240,7 +240,7 @@ object StateCommitment {
 
 case class CalculatedState(
   fibers: Map[UUID, StateMachineFiberRecord],
-  oracles: Map[UUID, ScriptOracleFiberRecord],
+  oracles: Map[UUID, ScriptFiberRecord],
 
   // NEW: State commitment aggregation
   fiberStateRoots: Map[UUID, Hash],         // Per-fiber MPT roots
@@ -1130,7 +1130,7 @@ Hypergraph:
 
 case class DataOnChainState(
   fibers: Map[UUID, StateMachineFiberRecord],
-  oracles: Map[UUID, ScriptOracleFiberRecord],
+  oracles: Map[UUID, ScriptFiberRecord],
   lastUpdate: SnapshotOrdinal
 ) extends xyz.kd5ujc.currency.dataApplication.DataOnChainState
 

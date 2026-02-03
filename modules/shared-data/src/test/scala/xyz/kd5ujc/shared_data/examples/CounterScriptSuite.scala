@@ -59,7 +59,7 @@ object CounterOracleSuite extends SimpleIOSuite {
         cid  <- IO.randomUUID
         prog <- IO.fromEither(parser.parse(counterScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = cid,
           scriptProgram = prog,
           initialState = Some(counterInitialState),
@@ -91,7 +91,7 @@ object CounterOracleSuite extends SimpleIOSuite {
         cid  <- IO.randomUUID
         prog <- IO.fromEither(parser.parse(counterScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = cid,
           scriptProgram = prog,
           initialState = Some(counterInitialState),
@@ -104,7 +104,7 @@ object CounterOracleSuite extends SimpleIOSuite {
           Signed(createOracle, createProof)
         )
 
-        invokeOracle = Updates.InvokeScriptOracle(
+        invokeOracle = Updates.InvokeScript(
           fiberId = cid,
           method = "increment",
           args = MapValue(Map.empty),
@@ -136,7 +136,7 @@ object CounterOracleSuite extends SimpleIOSuite {
         cid  <- IO.randomUUID
         prog <- IO.fromEither(parser.parse(counterScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = cid,
           scriptProgram = prog,
           initialState = Some(counterInitialState),
@@ -149,7 +149,7 @@ object CounterOracleSuite extends SimpleIOSuite {
           Signed(createOracle, createProof)
         )
 
-        invokeOracle = Updates.InvokeScriptOracle(
+        invokeOracle = Updates.InvokeScript(
           fiberId = cid,
           method = "decrement",
           args = MapValue(Map.empty),
@@ -184,7 +184,7 @@ object CounterOracleSuite extends SimpleIOSuite {
         // Start with non-zero initial state
         nonZeroInitial = MapValue(Map("value" -> IntValue(42)))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = cid,
           scriptProgram = prog,
           initialState = Some(nonZeroInitial),
@@ -197,7 +197,7 @@ object CounterOracleSuite extends SimpleIOSuite {
           Signed(createOracle, createProof)
         )
 
-        invokeOracle = Updates.InvokeScriptOracle(
+        invokeOracle = Updates.InvokeScript(
           fiberId = cid,
           method = "reset",
           args = MapValue(Map.empty),
@@ -229,7 +229,7 @@ object CounterOracleSuite extends SimpleIOSuite {
         cid  <- IO.randomUUID
         prog <- IO.fromEither(parser.parse(counterScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = cid,
           scriptProgram = prog,
           initialState = Some(counterInitialState),
@@ -243,18 +243,18 @@ object CounterOracleSuite extends SimpleIOSuite {
         )
 
         // First increment (0 -> 1)
-        invoke1 = Updates.InvokeScriptOracle(cid, "increment", MapValue(Map.empty), FiberOrdinal.MinValue)
+        invoke1 = Updates.InvokeScript(cid, "increment", MapValue(Map.empty), FiberOrdinal.MinValue)
         proof1 <- registry.generateProofs(invoke1, Set(Alice))
         state1 <- combiner.insert(state0, Signed(invoke1, proof1))
 
         oracle1 = state1.oracleRecord(cid)
 
         // Second increment (1 -> 2)
-        invoke2 = Updates.InvokeScriptOracle(
+        invoke2 = Updates.InvokeScript(
           cid,
           "increment",
           MapValue(Map.empty),
-          state1.calculated.scriptOracles(cid).sequenceNumber
+          state1.calculated.scripts(cid).sequenceNumber
         )
         proof2 <- registry.generateProofs(invoke2, Set(Alice))
         state2 <- combiner.insert(state1, Signed(invoke2, proof2))
@@ -262,11 +262,11 @@ object CounterOracleSuite extends SimpleIOSuite {
         oracle2 = state2.oracleRecord(cid)
 
         // Third increment (2 -> 3)
-        invoke3 = Updates.InvokeScriptOracle(
+        invoke3 = Updates.InvokeScript(
           cid,
           "increment",
           MapValue(Map.empty),
-          state2.calculated.scriptOracles(cid).sequenceNumber
+          state2.calculated.scripts(cid).sequenceNumber
         )
         proof3 <- registry.generateProofs(invoke3, Set(Alice))
         state3 <- combiner.insert(state2, Signed(invoke3, proof3))
@@ -294,7 +294,7 @@ object CounterOracleSuite extends SimpleIOSuite {
         cid  <- IO.randomUUID
         prog <- IO.fromEither(parser.parse(counterScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = cid,
           scriptProgram = prog,
           initialState = Some(counterInitialState),
@@ -308,26 +308,26 @@ object CounterOracleSuite extends SimpleIOSuite {
         )
 
         // First increment (0 -> 1)
-        invoke1 = Updates.InvokeScriptOracle(cid, "increment", MapValue(Map.empty), FiberOrdinal.MinValue)
+        invoke1 = Updates.InvokeScript(cid, "increment", MapValue(Map.empty), FiberOrdinal.MinValue)
         proof1 <- registry.generateProofs(invoke1, Set(Alice))
         state1 <- combiner.insert(state0, Signed(invoke1, proof1))
 
         // Second increment (1 -> 2)
-        invoke2 = Updates.InvokeScriptOracle(
+        invoke2 = Updates.InvokeScript(
           cid,
           "increment",
           MapValue(Map.empty),
-          state1.calculated.scriptOracles(cid).sequenceNumber
+          state1.calculated.scripts(cid).sequenceNumber
         )
         proof2 <- registry.generateProofs(invoke2, Set(Alice))
         state2 <- combiner.insert(state1, Signed(invoke2, proof2))
 
         // Decrement (2 -> 1)
-        invoke3 = Updates.InvokeScriptOracle(
+        invoke3 = Updates.InvokeScript(
           cid,
           "decrement",
           MapValue(Map.empty),
-          state2.calculated.scriptOracles(cid).sequenceNumber
+          state2.calculated.scripts(cid).sequenceNumber
         )
         proof3 <- registry.generateProofs(invoke3, Set(Alice))
         state3 <- combiner.insert(state2, Signed(invoke3, proof3))
@@ -357,7 +357,7 @@ object CounterOracleSuite extends SimpleIOSuite {
         // Start with non-zero value
         initialState = MapValue(Map("value" -> IntValue(5)))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = cid,
           scriptProgram = prog,
           initialState = Some(initialState),
@@ -370,7 +370,7 @@ object CounterOracleSuite extends SimpleIOSuite {
           Signed(createOracle, createProof)
         )
 
-        invokeOracle = Updates.InvokeScriptOracle(
+        invokeOracle = Updates.InvokeScript(
           fiberId = cid,
           method = "increment",
           args = MapValue(Map.empty),
@@ -402,7 +402,7 @@ object CounterOracleSuite extends SimpleIOSuite {
         cid  <- IO.randomUUID
         prog <- IO.fromEither(parser.parse(counterScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = cid,
           scriptProgram = prog,
           initialState = Some(counterInitialState),
@@ -418,7 +418,7 @@ object CounterOracleSuite extends SimpleIOSuite {
         oracleBefore = state1.oracleRecord(cid)
         hashBefore = oracleBefore.flatMap(_.stateDataHash)
 
-        invokeOracle = Updates.InvokeScriptOracle(
+        invokeOracle = Updates.InvokeScript(
           fiberId = cid,
           method = "increment",
           args = MapValue(Map.empty),
@@ -451,7 +451,7 @@ object CounterOracleSuite extends SimpleIOSuite {
         cid  <- IO.randomUUID
         prog <- IO.fromEither(parser.parse(counterScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = cid,
           scriptProgram = prog,
           initialState = Some(counterInitialState),
@@ -486,7 +486,7 @@ object CounterOracleSuite extends SimpleIOSuite {
         cid  <- IO.randomUUID
         prog <- IO.fromEither(parser.parse(counterScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = cid,
           scriptProgram = prog,
           initialState = Some(counterInitialState),
@@ -500,7 +500,7 @@ object CounterOracleSuite extends SimpleIOSuite {
           Signed(createOracle, createProof)
         )
 
-        invokeOracle = Updates.InvokeScriptOracle(
+        invokeOracle = Updates.InvokeScript(
           fiberId = cid,
           method = "increment",
           args = MapValue(Map.empty),
@@ -533,7 +533,7 @@ object CounterOracleSuite extends SimpleIOSuite {
         cid  <- IO.randomUUID
         prog <- IO.fromEither(parser.parse(counterScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = cid,
           scriptProgram = prog,
           initialState = Some(counterInitialState),
@@ -550,7 +550,7 @@ object CounterOracleSuite extends SimpleIOSuite {
         initialOnChainHashes = state1.onChain.fiberCommits.get(cid)
         initialStateHash = state1.oracleRecord(cid).flatMap(_.stateDataHash)
 
-        invokeOracle = Updates.InvokeScriptOracle(
+        invokeOracle = Updates.InvokeScript(
           fiberId = cid,
           method = "increment",
           args = MapValue(Map.empty),

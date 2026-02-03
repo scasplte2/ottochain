@@ -1,13 +1,13 @@
 # Tic-Tac-Toe Game
 
-Complete tic-tac-toe implementation using OttoChain script oracle + state machine, demonstrating the **oracle-centric architecture** pattern.
+Complete tic-tac-toe implementation using OttoChain script + state machine, demonstrating the **oracle-centric architecture** pattern.
 
 ## Table of Contents
 
 1. [Overview](#overview)
 2. [Key Features Demonstrated](#key-features-demonstrated)
 3. [Architecture](#architecture)
-4. [Script Oracle Design](#script-oracle-design)
+4. [Script Design](#script-oracle-design)
 5. [State Machine Design](#state-machine-design)
 6. [Test Location](#test-location)
 7. [Cell Numbering](#cell-numbering)
@@ -21,11 +21,11 @@ Complete tic-tac-toe implementation using OttoChain script oracle + state machin
 ![Tic-Tac-Toe Sequence Diagram](../../diagrams/tictactoe-sequence.png)
 
 This example demonstrates the **oracle-centric architecture** where:
-- **Script Oracle** = Game engine (holds board, enforces rules, detects wins)
+- **Script** = Game engine (holds board, enforces rules, detects wins)
 - **State Machine** = Lifecycle orchestrator (setup → playing → finished/cancelled)
 
 The game provides a simple but complete example of:
-- Stateful script oracles maintaining game state
+- Stateful scripts maintaining game state
 - State machines calling oracle methods via `_oracleCall`
 - Guards checking oracle state for transitions
 - Self-transitions for ongoing gameplay
@@ -44,7 +44,7 @@ The game provides a simple but complete example of:
 
 | Feature | Description |
 |---------|-------------|
-| **Script Oracle Pattern** | Oracle holds all game state (board, players, history) |
+| **Script Pattern** | Oracle holds all game state (board, players, history) |
 | **Oracle Method Dispatch** | Single script with 6 methods: initialize, makeMove, checkWinner, getBoard, resetGame, cancelGame |
 | **Validation Logic** | Oracle validates moves (turn, cell bounds, occupied check) |
 | **Win Detection** | Deterministic check of all 8 winning patterns |
@@ -69,7 +69,7 @@ The game provides a simple but complete example of:
            │ _oracleCall
            ▼
 ┌──────────────────────────┐
-│   Script Oracle          │
+│   Script          │
 │   (Game Engine)          │
 │                          │
 │  • Board [9 cells]       │
@@ -107,7 +107,7 @@ The game provides a simple but complete example of:
 
 ---
 
-## Script Oracle Design
+## Script Design
 
 ### Oracle State Structure
 

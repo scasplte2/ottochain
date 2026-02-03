@@ -94,7 +94,7 @@ object TriggerDispatcher {
                   logEntries <- ExecutionOps.getLogs[G]
                 } yield (TransactionResult.Committed(
                   updatedStateMachines = qs.txnState.stateMachines,
-                  updatedOracles = qs.txnState.scriptOracles,
+                  updatedOracles = qs.txnState.scripts,
                   logEntries = logEntries.toList,
                   totalGasUsed = gasUsed,
                   maxDepth = depth

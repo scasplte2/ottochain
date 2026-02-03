@@ -536,8 +536,8 @@ async function executeCommand(
         archive: 'archiveFiber',
       },
       oracle: {
-        create: 'createOracle',
-        invoke: 'invokeOracle',
+        create: 'createScript',
+        invoke: 'invokeScript',
       },
     };
 
@@ -975,7 +975,7 @@ const runCmd = new Command('run')
   .description('Execute predefined test flows from examples')
   .option(
     '-e, --example <name>',
-    'Example to run (e.g., simple-order, counter-oracle, tictactoe)'
+    'Example to run (e.g., simple-order, counter-script, tictactoe)'
   )
   .option('-f, --flow <number|name>', 'Test flow by number (1, 2, ...) or name')
   .option('-l, --list', 'List available test flows')
@@ -1198,7 +1198,7 @@ Examples:
             break;
           }
 
-          case 'createOracle': {
+          case 'createScript': {
             session.oracleFiberId =
               (example.oracleFiberId as string) || crypto.randomUUID();
             const definition = await loadFileOrModule(
@@ -1212,7 +1212,7 @@ Examples:
 
             stepOptions = { oracleDefinition: definition };
 
-            const libModule = await import('./lib/oracle/createOracle.ts');
+            const libModule = await import('./lib/script/createScript.ts');
             generator = libModule.generator;
             validator = libModule.validator;
             message = generator({
@@ -1281,7 +1281,7 @@ Examples:
               expectedResult: step.expectedResult,
             };
 
-            const libModule = await import('./lib/oracle/invokeOracle.ts');
+            const libModule = await import('./lib/script/invokeScript.ts');
             generator = libModule.generator;
             validator = libModule.validator;
             message = generator({

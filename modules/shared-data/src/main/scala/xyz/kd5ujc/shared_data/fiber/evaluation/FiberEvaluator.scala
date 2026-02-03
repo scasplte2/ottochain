@@ -28,7 +28,7 @@ import xyz.kd5ujc.shared_data.syntax.all._
  *
  * Dispatches to appropriate evaluation strategy based on fiber type:
  * - StateMachineFiberRecord + Transition → guard/effect evaluation
- * - ScriptOracleFiberRecord + MethodCall → script evaluation
+ * - ScriptFiberRecord + MethodCall → script evaluation
  *
  * Invalid combinations (SM + MethodCall, Oracle + Transition) return Failed.
  */
@@ -65,7 +65,7 @@ object FiberEvaluator {
         case (sm: Records.StateMachineFiberRecord, FiberInput.Transition(eventType, payload)) =>
           evaluateStateMachine(sm, eventType, payload, proofs)
 
-        case (oracle: Records.ScriptOracleFiberRecord, FiberInput.MethodCall(method, args, caller)) =>
+        case (oracle: Records.ScriptFiberRecord, FiberInput.MethodCall(method, args, caller)) =>
           evaluateOracle(oracle, method, args, caller)
 
         case (sm: Records.StateMachineFiberRecord, _: FiberInput.MethodCall) =>
@@ -73,9 +73,9 @@ object FiberEvaluator {
             .FiberInputMismatch(sm.fiberId, FiberKind.StateMachine, InputKind.MethodCall)
             .pureOutcome[G]
 
-        case (oracle: Records.ScriptOracleFiberRecord, _: FiberInput.Transition) =>
+        case (oracle: Records.ScriptFiberRecord, _: FiberInput.Transition) =>
           FailureReason
-            .FiberInputMismatch(oracle.fiberId, FiberKind.ScriptOracle, InputKind.Transition)
+            .FiberInputMismatch(oracle.fiberId, FiberKind.Script, InputKind.Transition)
             .pureOutcome[G]
       }
 
@@ -299,13 +299,13 @@ object FiberEvaluator {
       // ──────────────────────────────────────────────────────────────────────────
 
       private def evaluateOracle(
-        oracle: Records.ScriptOracleFiberRecord,
+        oracle: Records.ScriptFiberRecord,
         method: String,
         args:   JsonLogicValue,
         caller: io.constellationnetwork.schema.address.Address
       ): G[FiberResult] =
         for {
-          result <- OracleProcessor
+          result <- ScriptProcessor
             .validateAccess[F](oracle.accessControl, caller, oracle.fiberId, calculatedState)
             .liftTo[G]
             .flatMap {
@@ -331,7 +331,7 @@ object FiberEvaluator {
                     case Right(EvaluationResult(evaluationResult, gasUsed, _, _)) =>
                       for {
                         _              <- ExecutionOps.chargeGas[G](gasUsed.amount)
-                        stateAndResult <- OracleProcessor.extractStateAndResult[F](evaluationResult).liftTo[G]
+                        stateAndResult <- ScriptProcessor.extractStateAndResult[F](evaluationResult).liftTo[G]
                         (newStateData, returnValue) = stateAndResult
                       } yield FiberResult.Success(
                         newStateData = newStateData.getOrElse(oracle.stateData.getOrElse(NullValue)),

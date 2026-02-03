@@ -39,7 +39,7 @@ These examples demonstrate that OttoChain's state machine infrastructure can mod
 | **Total States** | 4 | 23 | 47 | 58 | 37 (across types) |
 | **Participants** | 2 | 5 | 6 | 8 | 13 active participants |
 | **Complexity** | ⭐ Simple | ⭐⭐ Moderate | ⭐⭐⭐ Complex | ⭐⭐⭐ Complex | ⭐⭐⭐⭐ Very Complex |
-| **Script Oracle Pattern** | ✅ Yes (game state) | ❌ No | ❌ No | ❌ No | ❌ No |
+| **Script Pattern** | ✅ Yes (game state) | ❌ No | ❌ No | ❌ No | ❌ No |
 | **Cross-Machine Triggers** | ❌ No | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes (15+ types) |
 | **Multiple Guards** | ❌ No | ❌ No | ✅ Yes (5 outcomes) | ✅ Yes (3 outcomes) | ✅ Yes |
 | **Bi-directional Transitions** | ❌ No | ❌ No | ✅ Yes | ✅ Yes | ❌ No |
@@ -183,11 +183,11 @@ Raw Materials → Manufacturer → Retailer → Consumer
 **Participants**: 2
 **Total States**: 4
 
-A two-player game demonstrating the **oracle-centric architecture** pattern where the script oracle acts as the game engine and the state machine orchestrates the game lifecycle.
+A two-player game demonstrating the **oracle-centric architecture** pattern where the script acts as the game engine and the state machine orchestrates the game lifecycle.
 
 #### Architecture: Oracle-Centric Pattern
 
-**Script Oracle** (Game Engine):
+**Script** (Game Engine):
 - Holds complete game state (board, moves, players)
 - Enforces game rules and move validation
 - Detects win/draw conditions automatically

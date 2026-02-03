@@ -30,7 +30,7 @@ OttoBot has access to 6 tools for managing tic-tac-toe games:
 
 **Process**:
 1. Generate UUIDs for oracle and state machine
-2. Build `CreateScriptOracle` message with tic-tac-toe logic
+2. Build `CreateScript` message with tic-tac-toe logic
 3. Build `CreateStateMachineFiber` message linked to oracle
 4. Sign both messages with agent wallet
 5. Submit both to Ottochain

@@ -9,17 +9,17 @@ import io.constellationnetwork.currency.dataApplication.DataState
 import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.signature.SignatureProof
 
-import xyz.kd5ujc.schema.Updates.{CreateScriptOracle, InvokeScriptOracle}
+import xyz.kd5ujc.schema.Updates.{CreateScript, InvokeScript}
 import xyz.kd5ujc.schema.{CalculatedState, OnChain}
-import xyz.kd5ujc.shared_data.lifecycle.validate.rules.{CommonRules, OracleRules}
+import xyz.kd5ujc.shared_data.lifecycle.validate.rules.{CommonRules, ScriptRules}
 
 /**
- * Validators for script oracle operations.
+ * Validators for script operations.
  *
  * Provides separate L1 and L0 validator classes that compose the rules
- * from OracleRules and CommonRules.
+ * from ScriptRules and CommonRules.
  */
-object OracleValidator {
+object ScriptValidator {
 
   /**
    * L1 Validator - Structural validations at Data-L1 layer.
@@ -30,8 +30,8 @@ object OracleValidator {
    */
   class L1Validator[F[_]: Monad](state: OnChain) {
 
-    /** Validates a CreateScriptOracle update */
-    def createOracle(update: CreateScriptOracle): F[ValidationResult] =
+    /** Validates a CreateScript update */
+    def createOracle(update: CreateScript): F[ValidationResult] =
       for {
         cidCheck       <- CommonRules.cidNotUsed(update.fiberId, state)
         initialStateOk <- CommonRules.isMapValueOrNull(update.initialState, "initialState")
@@ -47,11 +47,11 @@ object OracleValidator {
         }
       } yield List(cidCheck, initialStateOk, scriptDepthOk, initialStateSizeOk).combineAll
 
-    /** Validates an InvokeScriptOracle update */
-    def invokeOracle(update: InvokeScriptOracle): F[ValidationResult] =
+    /** Validates an InvokeScript update */
+    def invokeOracle(update: InvokeScript): F[ValidationResult] =
       for {
         cidExists     <- CommonRules.cidIsFound(update.fiberId, state)
-        seqNumOk      <- OracleRules.L1.sequenceNumberMatches(update.fiberId, update.targetSequenceNumber, state)
+        seqNumOk      <- ScriptRules.L1.sequenceNumberMatches(update.fiberId, update.targetSequenceNumber, state)
         argsStructure <- CommonRules.payloadStructureValid(update.args, "args")
         argsSize <- CommonRules.valueWithinSizeLimit(
           update.args,
@@ -74,15 +74,15 @@ object OracleValidator {
     proofs: NonEmptySet[SignatureProof]
   ) {
 
-    /** Validates a CreateScriptOracle update (L0 specific checks) */
-    def createOracle(update: CreateScriptOracle): F[ValidationResult] =
-      // CreateScriptOracle has no L0-specific validation requirements currently.
+    /** Validates a CreateScript update (L0 specific checks) */
+    def createOracle(update: CreateScript): F[ValidationResult] =
+      // CreateScript has no L0-specific validation requirements currently.
       // Anyone can create an oracle; access control applies to invocations.
       ().validNec[io.constellationnetwork.currency.dataApplication.DataApplicationValidationError].pure[F]
 
-    /** Validates an InvokeScriptOracle update (L0 specific checks) */
-    def invokeOracle(update: InvokeScriptOracle): F[ValidationResult] =
-      OracleRules.L0.accessControlCheck(update.fiberId, proofs, state.calculated)
+    /** Validates an InvokeScript update (L0 specific checks) */
+    def invokeOracle(update: InvokeScript): F[ValidationResult] =
+      ScriptRules.L0.accessControlCheck(update.fiberId, proofs, state.calculated)
   }
 
   /**
@@ -97,15 +97,15 @@ object OracleValidator {
     private val l1 = new L1Validator[F](state.onChain)
     private val l0 = new L0Validator[F](state, proofs)
 
-    /** Validates a CreateScriptOracle update (all checks) */
-    def createOracle(update: CreateScriptOracle): F[ValidationResult] =
+    /** Validates a CreateScript update (all checks) */
+    def createOracle(update: CreateScript): F[ValidationResult] =
       for {
         l1Result <- l1.createOracle(update)
         l0Result <- l0.createOracle(update)
       } yield l1Result |+| l0Result
 
-    /** Validates an InvokeScriptOracle update (all checks) */
-    def invokeOracle(update: InvokeScriptOracle): F[ValidationResult] =
+    /** Validates an InvokeScript update (all checks) */
+    def invokeOracle(update: InvokeScript): F[ValidationResult] =
       for {
         l1Result <- l1.invokeOracle(update)
         l0Result <- l0.invokeOracle(update)

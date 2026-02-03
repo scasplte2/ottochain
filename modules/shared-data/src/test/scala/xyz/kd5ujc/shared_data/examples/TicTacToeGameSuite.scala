@@ -73,7 +73,7 @@ object TicTacToeGameSuite extends SimpleIOSuite {
         "to": {"value": "playing"},
         "eventName": "make_move",
         "guard": {
-          "===": [{"var": "scriptOracles.${oracleFiberId}.state.status"}, "InProgress"]
+          "===": [{"var": "scripts.${oracleFiberId}.state.status"}, "InProgress"]
         },
         "effect": {
           "_oracleCall": {
@@ -97,8 +97,8 @@ object TicTacToeGameSuite extends SimpleIOSuite {
         "eventName": "make_move",
         "guard": {
           "or": [
-            {"===": [{"var": "scriptOracles.${oracleFiberId}.state.status"}, "Won"]},
-            {"===": [{"var": "scriptOracles.${oracleFiberId}.state.status"}, "Draw"]}
+            {"===": [{"var": "scripts.${oracleFiberId}.state.status"}, "Won"]},
+            {"===": [{"var": "scripts.${oracleFiberId}.state.status"}, "Draw"]}
           ]
         },
         "effect": {
@@ -110,17 +110,17 @@ object TicTacToeGameSuite extends SimpleIOSuite {
               "cell": {"var": "event.cell"}
             }
           },
-          "finalStatus": {"var": "scriptOracles.${oracleFiberId}.state.status"},
-          "winner": {"var": "scriptOracles.${oracleFiberId}.state.winner"},
-          "finalBoard": {"var": "scriptOracles.${oracleFiberId}.state.board"},
+          "finalStatus": {"var": "scripts.${oracleFiberId}.state.status"},
+          "winner": {"var": "scripts.${oracleFiberId}.state.winner"},
+          "finalBoard": {"var": "scripts.${oracleFiberId}.state.board"},
           "_emit": [
             {
               "name": "game_completed",
               "data": {
                 "gameId": {"var": "state.gameId"},
-                "winner": {"var": "scriptOracles.${oracleFiberId}.state.winner"},
-                "status": {"var": "scriptOracles.${oracleFiberId}.state.status"},
-                "moveCount": {"var": "scriptOracles.${oracleFiberId}.state.moveCount"}
+                "winner": {"var": "scripts.${oracleFiberId}.state.winner"},
+                "status": {"var": "scripts.${oracleFiberId}.state.status"},
+                "moveCount": {"var": "scripts.${oracleFiberId}.state.moveCount"}
               }
             }
           ]
@@ -133,8 +133,8 @@ object TicTacToeGameSuite extends SimpleIOSuite {
         "eventName": "reset_board",
         "guard": {
           "or": [
-            {"===": [{"var": "scriptOracles.${oracleFiberId}.state.status"}, "Won"]},
-            {"===": [{"var": "scriptOracles.${oracleFiberId}.state.status"}, "Draw"]}
+            {"===": [{"var": "scripts.${oracleFiberId}.state.status"}, "Won"]},
+            {"===": [{"var": "scripts.${oracleFiberId}.state.status"}, "Draw"]}
           ]
         },
         "effect": {
@@ -198,7 +198,7 @@ object TicTacToeGameSuite extends SimpleIOSuite {
 
       // Load oracle definition from resource (no hardcoded UUIDs)
       oracleDefJson <- IO {
-        val stream = getClass.getResourceAsStream("/tictactoe/oracle-definition.json")
+        val stream = getClass.getResourceAsStream("/tictactoe/script-definition.json")
         scala.io.Source.fromInputStream(stream).mkString
       }
       oracleDefParsed <- IO.fromEither(parse(oracleDefJson))
@@ -208,7 +208,7 @@ object TicTacToeGameSuite extends SimpleIOSuite {
       )
 
       // Create oracle via combiner
-      createOracle = Updates.CreateScriptOracle(
+      createOracle = Updates.CreateScript(
         fiberId = oracleFiberId,
         scriptProgram = oracleScript,
         initialState = oracleInitialState,

@@ -53,24 +53,24 @@ object Updates {
   ) extends StateMachineFiberOp
       with OttochainMessage
 
-  sealed trait ScriptOracleFiberOp
+  sealed trait ScriptFiberOp
 
   @derive(decoder, encoder)
-  final case class CreateScriptOracle(
+  final case class CreateScript(
     fiberId:       UUID,
     scriptProgram: JsonLogicExpression,
     initialState:  Option[JsonLogicValue],
     accessControl: AccessControlPolicy
-  ) extends ScriptOracleFiberOp
+  ) extends ScriptFiberOp
       with OttochainMessage
 
   @derive(decoder, encoder)
-  final case class InvokeScriptOracle(
+  final case class InvokeScript(
     fiberId:              UUID,
     method:               String,
     args:                 JsonLogicValue,
     targetSequenceNumber: FiberOrdinal
-  ) extends ScriptOracleFiberOp
+  ) extends ScriptFiberOp
       with OttochainMessage
 
   object OttochainMessage {
@@ -79,8 +79,8 @@ object Updates {
       case u: Updates.CreateStateMachine     => Json.obj(u.messageName -> u.asJson)
       case u: Updates.TransitionStateMachine => Json.obj(u.messageName -> u.asJson)
       case u: Updates.ArchiveStateMachine    => Json.obj(u.messageName -> u.asJson)
-      case u: Updates.CreateScriptOracle     => Json.obj(u.messageName -> u.asJson)
-      case u: Updates.InvokeScriptOracle     => Json.obj(u.messageName -> u.asJson)
+      case u: Updates.CreateScript           => Json.obj(u.messageName -> u.asJson)
+      case u: Updates.InvokeScript           => Json.obj(u.messageName -> u.asJson)
     }
 
     implicit val messageDecoder: Decoder[OttochainMessage] =
@@ -89,8 +89,8 @@ object Updates {
           Decoder[Updates.CreateStateMachine],
           Decoder[Updates.TransitionStateMachine],
           Decoder[Updates.ArchiveStateMachine],
-          Decoder[Updates.CreateScriptOracle],
-          Decoder[Updates.InvokeScriptOracle]
+          Decoder[Updates.CreateScript],
+          Decoder[Updates.InvokeScript]
         )
 
         c.keys

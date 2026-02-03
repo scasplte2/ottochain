@@ -70,15 +70,15 @@ class ML0CustomRoutes[F[_]: Async](
     case GET -> Root / "oracles" :? StatusQueryParam(statusOpt) =>
       checkpointService.get.map { case Checkpoint(_, state) =>
         statusOpt
-          .fold(state.scriptOracles) { status =>
-            state.scriptOracles.filter { case (_, oracle) => oracle.status == status }
+          .fold(state.scripts) { status =>
+            state.scripts.filter { case (_, oracle) => oracle.status == status }
           }
           .asRight[DataApplicationValidationError]
       }.toResponse
 
     case GET -> Root / "oracles" / UUIDVar(oracleId) =>
       checkpointService.get.map { case Checkpoint(_, state) =>
-        state.scriptOracles.get(oracleId).asRight[DataApplicationValidationError]
+        state.scripts.get(oracleId).asRight[DataApplicationValidationError]
       }.toResponse
 
     case GET -> Root / "state-machines" / UUIDVar(fiberId) / "events" =>

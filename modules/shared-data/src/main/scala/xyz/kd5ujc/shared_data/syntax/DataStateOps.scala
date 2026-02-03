@@ -31,7 +31,7 @@ trait DataStateOps {
      * the record's field. Routes to the correct CalculatedState field based on type.
      *
      * @param id     The fiber/oracle CID
-     * @param record The updated record (StateMachineFiberRecord or ScriptOracleFiberRecord)
+     * @param record The updated record (StateMachineFiberRecord or ScriptFiberRecord)
      * @return Updated DataState with both OnChain and CalculatedState modified
      */
     def withRecord[F[_]: Async](
@@ -48,13 +48,13 @@ trait DataStateOps {
               .focus(_.calculated.stateMachines)
               .modify(_.updated(id, sm))
           }
-        case oracle: Records.ScriptOracleFiberRecord =>
+        case oracle: Records.ScriptFiberRecord =>
           oracle.computeDigest.map { recordHash =>
             val commit = FiberCommit(recordHash, oracle.stateDataHash, oracle.sequenceNumber)
             state
               .focus(_.onChain.fiberCommits)
               .modify(_.updated(id, commit))
-              .focus(_.calculated.scriptOracles)
+              .focus(_.calculated.scripts)
               .modify(_.updated(id, oracle))
           }
       }
@@ -72,7 +72,7 @@ trait DataStateOps {
       records: Map[UUID, Records.FiberRecord]
     ): F[DataState[OnChain, CalculatedState]] = {
       val sms = records.collect { case (id, sm: Records.StateMachineFiberRecord) => id -> sm }
-      val oracles = records.collect { case (id, o: Records.ScriptOracleFiberRecord) => id -> o }
+      val oracles = records.collect { case (id, o: Records.ScriptFiberRecord) => id -> o }
 
       for {
         smHashes <- sms.toList.traverse { case (id, sm) =>
@@ -86,7 +86,7 @@ trait DataStateOps {
         .modify(_ ++ smHashes.toMap ++ oracleHashes.toMap)
         .focus(_.calculated.stateMachines)
         .modify(_ ++ sms)
-        .focus(_.calculated.scriptOracles)
+        .focus(_.calculated.scripts)
         .modify(_ ++ oracles)
     }
 
@@ -99,7 +99,7 @@ trait DataStateOps {
      */
     def withFibersAndOracles[F[_]: Async](
       fibers:  Map[UUID, Records.StateMachineFiberRecord],
-      oracles: Map[UUID, Records.ScriptOracleFiberRecord]
+      oracles: Map[UUID, Records.ScriptFiberRecord]
     ): F[DataState[OnChain, CalculatedState]] =
       withRecords(fibers ++ oracles)
 

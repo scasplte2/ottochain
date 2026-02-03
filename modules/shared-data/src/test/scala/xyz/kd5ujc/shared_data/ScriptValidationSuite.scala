@@ -20,7 +20,7 @@ import weaver.SimpleIOSuite
 
 object OracleValidationSuite extends SimpleIOSuite {
 
-  test("create script oracle with public access") {
+  test("create script with public access") {
     val oracleScript =
       """|{"if":[
          |  {"==":[{"var":"method"},"validate"]},
@@ -37,7 +37,7 @@ object OracleValidationSuite extends SimpleIOSuite {
         fiberId <- IO.randomUUID
         prog    <- IO.fromEither(parser.parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
 
-        createUpdate = Updates.CreateScriptOracle(
+        createUpdate = Updates.CreateScript(
           fiberId = fiberId,
           scriptProgram = prog,
           initialState = None,
@@ -47,7 +47,7 @@ object OracleValidationSuite extends SimpleIOSuite {
         createProof <- fixture.registry.generateProofs(createUpdate, Set(Alice))
         state <- combiner.insert(DataState(OnChain.genesis, CalculatedState.genesis), Signed(createUpdate, createProof))
 
-        oracle = state.calculated.scriptOracles.get(fiberId)
+        oracle = state.calculated.scripts.get(fiberId)
       } yield expect(oracle.isDefined) and
       expect(oracle.map(_.status).contains(FiberStatus.Active)) and
       expect(oracle.map(_.owners).contains(Set(fixture.registry.addresses(Alice))))
@@ -71,7 +71,7 @@ object OracleValidationSuite extends SimpleIOSuite {
         fiberId <- IO.randomUUID
         prog    <- IO.fromEither(parser.parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
 
-        createUpdate = Updates.CreateScriptOracle(
+        createUpdate = Updates.CreateScript(
           fiberId = fiberId,
           scriptProgram = prog,
           initialState = None,
@@ -84,7 +84,7 @@ object OracleValidationSuite extends SimpleIOSuite {
           Signed(createUpdate, createProof)
         )
 
-        invokeUpdate = Updates.InvokeScriptOracle(
+        invokeUpdate = Updates.InvokeScript(
           fiberId = fiberId,
           method = "validate",
           args = MapValue(Map("value" -> IntValue(15))),
@@ -94,7 +94,7 @@ object OracleValidationSuite extends SimpleIOSuite {
         invokeProof <- fixture.registry.generateProofs(invokeUpdate, Set(Alice))
         state2      <- combiner.insert(state1, Signed(invokeUpdate, invokeProof))
 
-        oracle = state2.calculated.scriptOracles.get(fiberId)
+        oracle = state2.calculated.scripts.get(fiberId)
         lastInvocation = oracle.flatMap(_.lastInvocation)
 
       } yield expect(oracle.isDefined) and
@@ -131,7 +131,7 @@ object OracleValidationSuite extends SimpleIOSuite {
         fiberId <- IO.randomUUID
         prog    <- IO.fromEither(parser.parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
 
-        createUpdate = Updates.CreateScriptOracle(
+        createUpdate = Updates.CreateScript(
           fiberId = fiberId,
           scriptProgram = prog,
           initialState = None,
@@ -144,7 +144,7 @@ object OracleValidationSuite extends SimpleIOSuite {
           Signed(createUpdate, createProof)
         )
 
-        invokeUpdate = Updates.InvokeScriptOracle(
+        invokeUpdate = Updates.InvokeScript(
           fiberId = fiberId,
           method = "validate",
           args = MapValue(Map("value" -> IntValue(5))),
@@ -154,7 +154,7 @@ object OracleValidationSuite extends SimpleIOSuite {
         invokeProof <- fixture.registry.generateProofs(invokeUpdate, Set(Alice))
         state2      <- combiner.insert(state1, Signed(invokeUpdate, invokeProof))
 
-        lastInvocation = state2.calculated.scriptOracles.get(fiberId).flatMap(_.lastInvocation)
+        lastInvocation = state2.calculated.scripts.get(fiberId).flatMap(_.lastInvocation)
 
       } yield expect(
         lastInvocation

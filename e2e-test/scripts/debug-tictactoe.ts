@@ -86,9 +86,9 @@ async function main() {
 
   // Step 1: Create Oracle
   console.log('\n=== Step 1: Create Oracle ===');
-  const oracleDef = await loadModule('oracle-definition.json');
-  const createOracleLib = await import('../lib/oracle/createOracle.ts');
-  const oracleMsg = createOracleLib.generator({
+  const oracleDef = await loadModule('script-definition.json');
+  const createScriptLib = await import('../lib/script/createScript.ts');
+  const oracleMsg = createScriptLib.generator({
     cid: oracleFiberId,
     wallets,
     options: { oracleDefinition: oracleDef },

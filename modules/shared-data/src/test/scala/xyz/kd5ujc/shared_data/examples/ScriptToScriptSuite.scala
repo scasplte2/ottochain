@@ -64,7 +64,7 @@ object OracleToOracleSuite extends SimpleIOSuite {
         innerProg    <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
 
         // Create inner oracle with Public access
-        createInner = Updates.CreateScriptOracle(
+        createInner = Updates.CreateScript(
           fiberId = innerfiberId,
           scriptProgram = innerProg,
           initialState = None,
@@ -78,7 +78,7 @@ object OracleToOracleSuite extends SimpleIOSuite {
         )
 
         // Invoke inner oracle multiple times
-        invoke1 = Updates.InvokeScriptOracle(
+        invoke1 = Updates.InvokeScript(
           fiberId = innerfiberId,
           method = "add",
           args = MapValue(Map("a" -> IntValue(10), "b" -> IntValue(5))),
@@ -88,11 +88,11 @@ object OracleToOracleSuite extends SimpleIOSuite {
         invoke1Proof <- registry.generateProofs(invoke1, Set(Alice))
         state2       <- combiner.insert(state1, Signed(invoke1, invoke1Proof))
 
-        invoke2 = Updates.InvokeScriptOracle(
+        invoke2 = Updates.InvokeScript(
           fiberId = innerfiberId,
           method = "add",
           args = MapValue(Map("a" -> IntValue(20), "b" -> IntValue(30))),
-          targetSequenceNumber = state2.calculated.scriptOracles(innerfiberId).sequenceNumber
+          targetSequenceNumber = state2.calculated.scripts(innerfiberId).sequenceNumber
         )
 
         invoke2Proof <- registry.generateProofs(invoke2, Set(Bob))
@@ -120,7 +120,7 @@ object OracleToOracleSuite extends SimpleIOSuite {
         prog          <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
 
         // Create oracle with whitelist access - only Alice allowed
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = oracleFiberId,
           scriptProgram = prog,
           initialState = None,
@@ -134,7 +134,7 @@ object OracleToOracleSuite extends SimpleIOSuite {
         )
 
         // Alice can invoke (whitelisted)
-        invokeAlice = Updates.InvokeScriptOracle(
+        invokeAlice = Updates.InvokeScript(
           fiberId = oracleFiberId,
           method = "add",
           args = MapValue(Map("a" -> IntValue(1), "b" -> IntValue(2))),
@@ -147,11 +147,11 @@ object OracleToOracleSuite extends SimpleIOSuite {
         oracleAfterAlice = state2.oracleRecord(oracleFiberId)
 
         // Bob tries to invoke (not whitelisted) - should fail
-        invokeBob = Updates.InvokeScriptOracle(
+        invokeBob = Updates.InvokeScript(
           fiberId = oracleFiberId,
           method = "add",
           args = MapValue(Map("a" -> IntValue(10), "b" -> IntValue(20))),
-          targetSequenceNumber = state2.calculated.scriptOracles(oracleFiberId).sequenceNumber
+          targetSequenceNumber = state2.calculated.scripts(oracleFiberId).sequenceNumber
         )
 
         bobProof <- registry.generateProofs(invokeBob, Set(Bob))
@@ -196,7 +196,7 @@ object OracleToOracleSuite extends SimpleIOSuite {
         counterProg <- IO.fromEither(parser.parse(counterScript).flatMap(_.as[JsonLogicExpression]))
 
         // Create calculator oracle
-        createOracle1 = Updates.CreateScriptOracle(
+        createOracle1 = Updates.CreateScript(
           fiberId = oracle1fiberId,
           scriptProgram = prog,
           initialState = None,
@@ -204,7 +204,7 @@ object OracleToOracleSuite extends SimpleIOSuite {
         )
 
         // Create counter oracle
-        createOracle2 = Updates.CreateScriptOracle(
+        createOracle2 = Updates.CreateScript(
           fiberId = oracle2fiberId,
           scriptProgram = counterProg,
           initialState = Some(MapValue(Map("value" -> IntValue(0)))),
@@ -221,13 +221,13 @@ object OracleToOracleSuite extends SimpleIOSuite {
         state2 <- combiner.insert(state1, Signed(createOracle2, proof2))
 
         // Invoke both oracles in sequence
-        invoke1 = Updates.InvokeScriptOracle(
+        invoke1 = Updates.InvokeScript(
           oracle1fiberId,
           "add",
           MapValue(Map("a" -> IntValue(5), "b" -> IntValue(3))),
           FiberOrdinal.MinValue
         )
-        invoke2 = Updates.InvokeScriptOracle(oracle2fiberId, "increment", MapValue(Map.empty), FiberOrdinal.MinValue)
+        invoke2 = Updates.InvokeScript(oracle2fiberId, "increment", MapValue(Map.empty), FiberOrdinal.MinValue)
 
         invokeProof1 <- registry.generateProofs(invoke1, Set(Alice))
         invokeProof2 <- registry.generateProofs(invoke2, Set(Alice))
@@ -235,11 +235,11 @@ object OracleToOracleSuite extends SimpleIOSuite {
         state3 <- combiner.insert(state2, Signed(invoke1, invokeProof1))
         state4 <- combiner.insert(state3, Signed(invoke2, invokeProof2))
 
-        invoke3 = Updates.InvokeScriptOracle(
+        invoke3 = Updates.InvokeScript(
           oracle2fiberId,
           "increment",
           MapValue(Map.empty),
-          state4.calculated.scriptOracles(oracle2fiberId).sequenceNumber
+          state4.calculated.scripts(oracle2fiberId).sequenceNumber
         )
         invokeProof3 <- registry.generateProofs(invoke3, Set(Alice))
         state5       <- combiner.insert(state4, Signed(invoke3, invokeProof3))
@@ -283,7 +283,7 @@ object OracleToOracleSuite extends SimpleIOSuite {
 
         validationProg <- IO.fromEither(parser.parse(validationScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = oracleFiberId,
           scriptProgram = validationProg,
           initialState = None,
@@ -297,7 +297,7 @@ object OracleToOracleSuite extends SimpleIOSuite {
         )
 
         // Invoke with amount >= 100 - should succeed
-        invokeValid = Updates.InvokeScriptOracle(
+        invokeValid = Updates.InvokeScript(
           fiberId = oracleFiberId,
           method = "validate",
           args = MapValue(Map("amount" -> IntValue(200))),
@@ -310,11 +310,11 @@ object OracleToOracleSuite extends SimpleIOSuite {
         oracleAfterValid = state2.oracleRecord(oracleFiberId)
 
         // Invoke with amount < 100 - should fail due to valid=false
-        invokeInvalid = Updates.InvokeScriptOracle(
+        invokeInvalid = Updates.InvokeScript(
           fiberId = oracleFiberId,
           method = "validate",
           args = MapValue(Map("amount" -> IntValue(50))),
-          targetSequenceNumber = state2.calculated.scriptOracles(oracleFiberId).sequenceNumber
+          targetSequenceNumber = state2.calculated.scripts(oracleFiberId).sequenceNumber
         )
 
         invalidProof  <- registry.generateProofs(invokeInvalid, Set(Alice))

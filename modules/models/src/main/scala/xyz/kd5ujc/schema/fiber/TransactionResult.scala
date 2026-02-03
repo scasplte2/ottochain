@@ -24,7 +24,7 @@ object TransactionResult {
    */
   final case class Committed(
     updatedStateMachines: Map[UUID, Records.StateMachineFiberRecord],
-    updatedOracles:       Map[UUID, Records.ScriptOracleFiberRecord],
+    updatedOracles:       Map[UUID, Records.ScriptFiberRecord],
     logEntries:           List[FiberLogEntry],
     totalGasUsed:         Long,
     maxDepth:             Int = 0,

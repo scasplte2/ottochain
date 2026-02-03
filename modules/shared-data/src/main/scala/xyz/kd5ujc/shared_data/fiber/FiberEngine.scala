@@ -103,7 +103,7 @@ object FiberEngine {
                 case sm: Records.StateMachineFiberRecord =>
                   processStateMachineSuccess(sm, input, newStateData, newStateId, fiberTriggers, spawns, emittedEvents)
 
-                case oracle: Records.ScriptOracleFiberRecord =>
+                case oracle: Records.ScriptFiberRecord =>
                   processOracleSuccess(oracle, input, newStateData, returnValue)
               }
 
@@ -134,7 +134,7 @@ object FiberEngine {
 
           case other =>
             TransactionResult.Aborted(
-              FailureReason.FiberInputMismatch(other.fiberId, FiberKind.ScriptOracle, InputKind.Transition),
+              FailureReason.FiberInputMismatch(other.fiberId, FiberKind.Script, InputKind.Transition),
               gasUsed
             ): TransactionResult
         }
@@ -206,7 +206,7 @@ object FiberEngine {
                   .make[F](calculatedState)
                   .buildTriggerContext(updatedFiber, input)
                   .liftFiber
-                knownFibers = calculatedState.stateMachines.keySet ++ calculatedState.scriptOracles.keySet
+                knownFibers = calculatedState.stateMachines.keySet ++ calculatedState.scripts.keySet
                 result <- processor.processSpawnsValidated(spawns, updatedFiber, contextData, knownFibers)
               } yield result
             }
@@ -289,7 +289,7 @@ object FiberEngine {
           }
 
       private def processOracleSuccess(
-        oracle:       Records.ScriptOracleFiberRecord,
+        oracle:       Records.ScriptFiberRecord,
         input:        FiberInput,
         newStateData: JsonLogicValue,
         returnValue:  Option[JsonLogicValue]

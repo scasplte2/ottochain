@@ -198,7 +198,7 @@ Use existing `e2e-test/resources/fungible.json`:
 ```json
 {
   "and": [
-    {"===": [{"var": "scriptOracles.CID_AMM.state.status"}, "active"]},
+    {"===": [{"var": "scripts.CID_AMM.state.status"}, "active"]},
     {"in": [{"var": "event.tokenIn"}, ["A", "B"]]},
     {">": [{"var": "event.amountIn"}, 0]}
   ]

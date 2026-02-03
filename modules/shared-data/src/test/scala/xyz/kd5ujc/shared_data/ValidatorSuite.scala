@@ -621,7 +621,7 @@ object ValidatorSuite extends SimpleIOSuite {
         validator <- Validator.make[IO]
         fiberId   <- UUIDGen.randomUUID[IO]
         update = Updates
-          .CreateScriptOracle(fiberId, Fixtures.simpleOracleScript(), None, AccessControlPolicy.Public)
+          .CreateScript(fiberId, Fixtures.simpleOracleScript(), None, AccessControlPolicy.Public)
         result <- validator.validateUpdate(update)
       } yield expect(result.isValid)
     }
@@ -634,7 +634,7 @@ object ValidatorSuite extends SimpleIOSuite {
       for {
         validator <- Validator.make[IO]
         fiberId   <- UUIDGen.randomUUID[IO]
-        update = Updates.CreateScriptOracle(
+        update = Updates.CreateScript(
           fiberId,
           Fixtures.simpleOracleScript(),
           Some(MapValue(Map("counter" -> IntValue(0)))),
@@ -652,7 +652,7 @@ object ValidatorSuite extends SimpleIOSuite {
       for {
         validator <- Validator.make[IO]
         fiberId   <- UUIDGen.randomUUID[IO]
-        update = Updates.CreateScriptOracle(
+        update = Updates.CreateScript(
           fiberId,
           Fixtures.simpleOracleScript(),
           Some(ArrayValue(List(IntValue(1)))),
@@ -748,12 +748,12 @@ object ValidatorSuite extends SimpleIOSuite {
         oracleId  <- UUIDGen.randomUUID[IO]
 
         createOracle = Updates
-          .CreateScriptOracle(oracleId, Fixtures.simpleOracleScript(), None, AccessControlPolicy.Public)
+          .CreateScript(oracleId, Fixtures.simpleOracleScript(), None, AccessControlPolicy.Public)
         createProof <- fixture.registry.generateProofs(createOracle, Set(Alice))
         stateAfterCreate <- combiner
           .insert(DataState(OnChain.genesis, CalculatedState.genesis), Signed(createOracle, createProof))
 
-        invokeOracle = Updates.InvokeScriptOracle(oracleId, "test", MapValue(Map.empty), FiberOrdinal.MinValue)
+        invokeOracle = Updates.InvokeScript(oracleId, "test", MapValue(Map.empty), FiberOrdinal.MinValue)
         invokeProof <- fixture.registry.generateProofs(invokeOracle, Set(Bob))
         result      <- validator.validateSignedUpdate(stateAfterCreate, Signed(invokeOracle, invokeProof))
       } yield expect(result.isValid)
@@ -771,7 +771,7 @@ object ValidatorSuite extends SimpleIOSuite {
         oracleId  <- UUIDGen.randomUUID[IO]
         bobAddr   <- fixture.registry.addresses(Bob).pure[IO]
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           oracleId,
           Fixtures.simpleOracleScript(),
           None,
@@ -781,7 +781,7 @@ object ValidatorSuite extends SimpleIOSuite {
         stateAfterCreate <- combiner
           .insert(DataState(OnChain.genesis, CalculatedState.genesis), Signed(createOracle, createProof))
 
-        invokeOracle = Updates.InvokeScriptOracle(oracleId, "test", MapValue(Map.empty), FiberOrdinal.MinValue)
+        invokeOracle = Updates.InvokeScript(oracleId, "test", MapValue(Map.empty), FiberOrdinal.MinValue)
         invokeProof <- fixture.registry.generateProofs(invokeOracle, Set(Bob))
         result      <- validator.validateSignedUpdate(stateAfterCreate, Signed(invokeOracle, invokeProof))
       } yield expect(result.isValid)
@@ -799,7 +799,7 @@ object ValidatorSuite extends SimpleIOSuite {
         oracleId  <- UUIDGen.randomUUID[IO]
         bobAddr   <- fixture.registry.addresses(Bob).pure[IO]
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           oracleId,
           Fixtures.simpleOracleScript(),
           None,
@@ -809,7 +809,7 @@ object ValidatorSuite extends SimpleIOSuite {
         stateAfterCreate <- combiner
           .insert(DataState(OnChain.genesis, CalculatedState.genesis), Signed(createOracle, createProof))
 
-        invokeOracle = Updates.InvokeScriptOracle(oracleId, "test", MapValue(Map.empty), FiberOrdinal.MinValue)
+        invokeOracle = Updates.InvokeScript(oracleId, "test", MapValue(Map.empty), FiberOrdinal.MinValue)
         invokeProof <- fixture.registry.generateProofs(invokeOracle, Set(Charlie))
         result      <- validator.validateSignedUpdate(stateAfterCreate, Signed(invokeOracle, invokeProof))
       } yield expect(result.isInvalid) and

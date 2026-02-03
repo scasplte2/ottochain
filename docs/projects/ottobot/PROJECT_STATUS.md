@@ -4,7 +4,7 @@
 
 ## Project Summary
 
-Agent-bridge microservice enabling an LLM (OttoBot the otter) to play tic-tac-toe against itself using Ottochain state machines and script oracles with full wallet autonomy.
+Agent-bridge microservice enabling an LLM (OttoBot the otter) to play tic-tac-toe against itself using Ottochain state machines and scripts with full wallet autonomy.
 
 ## Current Status: Phase 1 Complete (Documentation & Definitions)
 
@@ -107,7 +107,7 @@ Agent-bridge microservice enabling an LLM (OttoBot the otter) to play tic-tac-to
 ## Key Design Decisions
 
 ### Oracle-Centric Architecture ✅
-**Decision**: Script Oracle holds full game state, state machine only manages lifecycle
+**Decision**: Script holds full game state, state machine only manages lifecycle
 **Rationale**: Cleaner separation, deterministic rules, simpler state machine
 **Status**: Implemented
 

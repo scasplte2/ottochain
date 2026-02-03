@@ -47,20 +47,20 @@ export const validator = async ({ cid, statesMap, options, ml0Urls }: { cid: str
 
     if (!initialRecord) {
       throw new Error(
-        `\x1b[33m[invokeOracle.validator]\x1b[0m No initial script oracle found for fiberId = ${cid} from ${url}.`
+        `\x1b[33m[invokeScript.validator]\x1b[0m No initial script oracle found for fiberId = ${cid} from ${url}.`
       );
     }
 
     if (!finalRecord) {
       throw new Error(
-        `\x1b[33m[invokeOracle.validator]\x1b[0m No final script oracle found for fiberId = ${cid} from ${url}.`
+        `\x1b[33m[invokeScript.validator]\x1b[0m No final script oracle found for fiberId = ${cid} from ${url}.`
       );
     }
 
     // US-7: invocationCount → sequenceNumber
     if (finalRecord.sequenceNumber <= initialRecord.sequenceNumber) {
       throw new Error(
-        `\x1b[33m[invokeOracle.validator]\x1b[0m Expected sequenceNumber to increase. Initial: ${initialRecord.sequenceNumber}, Final: ${finalRecord.sequenceNumber} for fiberId = ${cid} at ${url}.`
+        `\x1b[33m[invokeScript.validator]\x1b[0m Expected sequenceNumber to increase. Initial: ${initialRecord.sequenceNumber}, Final: ${finalRecord.sequenceNumber} for fiberId = ${cid} at ${url}.`
       );
     }
 
@@ -68,16 +68,16 @@ export const validator = async ({ cid, statesMap, options, ml0Urls }: { cid: str
     const latestInvocation = finalRecord.lastInvocation;
     if (latestInvocation) {
       console.log(
-        `\x1b[33m[invokeOracle.validator]\x1b[32m Oracle invoked successfully for fiberId = ${cid} at ${url}.`
+        `\x1b[33m[invokeScript.validator]\x1b[32m Oracle invoked successfully for fiberId = ${cid} at ${url}.`
       );
       console.log(
-        `\x1b[33m[invokeOracle.validator]\x1b[0m   Method: ${latestInvocation.method}`
+        `\x1b[33m[invokeScript.validator]\x1b[0m   Method: ${latestInvocation.method}`
       );
       console.log(
-        `\x1b[33m[invokeOracle.validator]\x1b[0m   Result: ${JSON.stringify(latestInvocation.result)}`
+        `\x1b[33m[invokeScript.validator]\x1b[0m   Result: ${JSON.stringify(latestInvocation.result)}`
       );
       console.log(
-        `\x1b[33m[invokeOracle.validator]\x1b[0m   Gas Used: ${latestInvocation.gasUsed}`
+        `\x1b[33m[invokeScript.validator]\x1b[0m   Gas Used: ${latestInvocation.gasUsed}`
       );
 
       if (options.expectedResult !== undefined) {
@@ -89,13 +89,13 @@ export const validator = async ({ cid, statesMap, options, ml0Urls }: { cid: str
 
         if (JSON.stringify(actualResult) !== JSON.stringify(expectedResult)) {
           throw new Error(
-            `\x1b[33m[invokeOracle.validator]\x1b[0m Expected result ${JSON.stringify(expectedResult)} but got ${JSON.stringify(actualResult)} for fiberId = ${cid} at ${url}.`
+            `\x1b[33m[invokeScript.validator]\x1b[0m Expected result ${JSON.stringify(expectedResult)} but got ${JSON.stringify(actualResult)} for fiberId = ${cid} at ${url}.`
           );
         }
       }
     } else {
       console.log(
-        `\x1b[33m[invokeOracle.validator]\x1b[33m Oracle sequenceNumber increased but no lastInvocation found for fiberId = ${cid} at ${url}.\x1b[0m`
+        `\x1b[33m[invokeScript.validator]\x1b[33m Oracle sequenceNumber increased but no lastInvocation found for fiberId = ${cid} at ${url}.\x1b[0m`
       );
     }
   }

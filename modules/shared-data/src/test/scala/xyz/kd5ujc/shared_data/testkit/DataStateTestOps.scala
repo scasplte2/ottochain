@@ -107,12 +107,12 @@ object DataStateTestOps {
       }
 
     /**
-     * Lookup a script oracle fiber record by CID.
+     * Lookup a script fiber record by CID.
      *
      * @return Some(record) if the oracle exists, None otherwise
      */
-    def oracleRecord(fiberId: UUID): Option[Records.ScriptOracleFiberRecord] =
-      state.calculated.scriptOracles.get(fiberId)
+    def oracleRecord(fiberId: UUID): Option[Records.ScriptFiberRecord] =
+      state.calculated.scripts.get(fiberId)
 
     /**
      * Get the current sequence number for a fiber.

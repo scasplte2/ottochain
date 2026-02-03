@@ -49,25 +49,25 @@ export const validator = ({ cid, statesMap }: { cid: string; statesMap: StatesMa
 
     if (!finalRecord) {
       throw new Error(
-        `\x1b[33m[createOracle.validator]\x1b[0m No script oracle found for fiberId = ${cid} in final state from ${url}.`
+        `\x1b[33m[createScript.validator]\x1b[0m No script oracle found for fiberId = ${cid} in final state from ${url}.`
       );
     }
 
     if (finalRecord.status !== 'Active') {
       throw new Error(
-        `\x1b[33m[createOracle.validator]\x1b[0m Expected oracle status "Active" but found "${finalRecord.status}" for fiberId = ${cid} at ${url}.`
+        `\x1b[33m[createScript.validator]\x1b[0m Expected oracle status "Active" but found "${finalRecord.status}" for fiberId = ${cid} at ${url}.`
       );
     }
 
     // US-7: invocationCount → sequenceNumber
     if (finalRecord.sequenceNumber !== 0) {
       throw new Error(
-        `\x1b[33m[createOracle.validator]\x1b[0m Expected sequenceNumber 0 for new oracle but found ${finalRecord.sequenceNumber} for fiberId = ${cid} at ${url}.`
+        `\x1b[33m[createScript.validator]\x1b[0m Expected sequenceNumber 0 for new oracle but found ${finalRecord.sequenceNumber} for fiberId = ${cid} at ${url}.`
       );
     }
 
     console.log(
-      `\x1b[33m[createOracle.validator]\x1b[32m Oracle created successfully for fiberId = ${cid} at ${url}!\x1b[0m`
+      `\x1b[33m[createScript.validator]\x1b[32m Oracle created successfully for fiberId = ${cid} at ${url}!\x1b[0m`
     );
   }
 };

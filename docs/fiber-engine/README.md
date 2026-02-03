@@ -61,7 +61,7 @@ A fiber is an independently addressable execution unit. Two types exist:
 | Type | Record | Input | Purpose |
 |------|--------|-------|---------|
 | State Machine | `StateMachineFiberRecord` | `Transition` | Guarded state transitions with effects |
-| Oracle | `ScriptOracleFiberRecord` | `MethodCall` | Stateless computations with access control |
+| Oracle | `ScriptFiberRecord` | `MethodCall` | Stateless computations with access control |
 
 ### FiberInput
 
@@ -102,7 +102,7 @@ Result of a complete transaction (including cascades):
 sealed trait TransactionOutcome
 case class Committed(
   updatedStateMachines: Map[UUID, Records.StateMachineFiberRecord],
-  updatedOracles: Map[UUID, Records.ScriptOracleFiberRecord],
+  updatedOracles: Map[UUID, Records.ScriptFiberRecord],
   statuses: List[(UUID, Records.EventProcessingStatus)],
   totalGasUsed: Long,
   maxDepth: Int = 0,
@@ -274,7 +274,7 @@ def mergeEffectIntoState(
 
 *Source: [diagrams/src/execution-sequence.mmd](diagrams/src/execution-sequence.mmd)*
 
-1. **Combiner receives update** (ProcessFiberEvent, InvokeScriptOracle)
+1. **Combiner receives update** (ProcessFiberEvent, InvokeScript)
 2. **FiberOrchestrator.processEvent** coordinates transaction
 3. **FiberEvaluator.evaluate** processes primary fiber
 4. **SpawnProcessor** creates any child fibers
@@ -445,7 +445,7 @@ Available via `var` expressions in guards/effects:
 | `machines` | `Map` | Dependent machine states |
 | `parent` | `MapValue?` | Parent fiber state (if exists) |
 | `children` | `Map` | Child fiber states |
-| `scriptOracles` | `Map` | Available oracle states |
+| `scripts` | `Map` | Available oracle states |
 
 ### Context Input Keys (Oracle)
 

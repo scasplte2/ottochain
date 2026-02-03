@@ -492,7 +492,7 @@ case class RewardEmittedEvent(
 ```scala
 case class CalculatedState(
   stateMachines: Map[UUID, StateMachineFiberRecord],
-  scriptOracles: Map[UUID, ScriptOracleFiberRecord],
+  scripts: Map[UUID, ScriptFiberRecord],
 
   // NEW: Event indexing
   eventLog: List[FiberEvent],              // Append-only log (last N events)
@@ -643,7 +643,7 @@ object EventRoutes {
 
 **Oracles have**:
 ```scala
-case class ScriptOracleFiberRecord(
+case class ScriptFiberRecord(
   accessControl: AccessControl
 )
 

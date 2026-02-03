@@ -20,7 +20,7 @@ import weaver.SimpleIOSuite
 /**
  * Oracle Escrow State Machine — Unit Tests
  *
- * An escrow contract that uses a script oracle to determine release conditions.
+ * An escrow contract that uses a script to determine release conditions.
  * Demonstrates:
  * - State machine with conditional transitions (guards)
  * - Script oracle creation and invocation
@@ -85,7 +85,7 @@ object OracleEscrowSuite extends SimpleIOSuite {
         oracleProg <- IO.fromEither(parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
 
         // Create the oracle
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = oracleId,
           scriptProgram = oracleProg,
           initialState = None,
@@ -105,7 +105,7 @@ object OracleEscrowSuite extends SimpleIOSuite {
         state3    <- combiner.insert(state2, Signed(fundOp, fundProof))
 
         // Invoke Oracle (simulating an external check)
-        invokeOracle = Updates.InvokeScriptOracle(
+        invokeOracle = Updates.InvokeScript(
           fiberId = oracleId,
           method = "invoke",
           args = MapValue(Map.empty[String, JsonLogicValue]),
@@ -212,7 +212,7 @@ object OracleEscrowSuite extends SimpleIOSuite {
         oracleProg <- IO.fromEither(parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
 
         // Create the oracle
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = oracleId,
           scriptProgram = oracleProg,
           initialState = None,
@@ -232,7 +232,7 @@ object OracleEscrowSuite extends SimpleIOSuite {
         state3    <- combiner.insert(state2, Signed(fundOp, fundProof))
 
         // Invoke Oracle
-        invokeOracle = Updates.InvokeScriptOracle(
+        invokeOracle = Updates.InvokeScript(
           fiberId = oracleId,
           method = "invoke",
           args = MapValue(Map.empty[String, JsonLogicValue]),

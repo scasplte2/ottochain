@@ -10,7 +10,7 @@ import io.constellationnetwork.security.signature.Signed
 import xyz.kd5ujc.schema.Updates.OttochainMessage
 import xyz.kd5ujc.schema.fiber.ExecutionLimits
 import xyz.kd5ujc.schema.{CalculatedState, OnChain, Updates}
-import xyz.kd5ujc.shared_data.lifecycle.combine.{FiberCombiner, OracleCombiner}
+import xyz.kd5ujc.shared_data.lifecycle.combine.{FiberCombiner, ScriptCombiner}
 
 /**
  * Entry point for creating a CombinerService.
@@ -25,12 +25,12 @@ import xyz.kd5ujc.shared_data.lifecycle.combine.{FiberCombiner, OracleCombiner}
  *   - ProcessFiberEvent: Execute state transitions through orchestrator
  *   - ArchiveFiber: Mark fiber as archived
  *
- * - '''OracleCombiner''': Handles script oracle operations
- *   - CreateScriptOracle: Initialize new oracle with script
- *   - InvokeScriptOracle: Execute oracle method
+ * - '''ScriptCombiner''': Handles script operations
+ *   - CreateScript: Initialize new oracle with script
+ *   - InvokeScript: Execute oracle method
  *
  * @see [[combine.FiberCombiner]] for fiber operations
- * @see [[combine.OracleCombiner]] for oracle operations
+ * @see [[combine.ScriptCombiner]] for oracle operations
  */
 object Combiner {
 
@@ -49,14 +49,14 @@ object Combiner {
         update:   Signed[OttochainMessage]
       )(implicit ctx: L0NodeContext[F]): F[DataState[OnChain, CalculatedState]] = {
         val fiberCombiner = FiberCombiner[F](previous, ctx, executionLimits)
-        val oracleCombiner = OracleCombiner[F](previous, ctx, executionLimits)
+        val oracleCombiner = ScriptCombiner[F](previous, ctx, executionLimits)
 
         update.value match {
           case u: Updates.CreateStateMachine     => fiberCombiner.createStateMachineFiber(Signed(u, update.proofs))
           case u: Updates.TransitionStateMachine => fiberCombiner.processFiberEvent(Signed(u, update.proofs))
           case u: Updates.ArchiveStateMachine    => fiberCombiner.archiveFiber(Signed(u, update.proofs))
-          case u: Updates.CreateScriptOracle     => oracleCombiner.createScriptOracle(Signed(u, update.proofs))
-          case u: Updates.InvokeScriptOracle     => oracleCombiner.invokeScriptOracle(Signed(u, update.proofs))
+          case u: Updates.CreateScript           => oracleCombiner.createScript(Signed(u, update.proofs))
+          case u: Updates.InvokeScript           => oracleCombiner.invokeScript(Signed(u, update.proofs))
         }
       }
     }

@@ -7,7 +7,7 @@ Understanding the OttoChain metagraph architecture. For a high-level conceptual 
 OttoChain's processing model centers on **fibers** — lightweight, independently-addressable computation units that live on-chain. There are two kinds:
 
 - **State Machine Fibers** — Define workflows as states + transitions with JSON Logic guards and effects
-- **Script Oracle Fibers** — Stateful computation units exposing named methods
+- **Script Fibers** — Stateful computation units exposing named methods
 
 Fibers interact through triggers, dependencies, oracle calls, and parent-child spawning. See the [fiber interaction diagram](../../diagrams/fiber-interaction-patterns.png) for a visual overview.
 

@@ -35,7 +35,7 @@ object OracleAccessControlSuite extends SimpleIOSuite {
         oracleScript = """{"result": "success"}"""
         oracleProg <- IO.fromEither(parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = oracleFiberId,
           scriptProgram = oracleProg,
           initialState = None,
@@ -48,7 +48,7 @@ object OracleAccessControlSuite extends SimpleIOSuite {
           Signed(createOracle, oracleProof)
         )
 
-        invokeOracle = Updates.InvokeScriptOracle(
+        invokeOracle = Updates.InvokeScript(
           fiberId = oracleFiberId,
           method = "test",
           args = MapValue(Map.empty),
@@ -57,7 +57,7 @@ object OracleAccessControlSuite extends SimpleIOSuite {
         invokeProof <- fixture.registry.generateProofs(invokeOracle, Set(Alice))
         finalState  <- combiner.insert(stateAfterOracle, Signed(invokeOracle, invokeProof))
 
-        oracle = finalState.calculated.scriptOracles.get(oracleFiberId)
+        oracle = finalState.calculated.scripts.get(oracleFiberId)
 
       } yield expect(oracle.isDefined) and
       expect(oracle.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next)) and
@@ -79,7 +79,7 @@ object OracleAccessControlSuite extends SimpleIOSuite {
         oracleScript = """{"result": "success"}"""
         oracleProg <- IO.fromEither(parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = oracleFiberId,
           scriptProgram = oracleProg,
           initialState = None,
@@ -92,7 +92,7 @@ object OracleAccessControlSuite extends SimpleIOSuite {
           Signed(createOracle, oracleProof)
         )
 
-        invokeOracle = Updates.InvokeScriptOracle(
+        invokeOracle = Updates.InvokeScript(
           fiberId = oracleFiberId,
           method = "test",
           args = MapValue(Map.empty),
@@ -102,7 +102,7 @@ object OracleAccessControlSuite extends SimpleIOSuite {
 
         result <- combiner.insert(stateAfterOracle, Signed(invokeOracle, invokeProof)).attempt
 
-        oracle = stateAfterOracle.calculated.scriptOracles.get(oracleFiberId)
+        oracle = stateAfterOracle.calculated.scripts.get(oracleFiberId)
 
       } yield expect(result.isLeft) and
       expect(oracle.isDefined) and
@@ -125,7 +125,7 @@ object OracleAccessControlSuite extends SimpleIOSuite {
         oracleScript = """{"result": "success"}"""
         oracleProg <- IO.fromEither(parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = oracleFiberId,
           scriptProgram = oracleProg,
           initialState = None,
@@ -138,7 +138,7 @@ object OracleAccessControlSuite extends SimpleIOSuite {
           Signed(createOracle, oracleProof)
         )
 
-        invokeOracle1 = Updates.InvokeScriptOracle(
+        invokeOracle1 = Updates.InvokeScript(
           fiberId = oracleFiberId,
           method = "test",
           args = MapValue(Map.empty),
@@ -147,8 +147,8 @@ object OracleAccessControlSuite extends SimpleIOSuite {
         invokeProof1    <- fixture.registry.generateProofs(invokeOracle1, Set(Alice))
         stateAfterAlice <- combiner.insert(stateAfterOracle, Signed(invokeOracle1, invokeProof1))
 
-        oracleSeq1 = stateAfterAlice.calculated.scriptOracles(oracleFiberId).sequenceNumber
-        invokeOracle2 = Updates.InvokeScriptOracle(
+        oracleSeq1 = stateAfterAlice.calculated.scripts(oracleFiberId).sequenceNumber
+        invokeOracle2 = Updates.InvokeScript(
           fiberId = oracleFiberId,
           method = "test",
           args = MapValue(Map.empty),
@@ -157,8 +157,8 @@ object OracleAccessControlSuite extends SimpleIOSuite {
         invokeProof2  <- fixture.registry.generateProofs(invokeOracle2, Set(Bob))
         stateAfterBob <- combiner.insert(stateAfterAlice, Signed(invokeOracle2, invokeProof2))
 
-        oracleSeq2 = stateAfterBob.calculated.scriptOracles(oracleFiberId).sequenceNumber
-        invokeOracle3 = Updates.InvokeScriptOracle(
+        oracleSeq2 = stateAfterBob.calculated.scripts(oracleFiberId).sequenceNumber
+        invokeOracle3 = Updates.InvokeScript(
           fiberId = oracleFiberId,
           method = "test",
           args = MapValue(Map.empty),
@@ -167,7 +167,7 @@ object OracleAccessControlSuite extends SimpleIOSuite {
         invokeProof3  <- fixture.registry.generateProofs(invokeOracle3, Set(Charlie))
         charlieResult <- combiner.insert(stateAfterBob, Signed(invokeOracle3, invokeProof3)).attempt
 
-        oracle = stateAfterBob.calculated.scriptOracles.get(oracleFiberId)
+        oracle = stateAfterBob.calculated.scripts.get(oracleFiberId)
 
       } yield expect(oracle.isDefined) and
       expect(oracle.map(_.sequenceNumber).contains(FiberOrdinal.unsafeApply(2L))) and
@@ -196,7 +196,7 @@ object OracleAccessControlSuite extends SimpleIOSuite {
 
         oracleProg <- IO.fromEither(parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = oracleFiberId,
           scriptProgram = oracleProg,
           initialState = None,
@@ -256,7 +256,7 @@ object OracleAccessControlSuite extends SimpleIOSuite {
           .get(machineFiberId)
           .collect { case r: Records.StateMachineFiberRecord => r }
 
-        oracle = finalState.calculated.scriptOracles.get(oracleFiberId)
+        oracle = finalState.calculated.scripts.get(oracleFiberId)
 
       } yield expect(machine.isDefined) and
       expect(machine.map(_.currentState).contains(StateId("validated"))) and
@@ -286,7 +286,7 @@ object OracleAccessControlSuite extends SimpleIOSuite {
 
         oracleProg <- IO.fromEither(parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = oracleFiberId,
           scriptProgram = oracleProg,
           initialState = None,
@@ -346,7 +346,7 @@ object OracleAccessControlSuite extends SimpleIOSuite {
           .get(machineFiberId)
           .collect { case r: Records.StateMachineFiberRecord => r }
 
-        oracle = finalState.calculated.scriptOracles.get(oracleFiberId)
+        oracle = finalState.calculated.scripts.get(oracleFiberId)
 
       } yield expect(machine.isDefined) and
       expect(machine.map(_.currentState).contains(StateId("idle"))) and
@@ -385,7 +385,7 @@ object OracleAccessControlSuite extends SimpleIOSuite {
 
         oracleProg <- IO.fromEither(parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = oracleFiberId,
           scriptProgram = oracleProg,
           initialState = None,
@@ -450,7 +450,7 @@ object OracleAccessControlSuite extends SimpleIOSuite {
           .get(machineFiberId)
           .collect { case r: Records.StateMachineFiberRecord => r }
 
-        oracle = finalState.calculated.scriptOracles.get(oracleFiberId)
+        oracle = finalState.calculated.scripts.get(oracleFiberId)
 
       } yield expect(machine.isDefined) and
       // The SM's transition should have been aborted due to oracle access denial
@@ -491,7 +491,7 @@ object OracleAccessControlSuite extends SimpleIOSuite {
         oracleProg <- IO.fromEither(parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
 
         // Create oracle with FiberOwned access control (pointing to non-existent fiber)
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = oracleFiberId,
           scriptProgram = oracleProg,
           initialState = None,
@@ -505,7 +505,7 @@ object OracleAccessControlSuite extends SimpleIOSuite {
         )
 
         // Attempt to invoke the oracle (should fail - owner fiber doesn't exist)
-        invokeOracle = Updates.InvokeScriptOracle(
+        invokeOracle = Updates.InvokeScript(
           fiberId = oracleFiberId,
           method = "process",
           args = MapValue(Map.empty),

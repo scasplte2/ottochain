@@ -27,14 +27,14 @@ trait CalculatedStateOps {
 
     /** Lookup any fiber by ID */
     def getFiber(id: UUID): Option[Records.FiberRecord] =
-      state.stateMachines.get(id).orElse(state.scriptOracles.get(id))
+      state.stateMachines.get(id).orElse(state.scripts.get(id))
 
     /** Update a fiber (dispatches to correct map) */
     def updateFiber(fiber: Records.FiberRecord): CalculatedState = fiber match {
       case sm: Records.StateMachineFiberRecord =>
         state.copy(stateMachines = state.stateMachines.updated(sm.fiberId, sm))
-      case oracle: Records.ScriptOracleFiberRecord =>
-        state.copy(scriptOracles = state.scriptOracles.updated(oracle.fiberId, oracle))
+      case oracle: Records.ScriptFiberRecord =>
+        state.copy(scripts = state.scripts.updated(oracle.fiberId, oracle))
     }
   }
 }

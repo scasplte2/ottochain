@@ -161,7 +161,7 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
    */
   private def handleCommittedOutcome(
     updatedFibers:  Map[UUID, Records.StateMachineFiberRecord],
-    updatedOracles: Map[UUID, Records.ScriptOracleFiberRecord],
+    updatedOracles: Map[UUID, Records.ScriptFiberRecord],
     logEntries:     List[FiberLogEntry]
   ): F[DataState[OnChain, CalculatedState]] =
     current.withFibersAndOracles[F](updatedFibers, updatedOracles).map(_.appendLogs(logEntries))

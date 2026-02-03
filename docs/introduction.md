@@ -1,6 +1,6 @@
 # Understanding OttoChain
 
-OttoChain is a metagraph on the [Constellation Network](https://constellationnetwork.io/) that turns JSON into executable workflows. Define state machines, script oracles, and multi-party coordination entirely through JSON configuration — no custom code required.
+OttoChain is a metagraph on the [Constellation Network](https://constellationnetwork.io/) that turns JSON into executable workflows. Define state machines, scripts, and multi-party coordination entirely through JSON configuration — no custom code required.
 
 ## The Problem
 
@@ -14,7 +14,7 @@ OttoChain offers a fourth path: **JSON-encoded deterministic state machines** th
 
 ## Core Concepts
 
-OttoChain has two fundamental building blocks: **state machines** and **script oracles**. Both are called *fibers* — lightweight, independently-addressable units of computation that live on-chain.
+OttoChain has two fundamental building blocks: **state machines** and **scripts**. Both are called *fibers* — lightweight, independently-addressable units of computation that live on-chain.
 
 ### State Machines
 
@@ -61,14 +61,14 @@ Everything — states, transitions, guards, effects — is defined in JSON:
 - **Versionable** — Update workflow rules by deploying a new definition, no code changes
 - **AI-friendly** — LLMs can read, write, and reason about JSON Logic natively
 
-### Script Oracles
+### Scripts
 
 Script oracles are stateful computation units. Where state machines orchestrate *lifecycle* (which state am I in?), oracles handle *logic* (what's the answer?). An oracle exposes named **methods** that other fibers can call.
 
 Think of them as on-chain microservices:
 
 ```
-State Machine                    Script Oracle
+State Machine                    Script
 ┌───────────┐    _oracleCall     ┌─────────────┐
 │  playing  │───────────────────▶│  Game Logic  │
 │           │    makeMove(x,y)   │             │
@@ -143,7 +143,7 @@ sequenceDiagram
         Evaluator->>Evaluator: Find matching transition
         Evaluator->>Evaluator: Evaluate guard (JSON Logic)
         Evaluator->>Evaluator: Apply effect (JSON Logic)
-    else Script Oracle
+    else Script
         Evaluator->>Evaluator: Dispatch to method
         Evaluator->>Evaluator: Execute script
     end

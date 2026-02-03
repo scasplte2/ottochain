@@ -32,7 +32,7 @@ object StatefulOracleSuite extends SimpleIOSuite {
         fiberId <- IO.randomUUID
         prog    <- IO.fromEither(parser.parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = fiberId,
           scriptProgram = prog,
           initialState = None,
@@ -42,7 +42,7 @@ object StatefulOracleSuite extends SimpleIOSuite {
         createProof <- fixture.registry.generateProofs(createOracle, Set(Alice))
         state <- combiner.insert(DataState(OnChain.genesis, CalculatedState.genesis), Signed(createOracle, createProof))
 
-        oracle = state.calculated.scriptOracles.get(fiberId)
+        oracle = state.calculated.scripts.get(fiberId)
       } yield expect(oracle.isDefined) and
       expect(oracle.map(_.stateData).contains(None)) and
       expect(oracle.map(_.stateDataHash).contains(None)) and
@@ -67,7 +67,7 @@ object StatefulOracleSuite extends SimpleIOSuite {
 
         initialData = MapValue(Map("counter" -> IntValue(0)))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = fiberId,
           scriptProgram = prog,
           initialState = Some(initialData),
@@ -80,7 +80,7 @@ object StatefulOracleSuite extends SimpleIOSuite {
           Signed(createOracle, createProof)
         )
 
-        invokeOracle = Updates.InvokeScriptOracle(
+        invokeOracle = Updates.InvokeScript(
           fiberId = fiberId,
           method = "increment",
           args = MapValue(Map.empty),
@@ -90,7 +90,7 @@ object StatefulOracleSuite extends SimpleIOSuite {
         invokeProof <- fixture.registry.generateProofs(invokeOracle, Set(Alice))
         state2      <- combiner.insert(state1, Signed(invokeOracle, invokeProof))
 
-        oracle = state2.calculated.scriptOracles.get(fiberId)
+        oracle = state2.calculated.scripts.get(fiberId)
         expectedState = MapValue(Map("counter" -> IntValue(5)))
         expectedResult = MapValue(Map("success" -> BoolValue(true), "newValue" -> IntValue(5)))
       } yield expect(oracle.isDefined) and
@@ -112,7 +112,7 @@ object StatefulOracleSuite extends SimpleIOSuite {
         fiberId <- IO.randomUUID
         prog    <- IO.fromEither(parser.parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = fiberId,
           scriptProgram = prog,
           initialState = None,
@@ -125,7 +125,7 @@ object StatefulOracleSuite extends SimpleIOSuite {
           Signed(createOracle, createProof)
         )
 
-        invokeOracle = Updates.InvokeScriptOracle(
+        invokeOracle = Updates.InvokeScript(
           fiberId = fiberId,
           method = "increment",
           args = MapValue(Map.empty),
@@ -135,7 +135,7 @@ object StatefulOracleSuite extends SimpleIOSuite {
         invokeProof <- fixture.registry.generateProofs(invokeOracle, Set(Alice))
         state2      <- combiner.insert(state1, Signed(invokeOracle, invokeProof))
 
-        oracle = state2.calculated.scriptOracles.get(fiberId)
+        oracle = state2.calculated.scripts.get(fiberId)
         expectedState = MapValue(Map("counter" -> IntValue(1)))
       } yield expect(oracle.isDefined) and
       expect(oracle.flatMap(_.stateData).contains(expectedState)) and
@@ -161,7 +161,7 @@ object StatefulOracleSuite extends SimpleIOSuite {
 
         initialData = MapValue(Map("visits" -> IntValue(0)))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = fiberId,
           scriptProgram = prog,
           initialState = Some(initialData),
@@ -174,7 +174,7 @@ object StatefulOracleSuite extends SimpleIOSuite {
           Signed(createOracle, createProof)
         )
 
-        invokeOracle = Updates.InvokeScriptOracle(
+        invokeOracle = Updates.InvokeScript(
           fiberId = fiberId,
           method = "visit",
           args = MapValue(Map.empty),
@@ -184,7 +184,7 @@ object StatefulOracleSuite extends SimpleIOSuite {
         invokeProof <- fixture.registry.generateProofs(invokeOracle, Set(Alice))
         state2      <- combiner.insert(state1, Signed(invokeOracle, invokeProof))
 
-        oracle = state2.calculated.scriptOracles.get(fiberId)
+        oracle = state2.calculated.scripts.get(fiberId)
         expectedState = MapValue(Map("visits" -> IntValue(1)))
         expectedResult = MapValue(
           Map(
@@ -215,7 +215,7 @@ object StatefulOracleSuite extends SimpleIOSuite {
 
         initialData = MapValue(Map("callCount" -> IntValue(0)))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = fiberId,
           scriptProgram = prog,
           initialState = Some(initialData),
@@ -229,24 +229,24 @@ object StatefulOracleSuite extends SimpleIOSuite {
         )
 
         // First invocation
-        invoke1 = Updates.InvokeScriptOracle(fiberId, "inc", MapValue(Map.empty), FiberOrdinal.MinValue)
+        invoke1 = Updates.InvokeScript(fiberId, "inc", MapValue(Map.empty), FiberOrdinal.MinValue)
         proof1 <- fixture.registry.generateProofs(invoke1, Set(Alice))
         state1 <- combiner.insert(state0, Signed(invoke1, proof1))
 
-        oracle1 = state1.calculated.scriptOracles.get(fiberId)
+        oracle1 = state1.calculated.scripts.get(fiberId)
 
         // Second invocation
         invoke2 = Updates
-          .InvokeScriptOracle(
+          .InvokeScript(
             fiberId,
             "inc",
             MapValue(Map.empty),
-            state1.calculated.scriptOracles(fiberId).sequenceNumber
+            state1.calculated.scripts(fiberId).sequenceNumber
           )
         proof2 <- fixture.registry.generateProofs(invoke2, Set(Alice))
         state2 <- combiner.insert(state1, Signed(invoke2, proof2))
 
-        oracle2 = state2.calculated.scriptOracles.get(fiberId)
+        oracle2 = state2.calculated.scripts.get(fiberId)
 
       } yield expect(oracle1.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next)) and
       expect(oracle1.flatMap(_.stateData).contains(MapValue(Map("callCount" -> IntValue(99))))) and

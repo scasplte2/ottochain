@@ -178,7 +178,7 @@ Guards and effects are evaluated against a context that includes:
 | `machines` | Object | States of dependent state machine fibers |
 | `parent` | Object/null | Parent fiber's state (if this is a child) |
 | `children` | Object | Child fiber states, keyed by UUID |
-| `scriptOracles` | Object | States of dependent script oracle fibers |
+| `scripts` | Object | States of dependent script fibers |
 
 ### Accessing Nested Context
 
@@ -189,10 +189,10 @@ Use dot-notation paths:
 {"var": "event.data.amount"}
 {"var": "proofs.0.address"}
 {"var": "machines.550e8400-e29b-41d4-a716-446655440000.state.status"}
-{"var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.board"}
+{"var": "scripts.11111111-1111-1111-1111-111111111111.state.board"}
 ```
 
-### Oracle Context (for Script Oracle fibers)
+### Oracle Context (for Script fibers)
 
 Script oracles receive a different context:
 
@@ -206,9 +206,9 @@ Script oracles receive a different context:
 
 Effect results can include special keys (prefixed with `_`) that trigger side effects. These are extracted by the engine and **not** merged into state.
 
-### `_oracleCall` — Invoke a Script Oracle
+### `_oracleCall` — Invoke a Script
 
-Calls a method on a script oracle fiber:
+Calls a method on a script fiber:
 
 ```json
 "effect": {
@@ -301,8 +301,8 @@ Emit observable events (for external consumption):
       "name": "game_completed",
       "data": {
         "gameId": {"var": "state.gameId"},
-        "winner": {"var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.winner"},
-        "status": {"var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.status"}
+        "winner": {"var": "scripts.11111111-1111-1111-1111-111111111111.state.winner"},
+        "status": {"var": "scripts.11111111-1111-1111-1111-111111111111.state.status"}
       }
     }
   ]
@@ -340,12 +340,12 @@ Check that multiple fields exist:
 
 ### Check Dependent Oracle State
 
-Read state from a script oracle via the `scriptOracles` context:
+Read state from a script via the `scripts` context:
 
 ```json
 "guard": {
   "===": [
-    {"var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.status"},
+    {"var": "scripts.11111111-1111-1111-1111-111111111111.state.status"},
     "InProgress"
   ]
 }
@@ -419,13 +419,13 @@ A real-world effect combining multiple side effects with state changes:
       "name": "game_completed",
       "data": {
         "gameId": {"var": "state.gameId"},
-        "winner": {"var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.winner"}
+        "winner": {"var": "scripts.11111111-1111-1111-1111-111111111111.state.winner"}
       }
     }
   ],
-  "finalStatus": {"var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.status"},
-  "winner": {"var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.winner"},
-  "finalBoard": {"var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.board"}
+  "finalStatus": {"var": "scripts.11111111-1111-1111-1111-111111111111.state.status"},
+  "winner": {"var": "scripts.11111111-1111-1111-1111-111111111111.state.winner"},
+  "finalBoard": {"var": "scripts.11111111-1111-1111-1111-111111111111.state.board"}
 }
 ```
 

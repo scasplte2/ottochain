@@ -600,7 +600,7 @@ object FailureReasonSuite extends SimpleIOSuite {
     }
   }
 
-  test("type mismatch: Transition input with ScriptOracleFiberRecord") {
+  test("type mismatch: Transition input with ScriptFiberRecord") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
@@ -615,8 +615,8 @@ object FailureReasonSuite extends SimpleIOSuite {
         oracleData = MapValue(Map("value" -> IntValue(0)))
         oracleHash <- (oracleData: JsonLogicValue).computeDigest
 
-        // Create a script oracle fiber
-        oracle = Records.ScriptOracleFiberRecord(
+        // Create a script fiber
+        oracle = Records.ScriptFiberRecord(
           fiberId = oracleId,
           creationOrdinal = ordinal,
           latestUpdateOrdinal = ordinal,
@@ -648,8 +648,8 @@ object FailureReasonSuite extends SimpleIOSuite {
             case FailureReason.FiberInputMismatch(oid, fiberType, inputType) =>
               expect(oid == oracleId, s"Expected oracle $oracleId, got $oid") and
               expect(
-                fiberType == FiberKind.ScriptOracle,
-                s"Expected fiberType ScriptOracle, got $fiberType"
+                fiberType == FiberKind.Script,
+                s"Expected fiberType Script, got $fiberType"
               ) and
               expect(inputType == InputKind.Transition, s"Expected inputType Transition, got $inputType")
             case other =>

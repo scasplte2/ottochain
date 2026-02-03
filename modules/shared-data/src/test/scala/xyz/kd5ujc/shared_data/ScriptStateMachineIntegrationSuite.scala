@@ -41,7 +41,7 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
 
         oracleProg <- IO.fromEither(parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = oracleFiberId,
           scriptProgram = oracleProg,
           initialState = None,
@@ -104,7 +104,7 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
           .get(machineFiberId)
           .collect { case r: Records.StateMachineFiberRecord => r }
 
-        oracle = finalState.calculated.scriptOracles.get(oracleFiberId)
+        oracle = finalState.calculated.scripts.get(oracleFiberId)
 
         machineStatus = machine.flatMap { f =>
           f.stateData match {
@@ -154,7 +154,7 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
 
         oracleProg <- IO.fromEither(parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = oracleFiberId,
           scriptProgram = oracleProg,
           initialState = None,
@@ -217,7 +217,7 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
           .get(machineFiberId)
           .collect { case r: Records.StateMachineFiberRecord => r }
 
-        oracle = finalState.calculated.scriptOracles.get(oracleFiberId)
+        oracle = finalState.calculated.scripts.get(oracleFiberId)
 
       } yield expect(machine.isDefined) and
       expect(machine.map(_.currentState).contains(StateId("pending"))) and
@@ -243,7 +243,7 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
         oracleProg <- IO.fromEither(parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
         initialOracleState = MapValue(Map("counter" -> IntValue(3)))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = oracleFiberId,
           scriptProgram = oracleProg,
           initialState = Some(initialOracleState),
@@ -270,7 +270,7 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
               "eventName": "unlock",
               "guard": {
                 ">=": [
-                  { "var": "scriptOracles.$oracleFiberId.state.counter" },
+                  { "var": "scripts.$oracleFiberId.state.counter" },
                   5
                 ]
               },
@@ -303,7 +303,7 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
           .get(machineFiberId)
           .collect { case r: Records.StateMachineFiberRecord => r }
 
-        invokeOracle = Updates.InvokeScriptOracle(
+        invokeOracle = Updates.InvokeScript(
           fiberId = oracleFiberId,
           method = "increment",
           args = MapValue(Map.empty),
@@ -353,7 +353,7 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
 
         oracleProg <- IO.fromEither(parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = oracleFiberId,
           scriptProgram = oracleProg,
           initialState = None,
@@ -400,9 +400,9 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
               "effect": [
                 ["totalAmount", { "+": [
                   { "var": "state.amount" },
-                  { "var": "scriptOracles.$oracleFiberId.lastInvocation.result" }
+                  { "var": "scripts.$oracleFiberId.lastInvocation.result" }
                 ]}],
-                ["feeCalculated", { "var": "scriptOracles.$oracleFiberId.lastInvocation.result" }],
+                ["feeCalculated", { "var": "scripts.$oracleFiberId.lastInvocation.result" }],
                 ["status", "completed"]
               ],
               "dependencies": ["$oracleFiberId"]
@@ -492,7 +492,7 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
         oracleScript = """{"result": "validated"}"""
         oracleProg <- IO.fromEither(parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScriptOracle(
+        createOracle = Updates.CreateScript(
           fiberId = oracleFiberId,
           scriptProgram = oracleProg,
           initialState = None,
@@ -561,7 +561,7 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
         validate2Proof <- registry.generateProofs(validateEvent2, Set(Charlie))
         finalState     <- combiner.insert(stateAfterValidate1, Signed(validateEvent2, validate2Proof))
 
-        oracle = finalState.calculated.scriptOracles.get(oracleFiberId)
+        oracle = finalState.calculated.scripts.get(oracleFiberId)
         machine1 = finalState.calculated.stateMachines.get(machine1fiberId)
         machine2 = finalState.calculated.stateMachines.get(machine2fiberId)
 
