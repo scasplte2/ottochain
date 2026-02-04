@@ -493,5 +493,5 @@ Returns:
 **See also**:
 - `OTTO_PERSONA.md` - OttoBot behavior and tool usage guidelines
 - `API_REFERENCE.md` - Agent-bridge HTTP API specifications
-- `ORACLE_DESIGN.md` - Oracle method specifications
+- `SCRIPT_DESIGN.md` - Script method specifications
 - `STATE_MACHINE_DESIGN.md` - State machine transitions

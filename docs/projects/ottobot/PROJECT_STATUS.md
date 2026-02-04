@@ -1,6 +1,6 @@
 # OttoBot Agent-Bridge Project Status
 
-**Last Updated**: 2025-10-23
+**Last Updated**: 2026-02-03
 
 ## Project Summary
 
@@ -13,7 +13,7 @@ Agent-bridge microservice enabling an LLM (OttoBot the otter) to play tic-tac-to
 #### Core Documentation
 - [x] `/docs/ARCHITECTURE.md` - Full system architecture
 - [x] `/docs/OTTO_PERSONA.md` - LLM system prompt for OttoBot
-- [x] `/docs/ORACLE_DESIGN.md` - Script oracle specification (6 methods)
+- [x] `/docs/SCRIPT_DESIGN.md` - Script specification (6 methods)
 - [x] `/docs/STATE_MACHINE_DESIGN.md` - State machine design (4 states, 6 transitions)
 - [x] `/docs/TOOL_CATALOG.md` - Tool definitions for LLM (6 tools)
 - [x] `/docs/WORK_LOG.md` - Running development notes
@@ -48,7 +48,7 @@ Agent-bridge microservice enabling an LLM (OttoBot the otter) to play tic-tac-to
 - [x] Structured outputs on game completion
 
 #### Example Files
-- [x] Oracle definition: `e2e-test/examples/tictactoe/oracle-definition.json`
+- [x] Script definition: `e2e-test/examples/tictactoe/script-definition.json`
 - [x] State machine definition: `e2e-test/examples/tictactoe/state-machine-definition.json`
 - [x] Initial data template: `initial-data.json`
 - [x] Event examples:
@@ -138,7 +138,7 @@ ottochain/
 ├── docs/
 │   ├── ARCHITECTURE.md          ✅
 │   ├── OTTO_PERSONA.md          ✅
-│   ├── ORACLE_DESIGN.md         ✅
+│   ├── SCRIPT_DESIGN.md         ✅
 │   ├── STATE_MACHINE_DESIGN.md  ✅
 │   ├── TOOL_CATALOG.md          ✅
 │   ├── WORK_LOG.md              ✅
@@ -146,7 +146,7 @@ ottochain/
 │   ├── API_REFERENCE.md         🔄
 │   └── SETUP_GUIDE.md           📋
 ├── e2e-test/examples/tictactoe/
-│   ├── oracle-definition.json      ✅
+│   ├── script-definition.json      ✅
 │   ├── state-machine-definition.json ✅
 │   ├── initial-data.json           ✅
 │   ├── event-start.json            ✅

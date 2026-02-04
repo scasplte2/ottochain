@@ -121,7 +121,7 @@ Before building the agent-bridge, test the tic-tac-toe definitions manually.
 cd e2e-test
 
 node terminal.js or create \
-  --oracle examples/tictactoe/oracle-definition.json
+  --script examples/tictactoe/script-definition.json
 ```
 
 **Expected Output**:

@@ -342,7 +342,7 @@ The tic-tac-toe example is fully implemented and tested in the Scala test suite:
 - `modules/shared-data/src/test/scala/xyz/kd5ujc/shared_data/examples/TicTacToeGameSuite.scala`
 
 **Test Resources:**
-- Oracle definition: `modules/shared-data/src/test/resources/tictactoe/oracle-definition.json`
+- Script definition: `modules/shared-data/src/test/resources/tictactoe/script-definition.json`
 - State machine definition: `modules/shared-data/src/test/resources/tictactoe/state-machine-definition.json`
 
 ### Test Scenarios

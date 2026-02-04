@@ -131,7 +131,7 @@ The Otto Agent-Bridge is a microservice that enables an LLM agent (Otto the Otte
 - `resetGame()` - Clear board, keep players
 - `cancelGame(requestedBy)` - Mark game cancelled
 
-**Implementation**: JSON Logic expression (see ORACLE_DESIGN.md)
+**Implementation**: JSON Logic expression (see SCRIPT_DESIGN.md)
 
 ### 5. State Machine (Lifecycle Orchestrator)
 
