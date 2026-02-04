@@ -18,6 +18,7 @@ import xyz.kd5ujc.metagraph_l0.app.ML0AppConfig
 import xyz.kd5ujc.metagraph_l0.app.ML0AppConfigOps._
 import xyz.kd5ujc.shared_data.app._
 
+import org.http4s.ember.client.EmberClientBuilder
 import org.typelevel.log4cats.SelfAwareStructuredLogger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 
@@ -35,7 +36,22 @@ object Main
     implicit0(logger: SelfAwareStructuredLogger[IO]) <- Slf4jLogger.create[IO].asResource
     implicit0(supervisor: Supervisor[IO])            <- Supervisor[IO]
     implicit0(sp: SecurityProvider[IO])              <- SecurityProvider.forAsync[IO]
-    keyPair                                          <- loadKeyPair[IO](config).asResource
-    l0Service                                        <- ML0Service.make[IO].asResource
+    _                                                <- loadKeyPair[IO](config).asResource
+
+    // Create HTTP client for webhook delivery
+    httpClient <- EmberClientBuilder.default[IO].build
+
+    // Get metagraph ID from environment or use default
+    metagraphId = sys.env.getOrElse(
+      "CL_L0_TOKEN_IDENTIFIER",
+      "DAG3KNyfeKUTuWpMMhormWgWSYMD1pDGB2uaWqxG"
+    )
+
+    l0Service <- ML0Service
+      .make[IO](
+        httpClient = Some(httpClient),
+        metagraphId = metagraphId
+      )
+      .asResource
   } yield l0Service).some
 }
