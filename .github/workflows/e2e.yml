@@ -44,9 +44,11 @@ jobs:
           git clone --depth 1 --branch "v${TESSELLATION_VERSION}" \
             https://github.com/Constellation-Labs/tessellation.git tessellation
 
-      - name: Apply tessellation compile fix
+      - name: Apply tessellation patches
         working-directory: tessellation
-        run: git apply ../e2e-test/patches/v4.0.0-rc.2-compile-fix.patch
+        run: |
+          git apply ../e2e-test/patches/v4.0.0-rc.2-compile-fix.patch
+          git apply ../e2e-test/patches/v4.0.0-rc.2-java21-deps.patch
 
       - name: Start cluster
         working-directory: tessellation
