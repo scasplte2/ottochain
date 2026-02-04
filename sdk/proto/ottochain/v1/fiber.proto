@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+package ottochain.v1;
+
+import "ottochain/v1/common.proto";
+import "google/protobuf/struct.proto";
+
+// Fiber lifecycle status
+enum FiberStatus {
+  FIBER_STATUS_UNSPECIFIED = 0;
+  FIBER_STATUS_ACTIVE = 1;
+  FIBER_STATUS_ARCHIVED = 2;
+  FIBER_STATUS_FAILED = 3;
+}
+
+// Access control policy for scripts
+message AccessControlPolicy {
+  oneof policy {
+    PublicAccess public = 1;
+    WhitelistAccess whitelist = 2;
+    FiberOwnedAccess fiber_owned = 3;
+  }
+}
+
+message PublicAccess {}
+
+message WhitelistAccess {
+  repeated Address addresses = 1;
+}
+
+message FiberOwnedAccess {
+  string fiber_id = 1;
+}
+
+// State machine definition
+message StateMachineDefinition {
+  google.protobuf.Struct states = 1;
+  StateId initial_state = 2;
+  repeated google.protobuf.Struct transitions = 3;
+  optional google.protobuf.Struct metadata = 4;
+}
+
+// Emitted event from state machine transition
+message EmittedEvent {
+  string name = 1;
+  google.protobuf.Value data = 2;
+  optional string destination = 3;
+}
+
+// Event receipt - log entry for state machine transition
+message EventReceipt {
+  string fiber_id = 1;
+  FiberOrdinal sequence_number = 2;
+  string event_name = 3;
+  SnapshotOrdinal ordinal = 4;
+  StateId from_state = 5;
+  StateId to_state = 6;
+  bool success = 7;
+  int64 gas_used = 8;
+  int32 triggers_fired = 9;
+  optional string error_message = 10;
+  optional string source_fiber_id = 11;
+  repeated EmittedEvent emitted_events = 12;
+}
+
+// Script invocation - log entry for script oracle call
+message ScriptInvocation {
+  string fiber_id = 1;
+  string method = 2;
+  google.protobuf.Value args = 3;
+  google.protobuf.Value result = 4;
+  int64 gas_used = 5;
+  SnapshotOrdinal invoked_at = 6;
+  Address invoked_by = 7;
+}
+
+// Fiber log entry - union of event receipt or script invocation
+message FiberLogEntry {
+  oneof entry {
+    EventReceipt event_receipt = 1;
+    ScriptInvocation script_invocation = 2;
+  }
+}

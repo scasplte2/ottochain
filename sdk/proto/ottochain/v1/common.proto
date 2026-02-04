@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package ottochain.v1;
+
+import "google/protobuf/struct.proto";
+
+// Fiber sequence number (non-negative)
+message FiberOrdinal {
+  int64 value = 1;
+}
+
+// Snapshot ordinal from Constellation framework
+message SnapshotOrdinal {
+  int64 value = 1;
+}
+
+// State identifier for state machines
+message StateId {
+  string value = 1;
+}
+
+// Hash value
+message HashValue {
+  string value = 1;
+}
+
+// DAG address (Constellation network address)
+message Address {
+  string value = 1;
+}

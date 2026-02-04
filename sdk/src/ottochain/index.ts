@@ -6,6 +6,10 @@
  * @packageDocumentation
  */
 
+// Re-export generated protobuf types
+export * as proto from '../generated/index.js';
+
+// Legacy manual types (deprecated - use proto.* instead)
 export type {
   // Primitive / value types
   FiberOrdinal,

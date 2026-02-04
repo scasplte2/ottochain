@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+package ottochain.v1;
+
+import "ottochain/v1/common.proto";
+import "ottochain/v1/fiber.proto";
+import "google/protobuf/struct.proto";
+
+// State machine fiber record - on-chain representation
+message StateMachineFiberRecord {
+  string fiber_id = 1;
+  SnapshotOrdinal creation_ordinal = 2;
+  SnapshotOrdinal previous_update_ordinal = 3;
+  SnapshotOrdinal latest_update_ordinal = 4;
+  StateMachineDefinition definition = 5;
+  StateId current_state = 6;
+  google.protobuf.Value state_data = 7;
+  HashValue state_data_hash = 8;
+  FiberOrdinal sequence_number = 9;
+  repeated Address owners = 10;
+  FiberStatus status = 11;
+  optional EventReceipt last_receipt = 12;
+  optional string parent_fiber_id = 13;
+  repeated string child_fiber_ids = 14;
+}
+
+// Script fiber record - on-chain representation
+message ScriptFiberRecord {
+  string fiber_id = 1;
+  SnapshotOrdinal creation_ordinal = 2;
+  SnapshotOrdinal latest_update_ordinal = 3;
+  google.protobuf.Value script_program = 4;
+  optional google.protobuf.Value state_data = 5;
+  optional HashValue state_data_hash = 6;
+  AccessControlPolicy access_control = 7;
+  FiberOrdinal sequence_number = 8;
+  repeated Address owners = 9;
+  FiberStatus status = 10;
+  optional ScriptInvocation last_invocation = 11;
+}
+
+// Fiber commit - lightweight proof in on-chain state
+message FiberCommit {
+  HashValue record_hash = 1;
+  optional HashValue state_data_hash = 2;
+  FiberOrdinal sequence_number = 3;
+}
+
+// On-chain state
+message OnChainState {
+  map<string, FiberCommit> fiber_commits = 1;
+  map<string, FiberLogEntryList> latest_logs = 2;
+}
+
+// Helper for map of log entries
+message FiberLogEntryList {
+  repeated FiberLogEntry entries = 1;
+}
+
+// Calculated state - queryable via ML0 endpoints
+message CalculatedState {
+  map<string, StateMachineFiberRecord> state_machines = 1;
+  map<string, ScriptFiberRecord> scripts = 2;
+}

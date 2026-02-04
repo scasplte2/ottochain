@@ -1,0 +1,7 @@
+version: v1
+plugins:
+  - plugin: ts
+    out: src/generated
+    opt:
+      - target=ts
+      - import_extension=none
