@@ -8,7 +8,8 @@ import cats.syntax.all._
 import cats.{Applicative, Monad}
 
 import io.constellationnetwork.currency.dataApplication.DataApplicationValidationError
-import io.constellationnetwork.metagraph_sdk.json_logic.{BoolValue, ConstExpression}
+import io.constellationnetwork.metagraph_sdk.json_logic._
+import io.constellationnetwork.metagraph_sdk.json_logic.core.JsonLogicOp
 import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.signature.SignatureProof
 
@@ -136,6 +137,60 @@ object FiberRules {
 
       (guardValidations ++ effectValidations).sequence.map(_.combineAll)
     }
+
+    /**
+     * Validates that no field names in guard/effect expressions collide with reserved JSON Logic operators.
+     *
+     * Field names that match operator names (e.g., "count", "merge", "map") can cause signature
+     * validation failures due to ambiguous parsing during canonicalization. This check prevents
+     * such definitions from being accepted.
+     */
+    def noReservedOperatorFieldNames[F[_]: Applicative](
+      definition: StateMachineDefinition
+    ): F[ValidationResult] = {
+      val reservedOps = JsonLogicOp.knownOperatorTags.keySet
+
+      val collisions = definition.transitions.zipWithIndex.flatMap { case (t, idx) =>
+        val guardKeys = extractMapKeys(t.guard)
+        val effectKeys = extractMapKeys(t.effect)
+
+        val guardCollisions = guardKeys.filter(reservedOps.contains).map { key =>
+          (s"transition[$idx].guard", key)
+        }
+        val effectCollisions = effectKeys.filter(reservedOps.contains).map { key =>
+          (s"transition[$idx].effect", key)
+        }
+
+        guardCollisions ++ effectCollisions
+      }
+
+      collisions match {
+        case Nil => ().validNec[DataApplicationValidationError].pure[F]
+        case (location, key) :: _ =>
+          (Errors.ReservedOperatorAsFieldName(location, key): DataApplicationValidationError)
+            .invalidNec[Unit]
+            .pure[F]
+      }
+    }
+
+    /** Recursively extracts all map keys from a JSON Logic expression */
+    private def extractMapKeys(expr: JsonLogicExpression): Set[String] =
+      expr match {
+        case MapExpression(map) =>
+          map.keySet ++ map.values.flatMap(extractMapKeys).toSet
+
+        case ApplyExpression(_, args) =>
+          args.flatMap(extractMapKeys).toSet
+
+        case ArrayExpression(items) =>
+          items.flatMap(extractMapKeys).toSet
+
+        case VarExpression(Right(nested), _) =>
+          extractMapKeys(nested)
+
+        case _ =>
+          Set.empty
+      }
 
     /** Validates that targetSequenceNumber matches the fiber's current sequence number */
     def sequenceNumberMatches[F[_]: Applicative](
@@ -374,6 +429,18 @@ object FiberRules {
       eventName: String
     ) extends DataApplicationValidationError {
       override val message: String = s"No transition from state ${state.value} for event ${eventName}"
+    }
+
+    // --- Reserved operator collision errors ---
+
+    final case class ReservedOperatorAsFieldName(
+      location: String,
+      key:      String
+    ) extends DataApplicationValidationError {
+
+      override val message: String =
+        s"Field name '$key' in $location conflicts with reserved JSON Logic operator. " +
+        s"Using operator names as field keys can cause signature validation failures."
     }
   }
 }

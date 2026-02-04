@@ -38,6 +38,7 @@ object FiberValidator {
         definitionOk   <- FiberRules.L1.validStateMachineDefinition(update.definition)
         limitsOk       <- FiberRules.L1.definitionWithinLimits(update.definition)
         expressionsOk  <- FiberRules.L1.definitionExpressionsWithinDepthLimits(update.definition)
+        reservedOk     <- FiberRules.L1.noReservedOperatorFieldNames(update.definition)
         initialDataMap <- CommonRules.isMapValue(update.initialData, "initialData")
         initialDataSize <- CommonRules.valueWithinSizeLimit(
           update.initialData,
@@ -50,6 +51,7 @@ object FiberValidator {
         definitionOk,
         limitsOk,
         expressionsOk,
+        reservedOk,
         initialDataMap,
         initialDataSize,
         parentExists

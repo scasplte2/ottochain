@@ -6,6 +6,7 @@ import cats.syntax.all._
 
 import io.constellationnetwork.currency.dataApplication.{DataState, L0NodeContext, L1NodeContext}
 import io.constellationnetwork.metagraph_sdk.json_logic._
+import io.constellationnetwork.metagraph_sdk.json_logic.core.JsonLogicOp
 import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.Signed
 
@@ -207,6 +208,58 @@ object ValidatorSuite extends SimpleIOSuite {
 
     def simpleOracleScript(): JsonLogicExpression =
       ConstExpression(MapValue(Map("result" -> IntValue(42))))
+
+    /** Definition with a reserved operator name used as a field in guard */
+    def definitionWithReservedOperatorInGuard(): StateMachineDefinition = {
+      val stateA = StateId("stateA")
+      val stateB = StateId("stateB")
+      StateMachineDefinition(
+        states = Map(
+          stateA -> State(stateA),
+          stateB -> State(stateB)
+        ),
+        initialState = stateA,
+        transitions = List(
+          Transition(
+            from = stateA,
+            to = stateB,
+            eventName = "test",
+            // Using "count" as a field name - this collides with the count operator
+            guard = ApplyExpression(
+              JsonLogicOp.Geq,
+              List(
+                MapExpression(Map("count" -> VarExpression(Left("items")))),
+                ConstExpression(IntValue(2))
+              )
+            ),
+            effect = ConstExpression(MapValue(Map.empty))
+          )
+        )
+      )
+    }
+
+    /** Definition with a reserved operator name used as a field in effect */
+    def definitionWithReservedOperatorInEffect(): StateMachineDefinition = {
+      val stateA = StateId("stateA")
+      val stateB = StateId("stateB")
+      StateMachineDefinition(
+        states = Map(
+          stateA -> State(stateA),
+          stateB -> State(stateB)
+        ),
+        initialState = stateA,
+        transitions = List(
+          Transition(
+            from = stateA,
+            to = stateB,
+            eventName = "test",
+            guard = ConstExpression(BoolValue(true)),
+            // Using "merge" as a field name - this collides with the merge operator
+            effect = MapExpression(Map("merge" -> VarExpression(Left("data"))))
+          )
+        )
+      )
+    }
   }
 
   // ============== fiberId Not Used Tests (L1) ==============
@@ -330,6 +383,64 @@ object ValidatorSuite extends SimpleIOSuite {
         result <- validator.validateUpdate(update)
       } yield expect(result.isInvalid) and
       expect(result.swap.exists(_.exists(_.message.toLowerCase.contains("ambiguous"))))
+    }
+  }
+
+  // ============== Reserved Operator Field Name Tests (L1) ==============
+
+  test("noReservedOperatorFieldNames: reserved operator in guard rejected") {
+    TestFixture.resource().use { fixture =>
+      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
+      for {
+        validator <- Validator.make[IO]
+        fiberId   <- UUIDGen.randomUUID[IO]
+        update = Updates.CreateStateMachine(
+          fiberId,
+          Fixtures.definitionWithReservedOperatorInGuard(),
+          MapValue(Map.empty)
+        )
+        result <- validator.validateUpdate(update)
+      } yield expect(result.isInvalid) and
+      expect(result.swap.exists(_.exists(_.message.toLowerCase.contains("reserved")))) and
+      expect(result.swap.exists(_.exists(_.message.contains("count"))))
+    }
+  }
+
+  test("noReservedOperatorFieldNames: reserved operator in effect rejected") {
+    TestFixture.resource().use { fixture =>
+      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
+      for {
+        validator <- Validator.make[IO]
+        fiberId   <- UUIDGen.randomUUID[IO]
+        update = Updates.CreateStateMachine(
+          fiberId,
+          Fixtures.definitionWithReservedOperatorInEffect(),
+          MapValue(Map.empty)
+        )
+        result <- validator.validateUpdate(update)
+      } yield expect(result.isInvalid) and
+      expect(result.swap.exists(_.exists(_.message.toLowerCase.contains("reserved")))) and
+      expect(result.swap.exists(_.exists(_.message.contains("merge"))))
+    }
+  }
+
+  test("noReservedOperatorFieldNames: valid field names accepted") {
+    TestFixture.resource().use { fixture =>
+      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
+      for {
+        validator <- Validator.make[IO]
+        fiberId   <- UUIDGen.randomUUID[IO]
+        // simpleDefinitionWithTransition uses "moved" as a field name which is not reserved
+        update = Updates.CreateStateMachine(
+          fiberId,
+          Fixtures.simpleDefinitionWithTransition(),
+          MapValue(Map.empty)
+        )
+        result <- validator.validateUpdate(update)
+      } yield expect(result.isValid)
     }
   }
 
