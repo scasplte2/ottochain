@@ -4,7 +4,6 @@ import cats.effect.IO
 import cats.syntax.all._
 
 import io.constellationnetwork.currency.dataApplication.{DataState, L0NodeContext}
-import io.constellationnetwork.ext.cats.syntax.next._
 import io.constellationnetwork.metagraph_sdk.json_logic._
 import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.Signed
@@ -103,7 +102,7 @@ object PredictionMarketSuite extends SimpleIOSuite {
        |      "from": { "value": "open" },
        |      "to": { "value": "closed" },
        |      "eventName": "close",
-       |      "guard": { ">=": [{ "var": "state.positions" }, 1] },
+       |      "guard": { ">=": [{ "count": [{ "var": "state.positions" }] }, 1] },
        |      "effect": { "var": "state" },
        |      "dependencies": []
        |    },
@@ -171,63 +170,86 @@ object PredictionMarketSuite extends SimpleIOSuite {
   // ---------------------------------------------------------------------
   // Script: Resolution Oracle (aggregates votes with reputation weighting)
   // ---------------------------------------------------------------------
+  // Resolution script without 'let' (not supported in JLVM)
+  // Calculates weighted consensus from oracle submissions
+  // yesWeight = sum of reputation for YES votes
+  // noWeight = sum of reputation for NO votes
+  // yesRatio = yesWeight / (yesWeight + noWeight)
+  // Returns YES/NO if ratio meets threshold, DISPUTED otherwise
   private val resolutionScript =
     """|{
        |  "if": [
        |    { "==": [{ "var": "method" }, "calculateOutcome"] },
        |    {
-       |      "let": {
-       |        "submissions": { "var": "args.submissions" },
-       |        "threshold": { "var": "args.consensusThreshold" },
-       |        "yesWeight": {
-       |          "reduce": [
-       |            { "var": "submissions" },
-       |            {
-       |              "+": [
-       |                { "var": "accumulator" },
-       |                { "if": [
-       |                  { "==": [{ "var": "current.vote" }, "YES"] },
-       |                  { "var": "current.reputation" },
-       |                  0
-       |                ]}
-       |              ]
-       |            },
-       |            0
-       |          ]
-       |        },
-       |        "noWeight": {
-       |          "reduce": [
-       |            { "var": "submissions" },
-       |            {
-       |              "+": [
-       |                { "var": "accumulator" },
-       |                { "if": [
-       |                  { "==": [{ "var": "current.vote" }, "NO"] },
-       |                  { "var": "current.reputation" },
-       |                  0
-       |                ]}
-       |              ]
-       |            },
-       |            0
-       |          ]
-       |        },
-       |        "totalWeight": { "+": [{ "var": "yesWeight" }, { "var": "noWeight" }] },
-       |        "yesRatio": {
-       |          "if": [
-       |            { ">": [{ "var": "totalWeight" }, 0] },
-       |            { "/": [{ "var": "yesWeight" }, { "var": "totalWeight" }] },
-       |            0.5
-       |          ]
-       |        }
-       |      },
        |      "if": [
-       |        { ">=": [{ "var": "yesRatio" }, { "var": "threshold" }] },
-       |        { "outcome": "YES", "confidence": { "var": "yesRatio" } },
+       |        { ">": [
+       |          { "+": [
+       |            { "reduce": [{ "var": "args.submissions" }, { "+": [{ "var": "accumulator" }, { "if": [{ "==": [{ "var": "current.vote" }, "YES"] }, { "var": "current.reputation" }, 0] }] }, 0] },
+       |            { "reduce": [{ "var": "args.submissions" }, { "+": [{ "var": "accumulator" }, { "if": [{ "==": [{ "var": "current.vote" }, "NO"] }, { "var": "current.reputation" }, 0] }] }, 0] }
+       |          ]},
+       |          0
+       |        ]},
        |        { "if": [
-       |          { ">=": [{ "-": [1, { "var": "yesRatio" }] }, { "var": "threshold" }] },
-       |          { "outcome": "NO", "confidence": { "-": [1, { "var": "yesRatio" }] } },
-       |          { "outcome": "DISPUTED", "yesRatio": { "var": "yesRatio" } }
-       |        ]}
+       |          { ">=": [
+       |            { "/": [
+       |              { "reduce": [{ "var": "args.submissions" }, { "+": [{ "var": "accumulator" }, { "if": [{ "==": [{ "var": "current.vote" }, "YES"] }, { "var": "current.reputation" }, 0] }] }, 0] },
+       |              { "+": [
+       |                { "reduce": [{ "var": "args.submissions" }, { "+": [{ "var": "accumulator" }, { "if": [{ "==": [{ "var": "current.vote" }, "YES"] }, { "var": "current.reputation" }, 0] }] }, 0] },
+       |                { "reduce": [{ "var": "args.submissions" }, { "+": [{ "var": "accumulator" }, { "if": [{ "==": [{ "var": "current.vote" }, "NO"] }, { "var": "current.reputation" }, 0] }] }, 0] }
+       |              ]}
+       |            ]},
+       |            { "var": "args.consensusThreshold" }
+       |          ]},
+       |          {
+       |            "outcome": "YES",
+       |            "confidence": { "/": [
+       |              { "reduce": [{ "var": "args.submissions" }, { "+": [{ "var": "accumulator" }, { "if": [{ "==": [{ "var": "current.vote" }, "YES"] }, { "var": "current.reputation" }, 0] }] }, 0] },
+       |              { "+": [
+       |                { "reduce": [{ "var": "args.submissions" }, { "+": [{ "var": "accumulator" }, { "if": [{ "==": [{ "var": "current.vote" }, "YES"] }, { "var": "current.reputation" }, 0] }] }, 0] },
+       |                { "reduce": [{ "var": "args.submissions" }, { "+": [{ "var": "accumulator" }, { "if": [{ "==": [{ "var": "current.vote" }, "NO"] }, { "var": "current.reputation" }, 0] }] }, 0] }
+       |              ]}
+       |            ]}
+       |          },
+       |          { "if": [
+       |            { ">=": [
+       |              { "-": [
+       |                1,
+       |                { "/": [
+       |                  { "reduce": [{ "var": "args.submissions" }, { "+": [{ "var": "accumulator" }, { "if": [{ "==": [{ "var": "current.vote" }, "YES"] }, { "var": "current.reputation" }, 0] }] }, 0] },
+       |                  { "+": [
+       |                    { "reduce": [{ "var": "args.submissions" }, { "+": [{ "var": "accumulator" }, { "if": [{ "==": [{ "var": "current.vote" }, "YES"] }, { "var": "current.reputation" }, 0] }] }, 0] },
+       |                    { "reduce": [{ "var": "args.submissions" }, { "+": [{ "var": "accumulator" }, { "if": [{ "==": [{ "var": "current.vote" }, "NO"] }, { "var": "current.reputation" }, 0] }] }, 0] }
+       |                  ]}
+       |                ]}
+       |              ]},
+       |              { "var": "args.consensusThreshold" }
+       |            ]},
+       |            {
+       |              "outcome": "NO",
+       |              "confidence": { "-": [
+       |                1,
+       |                { "/": [
+       |                  { "reduce": [{ "var": "args.submissions" }, { "+": [{ "var": "accumulator" }, { "if": [{ "==": [{ "var": "current.vote" }, "YES"] }, { "var": "current.reputation" }, 0] }] }, 0] },
+       |                  { "+": [
+       |                    { "reduce": [{ "var": "args.submissions" }, { "+": [{ "var": "accumulator" }, { "if": [{ "==": [{ "var": "current.vote" }, "YES"] }, { "var": "current.reputation" }, 0] }] }, 0] },
+       |                    { "reduce": [{ "var": "args.submissions" }, { "+": [{ "var": "accumulator" }, { "if": [{ "==": [{ "var": "current.vote" }, "NO"] }, { "var": "current.reputation" }, 0] }] }, 0] }
+       |                  ]}
+       |                ]}
+       |              ]}
+       |            },
+       |            {
+       |              "outcome": "DISPUTED",
+       |              "yesRatio": { "/": [
+       |                { "reduce": [{ "var": "args.submissions" }, { "+": [{ "var": "accumulator" }, { "if": [{ "==": [{ "var": "current.vote" }, "YES"] }, { "var": "current.reputation" }, 0] }] }, 0] },
+       |                { "+": [
+       |                  { "reduce": [{ "var": "args.submissions" }, { "+": [{ "var": "accumulator" }, { "if": [{ "==": [{ "var": "current.vote" }, "YES"] }, { "var": "current.reputation" }, 0] }] }, 0] },
+       |                  { "reduce": [{ "var": "args.submissions" }, { "+": [{ "var": "accumulator" }, { "if": [{ "==": [{ "var": "current.vote" }, "NO"] }, { "var": "current.reputation" }, 0] }] }, 0] }
+       |                ]}
+       |              ]}
+       |            }
+       |          ]}
+       |        ]},
+       |        { "outcome": "DISPUTED", "yesRatio": 0.5 }
        |      ]
        |    },
        |    { "error": "unknown method" }
@@ -366,15 +388,13 @@ object PredictionMarketSuite extends SimpleIOSuite {
         invokeProof <- fixture.registry.generateProofs(invokeOp, Set(Alice))
         state2      <- combiner.insert(state1, Signed(invokeOp, invokeProof))
 
-        result = state2.oracleRecord(scriptId).flatMap(_.lastInvocation).flatMap(_.result)
+        result = state2.oracleRecord(scriptId).flatMap(_.lastInvocation).map(_.result)
 
       } yield expect.all(
         result.isDefined,
-        result.exists { r =>
-          r match {
-            case MapValue(m) => m.get("outcome").contains(StrValue("YES"))
-            case _           => false
-          }
+        result.exists {
+          case MapValue(m) => m.get("outcome").contains(StrValue("YES"))
+          case _           => false
         }
       )
     }
@@ -427,15 +447,13 @@ object PredictionMarketSuite extends SimpleIOSuite {
         invokeProof <- fixture.registry.generateProofs(invokeOp, Set(Alice))
         state2      <- combiner.insert(state1, Signed(invokeOp, invokeProof))
 
-        result = state2.oracleRecord(scriptId).flatMap(_.lastInvocation).flatMap(_.result)
+        result = state2.oracleRecord(scriptId).flatMap(_.lastInvocation).map(_.result)
 
       } yield expect.all(
         result.isDefined,
-        result.exists { r =>
-          r match {
-            case MapValue(m) => m.get("outcome").contains(StrValue("DISPUTED"))
-            case _           => false
-          }
+        result.exists {
+          case MapValue(m) => m.get("outcome").contains(StrValue("DISPUTED"))
+          case _           => false
         }
       )
     }
@@ -582,8 +600,11 @@ object PredictionMarketSuite extends SimpleIOSuite {
         scriptInvokeProof <- fixture.registry.generateProofs(invokeScript, Set(Alice))
         state10           <- combiner.insert(state9, Signed(invokeScript, scriptInvokeProof))
 
-        scriptResult = state10.oracleRecord(scriptId).flatMap(_.lastInvocation).flatMap(_.result)
-        outcome = scriptResult.collect { case MapValue(m) => m.get("outcome") }.flatten
+        scriptResult = state10.oracleRecord(scriptId).flatMap(_.lastInvocation).map(_.result)
+        outcome = scriptResult.flatMap {
+          case MapValue(m) => m.get("outcome")
+          case _           => None
+        }
 
         // Finalize market with computed outcome
         finalizeOp = Updates.TransitionStateMachine(
@@ -681,10 +702,16 @@ object PredictionMarketSuite extends SimpleIOSuite {
         )
         lowRepProof <- fixture.registry.generateProofs(lowRepVote, Set(Alice))
 
-        // This should fail due to guard condition
-        result <- combiner.insert(state5, Signed(lowRepVote, lowRepProof)).attempt
+        // This should fail due to guard condition (30 < 50 minReputation)
+        state6 <- combiner.insert(state5, Signed(lowRepVote, lowRepProof))
 
-      } yield expect(result.isLeft) // Guard should reject low reputation
+        // Guard failures don't throw — they record lastReceipt.success = false
+        marketAfter = state6.fiberRecord(marketId)
+
+      } yield expect.all(
+        marketAfter.isDefined,
+        marketAfter.exists(m => m.lastReceipt.exists(!_.success))
+      )
     }
   }
 }
