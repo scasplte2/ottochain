@@ -407,30 +407,37 @@ Aggregates oracle votes with reputation weighting:
 {
   "if": [
     {"==": [{"var": "method"}, "calculateOutcome"]},
-    {
-      "let": {
-        "yesWeight": {
-          "reduce": [
-            {"var": "submissions"},
-            {"+": [{"var": "accumulator"},
-              {"if": [{"==": [{"var": "current.vote"}, "YES"]},
-                {"var": "current.reputation"}, 0]}
-            ]},
-            0
-          ]
-        },
-        "totalWeight": {"+": [{"var": "yesWeight"}, {"var": "noWeight"}]},
-        "yesRatio": {"/": [{"var": "yesWeight"}, {"var": "totalWeight"}]}
-      },
-      "if": [
-        {">=": [{"var": "yesRatio"}, {"var": "threshold"}]},
+    {"let": [
+      [
+        ["yesWeight", {"reduce": [
+          {"var": "args.submissions"},
+          {"+": [{"var": "accumulator"},
+            {"if": [{"==": [{"var": "current.vote"}, "YES"]},
+              {"var": "current.reputation"}, 0]}
+          ]}, 0
+        ]}],
+        ["noWeight", {"reduce": [
+          {"var": "args.submissions"},
+          {"+": [{"var": "accumulator"},
+            {"if": [{"==": [{"var": "current.vote"}, "NO"]},
+              {"var": "current.reputation"}, 0]}
+          ]}, 0
+        ]}],
+        ["totalWeight", {"+": [{"var": "yesWeight"}, {"var": "noWeight"}]}],
+        ["yesRatio", {"/": [{"var": "yesWeight"}, {"var": "totalWeight"}]}]
+      ],
+      {"if": [
+        {">=": [{"var": "yesRatio"}, {"var": "args.threshold"}]},
         {"outcome": "YES", "confidence": {"var": "yesRatio"}},
-        {"outcome": "NO"}
-      ]
-    }
+        {"outcome": "NO", "confidence": {"-": [1, {"var": "yesRatio"}]}}
+      ]}
+    ]},
+    {"error": "unknown method"}
   ]
 }
 ```
+
+*Note: The `let` operator enables clean variable binding. See [metakit PR #13](https://github.com/Constellation-Labs/metakit/pull/13).*
 
 ### 6.5 Oracle Tiers
 
@@ -476,24 +483,131 @@ Bot: ✅ Position recorded! You: 500 USDC on YES
 
 ## 7. Economic Model
 
-### 7.1 Transaction Fees
+### 7.1 Two-Token Architecture
 
-| Operation | Fee |
-|-----------|-----|
-| Register identity | Low |
-| Submit attestation | Minimal |
-| Create contract | Low |
-| Update state | Minimal |
+OttoChain employs a dual-token model separating utility from governance:
 
-Reads are free. Public state should be publicly accessible.
+| Token | Symbol | Purpose | Supply |
+|-------|--------|---------|--------|
+| **OttoChain Token** | OTTO | Utility: fees, execution, attestations | Fixed cap (1B) |
+| **Stake Token** | STAKE | Governance, security collateral, rewards | Controlled emission |
 
-### 7.2 Staking (Future)
+**Why two tokens?**
+- **Separation of concerns**: Utility token remains stable and predictable; governance token absorbs volatility and risk
+- **Aligned incentives**: STAKE holders bear protocol risk, creating natural alignment with system health
+- **Deflationary mechanics**: OTTO fee burns create value accrual without inflation
 
-Agents deposit tokens as collateral, slashed for violations, returned with rewards after good standing.
+### 7.2 OTTO Token Economics
 
-### 7.3 Business Layer
+**Use Cases:**
+- **Execution fees**: Running state machines and invoking scripts
+- **Attestation fees**: Identity registration, vouching, disputes
+- **Storage costs**: On-chain state data persistence
 
-Protocol is open and minimal. Business opportunity: tooling, SDKs, analytics, platform integrations, enterprise support.
+**Fee Structure:**
+
+| Operation | Fee (OTTO) |
+|-----------|------------|
+| Agent registration | 10 |
+| Attestation (vouch) | 0.5-1 |
+| State machine transition | 0.01-0.1 (gas-based) |
+| Contract creation | 5 |
+| Challenge/dispute filing | 50 (refunded if valid) |
+| Prediction market creation | 20 |
+
+**Supply Mechanics:**
+- Fixed supply of 1 billion OTTO
+- No inflation—all OTTO minted at genesis or via scheduled vesting
+- **Burn mechanism**: 50% of all fees permanently burned
+- **Distribution**: 40% community/ecosystem, 25% team (4-year vest), 20% treasury, 15% early supporters
+
+### 7.3 STAKE Token Economics
+
+**Use Cases:**
+- **Reputation backing**: Agents stake STAKE proportional to their reputation tier
+- **Governance**: Vote on protocol upgrades, fee parameters, slashing rules
+- **Validator rewards**: Share of fees distributed to active stakers
+- **Oracle eligibility**: Higher tiers require larger stakes
+
+**Staking Tiers:**
+
+| Tier | Min STAKE | Max Reputation | Capabilities |
+|------|-----------|----------------|--------------|
+| Bronze | 100 | 50 | Basic attestations |
+| Silver | 1,000 | 200 | Cross-platform identity, prediction market oracles |
+| Gold | 10,000 | 500 | Priority execution, high-value attestations |
+| Platinum | 100,000 | Unlimited | Protocol governance, dispute arbitration |
+
+**Supply Mechanics:**
+- Uncapped but controlled emission via governance
+- Minted for: validator rewards, ecosystem grants, bug bounties
+- **Slashing**: Misbehaving agents lose staked STAKE (violation = 10% slash)
+- **Recapitalization**: If slashing depletes reserves, STAKE minted to cover (aligns long-term incentives)
+
+### 7.4 Economic Flywheel
+
+```
+Agents need reputation → Stake STAKE → Earn attestations
+                              ↓
+                    Agents pay OTTO fees
+                              ↓
+                Fees burned (deflation) + distributed to stakers
+                              ↓
+                    STAKE value increases → More staking
+```
+
+The flywheel creates sustainable demand:
+1. Agents need reputation to operate → demand for OTTO (fees)
+2. Higher reputation requires more STAKE → demand for STAKE
+3. Fee revenue rewards stakers → STAKE becomes productive asset
+4. Burning reduces OTTO supply → remaining OTTO appreciates
+5. Appreciation attracts more agents → cycle continues
+
+### 7.5 Revenue Projections (Conservative)
+
+| Activity | Volume/Month | Fee | Revenue/Month |
+|----------|--------------|-----|---------------|
+| Agent registrations | 500 | 10 OTTO | 5,000 OTTO |
+| Attestations | 50,000 | 0.5 OTTO | 25,000 OTTO |
+| State transitions | 1,000,000 | 0.05 OTTO | 50,000 OTTO |
+| Contracts | 1,000 | 5 OTTO | 5,000 OTTO |
+| Prediction markets | 100 | 20 OTTO | 2,000 OTTO |
+| **Total** | | | **87,000 OTTO** |
+
+At early-stage pricing ($0.10/OTTO): ~$8,700/month
+At scale (10x volume, $1/OTTO): ~$870,000/month
+
+### 7.6 Comparison to Alternatives
+
+| Aspect | MakerDAO | Lido | OttoChain |
+|--------|----------|------|-----------|
+| Utility token | DAI (stable) | stETH (liquid) | OTTO (fee-based) |
+| Governance | MKR | LDO | STAKE |
+| Risk absorption | MKR dilution | Insurance fund | STAKE slashing |
+| Revenue | Stability fees | Staking yield | Execution fees |
+
+### 7.7 Path to Market
+
+**Phase 1: Bootstrap (Q2 2026)**
+- Deploy on Constellation testnet
+- OTTO distributed via ecosystem grants and airdrops
+- No fees—subsidized execution to build network effects
+
+**Phase 2: Soft Launch (Q3 2026)**
+- Mainnet deployment with fee-free promotional period
+- STAKE introduced for early governance participants
+- Target: 100 registered agents, 1,000 attestations
+
+**Phase 3: Monetization (Q4 2026)**
+- Enable OTTO fees
+- STAKE staking with rewards
+- Target: 1,000 agents, 10,000 attestations/month
+
+**Phase 4: Scale (2027+)**
+- Enterprise API tier
+- Cross-chain bridges (Ethereum, Solana ecosystems)
+- Full DAO governance operational
+- Target: 10,000+ agents, 100,000+ attestations/month
 
 ---
 
@@ -585,23 +699,208 @@ We invite developers, platforms, and agent builders to join us in creating trust
 ## Appendices
 
 ### A. JSON Logic Primer
-*[Basic syntax, operators, examples]*
+
+JSON Logic expresses conditional logic as JSON structures. Every operation follows the pattern:
+
+```json
+{"operator": [arg1, arg2, ...]}
+```
+
+**Basic Operations:**
+
+```json
+// Comparison
+{"==": [1, 1]}                    // true
+{">": [{"var": "age"}, 18]}       // age > 18
+
+// Arithmetic
+{"+": [1, 2, 3]}                  // 6
+{"*": [{"var": "price"}, 1.1]}    // price × 1.1
+
+// Logic
+{"and": [true, true]}             // true
+{"or": [false, true]}             // true
+{"!": [false]}                    // true
+
+// Conditionals
+{"if": [
+  {">": [{"var": "score"}, 90]}, "A",
+  {">": [{"var": "score"}, 80]}, "B",
+  "C"
+]}
+
+// Variable access
+{"var": "user.name"}              // nested access
+{"var": ["items", 0, "price"]}    // array index
+```
+
+**Array Operations:**
+
+```json
+// Map: transform each element
+{"map": [
+  {"var": "users"},
+  {"var": "name"}
+]}
+
+// Filter: keep matching elements
+{"filter": [
+  {"var": "orders"},
+  {">": [{"var": "total"}, 100]}
+]}
+
+// Reduce: accumulate to single value
+{"reduce": [
+  {"var": "items"},
+  {"+": [{"var": "accumulator"}, {"var": "current.price"}]},
+  0
+]}
+```
+
+**Let Bindings (JLVM extension):**
+
+```json
+{"let": [
+  [["x", 5], ["y", {"+": [{"var": "x"}, 3]}]],
+  {"*": [{"var": "y"}, 2]}
+]}
+// Result: 16 ((5 + 3) × 2)
+```
+
+For complete operator reference, see [JLVM Specification](../reference/jlvm-semantics.md).
 
 ### B. State Machine Specifications
-*[Formal diagrams, transition tables, JSON schemas]*
+
+**AgentIdentity State Machine Schema:**
+
+```json
+{
+  "states": {
+    "Pending": {"id": "pending", "isFinal": false},
+    "Active": {"id": "active", "isFinal": false},
+    "Suspended": {"id": "suspended", "isFinal": false},
+    "Terminated": {"id": "terminated", "isFinal": true}
+  },
+  "initialState": "pending",
+  "transitions": [
+    {
+      "from": "pending", "to": "active",
+      "eventName": "activate",
+      "guard": {"==": [{"var": "event.activationProof"}, true]},
+      "effect": {"merge": [{"var": "state"}, {"activatedAt": {"var": "timestamp"}}]}
+    },
+    {
+      "from": "active", "to": "active",
+      "eventName": "submitAttestation",
+      "guard": {">": [{"var": "event.attestation.weight"}, 0]},
+      "effect": {
+        "merge": [
+          {"var": "state"},
+          {
+            "reputation": {"+": [{"var": "state.reputation"}, {"var": "event.attestation.weight"}]},
+            "attestations": {"merge": [{"var": "state.attestations"}, [{"var": "event.attestation"}]]}
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+
+**Contract State Machine Transition Table:**
+
+| From | Event | Guard | To |
+|------|-------|-------|-----|
+| Proposed | accept | caller == counterparty | Accepted |
+| Proposed | reject | caller ∈ {proposer, counterparty} | Cancelled |
+| Accepted | start | caller == proposer | InProgress |
+| InProgress | complete | deliverables.verified | Completed |
+| InProgress | dispute | evidence.valid | Disputed |
+| Disputed | arbitrate | arbitrator.reputation > 100 | Resolved |
 
 ### C. API Reference
-*[Bridge endpoints, SDK examples]*
+
+**Bridge REST Endpoints:**
+
+```
+POST /agent/register
+  Body: { masterKey: string, metadata: object }
+  Returns: { agentId: string, txHash: string }
+
+POST /agent/vouch
+  Body: { subjectId: string, attestation: object, signature: string }
+  Returns: { attestationId: string, txHash: string }
+
+GET /agent/:id/reputation
+  Returns: { reputation: number, attestations: array, history: array }
+
+POST /contract/propose
+  Body: { counterparty: string, terms: object }
+  Returns: { contractId: string, txHash: string }
+
+POST /contract/:id/accept
+  Returns: { txHash: string, newState: string }
+
+POST /market/create
+  Body: { question: string, deadline: number, oracleTier: string }
+  Returns: { marketId: string, txHash: string }
+```
+
+**SDK Usage (TypeScript):**
+
+```typescript
+import { OttoChain } from '@ottochain/sdk';
+
+const otto = new OttoChain({
+  network: 'mainnet',
+  privateKey: process.env.OTTO_KEY
+});
+
+// Register an agent
+const agent = await otto.agent.register({
+  metadata: { name: 'MyAgent', version: '1.0.0' }
+});
+
+// Submit an attestation
+await otto.attestation.vouch({
+  subject: 'did:otto:abc123',
+  type: 'COMPLETION',
+  evidence: { contractId: 'contract:xyz789' }
+});
+
+// Query reputation
+const rep = await otto.agent.getReputation('did:otto:abc123');
+console.log(`Reputation: ${rep.score}`);
+```
 
 ### D. Glossary
-- **Agent**: Autonomous AI system acting on behalf of users
-- **Attestation**: Signed statement from one entity about another
-- **DID**: Decentralized Identifier
-- **Metagraph**: Application-specific network on Constellation
-- **Script**: Stateless or stateful JSON Logic program
-- **State Machine**: Model with defined states and transitions
+
+| Term | Definition |
+|------|------------|
+| **Agent** | Autonomous AI system acting on behalf of users or other systems |
+| **Attestation** | Cryptographically signed statement from one entity about another |
+| **DID** | Decentralized Identifier—globally unique, self-sovereign identifier |
+| **Fiber** | OttoChain execution unit (state machine or script instance) |
+| **Guard** | JSON Logic condition that must be true for a transition to execute |
+| **JLVM** | JSON Logic Virtual Machine—OttoChain's execution environment |
+| **Metagraph** | Application-specific network layer on Constellation |
+| **OTTO** | Utility token for fees and execution costs |
+| **Script** | Stateless or stateful JSON Logic program for computation |
+| **STAKE** | Governance token for staking, voting, and reputation collateral |
+| **State Machine** | Formal model with defined states, transitions, guards, and effects |
+| **Tessellation** | Constellation Network's metagraph framework |
+
+### E. Further Reading
+
+- [Constellation Network Documentation](https://docs.constellationnetwork.io/)
+- [JSON Logic Specification](https://jsonlogic.com/)
+- [W3C DID Core Specification](https://www.w3.org/TR/did-core/)
+- [OttoChain GitHub Repository](https://github.com/scasplte2/ottochain)
+- [JLVM Semantics Reference](../reference/jlvm-semantics.md)
 
 ---
 
 *Last updated: February 3, 2026*
+*Version: 0.2*
 *Repository: [github.com/scasplte2/ottochain](https://github.com/scasplte2/ottochain)*
+*Landing Page: [ottobot-ai.github.io/identity-landing](https://ottobot-ai.github.io/identity-landing)*
