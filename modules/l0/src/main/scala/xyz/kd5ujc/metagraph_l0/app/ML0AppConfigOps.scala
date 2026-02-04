@@ -6,5 +6,6 @@ import pureconfig.ConfigReader
 import pureconfig.generic.semiauto.deriveReader
 
 object ML0AppConfigOps {
+  implicit val webhookConfigReader: ConfigReader[ML0AppConfig.WebhookConfig] = deriveReader
   implicit val applicationConfigReader: ConfigReader[ML0AppConfig] = deriveReader
 }

@@ -38,19 +38,15 @@ object Main
     implicit0(sp: SecurityProvider[IO])              <- SecurityProvider.forAsync[IO]
     _                                                <- loadKeyPair[IO](config).asResource
 
-    // Create HTTP client for webhook delivery
-    httpClient <- EmberClientBuilder.default[IO].build
-
-    // Get metagraph ID from environment or use default
-    metagraphId = sys.env.getOrElse(
-      "CL_L0_TOKEN_IDENTIFIER",
-      "DAG3KNyfeKUTuWpMMhormWgWSYMD1pDGB2uaWqxG"
-    )
+    // Create HTTP client for webhook delivery (only if webhook URL is configured)
+    httpClient <- config.webhook.url.fold(Resource.pure[IO, Option[org.http4s.client.Client[IO]]](None)) { _ =>
+      EmberClientBuilder.default[IO].build.map(Some(_))
+    }
 
     l0Service <- ML0Service
       .make[IO](
-        httpClient = Some(httpClient),
-        metagraphId = metagraphId
+        httpClient = httpClient,
+        metagraphId = config.webhook.metagraphId.getOrElse("DAG3KNyfeKUTuWpMMhormWgWSYMD1pDGB2uaWqxG")
       )
       .asResource
   } yield l0Service).some
