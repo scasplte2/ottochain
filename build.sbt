@@ -65,7 +65,27 @@ lazy val buildInfoSettings = Seq(
 lazy val root = (project in file("."))
   .settings(
     name := "ottochain"
-  ).aggregate(models, sharedData, currencyL0, currencyL1, dataL1)
+  ).aggregate(proto, models, sharedData, currencyL0, currencyL1, dataL1)
+
+lazy val proto = (project in file("modules/proto"))
+  .settings(
+    commonSettings,
+    name := "ottochain-proto",
+    Compile / PB.targets := Seq(
+      scalapb.gen(flatPackage = true) -> (Compile / sourceManaged).value / "scalapb",
+      scalapb.validate.gen() -> (Compile / sourceManaged).value / "scalapb"
+    ),
+    Compile / PB.protoSources := Seq(
+      (Compile / sourceDirectory).value / "protobuf"
+    ),
+    libraryDependencies ++= Seq(
+      Libraries.scalapbRuntime,
+      Libraries.scalapbRuntime % "protobuf",
+      Libraries.scalapbValidateCore,
+      Libraries.scalapbValidateCore % "protobuf",
+      Libraries.scalapbCirce
+    )
+  )
 
 lazy val models = (project in file("modules/models"))
   .settings(

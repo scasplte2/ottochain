@@ -8,4 +8,11 @@ addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "2.3.1")
 addSbtPlugin("com.eed3si9n" % "sbt-buildinfo" % "0.13.1")
 addSbtPlugin("com.timushev.sbt" % "sbt-updates" % "0.6.4")
 
+addSbtPlugin("com.thesamet" % "sbt-protoc" % "1.0.7")
+
+libraryDependencies ++= Seq(
+  "com.thesamet.scalapb" %% "compilerplugin" % "0.11.17",
+  "com.thesamet.scalapb" %% "scalapb-validate-codegen" % "0.3.4"
+)
+
 addDependencyTreePlugin

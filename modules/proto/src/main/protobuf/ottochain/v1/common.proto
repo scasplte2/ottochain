@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package ottochain.v1;
+
+import "scalapb/scalapb.proto";
+import "validate/validate.proto";
+
+option (scalapb.options) = {
+  flat_package: true
+  single_file: true
+  preserve_unknown_fields: false
+};
+
+// Fiber sequence number (non-negative)
+message FiberOrdinal {
+  int64 value = 1 [(validate.rules).int64.gte = 0];
+}
+
+// Snapshot ordinal from Constellation framework
+message SnapshotOrdinal {
+  int64 value = 1 [(validate.rules).int64.gte = 0];
+}
+
+// State identifier for state machines
+message StateId {
+  string value = 1 [(validate.rules).string.min_len = 1];
+}
+
+// Hash value
+message HashValue {
+  string value = 1 [(validate.rules).string.min_len = 1];
+}
+
+// DAG address (Constellation network address)
+message Address {
+  string value = 1 [(validate.rules).string = {pattern: "^DAG[0-9a-zA-Z]+$"}];
+}

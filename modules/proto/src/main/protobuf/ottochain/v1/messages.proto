@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+package ottochain.v1;
+
+import "scalapb/scalapb.proto";
+import "validate/validate.proto";
+import "ottochain/v1/common.proto";
+import "ottochain/v1/fiber.proto";
+import "google/protobuf/struct.proto";
+
+option (scalapb.options) = {
+  flat_package: true
+  single_file: true
+  preserve_unknown_fields: false
+};
+
+// Create a new state machine fiber
+message CreateStateMachine {
+  string fiber_id = 1 [(validate.rules).string.min_len = 1];
+  StateMachineDefinition definition = 2;
+  google.protobuf.Value initial_data = 3;
+  optional string parent_fiber_id = 4;
+}
+
+// Trigger a state machine transition
+message TransitionStateMachine {
+  string fiber_id = 1 [(validate.rules).string.min_len = 1];
+  string event_name = 2 [(validate.rules).string.min_len = 1];
+  google.protobuf.Value payload = 3;
+  FiberOrdinal target_sequence_number = 4;
+}
+
+// Archive a state machine fiber
+message ArchiveStateMachine {
+  string fiber_id = 1 [(validate.rules).string.min_len = 1];
+  FiberOrdinal target_sequence_number = 2;
+}
+
+// Create a new script fiber
+message CreateScript {
+  string fiber_id = 1 [(validate.rules).string.min_len = 1];
+  google.protobuf.Value script_program = 2;
+  optional google.protobuf.Value initial_state = 3;
+  AccessControlPolicy access_control = 4;
+}
+
+// Invoke a script
+message InvokeScript {
+  string fiber_id = 1 [(validate.rules).string.min_len = 1];
+  string method = 2 [(validate.rules).string.min_len = 1];
+  google.protobuf.Value args = 3;
+  FiberOrdinal target_sequence_number = 4;
+}
+
+// Union message type for all OttoChain operations
+message OttochainMessage {
+  oneof message {
+    CreateStateMachine create_state_machine = 1;
+    TransitionStateMachine transition_state_machine = 2;
+    ArchiveStateMachine archive_state_machine = 3;
+    CreateScript create_script = 4;
+    InvokeScript invoke_script = 5;
+  }
+}

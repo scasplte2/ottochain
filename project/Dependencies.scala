@@ -15,6 +15,9 @@ object Dependencies {
     val betterMonadicFor = "0.3.1"
     val kindProjector = "0.13.4"
     val semanticDB = "4.14.2"
+
+    val scalapb = "0.11.17"
+    val scalapbValidate = "0.3.4"
   }
 
   def decline(artifact: Option[String], ver: String): ModuleID = "com.monovore" %% {if (artifact.isEmpty) "decline" else s"decline-${artifact.get}"} % ver
@@ -40,6 +43,11 @@ object Dependencies {
     val weaverCats = "org.typelevel" %% "weaver-cats" % V.weaver
     val weaverDiscipline = "org.typelevel" %% "weaver-discipline" % V.weaver
     val weaverScalaCheck = "org.typelevel" %% "weaver-scalacheck" % V.weaver
+
+    val scalapbRuntime = "com.thesamet.scalapb" %% "scalapb-runtime" % V.scalapb
+    val scalapbRuntimeGrpc = "com.thesamet.scalapb" %% "scalapb-runtime-grpc" % V.scalapb
+    val scalapbValidateCore = "com.thesamet.scalapb" %% "scalapb-validate-core" % V.scalapbValidate
+    val scalapbCirce = "io.github.scalapb-json" %% "scalapb-circe" % "0.15.1"
   }
 
   object CompilerPlugin {
