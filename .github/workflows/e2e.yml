@@ -77,12 +77,6 @@ jobs:
           wait_for_node "DL1-1" 9410
           wait_for_node "DL1-2" 9420
 
-      - name: Build SDK
-        working-directory: sdk
-        run: |
-          npm install
-          npm run build
-
       - name: Install E2E dependencies
         working-directory: e2e-test
         run: npm ci

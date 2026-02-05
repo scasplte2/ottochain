@@ -14,7 +14,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@ottochain/sdk": "file:../sdk",
+    "@ottochain/sdk": "github:ottobot-ai/ottochain-sdk#main",
     "commander": "13.1.0",
     "dotenv": "^16.4.7"
   },
