@@ -8,6 +8,7 @@ ThisBuild / evictionErrorLevel := Level.Warn
 
 ThisBuild / assemblyMergeStrategy := {
   case "logback.xml" => MergeStrategy.first
+  case "dag-l1.conf" => MergeStrategy.first
   case x if x.contains("io.netty.versions.properties") => MergeStrategy.discard
   case PathList("xyz", "kd5ujc", "buildinfo", xs @ _*) => MergeStrategy.first
   case PathList(xs@_*) if xs.last == "module-info.class" => MergeStrategy.first
