@@ -135,13 +135,13 @@ object ProofValidationSuite extends SimpleIOSuite {
         machineJson = s"""
         {
           "states": {
-            "pending": { "id": { "value": "pending" }, "isFinal": false },
+            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false },
             "approved": { "id": { "value": "approved" }, "isFinal": false }
           },
-          "initialState": { "value": "pending" },
+          "initialState": { "value": "PENDING" },
           "transitions": [
             {
-              "from": { "value": "pending" },
+              "from": { "value": "PENDING" },
               "to": { "value": "approved" },
               "eventName": "approve",
               "guard": {
@@ -161,7 +161,7 @@ object ProofValidationSuite extends SimpleIOSuite {
         """
 
         machineDef <- IO.fromEither(decode[StateMachineDefinition](machineJson))
-        initialData = MapValue(Map("status" -> StrValue("pending")))
+        initialData = MapValue(Map("status" -> StrValue("PENDING")))
 
         createMachine = Updates.CreateStateMachine(machineFiberId, machineDef, initialData)
         machineProof <- registry.generateProofs(createMachine, Set(Bob))
@@ -206,7 +206,7 @@ object ProofValidationSuite extends SimpleIOSuite {
         }
 
       } yield expect(machineBob.isDefined) and
-      expect(machineBob.map(_.currentState).contains(StateId("pending"))) and
+      expect(machineBob.map(_.currentState).contains(StateId("PENDING"))) and
       expect(machineAlice.isDefined) and
       expect(machineAlice.map(_.currentState).contains(StateId("approved"))) and
       expect(statusAfterAlice.contains("approved"))
@@ -227,13 +227,13 @@ object ProofValidationSuite extends SimpleIOSuite {
         machineJson = """
         {
           "states": {
-            "pending": { "id": { "value": "pending" }, "isFinal": false },
+            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false },
             "approved": { "id": { "value": "approved" }, "isFinal": false }
           },
-          "initialState": { "value": "pending" },
+          "initialState": { "value": "PENDING" },
           "transitions": [
             {
-              "from": { "value": "pending" },
+              "from": { "value": "PENDING" },
               "to": { "value": "approved" },
               "eventName": "approve",
               "guard": {
@@ -253,7 +253,7 @@ object ProofValidationSuite extends SimpleIOSuite {
         """
 
         machineDef <- IO.fromEither(decode[StateMachineDefinition](machineJson))
-        initialData = MapValue(Map("status" -> StrValue("pending")))
+        initialData = MapValue(Map("status" -> StrValue("PENDING")))
 
         createMachine = Updates.CreateStateMachine(machineFiberId, machineDef, initialData)
         machineProof <- registry.generateProofs(createMachine, Set(Alice))
@@ -298,7 +298,7 @@ object ProofValidationSuite extends SimpleIOSuite {
         }
 
       } yield expect(machineAfterAliceOnly.isDefined) and
-      expect(machineAfterAliceOnly.map(_.currentState).contains(StateId("pending"))) and
+      expect(machineAfterAliceOnly.map(_.currentState).contains(StateId("PENDING"))) and
       expect(machineAfterAliceBob.isDefined) and
       expect(machineAfterAliceBob.map(_.currentState).contains(StateId("approved"))) and
       expect(statusAfterAliceBob.contains("approved"))
@@ -323,13 +323,13 @@ object ProofValidationSuite extends SimpleIOSuite {
         machineJson = s"""
         {
           "states": {
-            "pending": { "id": { "value": "pending" }, "isFinal": false },
+            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false },
             "approved": { "id": { "value": "approved" }, "isFinal": false }
           },
-          "initialState": { "value": "pending" },
+          "initialState": { "value": "PENDING" },
           "transitions": [
             {
-              "from": { "value": "pending" },
+              "from": { "value": "PENDING" },
               "to": { "value": "approved" },
               "eventName": "approve",
               "guard": {
@@ -355,7 +355,7 @@ object ProofValidationSuite extends SimpleIOSuite {
         """
 
         machineDef <- IO.fromEither(decode[StateMachineDefinition](machineJson))
-        initialData = MapValue(Map("status" -> StrValue("pending")))
+        initialData = MapValue(Map("status" -> StrValue("PENDING")))
 
         createMachine = Updates.CreateStateMachine(machineFiberId, machineDef, initialData)
         machineProof <- registry.generateProofs(createMachine, Set(Alice))

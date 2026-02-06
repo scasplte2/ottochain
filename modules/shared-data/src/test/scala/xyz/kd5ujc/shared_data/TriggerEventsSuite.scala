@@ -68,17 +68,17 @@ object TriggerEventsSuite extends SimpleIOSuite {
         {
           "states": {
             "inactive": { "id": { "value": "inactive" }, "isFinal": false },
-            "active": { "id": { "value": "active" }, "isFinal": false }
+            "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
           },
           "initialState": { "value": "inactive" },
           "transitions": [
             {
               "from": { "value": "inactive" },
-              "to": { "value": "active" },
+              "to": { "value": "ACTIVE" },
               "eventName": "activate",
               "guard": true,
               "effect": [
-                ["status", "active"],
+                ["status", "ACTIVE"],
                 ["activatedBy", { "var": "event.initiator" }],
                 ["activatedAt", { "var": "event.timestamp" }]
               ],
@@ -143,8 +143,8 @@ object TriggerEventsSuite extends SimpleIOSuite {
       } yield expect(initiator.isDefined) and
       expect(initiator.map(_.currentState).contains(StateId("triggered"))) and
       expect(target.isDefined) and
-      expect(target.map(_.currentState).contains(StateId("active"))) and
-      expect(targetStatus.contains("active")) and
+      expect(target.map(_.currentState).contains(StateId("ACTIVE"))) and
+      expect(targetStatus.contains("ACTIVE")) and
       expect(targetActivatedBy.contains(initiatorfiberId.toString)) and
       expect(targetActivatedAt.contains(BigInt(12345)))
     }

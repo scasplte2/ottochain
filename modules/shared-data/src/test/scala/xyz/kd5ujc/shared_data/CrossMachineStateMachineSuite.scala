@@ -66,13 +66,13 @@ object CrossMachineStateMachineSuite extends SimpleIOSuite {
         buyerfiberId <- UUIDGen.randomUUID[IO]
         buyerDef = StateMachineDefinition(
           states = Map(
-            StateId("pending")   -> State(StateId("pending")),
+            StateId("PENDING")   -> State(StateId("PENDING")),
             StateId("purchased") -> State(StateId("purchased"))
           ),
-          initialState = StateId("pending"),
+          initialState = StateId("PENDING"),
           transitions = List(
             Transition(
-              from = StateId("pending"),
+              from = StateId("PENDING"),
               to = StateId("purchased"),
               eventName = "buy",
               guard = ApplyExpression(
@@ -114,7 +114,7 @@ object CrossMachineStateMachineSuite extends SimpleIOSuite {
           previousUpdateOrdinal = ordinal,
           latestUpdateOrdinal = ordinal,
           definition = buyerDef,
-          currentState = StateId("pending"),
+          currentState = StateId("PENDING"),
           stateData = buyerData,
           stateDataHash = buyerHash,
           sequenceNumber = FiberOrdinal.MinValue,

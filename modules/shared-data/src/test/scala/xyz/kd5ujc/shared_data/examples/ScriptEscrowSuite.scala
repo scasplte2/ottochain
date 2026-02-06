@@ -42,14 +42,14 @@ object OracleEscrowSuite extends SimpleIOSuite {
         machineJson = """
         {
           "states": {
-            "pending": { "id": { "value": "pending" }, "isFinal": false, "metadata": null },
+            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false, "metadata": null },
             "funded": { "id": { "value": "funded" }, "isFinal": false, "metadata": null },
             "released": { "id": { "value": "released" }, "isFinal": true, "metadata": null }
           },
-          "initialState": { "value": "pending" },
+          "initialState": { "value": "PENDING" },
           "transitions": [
             {
-              "from": { "value": "pending" },
+              "from": { "value": "PENDING" },
               "to": { "value": "funded" },
               "eventName": "fund",
               "guard": { "==": [1, 1] },
@@ -160,15 +160,15 @@ object OracleEscrowSuite extends SimpleIOSuite {
         machineJson = """
         {
           "states": {
-            "pending": { "id": { "value": "pending" }, "isFinal": false, "metadata": null },
+            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false, "metadata": null },
             "funded": { "id": { "value": "funded" }, "isFinal": false, "metadata": null },
             "released": { "id": { "value": "released" }, "isFinal": true, "metadata": null },
             "refunded": { "id": { "value": "refunded" }, "isFinal": true, "metadata": null }
           },
-          "initialState": { "value": "pending" },
+          "initialState": { "value": "PENDING" },
           "transitions": [
             {
-              "from": { "value": "pending" },
+              "from": { "value": "PENDING" },
               "to": { "value": "funded" },
               "eventName": "fund",
               "guard": { "==": [1, 1] },

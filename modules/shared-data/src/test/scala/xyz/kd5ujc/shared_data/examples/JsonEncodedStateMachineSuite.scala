@@ -154,8 +154,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
         htlcJson =
           """{
           "states": {
-            "pending": {
-              "id": { "value": "pending" },
+            "PENDING": {
+              "id": { "value": "PENDING" },
               "isFinal": false
             },
             "claimed": {
@@ -167,10 +167,10 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "isFinal": true
             }
           },
-          "initialState": { "value": "pending" },
+          "initialState": { "value": "PENDING" },
           "transitions": [
             {
-              "from": { "value": "pending" },
+              "from": { "value": "PENDING" },
               "to": { "value": "claimed" },
               "eventName": "claim",
               "guard": {
@@ -198,7 +198,7 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "pending" },
+              "from": { "value": "PENDING" },
               "to": { "value": "refunded" },
               "eventName": "refund",
               "guard": {
@@ -248,7 +248,7 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
         )
 
         htlcFiber <- FiberBuilder(htlcfiberId, ordinal, parsedDef)
-          .withState("pending")
+          .withState("PENDING")
           .withDataValue(htlcData)
           .ownedBy(registry, Alice, Bob)
           .build[IO]
@@ -313,7 +313,7 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
         )
 
         htlcFiber2 <- FiberBuilder(htlcCid2, ordinal, parsedDef)
-          .withState("pending")
+          .withState("PENDING")
           .withDataValue(htlcData2)
           .ownedBy(registry, Alice, Bob)
           .build[IO]
@@ -395,8 +395,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
             "in_transit": { "id": { "value": "in_transit" }, "isFinal": false },
             "delivered": { "id": { "value": "delivered" }, "isFinal": false },
             "inspecting": { "id": { "value": "inspecting" }, "isFinal": false },
-            "completed": { "id": { "value": "completed" }, "isFinal": true },
-            "disputed": { "id": { "value": "disputed" }, "isFinal": true }
+            "COMPLETED": { "id": { "value": "COMPLETED" }, "isFinal": true },
+            "DISPUTED": { "id": { "value": "DISPUTED" }, "isFinal": true }
           },
           "initialState": { "value": "placed" },
           "transitions": [
@@ -477,7 +477,7 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
             },
             {
               "from": { "value": "inspecting" },
-              "to": { "value": "completed" },
+              "to": { "value": "COMPLETED" },
               "eventName": "complete_order",
               "guard": {
                 "and": [
@@ -496,14 +496,14 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
                 ]
               },
               "effect": [
-                ["status", "completed"],
+                ["status", "COMPLETED"],
                 ["completedAt", { "var": "event.timestamp" }]
               ],
               "dependencies": ["${inspectionfiberId}", "${escrowfiberId}"]
             },
             {
               "from": { "value": "inspecting" },
-              "to": { "value": "disputed" },
+              "to": { "value": "DISPUTED" },
               "eventName": "dispute",
               "guard": {
                 "===": [
@@ -512,7 +512,7 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
                 ]
               },
               "effect": [
-                ["status", "disputed"],
+                ["status", "DISPUTED"],
                 ["disputedAt", { "var": "event.timestamp" }]
               ],
               "dependencies": ["${inspectionfiberId}"]
@@ -664,7 +664,7 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
         shippingJson =
           s"""{
           "states": {
-            "pending": { "id": { "value": "pending" }, "isFinal": false },
+            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false },
             "picked_up": { "id": { "value": "picked_up" }, "isFinal": false },
             "in_transit": { "id": { "value": "in_transit" }, "isFinal": false },
             "customs": { "id": { "value": "customs" }, "isFinal": false },
@@ -673,10 +673,10 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
             "lost": { "id": { "value": "lost" }, "isFinal": true },
             "damaged": { "id": { "value": "damaged" }, "isFinal": true }
           },
-          "initialState": { "value": "pending" },
+          "initialState": { "value": "PENDING" },
           "transitions": [
             {
-              "from": { "value": "pending" },
+              "from": { "value": "PENDING" },
               "to": { "value": "picked_up" },
               "eventName": "pickup",
               "guard": true,
@@ -717,7 +717,7 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "guard": {
                 "===": [
                   { "var": "machines.${insurancefiberId}.state.status" },
-                  "active"
+                  "ACTIVE"
                 ]
               },
               "effect": [
@@ -869,17 +869,17 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
         insuranceJson =
           s"""{
           "states": {
-            "active": { "id": { "value": "active" }, "isFinal": false },
+            "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false },
             "claim_filed": { "id": { "value": "claim_filed" }, "isFinal": false },
             "investigating": { "id": { "value": "investigating" }, "isFinal": false },
             "approved": { "id": { "value": "approved" }, "isFinal": false },
             "denied": { "id": { "value": "denied" }, "isFinal": true },
             "settled": { "id": { "value": "settled" }, "isFinal": true }
           },
-          "initialState": { "value": "active" },
+          "initialState": { "value": "ACTIVE" },
           "transitions": [
             {
-              "from": { "value": "active" },
+              "from": { "value": "ACTIVE" },
               "to": { "value": "claim_filed" },
               "eventName": "file_claim",
               "guard": {
@@ -1080,11 +1080,11 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
           .build[IO]
 
         shippingFiber <- FiberBuilder(shippingfiberId, ordinal, shippingDef)
-          .withState("pending")
+          .withState("PENDING")
           .withData(
             "trackingNumber" -> StrValue("TRACK-12345"),
             "carrier"        -> StrValue("FastShip"),
-            "status"         -> StrValue("pending")
+            "status"         -> StrValue("PENDING")
           )
           .ownedBy(registry, Alice)
           .build[IO]
@@ -1099,11 +1099,11 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
           .build[IO]
 
         insuranceFiber <- FiberBuilder(insurancefiberId, ordinal, insuranceDef)
-          .withState("active")
+          .withState("ACTIVE")
           .withData(
             "policyNumber"   -> StrValue("INS-999"),
             "coverageAmount" -> IntValue(5000),
-            "status"         -> StrValue("active"),
+            "status"         -> StrValue("ACTIVE"),
             "hasClaim"       -> BoolValue(false)
           )
           .ownedBy(registry, Alice, Bob)
@@ -1277,8 +1277,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
 
       } yield expect.all(
         finalOrder.isDefined,
-        finalOrder.map(_.currentState).contains(StateId("completed")),
-        finalOrder.extractString("status").contains("completed"),
+        finalOrder.map(_.currentState).contains(StateId("COMPLETED")),
+        finalOrder.extractString("status").contains("COMPLETED"),
         finalEscrow.isDefined,
         finalEscrow.map(_.currentState).contains(StateId("released")),
         finalEscrow.extractString("status").contains("released"),
@@ -1288,7 +1288,7 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
         finalInspection.map(_.currentState).contains(StateId("passed")),
         finalInspection.extractString("result").contains("passed"),
         finalInsurance.isDefined,
-        finalInsurance.map(_.currentState).contains(StateId("active"))
+        finalInsurance.map(_.currentState).contains(StateId("ACTIVE"))
       )
     }
   }
@@ -1310,8 +1310,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
         proposalJson =
           """{
           "states": {
-            "proposed": {
-              "id": { "value": "proposed" },
+            "PROPOSED": {
+              "id": { "value": "PROPOSED" },
               "isFinal": false
             },
             "open": {
@@ -1331,10 +1331,10 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "isFinal": true
             }
           },
-          "initialState": { "value": "proposed" },
+          "initialState": { "value": "PROPOSED" },
           "transitions": [
             {
-              "from": { "value": "proposed" },
+              "from": { "value": "PROPOSED" },
               "to": { "value": "open" },
               "eventName": "collect",
               "guard": { "var": "state.hasQuorum" },
@@ -1378,7 +1378,7 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "proposed" },
+              "from": { "value": "PROPOSED" },
               "to": { "value": "aborted" },
               "eventName": "abort",
               "guard": true,
@@ -1395,23 +1395,23 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
         actionJson =
           s"""{
           "states": {
-            "pending": {
-              "id": { "value": "pending" },
+            "PENDING": {
+              "id": { "value": "PENDING" },
               "isFinal": false
             },
             "submitted": {
               "id": { "value": "submitted" },
               "isFinal": false
             },
-            "rejected": {
-              "id": { "value": "rejected" },
+            "REJECTED": {
+              "id": { "value": "REJECTED" },
               "isFinal": true
             }
           },
-          "initialState": { "value": "pending" },
+          "initialState": { "value": "PENDING" },
           "transitions": [
             {
-              "from": { "value": "pending" },
+              "from": { "value": "PENDING" },
               "to": { "value": "submitted" },
               "eventName": "submit",
               "guard": {
@@ -1429,8 +1429,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": ["${proposalfiberId}"]
             },
             {
-              "from": { "value": "pending" },
-              "to": { "value": "rejected" },
+              "from": { "value": "PENDING" },
+              "to": { "value": "REJECTED" },
               "eventName": "submit",
               "guard": {
                 "!==": [
@@ -1494,7 +1494,7 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
         )
 
         proposalFiber <- FiberBuilder(proposalfiberId, ordinal, proposalDef)
-          .withState("proposed")
+          .withState("PROPOSED")
           .withData(
             "title"          -> StrValue("Increase treasury allocation"),
             "hasQuorum"      -> BoolValue(true),
@@ -1502,7 +1502,7 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
             "requiredVotes"  -> IntValue(2),
             "yesVotes"       -> IntValue(0),
             "noVotes"        -> IntValue(0),
-            "status"         -> StrValue("proposed")
+            "status"         -> StrValue("PROPOSED")
           )
           .ownedBy(registry, Alice)
           .build[IO]
@@ -1545,7 +1545,7 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
         earlyActionfiberId <- UUIDGen.randomUUID[IO]
 
         earlyActionFiber <- FiberBuilder(earlyActionfiberId, ordinal, actionDef)
-          .withState("pending")
+          .withState("PENDING")
           .withData(
             "proposalId" -> StrValue(proposalfiberId.toString),
             "submitter"  -> StrValue(registry.addresses(Charlie).toString)
@@ -1557,7 +1557,7 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
         validActionfiberId <- UUIDGen.randomUUID[IO]
 
         validActionFiberInit <- FiberBuilder(validActionfiberId, ordinal, actionDef)
-          .withState("pending")
+          .withState("PENDING")
           .withData(
             "proposalId" -> StrValue(proposalfiberId.toString),
             "submitter"  -> StrValue(registry.addresses(Charlie).toString)
@@ -1596,7 +1596,7 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
         // Verify early submission was rejected
         _ = expect.all(
           earlyActionFiberResult.isDefined,
-          earlyActionFiberResult.map(_.currentState).contains(StateId("rejected")),
+          earlyActionFiberResult.map(_.currentState).contains(StateId("REJECTED")),
           earlyActionFiberResult.extractBool("rejected").contains(true),
           earlyActionFiberResult.extractString("reason").contains("proposal not open")
         )

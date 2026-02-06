@@ -43,17 +43,17 @@ object PredictionMarketSuite extends SimpleIOSuite {
   private val predictionMarketMachine =
     """|{
        |  "states": {
-       |    "proposed": { "id": { "value": "proposed" }, "isFinal": false, "metadata": null },
+       |    "PROPOSED": { "id": { "value": "PROPOSED" }, "isFinal": false, "metadata": null },
        |    "open": { "id": { "value": "open" }, "isFinal": false, "metadata": null },
        |    "closed": { "id": { "value": "closed" }, "isFinal": false, "metadata": null },
        |    "resolving": { "id": { "value": "resolving" }, "isFinal": false, "metadata": null },
        |    "resolved": { "id": { "value": "resolved" }, "isFinal": true, "metadata": null },
-       |    "cancelled": { "id": { "value": "cancelled" }, "isFinal": true, "metadata": null }
+       |    "CANCELLED": { "id": { "value": "CANCELLED" }, "isFinal": true, "metadata": null }
        |  },
-       |  "initialState": { "value": "proposed" },
+       |  "initialState": { "value": "PROPOSED" },
        |  "transitions": [
        |    {
-       |      "from": { "value": "proposed" },
+       |      "from": { "value": "PROPOSED" },
        |      "to": { "value": "open" },
        |      "eventName": "fund",
        |      "guard": { "==": [1, 1] },
@@ -66,8 +66,8 @@ object PredictionMarketSuite extends SimpleIOSuite {
        |      "dependencies": []
        |    },
        |    {
-       |      "from": { "value": "proposed" },
-       |      "to": { "value": "cancelled" },
+       |      "from": { "value": "PROPOSED" },
+       |      "to": { "value": "CANCELLED" },
        |      "eventName": "cancel",
        |      "guard": { "==": [1, 1] },
        |      "effect": { "var": "state" },
@@ -289,7 +289,7 @@ object PredictionMarketSuite extends SimpleIOSuite {
         )
 
         market1 = state1.calculated.stateMachines.get(marketId)
-        _ = expect(market1.exists(_.currentState == StateId("proposed")))
+        _ = expect(market1.exists(_.currentState == StateId("PROPOSED")))
 
         // Fund market (transition to open)
         fundOp = Updates.TransitionStateMachine(

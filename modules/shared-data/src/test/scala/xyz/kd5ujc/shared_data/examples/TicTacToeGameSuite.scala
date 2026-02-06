@@ -36,7 +36,7 @@ object TicTacToeGameSuite extends SimpleIOSuite {
       "setup": { "id": {"value": "setup"}, "isFinal": false },
       "playing": { "id": {"value": "playing"}, "isFinal": false },
       "finished": { "id": {"value": "finished"}, "isFinal": true },
-      "cancelled": { "id": {"value": "cancelled"}, "isFinal": true }
+      "CANCELLED": { "id": {"value": "CANCELLED"}, "isFinal": true }
     },
     "initialState": {"value": "setup"},
     "transitions": [
@@ -149,7 +149,7 @@ object TicTacToeGameSuite extends SimpleIOSuite {
       },
       {
         "from": {"value": "playing"},
-        "to": {"value": "cancelled"},
+        "to": {"value": "CANCELLED"},
         "eventName": "cancel_game",
         "guard": {"==": [1, 1]},
         "effect": {
@@ -168,7 +168,7 @@ object TicTacToeGameSuite extends SimpleIOSuite {
       },
       {
         "from": {"value": "setup"},
-        "to": {"value": "cancelled"},
+        "to": {"value": "CANCELLED"},
         "eventName": "cancel_game",
         "guard": {"==": [1, 1]},
         "effect": {

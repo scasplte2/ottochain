@@ -35,14 +35,14 @@ object ParentChildStateMachineSuite extends SimpleIOSuite {
 
         orderJson = s"""{
           "states": {
-            "pending": { "id": { "value": "pending" }, "isFinal": false },
+            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false },
             "confirmed": { "id": { "value": "confirmed" }, "isFinal": false },
             "shipped": { "id": { "value": "shipped" }, "isFinal": true }
           },
-          "initialState": { "value": "pending" },
+          "initialState": { "value": "PENDING" },
           "transitions": [
             {
-              "from": { "value": "pending" },
+              "from": { "value": "PENDING" },
               "to": { "value": "confirmed" },
               "eventName": "confirm",
               "guard": true,
@@ -102,7 +102,7 @@ object ParentChildStateMachineSuite extends SimpleIOSuite {
             "orderId"       -> StrValue("ORDER-123"),
             "customerEmail" -> StrValue("customer@example.com"),
             "customerPhone" -> StrValue("+1234567890"),
-            "status"        -> StrValue("pending")
+            "status"        -> StrValue("PENDING")
           )
         )
 
@@ -173,18 +173,18 @@ object ParentChildStateMachineSuite extends SimpleIOSuite {
 
         parentJson = s"""{
           "states": {
-            "active": { "id": { "value": "active" }, "isFinal": false },
-            "suspended": { "id": { "value": "suspended" }, "isFinal": false }
+            "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false },
+            "SUSPENDED": { "id": { "value": "SUSPENDED" }, "isFinal": false }
           },
-          "initialState": { "value": "active" },
+          "initialState": { "value": "ACTIVE" },
           "transitions": [
             {
-              "from": { "value": "active" },
-              "to": { "value": "suspended" },
+              "from": { "value": "ACTIVE" },
+              "to": { "value": "SUSPENDED" },
               "eventName": "suspend",
               "guard": true,
               "effect": {
-                "status": "suspended"
+                "status": "SUSPENDED"
               },
               "dependencies": []
             }
@@ -205,7 +205,7 @@ object ParentChildStateMachineSuite extends SimpleIOSuite {
               "guard": {
                 "===": [
                   { "var": "parent.state.status" },
-                  "suspended"
+                  "SUSPENDED"
                 ]
               },
               "effect": {
@@ -220,7 +220,7 @@ object ParentChildStateMachineSuite extends SimpleIOSuite {
         parentDef <- IO.fromEither(decode[StateMachineDefinition](parentJson))
         childDef  <- IO.fromEither(decode[StateMachineDefinition](childJson))
 
-        parentInitialData = MapValue(Map("status" -> StrValue("active")))
+        parentInitialData = MapValue(Map("status" -> StrValue("ACTIVE")))
         childInitialData = MapValue(Map("status" -> StrValue("running")))
 
         createParent = Updates.CreateStateMachine(parentfiberId, parentDef, parentInitialData)
@@ -276,8 +276,8 @@ object ParentChildStateMachineSuite extends SimpleIOSuite {
         childParentId = finalChild.flatMap(_.parentFiberId)
 
       } yield expect(finalParent.isDefined) and
-      expect(finalParent.map(_.currentState).contains(StateId("suspended"))) and
-      expect(parentStatus.contains("suspended")) and
+      expect(finalParent.map(_.currentState).contains(StateId("SUSPENDED"))) and
+      expect(parentStatus.contains("SUSPENDED")) and
       expect(finalChild.isDefined) and
       expect(finalChild.map(_.currentState).contains(StateId("paused"))) and
       expect(childStatus.contains("paused")) and
@@ -300,13 +300,13 @@ object ParentChildStateMachineSuite extends SimpleIOSuite {
 
         simpleDef = StateMachineDefinition(
           states = Map(
-            StateId("active") -> State(StateId("active"), isFinal = false)
+            StateId("ACTIVE") -> State(StateId("ACTIVE"), isFinal = false)
           ),
-          initialState = StateId("active"),
+          initialState = StateId("ACTIVE"),
           transitions = List.empty
         )
 
-        initialData = MapValue(Map("status" -> StrValue("active")))
+        initialData = MapValue(Map("status" -> StrValue("ACTIVE")))
 
         createParent = Updates.CreateStateMachine(parentfiberId, simpleDef, initialData)
         parentProof <- registry.generateProofs(createParent, Set(Alice))
@@ -440,13 +440,13 @@ object ParentChildStateMachineSuite extends SimpleIOSuite {
 
         json = s"""{
           "states": {
-            "pending": { "id": { "value": "pending" }, "isFinal": false },
+            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false },
             "done": { "id": { "value": "done" }, "isFinal": true }
           },
-          "initialState": { "value": "pending" },
+          "initialState": { "value": "PENDING" },
           "transitions": [
             {
-              "from": { "value": "pending" },
+              "from": { "value": "PENDING" },
               "to": { "value": "done" },
               "eventName": "complete",
               "guard": true,
@@ -471,7 +471,7 @@ object ParentChildStateMachineSuite extends SimpleIOSuite {
 
         def_ <- IO.fromEither(decode[StateMachineDefinition](json))
 
-        initialData = MapValue(Map("status" -> StrValue("pending")))
+        initialData = MapValue(Map("status" -> StrValue("PENDING")))
         initialHash <- (initialData: JsonLogicValue).computeDigest
 
         owners = Set(Alice).map(registry.addresses)
@@ -482,7 +482,7 @@ object ParentChildStateMachineSuite extends SimpleIOSuite {
           previousUpdateOrdinal = fixture.ordinal,
           latestUpdateOrdinal = fixture.ordinal,
           definition = def_,
-          currentState = StateId("pending"),
+          currentState = StateId("PENDING"),
           stateData = initialData,
           stateDataHash = initialHash,
           sequenceNumber = FiberOrdinal.MinValue,

@@ -55,7 +55,7 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
             "inspected": { "id": { "value": "inspected" }, "isFinal": false },
             "settling": { "id": { "value": "settling" }, "isFinal": false },
             "settled": { "id": { "value": "settled" }, "isFinal": true },
-            "rejected": { "id": { "value": "rejected" }, "isFinal": true }
+            "REJECTED": { "id": { "value": "REJECTED" }, "isFinal": true }
           },
           "initialState": { "value": "draft" },
           "transitions": [
@@ -99,7 +99,7 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
               "guard": {
                 "===": [
                   { "var": "machines.${gpsTrackerfiberId}.state.status" },
-                  "active"
+                  "ACTIVE"
                 ]
               },
               "effect": [
@@ -211,7 +211,7 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
             },
             {
               "from": { "value": "quality_check" },
-              "to": { "value": "rejected" },
+              "to": { "value": "REJECTED" },
               "eventName": "inspection_complete",
               "guard": {
                 "or": [
@@ -230,7 +230,7 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
                 ]
               },
               "effect": [
-                ["status", "rejected"],
+                ["status", "REJECTED"],
                 ["rejectedAt", { "var": "event.timestamp" }],
                 ["rejectionReason", "quality inspection failed"],
                 ["qualityScore", { "var": "machines.${inspectionfiberId}.state.qualityScore" }]
@@ -276,7 +276,7 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
           """{
           "states": {
             "inactive": { "id": { "value": "inactive" }, "isFinal": false },
-            "active": { "id": { "value": "active" }, "isFinal": false },
+            "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false },
             "tracking": { "id": { "value": "tracking" }, "isFinal": false },
             "stopped": { "id": { "value": "stopped" }, "isFinal": false },
             "archived": { "id": { "value": "archived" }, "isFinal": true }
@@ -285,11 +285,11 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
           "transitions": [
             {
               "from": { "value": "inactive" },
-              "to": { "value": "active" },
+              "to": { "value": "ACTIVE" },
               "eventName": "activate",
               "guard": true,
               "effect": [
-                ["status", "active"],
+                ["status", "ACTIVE"],
                 ["activatedAt", { "var": "event.timestamp" }],
                 ["vehicleId", { "var": "event.vehicleId" }],
                 ["dataPointCount", 0],
@@ -298,7 +298,7 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "active" },
+              "from": { "value": "ACTIVE" },
               "to": { "value": "tracking" },
               "eventName": "start_tracking",
               "guard": true,
@@ -369,15 +369,15 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
         supplierApprovalJson =
           """{
           "states": {
-            "pending": { "id": { "value": "pending" }, "isFinal": false },
+            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false },
             "reviewing": { "id": { "value": "reviewing" }, "isFinal": false },
             "approved": { "id": { "value": "approved" }, "isFinal": false },
-            "rejected": { "id": { "value": "rejected" }, "isFinal": true }
+            "REJECTED": { "id": { "value": "REJECTED" }, "isFinal": true }
           },
-          "initialState": { "value": "pending" },
+          "initialState": { "value": "PENDING" },
           "transitions": [
             {
-              "from": { "value": "pending" },
+              "from": { "value": "PENDING" },
               "to": { "value": "reviewing" },
               "eventName": "begin_review",
               "guard": true,
@@ -408,7 +408,7 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
             },
             {
               "from": { "value": "reviewing" },
-              "to": { "value": "rejected" },
+              "to": { "value": "REJECTED" },
               "eventName": "approve",
               "guard": {
                 "or": [
@@ -417,7 +417,7 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
                 ]
               },
               "effect": [
-                ["status", "rejected"],
+                ["status", "REJECTED"],
                 ["rejectedAt", { "var": "event.timestamp" }],
                 ["rejectionReason", "compliance or licensing issues"]
               ],
@@ -431,16 +431,16 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
         qualityInspectionJson =
           """{
           "states": {
-            "pending": { "id": { "value": "pending" }, "isFinal": false },
+            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false },
             "scheduled": { "id": { "value": "scheduled" }, "isFinal": false },
             "inspecting": { "id": { "value": "inspecting" }, "isFinal": false },
             "passed": { "id": { "value": "passed" }, "isFinal": true },
             "failed": { "id": { "value": "failed" }, "isFinal": true }
           },
-          "initialState": { "value": "pending" },
+          "initialState": { "value": "PENDING" },
           "transitions": [
             {
-              "from": { "value": "pending" },
+              "from": { "value": "PENDING" },
               "to": { "value": "scheduled" },
               "eventName": "schedule",
               "guard": true,
@@ -541,13 +541,13 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
           .withData(
             "supplierName" -> StrValue("Global Fuel Co"),
             "supplierId"   -> StrValue("SUP-001"),
-            "status"       -> StrValue("pending")
+            "status"       -> StrValue("PENDING")
           )
           .ownedBy(registry, Bob)
           .build[IO]
 
         inspectionFiber <- FiberBuilder(inspectionfiberId, ordinal, inspectionDef)
-          .withData("contractRef" -> StrValue("FC-2025-001"), "status" -> StrValue("pending"))
+          .withData("contractRef" -> StrValue("FC-2025-001"), "status" -> StrValue("PENDING"))
           .ownedBy(registry, Charlie)
           .build[IO]
 

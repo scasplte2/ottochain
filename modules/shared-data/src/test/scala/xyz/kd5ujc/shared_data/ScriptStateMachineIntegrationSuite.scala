@@ -57,13 +57,13 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
         machineJson = s"""
         {
           "states": {
-            "pending": { "id": { "value": "pending" }, "isFinal": false },
+            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false },
             "validated": { "id": { "value": "validated" }, "isFinal": false }
           },
-          "initialState": { "value": "pending" },
+          "initialState": { "value": "PENDING" },
           "transitions": [
             {
-              "from": { "value": "pending" },
+              "from": { "value": "PENDING" },
               "to": { "value": "validated" },
               "eventName": "submit",
               "guard": true,
@@ -85,7 +85,7 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
         """
 
         machineDef <- IO.fromEither(decode[StateMachineDefinition](machineJson))
-        initialData = MapValue(Map("status" -> StrValue("pending")))
+        initialData = MapValue(Map("status" -> StrValue("PENDING")))
 
         createMachine = Updates.CreateStateMachine(machineFiberId, machineDef, initialData)
         machineProof      <- registry.generateProofs(createMachine, Set(Bob))
@@ -170,13 +170,13 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
         machineJson = s"""
         {
           "states": {
-            "pending": { "id": { "value": "pending" }, "isFinal": false },
+            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false },
             "validated": { "id": { "value": "validated" }, "isFinal": false }
           },
-          "initialState": { "value": "pending" },
+          "initialState": { "value": "PENDING" },
           "transitions": [
             {
-              "from": { "value": "pending" },
+              "from": { "value": "PENDING" },
               "to": { "value": "validated" },
               "eventName": "submit",
               "guard": true,
@@ -198,7 +198,7 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
         """
 
         machineDef <- IO.fromEither(decode[StateMachineDefinition](machineJson))
-        initialData = MapValue(Map("status" -> StrValue("pending")))
+        initialData = MapValue(Map("status" -> StrValue("PENDING")))
 
         createMachine = Updates.CreateStateMachine(machineFiberId, machineDef, initialData)
         machineProof      <- registry.generateProofs(createMachine, Set(Bob))
@@ -220,7 +220,7 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
         oracle = finalState.calculated.scripts.get(oracleFiberId)
 
       } yield expect(machine.isDefined) and
-      expect(machine.map(_.currentState).contains(StateId("pending"))) and
+      expect(machine.map(_.currentState).contains(StateId("PENDING"))) and
       expect(machine.exists(_.lastReceipt.exists(r => !r.success))) and
       expect(oracle.isDefined) and
       expect(oracle.map(_.sequenceNumber).contains(FiberOrdinal.MinValue)) and
@@ -371,7 +371,7 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
           "states": {
             "idle": { "id": { "value": "idle" }, "isFinal": false },
             "processing": { "id": { "value": "processing" }, "isFinal": false },
-            "completed": { "id": { "value": "completed" }, "isFinal": false }
+            "COMPLETED": { "id": { "value": "COMPLETED" }, "isFinal": false }
           },
           "initialState": { "value": "idle" },
           "transitions": [
@@ -394,7 +394,7 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
             },
             {
               "from": { "value": "processing" },
-              "to": { "value": "completed" },
+              "to": { "value": "COMPLETED" },
               "eventName": "finalize",
               "guard": true,
               "effect": [
@@ -403,7 +403,7 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
                   { "var": "scripts.$oracleFiberId.lastInvocation.result" }
                 ]}],
                 ["feeCalculated", { "var": "scripts.$oracleFiberId.lastInvocation.result" }],
-                ["status", "completed"]
+                ["status", "COMPLETED"]
               ],
               "dependencies": ["$oracleFiberId"]
             }
@@ -470,10 +470,10 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
         }
 
       } yield expect(machine.isDefined) and
-      expect(machine.map(_.currentState).contains(StateId("completed"))) and
+      expect(machine.map(_.currentState).contains(StateId("COMPLETED"))) and
       expect(feeCalculated.contains(BigInt(50))) and
       expect(totalAmount.contains(BigInt(1050))) and
-      expect(status.contains("completed"))
+      expect(status.contains("COMPLETED"))
     }
   }
 

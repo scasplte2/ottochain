@@ -491,13 +491,13 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
                                   Map(
                                     "active" -> MapValue(
                                       Map(
-                                        "id"      -> MapValue(Map("value" -> StrValue("active"))),
+                                        "id"      -> MapValue(Map("value" -> StrValue("ACTIVE"))),
                                         "isFinal" -> BoolValue(false)
                                       )
                                     )
                                   )
                                 ),
-                                "initialState" -> MapValue(Map("value" -> StrValue("active"))),
+                                "initialState" -> MapValue(Map("value" -> StrValue("ACTIVE"))),
                                 "transitions"  -> ArrayValue(List.empty)
                               )
                             ),

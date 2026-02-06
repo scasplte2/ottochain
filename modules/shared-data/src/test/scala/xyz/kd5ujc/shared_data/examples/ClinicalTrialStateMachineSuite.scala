@@ -46,20 +46,20 @@ object ClinicalTrialStateMachineSuite extends SimpleIOSuite {
           s"""{
           "states": {
             "recruiting": { "id": { "value": "recruiting" }, "isFinal": false },
-            "active": { "id": { "value": "active" }, "isFinal": false },
+            "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false },
             "phase_1": { "id": { "value": "phase_1" }, "isFinal": false },
             "phase_2": { "id": { "value": "phase_2" }, "isFinal": false },
             "phase_3": { "id": { "value": "phase_3" }, "isFinal": false },
             "under_review": { "id": { "value": "under_review" }, "isFinal": false },
-            "completed": { "id": { "value": "completed" }, "isFinal": true },
-            "suspended": { "id": { "value": "suspended" }, "isFinal": false },
+            "COMPLETED": { "id": { "value": "COMPLETED" }, "isFinal": true },
+            "SUSPENDED": { "id": { "value": "SUSPENDED" }, "isFinal": false },
             "terminated": { "id": { "value": "terminated" }, "isFinal": true }
           },
           "initialState": { "value": "recruiting" },
           "transitions": [
             {
               "from": { "value": "recruiting" },
-              "to": { "value": "active" },
+              "to": { "value": "ACTIVE" },
               "eventName": "start_trial",
               "guard": {
                 "and": [
@@ -68,13 +68,13 @@ object ClinicalTrialStateMachineSuite extends SimpleIOSuite {
                 ]
               },
               "effect": [
-                ["status", "active"],
+                ["status", "ACTIVE"],
                 ["startedAt", { "var": "event.timestamp" }]
               ],
               "dependencies": ["${regulatorfiberId}"]
             },
             {
-              "from": { "value": "active" },
+              "from": { "value": "ACTIVE" },
               "to": { "value": "phase_1" },
               "eventName": "advance_phase",
               "guard": {
@@ -132,7 +132,7 @@ object ClinicalTrialStateMachineSuite extends SimpleIOSuite {
               "guard": {
                 "and": [
                   { ">=": [{ "var": "state.completedVisits" }, 20] },
-                  { "===": [{ "var": "machines.${patientfiberId}.state.status" }, "completed"] }
+                  { "===": [{ "var": "machines.${patientfiberId}.state.status" }, "COMPLETED"] }
                 ]
               },
               "effect": [
@@ -154,34 +154,34 @@ object ClinicalTrialStateMachineSuite extends SimpleIOSuite {
             },
             {
               "from": { "value": "under_review" },
-              "to": { "value": "completed" },
+              "to": { "value": "COMPLETED" },
               "eventName": "finalize",
               "guard": {
                 "===": [{ "var": "machines.${regulatorfiberId}.state.reviewResult" }, "approved"]
               },
               "effect": [
-                ["status", "completed"],
+                ["status", "COMPLETED"],
                 ["completedAt", { "var": "event.timestamp" }]
               ],
               "dependencies": ["${regulatorfiberId}"]
             },
             {
-              "from": { "value": "active" },
-              "to": { "value": "suspended" },
+              "from": { "value": "ACTIVE" },
+              "to": { "value": "SUSPENDED" },
               "eventName": "suspend",
               "guard": {
                 "===": [{ "var": "machines.${adverseEventfiberId}.state.hasCriticalEvent" }, true]
               },
               "effect": [
-                ["status", "suspended"],
+                ["status", "SUSPENDED"],
                 ["suspendedAt", { "var": "event.timestamp" }],
                 ["suspensionReason", "critical_adverse_event"]
               ],
               "dependencies": ["${adverseEventfiberId}"]
             },
             {
-              "from": { "value": "suspended" },
-              "to": { "value": "active" },
+              "from": { "value": "SUSPENDED" },
+              "to": { "value": "ACTIVE" },
               "eventName": "resume",
               "guard": {
                 "and": [
@@ -190,13 +190,13 @@ object ClinicalTrialStateMachineSuite extends SimpleIOSuite {
                 ]
               },
               "effect": [
-                ["status", "active"],
+                ["status", "ACTIVE"],
                 ["resumedAt", { "var": "event.timestamp" }]
               ],
               "dependencies": ["${adverseEventfiberId}", "${regulatorfiberId}"]
             },
             {
-              "from": { "value": "suspended" },
+              "from": { "value": "SUSPENDED" },
               "to": { "value": "terminated" },
               "eventName": "terminate",
               "guard": {
@@ -218,13 +218,13 @@ object ClinicalTrialStateMachineSuite extends SimpleIOSuite {
           "states": {
             "screening": { "id": { "value": "screening" }, "isFinal": false },
             "enrolled": { "id": { "value": "enrolled" }, "isFinal": false },
-            "active": { "id": { "value": "active" }, "isFinal": false },
+            "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false },
             "paused": { "id": { "value": "paused" }, "isFinal": false },
             "visit_scheduled": { "id": { "value": "visit_scheduled" }, "isFinal": false },
             "visit_completed": { "id": { "value": "visit_completed" }, "isFinal": false },
             "adverse_event": { "id": { "value": "adverse_event" }, "isFinal": false },
-            "completed": { "id": { "value": "completed" }, "isFinal": true },
-            "withdrawn": { "id": { "value": "withdrawn" }, "isFinal": true }
+            "COMPLETED": { "id": { "value": "COMPLETED" }, "isFinal": true },
+            "WITHDRAWN": { "id": { "value": "WITHDRAWN" }, "isFinal": true }
           },
           "initialState": { "value": "screening" },
           "transitions": [
@@ -261,20 +261,20 @@ object ClinicalTrialStateMachineSuite extends SimpleIOSuite {
             },
             {
               "from": { "value": "enrolled" },
-              "to": { "value": "active" },
+              "to": { "value": "ACTIVE" },
               "eventName": "activate",
               "guard": {
-                "===": [{ "var": "machines.${trialfiberId}.state.status" }, "active"]
+                "===": [{ "var": "machines.${trialfiberId}.state.status" }, "ACTIVE"]
               },
               "effect": [
-                ["status", "active"],
+                ["status", "ACTIVE"],
                 ["activatedAt", { "var": "event.timestamp" }],
                 ["visitCount", 0]
               ],
               "dependencies": ["${trialfiberId}"]
             },
             {
-              "from": { "value": "active" },
+              "from": { "value": "ACTIVE" },
               "to": { "value": "paused" },
               "eventName": "pause",
               "guard": true,
@@ -287,22 +287,22 @@ object ClinicalTrialStateMachineSuite extends SimpleIOSuite {
             },
             {
               "from": { "value": "paused" },
-              "to": { "value": "active" },
+              "to": { "value": "ACTIVE" },
               "eventName": "resume",
               "guard": {
                 "and": [
-                  { "===": [{ "var": "machines.${trialfiberId}.state.status" }, "active"] },
+                  { "===": [{ "var": "machines.${trialfiberId}.state.status" }, "ACTIVE"] },
                   { "<": [{ "-": [{ "var": "event.timestamp" }, { "var": "state.pausedAt" }] }, 2592000] }
                 ]
               },
               "effect": [
-                ["status", "active"],
+                ["status", "ACTIVE"],
                 ["resumedAt", { "var": "event.timestamp" }]
               ],
               "dependencies": ["${trialfiberId}"]
             },
             {
-              "from": { "value": "active" },
+              "from": { "value": "ACTIVE" },
               "to": { "value": "visit_scheduled" },
               "eventName": "schedule_visit",
               "guard": {
@@ -341,7 +341,7 @@ object ClinicalTrialStateMachineSuite extends SimpleIOSuite {
             },
             {
               "from": { "value": "visit_completed" },
-              "to": { "value": "active" },
+              "to": { "value": "ACTIVE" },
               "eventName": "continue",
               "guard": {
                 "and": [
@@ -350,7 +350,7 @@ object ClinicalTrialStateMachineSuite extends SimpleIOSuite {
                 ]
               },
               "effect": [
-                ["status", "active"]
+                ["status", "ACTIVE"]
               ],
               "dependencies": ["${labfiberId}"]
             },
@@ -383,20 +383,20 @@ object ClinicalTrialStateMachineSuite extends SimpleIOSuite {
             },
             {
               "from": { "value": "adverse_event" },
-              "to": { "value": "active" },
+              "to": { "value": "ACTIVE" },
               "eventName": "resolve",
               "guard": {
                 "===": [{ "var": "machines.${adverseEventfiberId}.state.resolved" }, true]
               },
               "effect": [
-                ["status", "active"],
+                ["status", "ACTIVE"],
                 ["resolvedAt", { "var": "event.timestamp" }]
               ],
               "dependencies": ["${adverseEventfiberId}"]
             },
             {
               "from": { "value": "visit_completed" },
-              "to": { "value": "completed" },
+              "to": { "value": "COMPLETED" },
               "eventName": "complete_trial",
               "guard": {
                 "and": [
@@ -415,18 +415,18 @@ object ClinicalTrialStateMachineSuite extends SimpleIOSuite {
                     }
                   }
                 ]],
-                ["status", "completed"],
+                ["status", "COMPLETED"],
                 ["completedAt", { "var": "event.timestamp" }]
               ],
               "dependencies": ["${labfiberId}"]
             },
             {
               "from": { "value": "paused" },
-              "to": { "value": "withdrawn" },
+              "to": { "value": "WITHDRAWN" },
               "eventName": "withdraw",
               "guard": true,
               "effect": [
-                ["status", "withdrawn"],
+                ["status", "WITHDRAWN"],
                 ["withdrawnAt", { "var": "event.timestamp" }],
                 ["withdrawalReason", { "var": "event.reason" }]
               ],
@@ -434,13 +434,13 @@ object ClinicalTrialStateMachineSuite extends SimpleIOSuite {
             },
             {
               "from": { "value": "adverse_event" },
-              "to": { "value": "withdrawn" },
+              "to": { "value": "WITHDRAWN" },
               "eventName": "withdraw",
               "guard": {
                 "===": [{ "var": "machines.${adverseEventfiberId}.state.severity" }, "critical"]
               },
               "effect": [
-                ["status", "withdrawn"],
+                ["status", "WITHDRAWN"],
                 ["withdrawnAt", { "var": "event.timestamp" }],
                 ["withdrawalReason", "critical_adverse_event"]
               ],
@@ -733,7 +733,7 @@ object ClinicalTrialStateMachineSuite extends SimpleIOSuite {
             "monitoring": { "id": { "value": "monitoring" }, "isFinal": false },
             "reviewing": { "id": { "value": "reviewing" }, "isFinal": false },
             "final_approved": { "id": { "value": "final_approved" }, "isFinal": true },
-            "rejected": { "id": { "value": "rejected" }, "isFinal": true }
+            "REJECTED": { "id": { "value": "REJECTED" }, "isFinal": true }
           },
           "initialState": { "value": "approved" },
           "transitions": [
@@ -780,14 +780,14 @@ object ClinicalTrialStateMachineSuite extends SimpleIOSuite {
             },
             {
               "from": { "value": "reviewing" },
-              "to": { "value": "rejected" },
+              "to": { "value": "REJECTED" },
               "eventName": "approve",
               "guard": {
                 "<": [{ "var": "event.complianceScore" }, 90]
               },
               "effect": [
-                ["reviewResult", "rejected"],
-                ["status", "rejected"],
+                ["reviewResult", "REJECTED"],
+                ["status", "REJECTED"],
                 ["rejectedAt", { "var": "event.timestamp" }],
                 ["complianceScore", { "var": "event.complianceScore" }],
                 ["rejectionReason", { "var": "event.reason" }]
@@ -801,16 +801,16 @@ object ClinicalTrialStateMachineSuite extends SimpleIOSuite {
         insuranceJson =
           """{
           "states": {
-            "active": { "id": { "value": "active" }, "isFinal": false },
+            "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false },
             "claim_filed": { "id": { "value": "claim_filed" }, "isFinal": false },
             "claim_processing": { "id": { "value": "claim_processing" }, "isFinal": false },
             "claim_approved": { "id": { "value": "claim_approved" }, "isFinal": false },
             "claim_paid": { "id": { "value": "claim_paid" }, "isFinal": false }
           },
-          "initialState": { "value": "active" },
+          "initialState": { "value": "ACTIVE" },
           "transitions": [
             {
-              "from": { "value": "active" },
+              "from": { "value": "ACTIVE" },
               "to": { "value": "claim_filed" },
               "eventName": "file_claim",
               "guard": {
@@ -859,11 +859,11 @@ object ClinicalTrialStateMachineSuite extends SimpleIOSuite {
             },
             {
               "from": { "value": "claim_paid" },
-              "to": { "value": "active" },
+              "to": { "value": "ACTIVE" },
               "eventName": "reset",
               "guard": true,
               "effect": [
-                ["status", "active"]
+                ["status", "ACTIVE"]
               ],
               "dependencies": []
             }
@@ -956,12 +956,12 @@ object ClinicalTrialStateMachineSuite extends SimpleIOSuite {
           .build[IO]
 
         insuranceFiber <- FiberBuilder(insurancefiberId, ordinal, insuranceDef)
-          .withState("active")
+          .withState("ACTIVE")
           .withData(
             "policyNumber"   -> StrValue("POL-123456"),
             "coverage"       -> IntValue(100000),
             "coverageActive" -> BoolValue(true),
-            "status"         -> StrValue("active")
+            "status"         -> StrValue("ACTIVE")
           )
           .ownedBy(registry, Alice, Bob)
           .build[IO]
@@ -1074,9 +1074,9 @@ object ClinicalTrialStateMachineSuite extends SimpleIOSuite {
         // Verify patient enrollment succeeded
         state1.fiberRecord(patientfiberId).map(_.currentState).contains(StateId("enrolled")),
         // Verify trial started
-        state2.fiberRecord(trialfiberId).map(_.currentState).contains(StateId("active")),
+        state2.fiberRecord(trialfiberId).map(_.currentState).contains(StateId("ACTIVE")),
         // Verify patient activated
-        state3.fiberRecord(patientfiberId).map(_.currentState).contains(StateId("active")),
+        state3.fiberRecord(patientfiberId).map(_.currentState).contains(StateId("ACTIVE")),
         // Verify visit scheduled
         state4.fiberRecord(patientfiberId).map(_.currentState).contains(StateId("visit_scheduled")),
         // Verify lab received sample
@@ -1091,12 +1091,12 @@ object ClinicalTrialStateMachineSuite extends SimpleIOSuite {
         labResult.contains("passed"),
         // Verify patient continued and is back to active
         patientAfterContinue.isDefined,
-        patientAfterContinue.map(_.currentState).contains(StateId("active")),
-        patientStatus.contains("active"),
+        patientAfterContinue.map(_.currentState).contains(StateId("ACTIVE")),
+        patientStatus.contains("ACTIVE"),
         patientVisitCount.contains(BigInt(1)),
         // Verify trial is still active
         trialAfterVisit.isDefined,
-        trialStatus.contains("active")
+        trialStatus.contains("ACTIVE")
       )
     }
   }

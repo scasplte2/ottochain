@@ -41,13 +41,13 @@ object FailureReasonSuite extends SimpleIOSuite {
         definition = StateMachineDefinition(
           states = Map(
             StateId("idle")   -> State(StateId("idle")),
-            StateId("active") -> State(StateId("active"))
+            StateId("ACTIVE") -> State(StateId("ACTIVE"))
           ),
           initialState = StateId("idle"),
           transitions = List(
             Transition(
               from = StateId("idle"),
-              to = StateId("active"),
+              to = StateId("ACTIVE"),
               eventName = "activate",
               guard = ConstExpression(BoolValue(true)),
               effect = ConstExpression(MapValue(Map("activated" -> BoolValue(true))))

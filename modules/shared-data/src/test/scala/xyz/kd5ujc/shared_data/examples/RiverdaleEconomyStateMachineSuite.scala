@@ -367,7 +367,7 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "guard": {
             "and": [
               { ">=": [{ "var": "state.stock" }, { "var": "event.quantity" }] },
-              { "===": [{ "var": "machines.$paymentProcessorfiberId.state.status" }, "active"] }
+              { "===": [{ "var": "machines.$paymentProcessorfiberId.state.status" }, "ACTIVE"] }
             ]
           },
           "effect": [
@@ -387,7 +387,7 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "guard": {
             "and": [
               { ">=": [{ "var": "state.stock" }, { "var": "event.quantity" }] },
-              { "===": [{ "var": "machines.$paymentProcessorfiberId.state.status" }, "active"] }
+              { "===": [{ "var": "machines.$paymentProcessorfiberId.state.status" }, "ACTIVE"] }
             ]
           },
           "effect": [
@@ -723,7 +723,7 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
   def consumerStateMachineJson(): String =
     """{
       "states": {
-        "active": { "id": { "value": "active" }, "isFinal": false },
+        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false },
         "shopping": { "id": { "value": "shopping" }, "isFinal": false },
         "service_providing": { "id": { "value": "service_providing" }, "isFinal": false },
         "marketplace_selling": { "id": { "value": "marketplace_selling" }, "isFinal": false },
@@ -731,11 +731,11 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
         "debt_current": { "id": { "value": "debt_current" }, "isFinal": false },
         "debt_delinquent": { "id": { "value": "debt_delinquent" }, "isFinal": false }
       },
-      "initialState": { "value": "active" },
+      "initialState": { "value": "ACTIVE" },
       "transitions": [
         {
-          "from": { "value": "active" },
-          "to": { "value": "active" },
+          "from": { "value": "ACTIVE" },
+          "to": { "value": "ACTIVE" },
           "eventName": "browse_products",
           "guard": { ">=": [{ "var": "state.balance" }, { "var": "event.expectedCost" }] },
           "effect": {
@@ -756,8 +756,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "active" },
-          "to": { "value": "active" },
+          "from": { "value": "ACTIVE" },
+          "to": { "value": "ACTIVE" },
           "eventName": "provide_service",
           "guard": { "===": [{ "var": "state.serviceType" }, { "var": "event.requestedService" }] },
           "effect": [
@@ -768,7 +768,7 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "active" },
+          "from": { "value": "ACTIVE" },
           "to": { "value": "debt_current" },
           "eventName": "loan_funded",
           "guard": true,
@@ -868,7 +868,7 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "active" },
+          "from": { "value": "ACTIVE" },
           "to": { "value": "marketplace_selling" },
           "eventName": "list_item",
           "guard": true,
@@ -937,14 +937,14 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
         },
         {
           "from": { "value": "marketplace_selling" },
-          "to": { "value": "active" },
+          "to": { "value": "ACTIVE" },
           "eventName": "sale_completed",
           "guard": true,
           "effect": [
             ["balance", { "+": [{ "var": "state.balance" }, { "var": "event.amount" }] }],
             ["activeListings", { "-": [{ "var": "state.activeListings" }, 1] }],
             ["marketplaceSales", { "+": [{ "var": "state.marketplaceSales" }, 1] }],
-            ["status", "active"]
+            ["status", "ACTIVE"]
           ],
           "dependencies": []
         },
@@ -1028,8 +1028,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "active" },
-          "to": { "value": "active" },
+          "from": { "value": "ACTIVE" },
+          "to": { "value": "ACTIVE" },
           "eventName": "pay_taxes",
           "guard": true,
           "effect": {
@@ -1464,7 +1464,7 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
               "responseTime" -> IntValue(100),
               "capacity"     -> IntValue(1000),
               "transactions" -> IntValue(0),
-              "status"       -> StrValue("active")
+              "status"       -> StrValue("ACTIVE")
             )
           )
 
@@ -1499,7 +1499,7 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
               "missedPayments"    -> IntValue(0),
               "paymentsRemaining" -> IntValue(36),
               "taxesPaid"         -> FloatValue(0.0),
-              "status"            -> StrValue("active")
+              "status"            -> StrValue("ACTIVE")
             )
           )
 
@@ -1618,7 +1618,7 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
 
           // Initialize consumer fibers
           ruthFiber <- FiberBuilder(ruthfiberId, ordinal, consumerDef)
-            .withState("active")
+            .withState("ACTIVE")
             .withDataValue(
               consumerInitialData
                 .copy(value = consumerInitialData.value + ("name" -> StrValue("Ruth - Software Developer")))
@@ -1633,7 +1633,7 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
             )
           )
           sybilFiber <- FiberBuilder(sybilfiberId, ordinal, consumerDef)
-            .withState("active")
+            .withState("ACTIVE")
             .withDataValue(sybilInitialData)
             .ownedBy(registry, Sybil)
             .build[IO]
@@ -1645,7 +1645,7 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
             )
           )
           victorFiber <- FiberBuilder(victorfiberId, ordinal, consumerDef)
-            .withState("active")
+            .withState("ACTIVE")
             .withDataValue(victorInitialData)
             .ownedBy(registry, Victor)
             .build[IO]
@@ -2371,7 +2371,7 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           finalNiajFiber.extractInt("transactions").exists(_ == 0),
 
           // Verify Niaj's status is still active
-          finalNiajFiber.extractString("status").contains("active"),
+          finalNiajFiber.extractString("status").contains("ACTIVE"),
 
           // Verify state transitions
           finalAliceFiber.map(_.sequenceNumber).exists(_ > FiberOrdinal.MinValue),
@@ -2518,7 +2518,7 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
 
           // Verify Victor still exists in active state
           finalVictorFiber.isDefined,
-          finalVictorFiber.map(_.currentState).contains(StateId("active")),
+          finalVictorFiber.map(_.currentState).contains(StateId("ACTIVE")),
 
           // ========================================
           // AUCTION 2 (VICTOR'S AUCTION) VALIDATIONS

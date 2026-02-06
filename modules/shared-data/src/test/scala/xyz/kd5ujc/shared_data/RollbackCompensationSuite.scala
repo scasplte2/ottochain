@@ -114,13 +114,13 @@ object RollbackCompensationSuite extends SimpleIOSuite {
         // Machine C fails (guard always false, no valid transition)
         defC = StateMachineDefinition(
           states = Map(
-            StateId("pending")  -> State(StateId("pending")),
+            StateId("PENDING")  -> State(StateId("PENDING")),
             StateId("finished") -> State(StateId("finished"))
           ),
-          initialState = StateId("pending"),
+          initialState = StateId("PENDING"),
           transitions = List(
             Transition(
-              from = StateId("pending"),
+              from = StateId("PENDING"),
               to = StateId("finished"),
               eventName = "finish",
               // Guard that always fails
@@ -173,7 +173,7 @@ object RollbackCompensationSuite extends SimpleIOSuite {
           previousUpdateOrdinal = ordinal,
           latestUpdateOrdinal = ordinal,
           definition = defC,
-          currentState = StateId("pending"),
+          currentState = StateId("PENDING"),
           stateData = dataC,
           stateDataHash = hashC,
           sequenceNumber = FiberOrdinal.MinValue,
@@ -205,7 +205,7 @@ object RollbackCompensationSuite extends SimpleIOSuite {
             calculatedState.stateMachines.get(machineB).exists(_.currentState == StateId("waiting"))
           ) and
           expect(
-            calculatedState.stateMachines.get(machineC).exists(_.currentState == StateId("pending"))
+            calculatedState.stateMachines.get(machineC).exists(_.currentState == StateId("PENDING"))
           ) and
           expect(calculatedState.stateMachines.get(machineA).exists(_.sequenceNumber == FiberOrdinal.MinValue)) and
           expect(calculatedState.stateMachines.get(machineB).exists(_.sequenceNumber == FiberOrdinal.MinValue)) and

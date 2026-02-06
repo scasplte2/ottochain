@@ -30,7 +30,7 @@ import xyz.kd5ujc.shared_test.Participant.ParticipantRegistry
  *
  * // With pre-built MapValue:
  * val fiber <- FiberBuilder(fiberId, ordinal, definition)
- *   .withState("active")
+ *   .withState("ACTIVE")
  *   .withDataValue(myMapValue)
  *   .withOwners(Set(aliceAddr, bobAddr))
  *   .build[IO]

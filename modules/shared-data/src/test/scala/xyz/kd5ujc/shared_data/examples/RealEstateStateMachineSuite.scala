@@ -347,7 +347,7 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
               "guard": {
                 "or": [
                   { "===": [{ "var": "machines.${inspectionfiberId}.state.result" }, "failed"] },
-                  { "===": [{ "var": "machines.${appraisalfiberId}.state.result" }, "rejected"] },
+                  { "===": [{ "var": "machines.${appraisalfiberId}.state.result" }, "REJECTED"] },
                   { "===": [{ "var": "machines.${mortgagefiberId}.state.status" }, "denied"] }
                 ]
               },
@@ -545,17 +545,17 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
         inspectionJson =
           """{
           "states": {
-            "pending": { "id": { "value": "pending" }, "isFinal": false },
+            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false },
             "scheduled": { "id": { "value": "scheduled" }, "isFinal": false },
-            "completed": { "id": { "value": "completed" }, "isFinal": false },
+            "COMPLETED": { "id": { "value": "COMPLETED" }, "isFinal": false },
             "passed": { "id": { "value": "passed" }, "isFinal": true },
             "failed": { "id": { "value": "failed" }, "isFinal": true },
             "passed_with_repairs": { "id": { "value": "passed_with_repairs" }, "isFinal": true }
           },
-          "initialState": { "value": "pending" },
+          "initialState": { "value": "PENDING" },
           "transitions": [
             {
-              "from": { "value": "pending" },
+              "from": { "value": "PENDING" },
               "to": { "value": "scheduled" },
               "eventName": "schedule",
               "guard": true,
@@ -567,18 +567,18 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
             },
             {
               "from": { "value": "scheduled" },
-              "to": { "value": "completed" },
+              "to": { "value": "COMPLETED" },
               "eventName": "complete",
               "guard": true,
               "effect": [
-                ["status", "completed"],
+                ["status", "COMPLETED"],
                 ["completedAt", { "var": "event.timestamp" }],
                 ["issues", { "var": "event.issues" }]
               ],
               "dependencies": []
             },
             {
-              "from": { "value": "completed" },
+              "from": { "value": "COMPLETED" },
               "to": { "value": "passed" },
               "eventName": "approve",
               "guard": {
@@ -591,7 +591,7 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "completed" },
+              "from": { "value": "COMPLETED" },
               "to": { "value": "passed_with_repairs" },
               "eventName": "approve",
               "guard": {
@@ -609,7 +609,7 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "completed" },
+              "from": { "value": "COMPLETED" },
               "to": { "value": "failed" },
               "eventName": "reject",
               "guard": {
@@ -628,16 +628,16 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
         appraisalJson =
           """{
           "states": {
-            "pending": { "id": { "value": "pending" }, "isFinal": false },
+            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false },
             "ordered": { "id": { "value": "ordered" }, "isFinal": false },
-            "completed": { "id": { "value": "completed" }, "isFinal": false },
+            "COMPLETED": { "id": { "value": "COMPLETED" }, "isFinal": false },
             "approved": { "id": { "value": "approved" }, "isFinal": true },
-            "rejected": { "id": { "value": "rejected" }, "isFinal": true }
+            "REJECTED": { "id": { "value": "REJECTED" }, "isFinal": true }
           },
-          "initialState": { "value": "pending" },
+          "initialState": { "value": "PENDING" },
           "transitions": [
             {
-              "from": { "value": "pending" },
+              "from": { "value": "PENDING" },
               "to": { "value": "ordered" },
               "eventName": "order",
               "guard": true,
@@ -650,18 +650,18 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
             },
             {
               "from": { "value": "ordered" },
-              "to": { "value": "completed" },
+              "to": { "value": "COMPLETED" },
               "eventName": "complete",
               "guard": true,
               "effect": [
-                ["status", "completed"],
+                ["status", "COMPLETED"],
                 ["appraisedValue", { "var": "event.appraisedValue" }],
                 ["completedAt", { "var": "event.timestamp" }]
               ],
               "dependencies": []
             },
             {
-              "from": { "value": "completed" },
+              "from": { "value": "COMPLETED" },
               "to": { "value": "approved" },
               "eventName": "review",
               "guard": {
@@ -674,14 +674,14 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "completed" },
-              "to": { "value": "rejected" },
+              "from": { "value": "COMPLETED" },
+              "to": { "value": "REJECTED" },
               "eventName": "review",
               "guard": {
                 "<": [{ "var": "state.appraisedValue" }, { "var": "state.expectedValue" }]
               },
               "effect": [
-                ["result", "rejected"],
+                ["result", "REJECTED"],
                 ["rejectedAt", { "var": "event.timestamp" }],
                 ["shortfall", { "-": [{ "var": "state.expectedValue" }, { "var": "state.appraisedValue" }] }]
               ],
@@ -698,7 +698,7 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
             "underwriting": { "id": { "value": "underwriting" }, "isFinal": false },
             "approved": { "id": { "value": "approved" }, "isFinal": false },
             "denied": { "id": { "value": "denied" }, "isFinal": true },
-            "active": { "id": { "value": "active" }, "isFinal": false },
+            "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false },
             "current": { "id": { "value": "current" }, "isFinal": false },
             "delinquent_30": { "id": { "value": "delinquent_30" }, "isFinal": false },
             "delinquent_60": { "id": { "value": "delinquent_60" }, "isFinal": false },
@@ -761,11 +761,11 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
             },
             {
               "from": { "value": "approved" },
-              "to": { "value": "active" },
+              "to": { "value": "ACTIVE" },
               "eventName": "activate",
               "guard": true,
               "effect": [
-                ["status", "active"],
+                ["status", "ACTIVE"],
                 ["originationDate", { "var": "event.closingDate" }],
                 ["servicer", { "var": "state.lender" }],
                 ["owner", { "var": "state.lender" }],
@@ -775,7 +775,7 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "active" },
+              "from": { "value": "ACTIVE" },
               "to": { "value": "current" },
               "eventName": "first_payment",
               "guard": true,
@@ -988,17 +988,17 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
         titleJson =
           """{
           "states": {
-            "pending": { "id": { "value": "pending" }, "isFinal": false },
+            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false },
             "searching": { "id": { "value": "searching" }, "isFinal": false },
             "clear": { "id": { "value": "clear" }, "isFinal": false },
             "issues_found": { "id": { "value": "issues_found" }, "isFinal": false },
             "insured": { "id": { "value": "insured" }, "isFinal": false },
             "transferred": { "id": { "value": "transferred" }, "isFinal": true }
           },
-          "initialState": { "value": "pending" },
+          "initialState": { "value": "PENDING" },
           "transitions": [
             {
-              "from": { "value": "pending" },
+              "from": { "value": "PENDING" },
               "to": { "value": "searching" },
               "eventName": "search",
               "guard": true,
@@ -1262,13 +1262,13 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
 
         inspectionData = MapValue(
           Map(
-            "status" -> StrValue("pending")
+            "status" -> StrValue("PENDING")
           )
         )
 
         appraisalData = MapValue(
           Map(
-            "status" -> StrValue("pending")
+            "status" -> StrValue("PENDING")
           )
         )
 
@@ -1280,7 +1280,7 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
 
         titleData = MapValue(
           Map(
-            "status" -> StrValue("pending")
+            "status" -> StrValue("PENDING")
           )
         )
 
@@ -1310,13 +1310,13 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
           .build[IO]
 
         inspectionFiber <- FiberBuilder(inspectionfiberId, ordinal, inspectionDef)
-          .withState("pending")
+          .withState("PENDING")
           .withDataValue(inspectionData)
           .ownedBy(registry, Dave)
           .build[IO]
 
         appraisalFiber <- FiberBuilder(appraisalfiberId, ordinal, appraisalDef)
-          .withState("pending")
+          .withState("PENDING")
           .withDataValue(appraisalData)
           .ownedBy(registry, Eve)
           .build[IO]
@@ -1328,7 +1328,7 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
           .build[IO]
 
         titleFiber <- FiberBuilder(titlefiberId, ordinal, titleDef)
-          .withState("pending")
+          .withState("PENDING")
           .withDataValue(titleData)
           .ownedBy(registry, Grace)
           .build[IO]
@@ -1646,7 +1646,7 @@ object RealEstateStateMachineSuite extends SimpleIOSuite {
         propertyStatus.contains("owned"),
         // Verify mortgage activated by trigger from property close
         mortgageAfterClose.isDefined,
-        mortgageStatus.contains("active"),
+        mortgageStatus.contains("ACTIVE"),
         // Verify mortgage is now current after first payment
         mortgageAfterFirstPayment.isDefined,
         mortgageAfterFirstPayment.map(_.currentState).contains(StateId("current")),

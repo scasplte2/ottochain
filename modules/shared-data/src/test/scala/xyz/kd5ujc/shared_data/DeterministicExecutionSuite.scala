@@ -42,13 +42,13 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
         definition = StateMachineDefinition(
           states = Map(
             StateId("idle")   -> State(StateId("idle")),
-            StateId("active") -> State(StateId("active"))
+            StateId("ACTIVE") -> State(StateId("ACTIVE"))
           ),
           initialState = StateId("idle"),
           transitions = List(
             Transition(
               from = StateId("idle"),
-              to = StateId("active"),
+              to = StateId("ACTIVE"),
               eventName = "activate",
               guard = ConstExpression(BoolValue(true)),
               effect = ConstExpression(MapValue(Map("activated" -> BoolValue(true))))
@@ -97,7 +97,7 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
       expect(
         result1 match {
           case TransactionResult.Committed(updatedSMs, _, _, _, _, _) =>
-            updatedSMs.get(fiberId).exists(_.currentState == StateId("active"))
+            updatedSMs.get(fiberId).exists(_.currentState == StateId("ACTIVE"))
           case _ => false
         }
       )
@@ -985,13 +985,13 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
         // C triggers A (completes the cycle, with self-transition to allow cycle to continue)
         defC = StateMachineDefinition(
           states = Map(
-            StateId("pending")  -> State(StateId("pending")),
+            StateId("PENDING")  -> State(StateId("PENDING")),
             StateId("finished") -> State(StateId("finished"))
           ),
-          initialState = StateId("pending"),
+          initialState = StateId("PENDING"),
           transitions = List(
             Transition(
-              from = StateId("pending"),
+              from = StateId("PENDING"),
               to = StateId("finished"),
               eventName = "finish",
               guard = ConstExpression(BoolValue(true)),
@@ -1085,7 +1085,7 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
           previousUpdateOrdinal = ordinal,
           latestUpdateOrdinal = ordinal,
           definition = defC,
-          currentState = StateId("pending"),
+          currentState = StateId("PENDING"),
           stateData = dataC,
           stateDataHash = hashC,
           sequenceNumber = FiberOrdinal.MinValue,
@@ -1389,7 +1389,7 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
         parentDefinition = StateMachineDefinition(
           states = Map(
             StateId("ready")    -> State(StateId("ready")),
-            StateId("active")   -> State(StateId("active")),
+            StateId("ACTIVE")   -> State(StateId("ACTIVE")),
             StateId("callback") -> State(StateId("callback"))
           ),
           initialState = StateId("ready"),
@@ -1397,7 +1397,7 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
             // Start transition triggers child
             Transition(
               from = StateId("ready"),
-              to = StateId("active"),
+              to = StateId("ACTIVE"),
               eventName = "start",
               guard = ConstExpression(BoolValue(true)),
               effect = ConstExpression(
@@ -1421,7 +1421,7 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
             ),
             // Callback from child triggers child again - creates cycle!
             Transition(
-              from = StateId("active"),
+              from = StateId("ACTIVE"),
               to = StateId("callback"),
               eventName = "child_callback",
               guard = ConstExpression(BoolValue(true)),
@@ -1447,7 +1447,7 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
             // Handle callback from callback state to continue cycle
             Transition(
               from = StateId("callback"),
-              to = StateId("active"),
+              to = StateId("ACTIVE"),
               eventName = "child_callback",
               guard = ConstExpression(BoolValue(true)),
               effect = ConstExpression(

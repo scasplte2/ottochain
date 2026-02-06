@@ -120,8 +120,8 @@ object NftMarketplaceSuite extends SimpleIOSuite {
               "isFinal": true,
               "metadata": "NFT has been sold"
             },
-            "cancelled": {
-              "id": { "value": "cancelled" },
+            "CANCELLED": {
+              "id": { "value": "CANCELLED" },
               "isFinal": true,
               "metadata": "Listing was cancelled"
             }
@@ -170,7 +170,7 @@ object NftMarketplaceSuite extends SimpleIOSuite {
             },
             {
               "from": { "value": "listed" },
-              "to": { "value": "cancelled" },
+              "to": { "value": "CANCELLED" },
               "eventName": "cancel",
               "guard": {
                 "===": [
@@ -195,17 +195,17 @@ object NftMarketplaceSuite extends SimpleIOSuite {
         marketplaceJson =
           s"""{
           "states": {
-            "active": {
-              "id": { "value": "active" },
+            "ACTIVE": {
+              "id": { "value": "ACTIVE" },
               "isFinal": false,
               "metadata": "Marketplace is active"
             }
           },
-          "initialState": { "value": "active" },
+          "initialState": { "value": "ACTIVE" },
           "transitions": [
             {
-              "from": { "value": "active" },
-              "to": { "value": "active" },
+              "from": { "value": "ACTIVE" },
+              "to": { "value": "ACTIVE" },
               "eventName": "createListing",
               "guard": true,
               "effect": {
@@ -236,8 +236,8 @@ object NftMarketplaceSuite extends SimpleIOSuite {
                           "isFinal": true,
                           "metadata": "NFT has been sold"
                         },
-                        "cancelled": {
-                          "id": { "value": "cancelled" },
+                        "CANCELLED": {
+                          "id": { "value": "CANCELLED" },
                           "isFinal": true,
                           "metadata": "Listing was cancelled"
                         }
@@ -286,7 +286,7 @@ object NftMarketplaceSuite extends SimpleIOSuite {
                         },
                         {
                           "from": { "value": "listed" },
-                          "to": { "value": "cancelled" },
+                          "to": { "value": "CANCELLED" },
                           "eventName": "cancel",
                           "guard": {
                             "===": [
@@ -332,7 +332,7 @@ object NftMarketplaceSuite extends SimpleIOSuite {
         )
 
         marketplaceFiber <- FiberBuilder(marketplacefiberId, ordinal, marketplaceDef)
-          .withState("active")
+          .withState("ACTIVE")
           .withDataValue(marketplaceData)
           .ownedBy(registry, Alice)
           .build[IO]

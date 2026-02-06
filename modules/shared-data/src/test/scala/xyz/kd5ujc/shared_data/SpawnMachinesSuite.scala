@@ -55,9 +55,9 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$childfiberId",
                     "definition": {
                       "states": {
-                        "active": { "id": { "value": "active" }, "isFinal": false }
+                        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
                       },
-                      "initialState": { "value": "active" },
+                      "initialState": { "value": "ACTIVE" },
                       "transitions": []
                     },
                     "initialData": {
@@ -115,7 +115,7 @@ object SpawnMachinesSuite extends SimpleIOSuite {
       expect(parent.map(_.currentState).contains(StateId("spawned"))) and
       expect(parent.exists(_.childFiberIds.contains(childfiberId))) and
       expect(child.isDefined) and
-      expect(child.map(_.currentState).contains(StateId("active"))) and
+      expect(child.map(_.currentState).contains(StateId("ACTIVE"))) and
       expect(child.map(_.parentFiberId).contains(Some(parentfiberId))) and
       expect(child.map(_.status).contains(FiberStatus.Active)) and
       expect(childParentId.contains(parentfiberId.toString)) and
@@ -154,9 +154,9 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$child1fiberId",
                     "definition": {
                       "states": {
-                        "active": { "id": { "value": "active" }, "isFinal": false }
+                        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
                       },
-                      "initialState": { "value": "active" },
+                      "initialState": { "value": "ACTIVE" },
                       "transitions": []
                     },
                     "initialData": { "index": 0 }
@@ -165,9 +165,9 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$child2fiberId",
                     "definition": {
                       "states": {
-                        "active": { "id": { "value": "active" }, "isFinal": false }
+                        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
                       },
-                      "initialState": { "value": "active" },
+                      "initialState": { "value": "ACTIVE" },
                       "transitions": []
                     },
                     "initialData": { "index": 1 }
@@ -176,9 +176,9 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$child3fiberId",
                     "definition": {
                       "states": {
-                        "active": { "id": { "value": "active" }, "isFinal": false }
+                        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
                       },
-                      "initialState": { "value": "active" },
+                      "initialState": { "value": "ACTIVE" },
                       "transitions": []
                     },
                     "initialData": { "index": 2 }
@@ -401,12 +401,12 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$childfiberId",
                     "definition": {
                       "states": {
-                        "active": { "id": { "value": "active" }, "isFinal": false }
+                        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
                       },
-                      "initialState": { "value": "active" },
+                      "initialState": { "value": "ACTIVE" },
                       "transitions": []
                     },
-                    "initialData": { "status": "active" }
+                    "initialData": { "status": "ACTIVE" }
                   }
                 ],
                 "status": "spawned"
@@ -624,17 +624,17 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "definition": {
                       "states": {
                         "idle": { "id": { "value": "idle" }, "isFinal": false },
-                        "active": { "id": { "value": "active" }, "isFinal": false }
+                        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
                       },
                       "initialState": { "value": "idle" },
                       "transitions": [
                         {
                           "from": { "value": "idle" },
-                          "to": { "value": "active" },
+                          "to": { "value": "ACTIVE" },
                           "eventName": "activate",
                           "guard": true,
                           "effect": {
-                            "status": "active",
+                            "status": "ACTIVE",
                             "eventMessage": { "var": "event.msg" },
                             "eventAmount": { "var": "event.amount" },
                             "parentState": { "var": "parent.state.level" },
@@ -713,7 +713,7 @@ object SpawnMachinesSuite extends SimpleIOSuite {
         }
 
       } yield expect(child.isDefined) and
-      expect(child.map(_.currentState).contains(StateId("active"))) and
+      expect(child.map(_.currentState).contains(StateId("ACTIVE"))) and
       expect(childEventMessage.contains("Hello")) and
       expect(childEventAmount.contains(BigInt(42))) and
       expect(childParentState.contains(BigInt(1))) and
@@ -767,13 +767,13 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                                 "childId": "$childfiberId",
                                 "definition": {
                                   "states": {
-                                    "active": { "id": { "value": "active" }, "isFinal": false }
+                                    "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
                                   },
-                                  "initialState": { "value": "active" },
+                                  "initialState": { "value": "ACTIVE" },
                                   "transitions": [
                                     {
-                                      "from": { "value": "active" },
-                                      "to": { "value": "active" },
+                                      "from": { "value": "ACTIVE" },
+                                      "to": { "value": "ACTIVE" },
                                       "eventName": "activate",
                                       "guard": true,
                                       "effect": {
@@ -881,7 +881,7 @@ object SpawnMachinesSuite extends SimpleIOSuite {
       expect(parent.map(_.parentFiberId).contains(Some(grandparentfiberId))) and
       expect(parent.exists(_.childFiberIds.contains(childfiberId))) and
       expect(grandchild.isDefined) and
-      expect(grandchild.map(_.currentState).contains(StateId("active"))) and
+      expect(grandchild.map(_.currentState).contains(StateId("ACTIVE"))) and
       expect(grandchild.map(_.parentFiberId).contains(Some(parentfiberId))) and
       expect(grandchildGrandparentId.contains(grandparentfiberId.toString)) and
       expect(grandchildActivatedBy.contains(parentfiberId.toString))
@@ -919,9 +919,9 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$child1fiberId",
                     "definition": {
                       "states": {
-                        "active": { "id": { "value": "active" }, "isFinal": false }
+                        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
                       },
-                      "initialState": { "value": "active" },
+                      "initialState": { "value": "ACTIVE" },
                       "transitions": []
                     },
                     "initialData": { "index": 0 }
@@ -953,9 +953,9 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$child3fiberId",
                     "definition": {
                       "states": {
-                        "active": { "id": { "value": "active" }, "isFinal": false }
+                        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
                       },
-                      "initialState": { "value": "active" },
+                      "initialState": { "value": "ACTIVE" },
                       "transitions": []
                     },
                     "initialData": { "index": 2 }
@@ -1035,12 +1035,12 @@ object SpawnMachinesSuite extends SimpleIOSuite {
             "childId": "$fiberId",
             "definition": {
               "states": {
-                "active": { "id": { "value": "active" }, "isFinal": false }
+                "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
               },
-              "initialState": { "value": "active" },
+              "initialState": { "value": "ACTIVE" },
               "transitions": []
             },
-            "initialData": { "status": "active" }
+            "initialData": { "status": "ACTIVE" }
           }
           """
           }
@@ -1139,9 +1139,9 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$childfiberId",
                     "definition": {
                       "states": {
-                        "active": { "id": { "value": "active" }, "isFinal": false }
+                        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
                       },
-                      "initialState": { "value": "active" },
+                      "initialState": { "value": "ACTIVE" },
                       "transitions": []
                     },
                     "initialData": { "index": 1 }
@@ -1150,9 +1150,9 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$childfiberId",
                     "definition": {
                       "states": {
-                        "active": { "id": { "value": "active" }, "isFinal": false }
+                        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
                       },
-                      "initialState": { "value": "active" },
+                      "initialState": { "value": "ACTIVE" },
                       "transitions": []
                     },
                     "initialData": { "index": 2 }
@@ -1240,9 +1240,9 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$existingfiberId",
                     "definition": {
                       "states": {
-                        "active": { "id": { "value": "active" }, "isFinal": false }
+                        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
                       },
-                      "initialState": { "value": "active" },
+                      "initialState": { "value": "ACTIVE" },
                       "transitions": []
                     },
                     "initialData": { "value": 1 }
@@ -1360,9 +1360,9 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$childfiberId",
                     "definition": {
                       "states": {
-                        "active": { "id": { "value": "active" }, "isFinal": false }
+                        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
                       },
-                      "initialState": { "value": "active" },
+                      "initialState": { "value": "ACTIVE" },
                       "transitions": []
                     },
                     "initialData": { "testData": "$testData" }
@@ -1448,12 +1448,12 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$childfiberId",
                     "definition": {
                       "states": {
-                        "active": { "id": { "value": "active" }, "isFinal": false }
+                        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
                       },
-                      "initialState": { "value": "active" },
+                      "initialState": { "value": "ACTIVE" },
                       "transitions": []
                     },
-                    "initialData": { "status": "active" }
+                    "initialData": { "status": "ACTIVE" }
                   }
                 ],
                 "status": "spawned"
@@ -1536,12 +1536,12 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$childfiberId",
                     "definition": {
                       "states": {
-                        "active": { "id": { "value": "active" }, "isFinal": false }
+                        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
                       },
-                      "initialState": { "value": "active" },
+                      "initialState": { "value": "ACTIVE" },
                       "transitions": []
                     },
-                    "initialData": { "status": "active" },
+                    "initialData": { "status": "ACTIVE" },
                     "owners": { "var": "event.customOwners" }
                   }
                 ],
@@ -1632,13 +1632,13 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                                   Map(
                                     "active" -> MapValue(
                                       Map(
-                                        "id"      -> MapValue(Map("value" -> StrValue("active"))),
+                                        "id"      -> MapValue(Map("value" -> StrValue("ACTIVE"))),
                                         "isFinal" -> BoolValue(false)
                                       )
                                     )
                                   )
                                 ),
-                                "initialState" -> MapValue(Map("value" -> StrValue("active"))),
+                                "initialState" -> MapValue(Map("value" -> StrValue("ACTIVE"))),
                                 "transitions"  -> ArrayValue(List.empty)
                               )
                             ),
@@ -1738,13 +1738,13 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                                   Map(
                                     "active" -> MapValue(
                                       Map(
-                                        "id"      -> MapValue(Map("value" -> StrValue("active"))),
+                                        "id"      -> MapValue(Map("value" -> StrValue("ACTIVE"))),
                                         "isFinal" -> BoolValue(false)
                                       )
                                     )
                                   )
                                 ),
-                                "initialState" -> MapValue(Map("value" -> StrValue("active"))),
+                                "initialState" -> MapValue(Map("value" -> StrValue("ACTIVE"))),
                                 "transitions"  -> ArrayValue(List.empty)
                               )
                             ),
@@ -1841,13 +1841,13 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                                   Map(
                                     "active" -> MapValue(
                                       Map(
-                                        "id"      -> MapValue(Map("value" -> StrValue("active"))),
+                                        "id"      -> MapValue(Map("value" -> StrValue("ACTIVE"))),
                                         "isFinal" -> BoolValue(false)
                                       )
                                     )
                                   )
                                 ),
-                                "initialState" -> MapValue(Map("value" -> StrValue("active"))),
+                                "initialState" -> MapValue(Map("value" -> StrValue("ACTIVE"))),
                                 "transitions"  -> ArrayValue(List.empty)
                               )
                             ),
@@ -1945,13 +1945,13 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                                   Map(
                                     "active" -> MapValue(
                                       Map(
-                                        "id"      -> MapValue(Map("value" -> StrValue("active"))),
+                                        "id"      -> MapValue(Map("value" -> StrValue("ACTIVE"))),
                                         "isFinal" -> BoolValue(false)
                                       )
                                     )
                                   )
                                 ),
-                                "initialState" -> MapValue(Map("value" -> StrValue("active"))),
+                                "initialState" -> MapValue(Map("value" -> StrValue("ACTIVE"))),
                                 "transitions"  -> ArrayValue(List.empty)
                               )
                             ),

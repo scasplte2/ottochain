@@ -40,14 +40,14 @@ object VotingSuite extends SimpleIOSuite {
         machineJson = """
         {
           "states": {
-            "pending": { "id": { "value": "pending" }, "isFinal": false, "metadata": null },
+            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false, "metadata": null },
             "voting": { "id": { "value": "voting" }, "isFinal": false, "metadata": null },
-            "completed": { "id": { "value": "completed" }, "isFinal": true, "metadata": null }
+            "COMPLETED": { "id": { "value": "COMPLETED" }, "isFinal": true, "metadata": null }
           },
-          "initialState": { "value": "pending" },
+          "initialState": { "value": "PENDING" },
           "transitions": [
             {
-              "from": { "value": "pending" },
+              "from": { "value": "PENDING" },
               "to": { "value": "voting" },
               "eventName": "startVoting",
               "guard": { "==": [1, 1] },
@@ -56,7 +56,7 @@ object VotingSuite extends SimpleIOSuite {
             },
             {
               "from": { "value": "voting" },
-              "to": { "value": "completed" },
+              "to": { "value": "COMPLETED" },
               "eventName": "endVoting",
               "guard": { "==": [1, 1] },
               "effect": { "var": "state" },
@@ -104,7 +104,7 @@ object VotingSuite extends SimpleIOSuite {
           .collect { case r: Records.StateMachineFiberRecord => r }
 
       } yield expect(finalMachine.isDefined) and
-      expect(finalMachine.map(_.currentState).contains(StateId("completed")))
+      expect(finalMachine.map(_.currentState).contains(StateId("COMPLETED")))
     }
   }
 

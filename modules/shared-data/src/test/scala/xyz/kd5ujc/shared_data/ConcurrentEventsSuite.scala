@@ -200,13 +200,13 @@ object ConcurrentEventsSuite extends SimpleIOSuite {
   private val historyDefinitionJson =
     """|{
        |  "states": {
-       |    "active": { "id": { "value": "active" }, "isFinal": false }
+       |    "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
        |  },
-       |  "initialState": { "value": "active" },
+       |  "initialState": { "value": "ACTIVE" },
        |  "transitions": [
        |    {
-       |      "from": { "value": "active" },
-       |      "to": { "value": "active" },
+       |      "from": { "value": "ACTIVE" },
+       |      "to": { "value": "ACTIVE" },
        |      "eventName": "record",
        |      "guard": true,
        |      "effect": {
