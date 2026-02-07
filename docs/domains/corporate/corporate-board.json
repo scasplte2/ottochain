@@ -1,0 +1,745 @@
+{
+  "$schema": "https://ottochain.dev/schemas/state-machine-v1.json",
+  "name": "corporate-board",
+  "version": "1.0.0",
+  "category": "corporate-governance",
+  "description": "Board of directors state machine managing director seats, meetings, quorum, and formal board actions. Supports staggered boards with classified directors.",
+
+  "context": {
+    "boardId": { "type": "string", "description": "Unique identifier for this board instance" },
+    "entityId": { "type": "string", "description": "Reference to parent corporate-entity" },
+    "directors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "directorId": { "type": "string" },
+          "name": { "type": "string" },
+          "email": { "type": "string" },
+          "termStart": { "type": "string", "format": "date" },
+          "termEnd": { "type": "string", "format": "date" },
+          "class": { 
+            "type": "string", 
+            "enum": ["CLASS_I", "CLASS_II", "CLASS_III", "UNCLASSIFIED"],
+            "description": "For staggered boards"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["ACTIVE", "RESIGNED", "REMOVED", "TERM_EXPIRED"]
+          },
+          "isIndependent": { "type": "boolean", "description": "Independence under applicable rules" },
+          "isChair": { "type": "boolean", "default": false },
+          "isLeadIndependent": { "type": "boolean", "default": false },
+          "committees": { 
+            "type": "array", 
+            "items": { "type": "string" },
+            "description": "Committee memberships by committee ID"
+          },
+          "electedBy": { "type": "string", "description": "Resolution reference for election" },
+          "compensationAgreementRef": { "type": "string", "nullable": true }
+        }
+      }
+    },
+    "seats": {
+      "type": "object",
+      "properties": {
+        "authorized": { "type": "integer", "description": "Number of board seats authorized by bylaws" },
+        "filled": { "type": "integer" },
+        "vacant": { "type": "integer" }
+      }
+    },
+    "boardStructure": {
+      "type": "object",
+      "properties": {
+        "isClassified": { "type": "boolean", "description": "Whether board has staggered terms" },
+        "termYears": { "type": "integer", "default": 1, "description": "Director term length" },
+        "classTerms": {
+          "type": "object",
+          "properties": {
+            "CLASS_I": { "type": "integer" },
+            "CLASS_II": { "type": "integer" },
+            "CLASS_III": { "type": "integer" }
+          }
+        }
+      }
+    },
+    "quorumRules": {
+      "type": "object",
+      "properties": {
+        "type": { 
+          "type": "string", 
+          "enum": ["MAJORITY", "SUPERMAJORITY", "FIXED_NUMBER"],
+          "default": "MAJORITY"
+        },
+        "threshold": { "type": "number", "description": "Fraction for majority/super, or count for fixed" },
+        "minimumRequired": { "type": "integer", "description": "Absolute minimum regardless of formula" }
+      }
+    },
+    "votingRules": {
+      "type": "object",
+      "properties": {
+        "standardApproval": { "type": "string", "enum": ["MAJORITY_PRESENT", "MAJORITY_FULL_BOARD"], "default": "MAJORITY_PRESENT" },
+        "supermajorityMatters": { 
+          "type": "array", 
+          "items": { "type": "string" },
+          "description": "Action types requiring supermajority"
+        },
+        "supermajorityThreshold": { "type": "number", "default": 0.6667 }
+      }
+    },
+    "currentMeeting": {
+      "type": "object",
+      "nullable": true,
+      "properties": {
+        "meetingId": { "type": "string" },
+        "type": { "type": "string", "enum": ["REGULAR", "SPECIAL", "ANNUAL", "ORGANIZATIONAL"] },
+        "scheduledDate": { "type": "string", "format": "date-time" },
+        "location": { "type": "string" },
+        "isVirtual": { "type": "boolean" },
+        "calledBy": { "type": "string" },
+        "noticeDate": { "type": "string", "format": "date" },
+        "agenda": { "type": "array", "items": { "type": "string" } },
+        "attendees": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "directorId": { "type": "string" },
+              "present": { "type": "boolean" },
+              "arrivedAt": { "type": "string", "format": "date-time", "nullable": true },
+              "departedAt": { "type": "string", "format": "date-time", "nullable": true },
+              "viaProxy": { "type": "boolean", "default": false }
+            }
+          }
+        },
+        "quorumPresent": { "type": "boolean" },
+        "quorumCount": { "type": "integer" },
+        "openedAt": { "type": "string", "format": "date-time", "nullable": true },
+        "closedAt": { "type": "string", "format": "date-time", "nullable": true },
+        "minutesRef": { "type": "string", "nullable": true }
+      }
+    },
+    "meetingHistory": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "meetingId": { "type": "string" },
+          "type": { "type": "string" },
+          "date": { "type": "string", "format": "date" },
+          "quorumAchieved": { "type": "boolean" },
+          "attendeeCount": { "type": "integer" },
+          "resolutionsPassed": { "type": "array", "items": { "type": "string" } },
+          "minutesRef": { "type": "string" }
+        }
+      }
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+
+  "states": {
+    "ACTIVE": {
+      "description": "Board is constituted and able to conduct business. Default state between meetings.",
+      "metadata": {
+        "displayName": "Active",
+        "color": "#28A745"
+      }
+    },
+    "IN_MEETING": {
+      "description": "Board meeting is in session with quorum present. Can take formal actions.",
+      "metadata": {
+        "displayName": "In Meeting",
+        "color": "#007BFF"
+      }
+    },
+    "QUORUM_LOST": {
+      "description": "Meeting in progress but quorum lost due to departures. No further action until quorum restored or adjourned.",
+      "metadata": {
+        "displayName": "Quorum Lost",
+        "color": "#FFC107"
+      }
+    }
+  },
+
+  "initialState": "ACTIVE",
+
+  "transitions": {
+    "elect_director": {
+      "from": "ACTIVE",
+      "to": "ACTIVE",
+      "description": "Add a new director to the board (election typically done at shareholder meeting or by board to fill vacancy)",
+      "event": {
+        "name": "elect_director",
+        "payload": {
+          "directorId": { "type": "string", "required": true },
+          "name": { "type": "string", "required": true },
+          "email": { "type": "string" },
+          "termStart": { "type": "string", "format": "date", "required": true },
+          "termEnd": { "type": "string", "format": "date", "required": true },
+          "class": { "type": "string", "enum": ["CLASS_I", "CLASS_II", "CLASS_III", "UNCLASSIFIED"] },
+          "isIndependent": { "type": "boolean", "required": true },
+          "electionResolutionRef": { "type": "string", "required": true, "description": "Shareholder or board resolution" },
+          "isFillingVacancy": { "type": "boolean", "default": false }
+        }
+      },
+      "guards": [
+        {
+          "name": "hasAvailableSeat",
+          "description": "Must have vacant seat or be filling expired term",
+          "expression": "context.seats.vacant > 0 || event.isFillingVacancy"
+        },
+        {
+          "name": "hasElectionResolution",
+          "description": "Must have valid election resolution (shareholder for annual, board for vacancy fill)",
+          "expression": "event.electionResolutionRef != null"
+        },
+        {
+          "name": "notAlreadyDirector",
+          "description": "Person not already serving on board",
+          "expression": "!context.directors.some(d => d.directorId === event.directorId && d.status === 'ACTIVE')"
+        }
+      ],
+      "effects": [
+        {
+          "type": "APPEND_ARRAY",
+          "path": "directors",
+          "value": {
+            "directorId": "{{ event.directorId }}",
+            "name": "{{ event.name }}",
+            "email": "{{ event.email }}",
+            "termStart": "{{ event.termStart }}",
+            "termEnd": "{{ event.termEnd }}",
+            "class": "{{ event.class }}",
+            "status": "ACTIVE",
+            "isIndependent": "{{ event.isIndependent }}",
+            "isChair": false,
+            "isLeadIndependent": false,
+            "committees": [],
+            "electedBy": "{{ event.electionResolutionRef }}"
+          }
+        },
+        {
+          "type": "INCREMENT",
+          "path": "seats.filled",
+          "amount": 1
+        },
+        {
+          "type": "DECREMENT",
+          "path": "seats.vacant",
+          "amount": 1
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "DIRECTOR_ELECTED",
+          "payload": {
+            "boardId": "{{ context.boardId }}",
+            "directorId": "{{ event.directorId }}",
+            "name": "{{ event.name }}",
+            "termEnd": "{{ event.termEnd }}"
+          }
+        }
+      ]
+    },
+
+    "resign_director": {
+      "from": ["ACTIVE", "IN_MEETING"],
+      "to": "ACTIVE",
+      "description": "Director resigns from the board",
+      "event": {
+        "name": "resign_director",
+        "payload": {
+          "directorId": { "type": "string", "required": true },
+          "effectiveDate": { "type": "string", "format": "date", "required": true },
+          "reason": { "type": "string" },
+          "resignationLetter": { "type": "string", "description": "Document reference" }
+        }
+      },
+      "guards": [
+        {
+          "name": "isActiveDirector",
+          "expression": "context.directors.some(d => d.directorId === event.directorId && d.status === 'ACTIVE')"
+        }
+      ],
+      "effects": [
+        {
+          "type": "UPDATE_ARRAY_ITEM",
+          "path": "directors",
+          "matchKey": "directorId",
+          "matchValue": "{{ event.directorId }}",
+          "updates": {
+            "status": "RESIGNED",
+            "termEnd": "{{ event.effectiveDate }}"
+          }
+        },
+        {
+          "type": "DECREMENT",
+          "path": "seats.filled",
+          "amount": 1
+        },
+        {
+          "type": "INCREMENT",
+          "path": "seats.vacant",
+          "amount": 1
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "DIRECTOR_RESIGNED",
+          "payload": {
+            "boardId": "{{ context.boardId }}",
+            "directorId": "{{ event.directorId }}",
+            "effectiveDate": "{{ event.effectiveDate }}"
+          }
+        }
+      ]
+    },
+
+    "remove_for_cause": {
+      "from": "ACTIVE",
+      "to": "ACTIVE",
+      "description": "Remove a director for cause (requires board or shareholder action depending on bylaws)",
+      "event": {
+        "name": "remove_for_cause",
+        "payload": {
+          "directorId": { "type": "string", "required": true },
+          "cause": { "type": "string", "required": true },
+          "removalResolutionRef": { "type": "string", "required": true },
+          "effectiveDate": { "type": "string", "format": "date", "required": true }
+        }
+      },
+      "guards": [
+        {
+          "name": "isActiveDirector",
+          "expression": "context.directors.some(d => d.directorId === event.directorId && d.status === 'ACTIVE')"
+        },
+        {
+          "name": "hasRemovalResolution",
+          "crossMachine": {
+            "machine": "corporate-resolution",
+            "instanceRef": "{{ event.removalResolutionRef }}",
+            "requiredState": "EXECUTED"
+          }
+        }
+      ],
+      "effects": [
+        {
+          "type": "UPDATE_ARRAY_ITEM",
+          "path": "directors",
+          "matchKey": "directorId",
+          "matchValue": "{{ event.directorId }}",
+          "updates": {
+            "status": "REMOVED",
+            "termEnd": "{{ event.effectiveDate }}"
+          }
+        },
+        {
+          "type": "DECREMENT",
+          "path": "seats.filled",
+          "amount": 1
+        },
+        {
+          "type": "INCREMENT",
+          "path": "seats.vacant",
+          "amount": 1
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "DIRECTOR_REMOVED",
+          "payload": {
+            "boardId": "{{ context.boardId }}",
+            "directorId": "{{ event.directorId }}",
+            "cause": "{{ event.cause }}"
+          }
+        }
+      ]
+    },
+
+    "designate_chair": {
+      "from": "ACTIVE",
+      "to": "ACTIVE",
+      "description": "Designate a director as board chair",
+      "event": {
+        "name": "designate_chair",
+        "payload": {
+          "directorId": { "type": "string", "required": true },
+          "resolutionRef": { "type": "string", "required": true }
+        }
+      },
+      "guards": [
+        {
+          "name": "isActiveDirector",
+          "expression": "context.directors.some(d => d.directorId === event.directorId && d.status === 'ACTIVE')"
+        }
+      ],
+      "effects": [
+        {
+          "type": "UPDATE_ARRAY_ALL",
+          "path": "directors",
+          "updates": { "isChair": false }
+        },
+        {
+          "type": "UPDATE_ARRAY_ITEM",
+          "path": "directors",
+          "matchKey": "directorId",
+          "matchValue": "{{ event.directorId }}",
+          "updates": { "isChair": true }
+        }
+      ]
+    },
+
+    "call_meeting": {
+      "from": "ACTIVE",
+      "to": "ACTIVE",
+      "description": "Schedule a board meeting (can be called by chair, CEO, or directors per bylaws)",
+      "event": {
+        "name": "call_meeting",
+        "payload": {
+          "meetingId": { "type": "string", "required": true },
+          "type": { "type": "string", "enum": ["REGULAR", "SPECIAL", "ANNUAL", "ORGANIZATIONAL"], "required": true },
+          "scheduledDate": { "type": "string", "format": "date-time", "required": true },
+          "location": { "type": "string" },
+          "isVirtual": { "type": "boolean", "default": false },
+          "calledBy": { "type": "string", "required": true, "description": "Director ID or officer title" },
+          "noticeDate": { "type": "string", "format": "date", "required": true },
+          "agenda": { "type": "array", "items": { "type": "string" } },
+          "waiverOfNotice": { "type": "boolean", "default": false, "description": "If all directors waive notice" }
+        }
+      },
+      "guards": [
+        {
+          "name": "sufficientNotice",
+          "description": "Must provide notice per bylaws (typically 2-10 days for special, less for regular)",
+          "expression": "event.waiverOfNotice || (new Date(event.scheduledDate) - new Date(event.noticeDate)) >= 2 * 24 * 60 * 60 * 1000"
+        },
+        {
+          "name": "noConflictingMeeting",
+          "description": "No other meeting currently scheduled/in progress",
+          "expression": "context.currentMeeting == null || context.currentMeeting.closedAt != null"
+        }
+      ],
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "currentMeeting",
+          "value": {
+            "meetingId": "{{ event.meetingId }}",
+            "type": "{{ event.type }}",
+            "scheduledDate": "{{ event.scheduledDate }}",
+            "location": "{{ event.location }}",
+            "isVirtual": "{{ event.isVirtual }}",
+            "calledBy": "{{ event.calledBy }}",
+            "noticeDate": "{{ event.noticeDate }}",
+            "agenda": "{{ event.agenda }}",
+            "attendees": [],
+            "quorumPresent": false,
+            "quorumCount": 0
+          }
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "BOARD_MEETING_SCHEDULED",
+          "payload": {
+            "boardId": "{{ context.boardId }}",
+            "meetingId": "{{ event.meetingId }}",
+            "scheduledDate": "{{ event.scheduledDate }}"
+          }
+        }
+      ]
+    },
+
+    "record_attendance": {
+      "from": "ACTIVE",
+      "to": "ACTIVE",
+      "description": "Record a director's attendance before meeting opens",
+      "event": {
+        "name": "record_attendance",
+        "payload": {
+          "directorId": { "type": "string", "required": true },
+          "present": { "type": "boolean", "required": true },
+          "arrivedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "guards": [
+        {
+          "name": "hasPendingMeeting",
+          "expression": "context.currentMeeting != null && context.currentMeeting.openedAt == null"
+        },
+        {
+          "name": "isActiveDirector",
+          "expression": "context.directors.some(d => d.directorId === event.directorId && d.status === 'ACTIVE')"
+        }
+      ],
+      "effects": [
+        {
+          "type": "APPEND_ARRAY",
+          "path": "currentMeeting.attendees",
+          "value": {
+            "directorId": "{{ event.directorId }}",
+            "present": "{{ event.present }}",
+            "arrivedAt": "{{ event.arrivedAt }}",
+            "viaProxy": false
+          }
+        },
+        {
+          "type": "COMPUTE",
+          "path": "currentMeeting.quorumCount",
+          "expression": "context.currentMeeting.attendees.filter(a => a.present).length"
+        },
+        {
+          "type": "COMPUTE",
+          "path": "currentMeeting.quorumPresent",
+          "expression": "context.currentMeeting.attendees.filter(a => a.present).length >= Math.ceil(context.seats.filled * 0.5)"
+        }
+      ]
+    },
+
+    "open_meeting": {
+      "from": "ACTIVE",
+      "to": "IN_MEETING",
+      "description": "Officially open the board meeting once quorum is established",
+      "event": {
+        "name": "open_meeting",
+        "payload": {
+          "openedAt": { "type": "string", "format": "date-time", "required": true },
+          "chairPresiding": { "type": "string", "description": "Director ID presiding" }
+        }
+      },
+      "guards": [
+        {
+          "name": "hasPendingMeeting",
+          "expression": "context.currentMeeting != null && context.currentMeeting.openedAt == null"
+        },
+        {
+          "name": "quorumPresent",
+          "description": "Cannot open meeting without quorum",
+          "expression": "context.currentMeeting.quorumPresent === true"
+        }
+      ],
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "currentMeeting.openedAt",
+          "value": "{{ event.openedAt }}"
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "BOARD_MEETING_OPENED",
+          "payload": {
+            "boardId": "{{ context.boardId }}",
+            "meetingId": "{{ context.currentMeeting.meetingId }}",
+            "quorumCount": "{{ context.currentMeeting.quorumCount }}"
+          }
+        }
+      ]
+    },
+
+    "director_departs": {
+      "from": "IN_MEETING",
+      "to": "IN_MEETING",
+      "description": "Record a director leaving the meeting (may affect quorum)",
+      "event": {
+        "name": "director_departs",
+        "payload": {
+          "directorId": { "type": "string", "required": true },
+          "departedAt": { "type": "string", "format": "date-time", "required": true }
+        }
+      },
+      "effects": [
+        {
+          "type": "UPDATE_ARRAY_ITEM",
+          "path": "currentMeeting.attendees",
+          "matchKey": "directorId",
+          "matchValue": "{{ event.directorId }}",
+          "updates": {
+            "present": false,
+            "departedAt": "{{ event.departedAt }}"
+          }
+        },
+        {
+          "type": "COMPUTE",
+          "path": "currentMeeting.quorumCount",
+          "expression": "context.currentMeeting.attendees.filter(a => a.present).length"
+        },
+        {
+          "type": "COMPUTE",
+          "path": "currentMeeting.quorumPresent",
+          "expression": "context.currentMeeting.attendees.filter(a => a.present).length >= Math.ceil(context.seats.filled * 0.5)"
+        }
+      ]
+    },
+
+    "quorum_lost": {
+      "from": "IN_MEETING",
+      "to": "QUORUM_LOST",
+      "description": "Automatic transition when quorum is lost during meeting",
+      "event": {
+        "name": "quorum_lost",
+        "payload": {
+          "lostAt": { "type": "string", "format": "date-time", "required": true }
+        }
+      },
+      "guards": [
+        {
+          "name": "noLongerQuorate",
+          "expression": "context.currentMeeting.quorumPresent === false"
+        }
+      ],
+      "effects": [
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "BOARD_QUORUM_LOST",
+          "payload": {
+            "boardId": "{{ context.boardId }}",
+            "meetingId": "{{ context.currentMeeting.meetingId }}",
+            "remainingDirectors": "{{ context.currentMeeting.quorumCount }}"
+          }
+        }
+      ]
+    },
+
+    "quorum_restored": {
+      "from": "QUORUM_LOST",
+      "to": "IN_MEETING",
+      "description": "Quorum restored after additional director(s) join",
+      "event": {
+        "name": "quorum_restored",
+        "payload": {
+          "restoredAt": { "type": "string", "format": "date-time", "required": true },
+          "directorId": { "type": "string", "required": true, "description": "Joining director" }
+        }
+      },
+      "guards": [
+        {
+          "name": "nowQuorate",
+          "expression": "context.currentMeeting.quorumPresent === true"
+        }
+      ],
+      "effects": [
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "BOARD_QUORUM_RESTORED",
+          "payload": {
+            "boardId": "{{ context.boardId }}",
+            "meetingId": "{{ context.currentMeeting.meetingId }}"
+          }
+        }
+      ]
+    },
+
+    "adjourn": {
+      "from": ["IN_MEETING", "QUORUM_LOST"],
+      "to": "ACTIVE",
+      "description": "Adjourn the board meeting",
+      "event": {
+        "name": "adjourn",
+        "payload": {
+          "closedAt": { "type": "string", "format": "date-time", "required": true },
+          "minutesRef": { "type": "string", "description": "Reference to meeting minutes document" },
+          "resolutionsPassed": { "type": "array", "items": { "type": "string" } },
+          "adjournedTo": { "type": "string", "format": "date-time", "nullable": true, "description": "If adjourning to later date" }
+        }
+      },
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "currentMeeting.closedAt",
+          "value": "{{ event.closedAt }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "currentMeeting.minutesRef",
+          "value": "{{ event.minutesRef }}"
+        },
+        {
+          "type": "APPEND_ARRAY",
+          "path": "meetingHistory",
+          "value": {
+            "meetingId": "{{ context.currentMeeting.meetingId }}",
+            "type": "{{ context.currentMeeting.type }}",
+            "date": "{{ context.currentMeeting.scheduledDate }}",
+            "quorumAchieved": "{{ context.currentMeeting.quorumPresent }}",
+            "attendeeCount": "{{ context.currentMeeting.attendees.filter(a => a.present).length }}",
+            "resolutionsPassed": "{{ event.resolutionsPassed }}",
+            "minutesRef": "{{ event.minutesRef }}"
+          }
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "currentMeeting",
+          "value": null
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "BOARD_MEETING_ADJOURNED",
+          "payload": {
+            "boardId": "{{ context.boardId }}",
+            "meetingId": "{{ context.currentMeeting.meetingId }}",
+            "resolutionsPassed": "{{ event.resolutionsPassed }}"
+          }
+        }
+      ]
+    },
+
+    "update_seats": {
+      "from": "ACTIVE",
+      "to": "ACTIVE",
+      "description": "Change the number of authorized board seats (requires bylaw amendment)",
+      "event": {
+        "name": "update_seats",
+        "payload": {
+          "newAuthorizedSeats": { "type": "integer", "required": true },
+          "bylawAmendmentRef": { "type": "string", "required": true }
+        }
+      },
+      "guards": [
+        {
+          "name": "seatsNotLessThanFilled",
+          "description": "Cannot reduce below current filled seats",
+          "expression": "event.newAuthorizedSeats >= context.seats.filled"
+        }
+      ],
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "seats.authorized",
+          "value": "{{ event.newAuthorizedSeats }}"
+        },
+        {
+          "type": "COMPUTE",
+          "path": "seats.vacant",
+          "expression": "event.newAuthorizedSeats - context.seats.filled"
+        }
+      ]
+    }
+  },
+
+  "crossMachineRefs": {
+    "entity": {
+      "machine": "corporate-entity",
+      "description": "Parent corporate entity",
+      "foreignKey": "entityId"
+    },
+    "resolutions": {
+      "machine": "corporate-resolution",
+      "description": "Board resolutions",
+      "foreignKey": "boardId"
+    },
+    "committees": {
+      "machine": "corporate-committee",
+      "description": "Board committees",
+      "foreignKey": "boardId"
+    },
+    "officers": {
+      "machine": "corporate-officers",
+      "description": "Officers appointed by board",
+      "foreignKey": "entityId"
+    }
+  },
+
+  "metadata": {
+    "author": "OttoChain",
+    "license": "MIT",
+    "tags": ["corporate", "governance", "board", "directors", "meetings"],
+    "documentation": "https://ottochain.dev/docs/corporate/board"
+  }
+}

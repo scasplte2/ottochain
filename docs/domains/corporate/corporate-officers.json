@@ -1,0 +1,559 @@
+{
+  "$schema": "https://ottochain.dev/schemas/state-machine-v1.json",
+  "name": "corporate-officers",
+  "version": "1.0.0",
+  "category": "corporate-governance",
+  "description": "Executive officers state machine managing officer appointments, authority delegation, and succession. Tracks officer roles, reporting relationships, and delegation chains.",
+
+  "context": {
+    "officersInstanceId": { "type": "string", "description": "Unique identifier for this officers instance" },
+    "entityId": { "type": "string", "description": "Reference to parent corporate-entity" },
+    "officers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "officerId": { "type": "string" },
+          "personId": { "type": "string", "description": "Person identifier" },
+          "name": { "type": "string" },
+          "title": { 
+            "type": "string", 
+            "enum": ["CEO", "PRESIDENT", "COO", "CFO", "CTO", "CLO", "SECRETARY", "TREASURER", "VP", "SVP", "EVP", "GENERAL_COUNSEL", "CONTROLLER", "ASSISTANT_SECRETARY", "ASSISTANT_TREASURER", "OTHER"],
+            "description": "Officer title"
+          },
+          "customTitle": { "type": "string", "nullable": true, "description": "Custom title if OTHER" },
+          "status": { "type": "string", "enum": ["ACTIVE", "RESIGNED", "REMOVED", "INTERIM"] },
+          "appointedDate": { "type": "string", "format": "date" },
+          "appointmentResolutionRef": { "type": "string" },
+          "terminationDate": { "type": "string", "format": "date", "nullable": true },
+          "reportsTo": { "type": "string", "nullable": true, "description": "Officer ID of supervisor" },
+          "isBoardMember": { "type": "boolean", "default": false },
+          "directorId": { "type": "string", "nullable": true },
+          "compensationAgreementRef": { "type": "string", "nullable": true },
+          "authorityLevel": { 
+            "type": "string", 
+            "enum": ["FULL", "LIMITED", "SPECIFIC"],
+            "description": "Scope of authority"
+          },
+          "spendingLimit": { "type": "number", "nullable": true, "description": "Unilateral spending authority limit" },
+          "signatureAuthority": {
+            "type": "object",
+            "properties": {
+              "contracts": { "type": "boolean", "default": false },
+              "contractLimit": { "type": "number", "nullable": true },
+              "checks": { "type": "boolean", "default": false },
+              "checkLimit": { "type": "number", "nullable": true },
+              "hiringAuthority": { "type": "boolean", "default": false },
+              "terminationAuthority": { "type": "boolean", "default": false }
+            }
+          },
+          "delegatedAuthorities": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "delegationId": { "type": "string" },
+                "authority": { "type": "string" },
+                "scope": { "type": "string" },
+                "delegatedBy": { "type": "string" },
+                "delegatedOn": { "type": "string", "format": "date" },
+                "expiresOn": { "type": "string", "format": "date", "nullable": true },
+                "revoked": { "type": "boolean", "default": false }
+              }
+            }
+          }
+        }
+      }
+    },
+    "appointmentAuthority": {
+      "type": "object",
+      "description": "Which officers can appoint which other officers",
+      "properties": {
+        "boardAppoints": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["CEO", "PRESIDENT", "CFO", "SECRETARY", "TREASURER", "GENERAL_COUNSEL"]
+        },
+        "ceoAppoints": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["COO", "CTO", "VP", "SVP", "EVP", "CONTROLLER"]
+        },
+        "cfoAppoints": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["CONTROLLER", "ASSISTANT_TREASURER"]
+        },
+        "secretaryAppoints": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["ASSISTANT_SECRETARY"]
+        }
+      }
+    },
+    "successionPlan": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "position": { "type": "string" },
+          "currentOfficerId": { "type": "string" },
+          "successors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "personId": { "type": "string" },
+                "name": { "type": "string" },
+                "priority": { "type": "integer" },
+                "readiness": { "type": "string", "enum": ["READY_NOW", "READY_1_YEAR", "READY_2_YEARS", "DEVELOPMENTAL"] }
+              }
+            }
+          }
+        }
+      }
+    },
+    "vacantPositions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Officer titles currently vacant"
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+
+  "states": {
+    "ACTIVE": {
+      "description": "Officer roster is active. This is the only state - all changes are self-transitions.",
+      "metadata": {
+        "displayName": "Active",
+        "color": "#28A745"
+      }
+    }
+  },
+
+  "initialState": "ACTIVE",
+
+  "transitions": {
+    "appoint_officer": {
+      "from": "ACTIVE",
+      "to": "ACTIVE",
+      "description": "Appoint a new executive officer",
+      "event": {
+        "name": "appoint_officer",
+        "payload": {
+          "officerId": { "type": "string", "required": true },
+          "personId": { "type": "string", "required": true },
+          "name": { "type": "string", "required": true },
+          "title": { "type": "string", "required": true },
+          "customTitle": { "type": "string" },
+          "appointedDate": { "type": "string", "format": "date", "required": true },
+          "appointmentResolutionRef": { "type": "string", "required": true },
+          "reportsTo": { "type": "string" },
+          "isBoardMember": { "type": "boolean", "default": false },
+          "directorId": { "type": "string" },
+          "authorityLevel": { "type": "string", "default": "LIMITED" },
+          "spendingLimit": { "type": "number" },
+          "signatureAuthority": { "type": "object" },
+          "isInterim": { "type": "boolean", "default": false }
+        }
+      },
+      "guards": [
+        {
+          "name": "hasAppointmentResolution",
+          "description": "Officer appointment requires board resolution (for senior) or authorized officer action",
+          "crossMachine": {
+            "machine": "corporate-resolution",
+            "instanceRef": "{{ event.appointmentResolutionRef }}",
+            "requiredState": "EXECUTED"
+          }
+        },
+        {
+          "name": "boardMeetingHadQuorum",
+          "description": "If board-appointed, board meeting must have had quorum",
+          "expression": "true",
+          "note": "Validated through resolution's meeting reference"
+        },
+        {
+          "name": "positionNotDuplicate",
+          "description": "Cannot have two active officers with same title (except VPs)",
+          "expression": "event.title === 'VP' || event.title === 'SVP' || event.title === 'EVP' || event.title === 'OTHER' || !context.officers.some(o => o.title === event.title && o.status === 'ACTIVE')"
+        }
+      ],
+      "effects": [
+        {
+          "type": "APPEND_ARRAY",
+          "path": "officers",
+          "value": {
+            "officerId": "{{ event.officerId }}",
+            "personId": "{{ event.personId }}",
+            "name": "{{ event.name }}",
+            "title": "{{ event.title }}",
+            "customTitle": "{{ event.customTitle }}",
+            "status": "{{ event.isInterim ? 'INTERIM' : 'ACTIVE' }}",
+            "appointedDate": "{{ event.appointedDate }}",
+            "appointmentResolutionRef": "{{ event.appointmentResolutionRef }}",
+            "reportsTo": "{{ event.reportsTo }}",
+            "isBoardMember": "{{ event.isBoardMember }}",
+            "directorId": "{{ event.directorId }}",
+            "authorityLevel": "{{ event.authorityLevel }}",
+            "spendingLimit": "{{ event.spendingLimit }}",
+            "signatureAuthority": "{{ event.signatureAuthority }}",
+            "delegatedAuthorities": []
+          }
+        },
+        {
+          "type": "REMOVE_FROM_ARRAY",
+          "path": "vacantPositions",
+          "value": "{{ event.title }}"
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "OFFICER_APPOINTED",
+          "payload": {
+            "entityId": "{{ context.entityId }}",
+            "officerId": "{{ event.officerId }}",
+            "name": "{{ event.name }}",
+            "title": "{{ event.title }}",
+            "appointedDate": "{{ event.appointedDate }}"
+          }
+        }
+      ]
+    },
+
+    "remove_officer": {
+      "from": "ACTIVE",
+      "to": "ACTIVE",
+      "description": "Remove an officer (with or without cause)",
+      "event": {
+        "name": "remove_officer",
+        "payload": {
+          "officerId": { "type": "string", "required": true },
+          "effectiveDate": { "type": "string", "format": "date", "required": true },
+          "reason": { "type": "string", "enum": ["WITH_CAUSE", "WITHOUT_CAUSE", "REORGANIZATION"], "required": true },
+          "removalResolutionRef": { "type": "string", "required": true },
+          "severanceAgreementRef": { "type": "string" }
+        }
+      },
+      "guards": [
+        {
+          "name": "isActiveOfficer",
+          "expression": "context.officers.some(o => o.officerId === event.officerId && (o.status === 'ACTIVE' || o.status === 'INTERIM'))"
+        },
+        {
+          "name": "hasRemovalAuthority",
+          "crossMachine": {
+            "machine": "corporate-resolution",
+            "instanceRef": "{{ event.removalResolutionRef }}",
+            "requiredState": "EXECUTED"
+          }
+        }
+      ],
+      "effects": [
+        {
+          "type": "UPDATE_ARRAY_ITEM",
+          "path": "officers",
+          "matchKey": "officerId",
+          "matchValue": "{{ event.officerId }}",
+          "updates": {
+            "status": "REMOVED",
+            "terminationDate": "{{ event.effectiveDate }}"
+          }
+        },
+        {
+          "type": "COMPUTE",
+          "path": "vacantPositions",
+          "expression": "context.vacantPositions.concat([context.officers.find(o => o.officerId === event.officerId).title])"
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "OFFICER_REMOVED",
+          "payload": {
+            "entityId": "{{ context.entityId }}",
+            "officerId": "{{ event.officerId }}",
+            "reason": "{{ event.reason }}"
+          }
+        }
+      ]
+    },
+
+    "accept_resignation": {
+      "from": "ACTIVE",
+      "to": "ACTIVE",
+      "description": "Accept an officer's resignation",
+      "event": {
+        "name": "accept_resignation",
+        "payload": {
+          "officerId": { "type": "string", "required": true },
+          "effectiveDate": { "type": "string", "format": "date", "required": true },
+          "resignationLetterRef": { "type": "string" },
+          "acceptedBy": { "type": "string", "required": true, "description": "Officer ID or BOARD" }
+        }
+      },
+      "guards": [
+        {
+          "name": "isActiveOfficer",
+          "expression": "context.officers.some(o => o.officerId === event.officerId && o.status === 'ACTIVE')"
+        }
+      ],
+      "effects": [
+        {
+          "type": "UPDATE_ARRAY_ITEM",
+          "path": "officers",
+          "matchKey": "officerId",
+          "matchValue": "{{ event.officerId }}",
+          "updates": {
+            "status": "RESIGNED",
+            "terminationDate": "{{ event.effectiveDate }}"
+          }
+        },
+        {
+          "type": "COMPUTE",
+          "path": "vacantPositions",
+          "expression": "context.vacantPositions.concat([context.officers.find(o => o.officerId === event.officerId).title])"
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "OFFICER_RESIGNED",
+          "payload": {
+            "entityId": "{{ context.entityId }}",
+            "officerId": "{{ event.officerId }}",
+            "effectiveDate": "{{ event.effectiveDate }}"
+          }
+        }
+      ]
+    },
+
+    "delegate_authority": {
+      "from": "ACTIVE",
+      "to": "ACTIVE",
+      "description": "One officer delegates specific authority to another",
+      "event": {
+        "name": "delegate_authority",
+        "payload": {
+          "delegationId": { "type": "string", "required": true },
+          "fromOfficerId": { "type": "string", "required": true },
+          "toOfficerId": { "type": "string", "required": true },
+          "authority": { "type": "string", "required": true, "description": "Type of authority being delegated" },
+          "scope": { "type": "string", "required": true, "description": "Scope/limits of delegation" },
+          "expiresOn": { "type": "string", "format": "date" }
+        }
+      },
+      "guards": [
+        {
+          "name": "delegatorIsActive",
+          "expression": "context.officers.some(o => o.officerId === event.fromOfficerId && o.status === 'ACTIVE')"
+        },
+        {
+          "name": "delegateeIsActive",
+          "expression": "context.officers.some(o => o.officerId === event.toOfficerId && o.status === 'ACTIVE')"
+        },
+        {
+          "name": "delegatorHasAuthority",
+          "description": "Cannot delegate authority you don't have",
+          "expression": "true"
+        }
+      ],
+      "effects": [
+        {
+          "type": "UPDATE_ARRAY_ITEM",
+          "path": "officers",
+          "matchKey": "officerId",
+          "matchValue": "{{ event.toOfficerId }}",
+          "arrayPath": "delegatedAuthorities",
+          "arrayOperation": "APPEND",
+          "value": {
+            "delegationId": "{{ event.delegationId }}",
+            "authority": "{{ event.authority }}",
+            "scope": "{{ event.scope }}",
+            "delegatedBy": "{{ event.fromOfficerId }}",
+            "delegatedOn": "{{ today() }}",
+            "expiresOn": "{{ event.expiresOn }}",
+            "revoked": false
+          }
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "AUTHORITY_DELEGATED",
+          "payload": {
+            "entityId": "{{ context.entityId }}",
+            "delegationId": "{{ event.delegationId }}",
+            "from": "{{ event.fromOfficerId }}",
+            "to": "{{ event.toOfficerId }}",
+            "authority": "{{ event.authority }}"
+          }
+        }
+      ]
+    },
+
+    "revoke_authority": {
+      "from": "ACTIVE",
+      "to": "ACTIVE",
+      "description": "Revoke a previously delegated authority",
+      "event": {
+        "name": "revoke_authority",
+        "payload": {
+          "delegationId": { "type": "string", "required": true },
+          "officerId": { "type": "string", "required": true },
+          "revokedBy": { "type": "string", "required": true },
+          "reason": { "type": "string" }
+        }
+      },
+      "effects": [
+        {
+          "type": "UPDATE_NESTED_ARRAY_ITEM",
+          "path": "officers",
+          "matchKey": "officerId",
+          "matchValue": "{{ event.officerId }}",
+          "nestedPath": "delegatedAuthorities",
+          "nestedMatchKey": "delegationId",
+          "nestedMatchValue": "{{ event.delegationId }}",
+          "updates": {
+            "revoked": true
+          }
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "AUTHORITY_REVOKED",
+          "payload": {
+            "entityId": "{{ context.entityId }}",
+            "delegationId": "{{ event.delegationId }}",
+            "officerId": "{{ event.officerId }}"
+          }
+        }
+      ]
+    },
+
+    "update_authority_limits": {
+      "from": "ACTIVE",
+      "to": "ACTIVE",
+      "description": "Update an officer's spending or signature authority limits",
+      "event": {
+        "name": "update_authority_limits",
+        "payload": {
+          "officerId": { "type": "string", "required": true },
+          "authorityLevel": { "type": "string" },
+          "spendingLimit": { "type": "number" },
+          "signatureAuthority": { "type": "object" },
+          "resolutionRef": { "type": "string", "required": true }
+        }
+      },
+      "guards": [
+        {
+          "name": "hasApproval",
+          "crossMachine": {
+            "machine": "corporate-resolution",
+            "instanceRef": "{{ event.resolutionRef }}",
+            "requiredState": "EXECUTED"
+          }
+        }
+      ],
+      "effects": [
+        {
+          "type": "UPDATE_ARRAY_ITEM",
+          "path": "officers",
+          "matchKey": "officerId",
+          "matchValue": "{{ event.officerId }}",
+          "updates": {
+            "authorityLevel": "{{ event.authorityLevel }}",
+            "spendingLimit": "{{ event.spendingLimit }}",
+            "signatureAuthority": "{{ event.signatureAuthority }}"
+          }
+        }
+      ]
+    },
+
+    "promote_interim_to_permanent": {
+      "from": "ACTIVE",
+      "to": "ACTIVE",
+      "description": "Convert an interim officer to permanent status",
+      "event": {
+        "name": "promote_interim_to_permanent",
+        "payload": {
+          "officerId": { "type": "string", "required": true },
+          "effectiveDate": { "type": "string", "format": "date", "required": true },
+          "resolutionRef": { "type": "string", "required": true }
+        }
+      },
+      "guards": [
+        {
+          "name": "isInterimOfficer",
+          "expression": "context.officers.some(o => o.officerId === event.officerId && o.status === 'INTERIM')"
+        }
+      ],
+      "effects": [
+        {
+          "type": "UPDATE_ARRAY_ITEM",
+          "path": "officers",
+          "matchKey": "officerId",
+          "matchValue": "{{ event.officerId }}",
+          "updates": {
+            "status": "ACTIVE",
+            "appointedDate": "{{ event.effectiveDate }}",
+            "appointmentResolutionRef": "{{ event.resolutionRef }}"
+          }
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "INTERIM_MADE_PERMANENT",
+          "payload": {
+            "entityId": "{{ context.entityId }}",
+            "officerId": "{{ event.officerId }}"
+          }
+        }
+      ]
+    },
+
+    "update_succession_plan": {
+      "from": "ACTIVE",
+      "to": "ACTIVE",
+      "description": "Update the succession plan for key positions",
+      "event": {
+        "name": "update_succession_plan",
+        "payload": {
+          "position": { "type": "string", "required": true },
+          "currentOfficerId": { "type": "string", "required": true },
+          "successors": { "type": "array", "required": true }
+        }
+      },
+      "effects": [
+        {
+          "type": "UPSERT_ARRAY",
+          "path": "successionPlan",
+          "matchKey": "position",
+          "matchValue": "{{ event.position }}",
+          "value": {
+            "position": "{{ event.position }}",
+            "currentOfficerId": "{{ event.currentOfficerId }}",
+            "successors": "{{ event.successors }}"
+          }
+        }
+      ]
+    }
+  },
+
+  "crossMachineRefs": {
+    "entity": {
+      "machine": "corporate-entity",
+      "description": "Parent corporate entity",
+      "foreignKey": "entityId"
+    },
+    "board": {
+      "machine": "corporate-board",
+      "description": "Board that appoints senior officers",
+      "foreignKey": "entityId"
+    },
+    "resolutions": {
+      "machine": "corporate-resolution",
+      "description": "Resolutions authorizing officer actions",
+      "foreignKey": "entityId"
+    }
+  },
+
+  "metadata": {
+    "author": "OttoChain",
+    "license": "MIT",
+    "tags": ["corporate", "governance", "officers", "executives", "authority"],
+    "documentation": "https://ottochain.dev/docs/corporate/officers"
+  }
+}

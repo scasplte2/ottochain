@@ -1,0 +1,811 @@
+{
+  "$schema": "https://ottochain.dev/schemas/state-machine-v1.json",
+  "name": "corporate-resolution",
+  "version": "1.0.0",
+  "category": "corporate-governance",
+  "description": "Formal corporate resolutions state machine tracking the lifecycle from proposal through approval, execution, and expiration. Supports board resolutions, shareholder resolutions, and written consents.",
+
+  "context": {
+    "resolutionId": { "type": "string", "description": "Unique identifier for this resolution" },
+    "entityId": { "type": "string", "description": "Reference to parent corporate-entity" },
+    "resolutionNumber": { "type": "string", "description": "Sequential resolution number (e.g., 2024-B-001 for board, 2024-S-001 for shareholder)" },
+    "title": { "type": "string", "description": "Brief title of the resolution" },
+    "resolutionType": {
+      "type": "string",
+      "enum": ["BOARD_RESOLUTION", "SHAREHOLDER_RESOLUTION", "BOARD_WRITTEN_CONSENT", "SHAREHOLDER_WRITTEN_CONSENT", "UNANIMOUS_WRITTEN_CONSENT"],
+      "description": "Type of resolution"
+    },
+    "category": {
+      "type": "string",
+      "enum": ["OFFICER_APPOINTMENT", "OFFICER_REMOVAL", "STOCK_ISSUANCE", "DIVIDEND_DECLARATION", "CONTRACT_APPROVAL", "BANKING", "CHARTER_AMENDMENT", "BYLAW_AMENDMENT", "MERGER_ACQUISITION", "DISSOLUTION", "COMMITTEE_ACTION", "COMPENSATION", "AUDIT", "GENERAL", "OTHER"],
+      "description": "Category of action"
+    },
+    "proposedDate": { "type": "string", "format": "date" },
+    "proposedBy": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["DIRECTOR", "OFFICER", "SHAREHOLDER", "COMMITTEE"] },
+        "personId": { "type": "string" },
+        "name": { "type": "string" }
+      }
+    },
+    "resolvedText": { "type": "string", "description": "Full text of the resolution including WHEREAS and RESOLVED clauses" },
+    "whereAsClauses": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Background/recital clauses"
+    },
+    "resolvedClauses": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Operative clauses"
+    },
+    "attachments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "attachmentId": { "type": "string" },
+          "title": { "type": "string" },
+          "documentRef": { "type": "string" },
+          "type": { "type": "string" }
+        }
+      }
+    },
+    "approvalRequirements": {
+      "type": "object",
+      "properties": {
+        "approverType": { "type": "string", "enum": ["BOARD", "SHAREHOLDERS", "COMMITTEE", "BOARD_AND_SHAREHOLDERS"] },
+        "threshold": { 
+          "type": "string", 
+          "enum": ["MAJORITY_PRESENT", "MAJORITY_FULL", "SUPERMAJORITY", "UNANIMOUS"],
+          "description": "Vote threshold required"
+        },
+        "supermajorityPercent": { "type": "number", "nullable": true },
+        "quorumRequired": { "type": "boolean", "default": true },
+        "shareholderClassVotes": { 
+          "type": "array", 
+          "items": { "type": "string" },
+          "description": "Share classes that must approve (for class voting)"
+        }
+      }
+    },
+    "meetingRef": {
+      "type": "object",
+      "nullable": true,
+      "description": "Reference to meeting where resolution was considered",
+      "properties": {
+        "meetingType": { "type": "string", "enum": ["BOARD_MEETING", "SHAREHOLDER_MEETING", "COMMITTEE_MEETING"] },
+        "meetingId": { "type": "string" },
+        "meetingDate": { "type": "string", "format": "date" }
+      }
+    },
+    "voting": {
+      "type": "object",
+      "properties": {
+        "votingOpenedAt": { "type": "string", "format": "date-time", "nullable": true },
+        "votingClosedAt": { "type": "string", "format": "date-time", "nullable": true },
+        "votes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "voterId": { "type": "string" },
+              "voterName": { "type": "string" },
+              "voterType": { "type": "string", "enum": ["DIRECTOR", "SHAREHOLDER", "COMMITTEE_MEMBER"] },
+              "vote": { "type": "string", "enum": ["FOR", "AGAINST", "ABSTAIN", "RECUSE"] },
+              "votingPower": { "type": "integer", "default": 1, "description": "Number of votes (shares for shareholders)" },
+              "timestamp": { "type": "string", "format": "date-time" },
+              "comment": { "type": "string", "nullable": true }
+            }
+          }
+        },
+        "tally": {
+          "type": "object",
+          "properties": {
+            "for": { "type": "integer", "default": 0 },
+            "against": { "type": "integer", "default": 0 },
+            "abstain": { "type": "integer", "default": 0 },
+            "recused": { "type": "integer", "default": 0 },
+            "totalEligible": { "type": "integer" },
+            "totalVoted": { "type": "integer" }
+          }
+        }
+      }
+    },
+    "writtenConsent": {
+      "type": "object",
+      "nullable": true,
+      "description": "For written consent resolutions (no meeting)",
+      "properties": {
+        "consentForm": { "type": "string", "description": "Document reference" },
+        "circulationDate": { "type": "string", "format": "date" },
+        "consentDeadline": { "type": "string", "format": "date" },
+        "consents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "consentorId": { "type": "string" },
+              "consentorName": { "type": "string" },
+              "signedDate": { "type": "string", "format": "date" },
+              "votingPower": { "type": "integer", "default": 1 },
+              "signatureRef": { "type": "string" }
+            }
+          }
+        },
+        "totalConsentPower": { "type": "integer" },
+        "requiredConsentPower": { "type": "integer" }
+      }
+    },
+    "approvalDetails": {
+      "type": "object",
+      "nullable": true,
+      "properties": {
+        "approved": { "type": "boolean" },
+        "approvalDate": { "type": "string", "format": "date" },
+        "approvalMethod": { "type": "string", "enum": ["MEETING_VOTE", "WRITTEN_CONSENT"] },
+        "certifiedBy": { "type": "string" },
+        "certificationDate": { "type": "string", "format": "date" }
+      }
+    },
+    "effectiveDate": { "type": "string", "format": "date", "nullable": true },
+    "expirationDate": { "type": "string", "format": "date", "nullable": true, "description": "For authorizations with time limits" },
+    "executionDetails": {
+      "type": "object",
+      "nullable": true,
+      "properties": {
+        "executedDate": { "type": "string", "format": "date" },
+        "executedBy": { "type": "string" },
+        "executionNotes": { "type": "string" },
+        "resultingActions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "actionType": { "type": "string" },
+              "reference": { "type": "string" },
+              "completedDate": { "type": "string", "format": "date" }
+            }
+          }
+        }
+      }
+    },
+    "rescissionDetails": {
+      "type": "object",
+      "nullable": true,
+      "properties": {
+        "rescindedDate": { "type": "string", "format": "date" },
+        "rescindingResolutionRef": { "type": "string" },
+        "reason": { "type": "string" }
+      }
+    },
+    "relatedResolutions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "resolutionId": { "type": "string" },
+          "relationship": { "type": "string", "enum": ["SUPERSEDES", "SUPERSEDED_BY", "AMENDS", "AMENDED_BY", "DEPENDS_ON", "ENABLES"] }
+        }
+      }
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+
+  "states": {
+    "DRAFT": {
+      "description": "Resolution drafted but not yet formally proposed",
+      "metadata": {
+        "displayName": "Draft",
+        "color": "#6C757D"
+      }
+    },
+    "PROPOSED": {
+      "description": "Resolution formally proposed and awaiting vote",
+      "metadata": {
+        "displayName": "Proposed",
+        "color": "#17A2B8"
+      }
+    },
+    "VOTING": {
+      "description": "Voting or consent collection in progress",
+      "metadata": {
+        "displayName": "Voting",
+        "color": "#FFC107"
+      }
+    },
+    "APPROVED": {
+      "description": "Resolution approved but not yet executed/effective",
+      "metadata": {
+        "displayName": "Approved",
+        "color": "#28A745"
+      }
+    },
+    "EXECUTED": {
+      "description": "Resolution has been carried out; authorized actions completed",
+      "metadata": {
+        "displayName": "Executed",
+        "color": "#007BFF"
+      }
+    },
+    "REJECTED": {
+      "description": "Resolution failed to obtain required approval",
+      "metadata": {
+        "displayName": "Rejected",
+        "color": "#DC3545"
+      },
+      "terminal": true
+    },
+    "EXPIRED": {
+      "description": "Resolution expired without execution",
+      "metadata": {
+        "displayName": "Expired",
+        "color": "#6C757D"
+      },
+      "terminal": true
+    },
+    "RESCINDED": {
+      "description": "Resolution was rescinded by subsequent action",
+      "metadata": {
+        "displayName": "Rescinded",
+        "color": "#6C757D"
+      },
+      "terminal": true
+    }
+  },
+
+  "initialState": "DRAFT",
+
+  "transitions": {
+    "draft_resolution": {
+      "from": null,
+      "to": "DRAFT",
+      "description": "Create a new draft resolution",
+      "event": {
+        "name": "draft_resolution",
+        "payload": {
+          "resolutionId": { "type": "string", "required": true },
+          "entityId": { "type": "string", "required": true },
+          "title": { "type": "string", "required": true },
+          "resolutionType": { "type": "string", "required": true },
+          "category": { "type": "string", "required": true },
+          "whereAsClauses": { "type": "array" },
+          "resolvedClauses": { "type": "array", "required": true },
+          "approvalRequirements": { "type": "object", "required": true }
+        }
+      },
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "resolutionId",
+          "value": "{{ event.resolutionId }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "entityId",
+          "value": "{{ event.entityId }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "title",
+          "value": "{{ event.title }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "resolutionType",
+          "value": "{{ event.resolutionType }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "category",
+          "value": "{{ event.category }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "whereAsClauses",
+          "value": "{{ event.whereAsClauses }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "resolvedClauses",
+          "value": "{{ event.resolvedClauses }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "approvalRequirements",
+          "value": "{{ event.approvalRequirements }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "voting.votes",
+          "value": []
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "voting.tally",
+          "value": { "for": 0, "against": 0, "abstain": 0, "recused": 0, "totalVoted": 0 }
+        }
+      ]
+    },
+
+    "propose": {
+      "from": "DRAFT",
+      "to": "PROPOSED",
+      "description": "Formally propose the resolution for consideration",
+      "event": {
+        "name": "propose",
+        "payload": {
+          "proposedBy": { "type": "object", "required": true },
+          "meetingRef": { "type": "object", "description": "If proposing for a specific meeting" },
+          "resolutionNumber": { "type": "string", "required": true }
+        }
+      },
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "proposedDate",
+          "value": "{{ today() }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "proposedBy",
+          "value": "{{ event.proposedBy }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "meetingRef",
+          "value": "{{ event.meetingRef }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "resolutionNumber",
+          "value": "{{ event.resolutionNumber }}"
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "RESOLUTION_PROPOSED",
+          "payload": {
+            "resolutionId": "{{ context.resolutionId }}",
+            "title": "{{ context.title }}",
+            "type": "{{ context.resolutionType }}"
+          }
+        }
+      ]
+    },
+
+    "open_voting": {
+      "from": "PROPOSED",
+      "to": "VOTING",
+      "description": "Open voting on the resolution (at meeting or via written consent)",
+      "event": {
+        "name": "open_voting",
+        "payload": {
+          "votingOpenedAt": { "type": "string", "format": "date-time", "required": true },
+          "totalEligibleVoters": { "type": "integer", "required": true },
+          "isWrittenConsent": { "type": "boolean", "default": false },
+          "consentDeadline": { "type": "string", "format": "date" }
+        }
+      },
+      "guards": [
+        {
+          "name": "meetingHasQuorumIfRequired",
+          "description": "If board/shareholder vote at meeting, meeting must have quorum",
+          "expression": "!event.isWrittenConsent || !context.approvalRequirements.quorumRequired"
+        }
+      ],
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "voting.votingOpenedAt",
+          "value": "{{ event.votingOpenedAt }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "voting.tally.totalEligible",
+          "value": "{{ event.totalEligibleVoters }}"
+        },
+        {
+          "type": "CONDITIONAL",
+          "condition": "event.isWrittenConsent",
+          "then": {
+            "type": "SET_CONTEXT",
+            "path": "writtenConsent",
+            "value": {
+              "circulationDate": "{{ today() }}",
+              "consentDeadline": "{{ event.consentDeadline }}",
+              "consents": [],
+              "totalConsentPower": 0
+            }
+          }
+        }
+      ]
+    },
+
+    "record_vote": {
+      "from": "VOTING",
+      "to": "VOTING",
+      "description": "Record an individual vote on the resolution",
+      "event": {
+        "name": "record_vote",
+        "payload": {
+          "voterId": { "type": "string", "required": true },
+          "voterName": { "type": "string", "required": true },
+          "voterType": { "type": "string", "required": true },
+          "vote": { "type": "string", "enum": ["FOR", "AGAINST", "ABSTAIN", "RECUSE"], "required": true },
+          "votingPower": { "type": "integer", "default": 1 },
+          "comment": { "type": "string" }
+        }
+      },
+      "guards": [
+        {
+          "name": "hasNotAlreadyVoted",
+          "expression": "!context.voting.votes.some(v => v.voterId === event.voterId)"
+        }
+      ],
+      "effects": [
+        {
+          "type": "APPEND_ARRAY",
+          "path": "voting.votes",
+          "value": {
+            "voterId": "{{ event.voterId }}",
+            "voterName": "{{ event.voterName }}",
+            "voterType": "{{ event.voterType }}",
+            "vote": "{{ event.vote }}",
+            "votingPower": "{{ event.votingPower }}",
+            "timestamp": "{{ now() }}",
+            "comment": "{{ event.comment }}"
+          }
+        },
+        {
+          "type": "CONDITIONAL",
+          "condition": "event.vote === 'FOR'",
+          "then": { "type": "INCREMENT", "path": "voting.tally.for", "amount": "{{ event.votingPower }}" }
+        },
+        {
+          "type": "CONDITIONAL",
+          "condition": "event.vote === 'AGAINST'",
+          "then": { "type": "INCREMENT", "path": "voting.tally.against", "amount": "{{ event.votingPower }}" }
+        },
+        {
+          "type": "CONDITIONAL",
+          "condition": "event.vote === 'ABSTAIN'",
+          "then": { "type": "INCREMENT", "path": "voting.tally.abstain", "amount": "{{ event.votingPower }}" }
+        },
+        {
+          "type": "CONDITIONAL",
+          "condition": "event.vote === 'RECUSE'",
+          "then": { "type": "INCREMENT", "path": "voting.tally.recused", "amount": "{{ event.votingPower }}" }
+        },
+        {
+          "type": "INCREMENT",
+          "path": "voting.tally.totalVoted",
+          "amount": "{{ event.votingPower }}"
+        }
+      ]
+    },
+
+    "record_consent": {
+      "from": "VOTING",
+      "to": "VOTING",
+      "description": "Record a written consent signature",
+      "event": {
+        "name": "record_consent",
+        "payload": {
+          "consentorId": { "type": "string", "required": true },
+          "consentorName": { "type": "string", "required": true },
+          "signedDate": { "type": "string", "format": "date", "required": true },
+          "votingPower": { "type": "integer", "default": 1 },
+          "signatureRef": { "type": "string" }
+        }
+      },
+      "guards": [
+        {
+          "name": "isWrittenConsentResolution",
+          "expression": "context.writtenConsent != null"
+        },
+        {
+          "name": "hasNotAlreadyConsented",
+          "expression": "!context.writtenConsent.consents.some(c => c.consentorId === event.consentorId)"
+        }
+      ],
+      "effects": [
+        {
+          "type": "APPEND_ARRAY",
+          "path": "writtenConsent.consents",
+          "value": {
+            "consentorId": "{{ event.consentorId }}",
+            "consentorName": "{{ event.consentorName }}",
+            "signedDate": "{{ event.signedDate }}",
+            "votingPower": "{{ event.votingPower }}",
+            "signatureRef": "{{ event.signatureRef }}"
+          }
+        },
+        {
+          "type": "INCREMENT",
+          "path": "writtenConsent.totalConsentPower",
+          "amount": "{{ event.votingPower }}"
+        }
+      ]
+    },
+
+    "close_voting_approved": {
+      "from": "VOTING",
+      "to": "APPROVED",
+      "description": "Close voting - resolution passes",
+      "event": {
+        "name": "close_voting_approved",
+        "payload": {
+          "votingClosedAt": { "type": "string", "format": "date-time", "required": true },
+          "certifiedBy": { "type": "string", "required": true },
+          "effectiveDate": { "type": "string", "format": "date" },
+          "expirationDate": { "type": "string", "format": "date" }
+        }
+      },
+      "guards": [
+        {
+          "name": "meetsApprovalThreshold",
+          "description": "Vote tally meets required threshold",
+          "expression": "context.voting.tally.for > context.voting.tally.against"
+        }
+      ],
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "voting.votingClosedAt",
+          "value": "{{ event.votingClosedAt }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "approvalDetails",
+          "value": {
+            "approved": true,
+            "approvalDate": "{{ today() }}",
+            "approvalMethod": "{{ context.writtenConsent ? 'WRITTEN_CONSENT' : 'MEETING_VOTE' }}",
+            "certifiedBy": "{{ event.certifiedBy }}",
+            "certificationDate": "{{ today() }}"
+          }
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "effectiveDate",
+          "value": "{{ event.effectiveDate || today() }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "expirationDate",
+          "value": "{{ event.expirationDate }}"
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "RESOLUTION_APPROVED",
+          "payload": {
+            "resolutionId": "{{ context.resolutionId }}",
+            "title": "{{ context.title }}",
+            "votesFor": "{{ context.voting.tally.for }}",
+            "votesAgainst": "{{ context.voting.tally.against }}"
+          }
+        }
+      ]
+    },
+
+    "close_voting_rejected": {
+      "from": "VOTING",
+      "to": "REJECTED",
+      "description": "Close voting - resolution fails",
+      "event": {
+        "name": "close_voting_rejected",
+        "payload": {
+          "votingClosedAt": { "type": "string", "format": "date-time", "required": true },
+          "certifiedBy": { "type": "string", "required": true }
+        }
+      },
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "voting.votingClosedAt",
+          "value": "{{ event.votingClosedAt }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "approvalDetails",
+          "value": {
+            "approved": false,
+            "approvalDate": "{{ today() }}",
+            "approvalMethod": "{{ context.writtenConsent ? 'WRITTEN_CONSENT' : 'MEETING_VOTE' }}",
+            "certifiedBy": "{{ event.certifiedBy }}",
+            "certificationDate": "{{ today() }}"
+          }
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "RESOLUTION_REJECTED",
+          "payload": {
+            "resolutionId": "{{ context.resolutionId }}",
+            "title": "{{ context.title }}"
+          }
+        }
+      ]
+    },
+
+    "execute": {
+      "from": "APPROVED",
+      "to": "EXECUTED",
+      "description": "Execute the resolution - carry out authorized actions",
+      "event": {
+        "name": "execute",
+        "payload": {
+          "executedBy": { "type": "string", "required": true },
+          "executionNotes": { "type": "string" },
+          "resultingActions": { "type": "array" }
+        }
+      },
+      "guards": [
+        {
+          "name": "effectiveDateReached",
+          "description": "Cannot execute before effective date",
+          "expression": "new Date() >= new Date(context.effectiveDate)"
+        },
+        {
+          "name": "notExpired",
+          "description": "Cannot execute after expiration",
+          "expression": "context.expirationDate == null || new Date() <= new Date(context.expirationDate)"
+        }
+      ],
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "executionDetails",
+          "value": {
+            "executedDate": "{{ today() }}",
+            "executedBy": "{{ event.executedBy }}",
+            "executionNotes": "{{ event.executionNotes }}",
+            "resultingActions": "{{ event.resultingActions }}"
+          }
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "RESOLUTION_EXECUTED",
+          "payload": {
+            "resolutionId": "{{ context.resolutionId }}",
+            "title": "{{ context.title }}",
+            "category": "{{ context.category }}"
+          }
+        }
+      ]
+    },
+
+    "expire": {
+      "from": "APPROVED",
+      "to": "EXPIRED",
+      "description": "Resolution expires without being executed",
+      "event": {
+        "name": "expire",
+        "payload": {
+          "expiredDate": { "type": "string", "format": "date", "required": true }
+        }
+      },
+      "guards": [
+        {
+          "name": "hasExpirationDate",
+          "expression": "context.expirationDate != null"
+        },
+        {
+          "name": "isPastExpiration",
+          "expression": "new Date(event.expiredDate) >= new Date(context.expirationDate)"
+        }
+      ],
+      "effects": [
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "RESOLUTION_EXPIRED",
+          "payload": {
+            "resolutionId": "{{ context.resolutionId }}",
+            "title": "{{ context.title }}"
+          }
+        }
+      ]
+    },
+
+    "rescind": {
+      "from": ["APPROVED", "EXECUTED"],
+      "to": "RESCINDED",
+      "description": "Rescind the resolution by subsequent formal action",
+      "event": {
+        "name": "rescind",
+        "payload": {
+          "rescindingResolutionRef": { "type": "string", "required": true },
+          "reason": { "type": "string", "required": true },
+          "rescindedDate": { "type": "string", "format": "date", "required": true }
+        }
+      },
+      "guards": [
+        {
+          "name": "hasRescindingResolution",
+          "description": "Must have a subsequent resolution authorizing rescission",
+          "crossMachine": {
+            "machine": "corporate-resolution",
+            "instanceRef": "{{ event.rescindingResolutionRef }}",
+            "requiredState": "APPROVED"
+          }
+        }
+      ],
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "rescissionDetails",
+          "value": {
+            "rescindedDate": "{{ event.rescindedDate }}",
+            "rescindingResolutionRef": "{{ event.rescindingResolutionRef }}",
+            "reason": "{{ event.reason }}"
+          }
+        },
+        {
+          "type": "APPEND_ARRAY",
+          "path": "relatedResolutions",
+          "value": {
+            "resolutionId": "{{ event.rescindingResolutionRef }}",
+            "relationship": "SUPERSEDED_BY"
+          }
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "RESOLUTION_RESCINDED",
+          "payload": {
+            "resolutionId": "{{ context.resolutionId }}",
+            "rescindedBy": "{{ event.rescindingResolutionRef }}"
+          }
+        }
+      ]
+    },
+
+    "withdraw": {
+      "from": ["DRAFT", "PROPOSED"],
+      "to": "REJECTED",
+      "description": "Withdraw the resolution before voting",
+      "event": {
+        "name": "withdraw",
+        "payload": {
+          "withdrawnBy": { "type": "string", "required": true },
+          "reason": { "type": "string" }
+        }
+      },
+      "effects": [
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "RESOLUTION_WITHDRAWN",
+          "payload": {
+            "resolutionId": "{{ context.resolutionId }}",
+            "withdrawnBy": "{{ event.withdrawnBy }}"
+          }
+        }
+      ]
+    }
+  },
+
+  "crossMachineRefs": {
+    "entity": {
+      "machine": "corporate-entity",
+      "description": "Parent corporate entity",
+      "foreignKey": "entityId"
+    },
+    "board": {
+      "machine": "corporate-board",
+      "description": "Board for board resolutions",
+      "foreignKey": "entityId"
+    },
+    "shareholders": {
+      "machine": "corporate-shareholders",
+      "description": "Shareholder meeting for shareholder resolutions",
+      "foreignKey": "meetingRef.meetingId"
+    }
+  },
+
+  "metadata": {
+    "author": "OttoChain",
+    "license": "MIT",
+    "tags": ["corporate", "governance", "resolution", "voting", "board", "shareholders"],
+    "documentation": "https://ottochain.dev/docs/corporate/resolution"
+  }
+}

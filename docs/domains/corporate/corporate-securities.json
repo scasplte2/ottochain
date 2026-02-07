@@ -1,0 +1,818 @@
+{
+  "$schema": "https://ottochain.dev/schemas/state-machine-v1.json",
+  "name": "corporate-securities",
+  "version": "1.0.0",
+  "category": "corporate-governance",
+  "description": "Securities state machine tracking the lifecycle of equity from authorization through issuance, transfer, and retirement. Manages stock certificates, book entry positions, and restricted securities.",
+
+  "context": {
+    "securityId": { "type": "string", "description": "Unique identifier for this security lot/certificate" },
+    "entityId": { "type": "string", "description": "Reference to parent corporate-entity" },
+    "shareClass": { "type": "string", "description": "Share class ID from corporate-entity" },
+    "shareClassName": { "type": "string", "description": "Human-readable class name" },
+    "certificateNumber": { "type": "string", "nullable": true, "description": "For certificated shares" },
+    "cusip": { "type": "string", "nullable": true, "description": "CUSIP number if assigned" },
+    "shareCount": { "type": "integer", "description": "Number of shares in this lot" },
+    "parValue": { "type": "number", "description": "Par value per share" },
+    "issuancePrice": { "type": "number", "nullable": true, "description": "Price per share at issuance" },
+    "issuanceDate": { "type": "string", "format": "date", "nullable": true },
+    "form": {
+      "type": "string",
+      "enum": ["CERTIFICATED", "BOOK_ENTRY", "DRS"],
+      "description": "Physical certificate, book entry, or Direct Registration System"
+    },
+    "holder": {
+      "type": "object",
+      "nullable": true,
+      "properties": {
+        "holderId": { "type": "string" },
+        "holderType": { "type": "string", "enum": ["INDIVIDUAL", "ENTITY", "TRUST", "TREASURY"] },
+        "name": { "type": "string" },
+        "taxId": { "type": "string", "nullable": true },
+        "address": { "type": "object", "nullable": true },
+        "acquisitionDate": { "type": "string", "format": "date" },
+        "acquisitionMethod": { 
+          "type": "string", 
+          "enum": ["ORIGINAL_ISSUANCE", "PURCHASE", "GIFT", "INHERITANCE", "STOCK_SPLIT", "CONVERSION", "EXERCISE"] 
+        },
+        "costBasis": { "type": "number", "nullable": true }
+      }
+    },
+    "restrictions": {
+      "type": "object",
+      "properties": {
+        "isRestricted": { "type": "boolean", "default": false },
+        "restrictionType": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["RULE_144", "SECTION_4(a)(2)", "REG_D", "REG_S", "LOCK_UP", "VESTING", "RIGHT_OF_FIRST_REFUSAL"]
+          }
+        },
+        "restrictionEndDate": { "type": "string", "format": "date", "nullable": true },
+        "legends": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Legend text on certificates"
+        },
+        "vestingSchedule": {
+          "type": "object",
+          "nullable": true,
+          "properties": {
+            "vestingStartDate": { "type": "string", "format": "date" },
+            "totalShares": { "type": "integer" },
+            "vestedShares": { "type": "integer" },
+            "vestingScheduleRef": { "type": "string" }
+          }
+        },
+        "lockUpExpiration": { "type": "string", "format": "date", "nullable": true },
+        "rofr": {
+          "type": "object",
+          "nullable": true,
+          "description": "Right of First Refusal",
+          "properties": {
+            "holderIds": { "type": "array", "items": { "type": "string" } },
+            "noticePeriodDays": { "type": "integer" }
+          }
+        }
+      }
+    },
+    "authorization": {
+      "type": "object",
+      "nullable": true,
+      "description": "For shares in AUTHORIZED state",
+      "properties": {
+        "authorizedDate": { "type": "string", "format": "date" },
+        "charterProvision": { "type": "string" },
+        "authorizedShares": { "type": "integer" }
+      }
+    },
+    "issuanceDetails": {
+      "type": "object",
+      "nullable": true,
+      "properties": {
+        "boardResolutionRef": { "type": "string" },
+        "issuanceAgreementRef": { "type": "string" },
+        "consideration": {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "enum": ["CASH", "PROPERTY", "SERVICES", "DEBT_CONVERSION", "STOCK_CONVERSION"] },
+            "value": { "type": "number" },
+            "description": { "type": "string" }
+          }
+        },
+        "exemptionUsed": { "type": "string", "nullable": true },
+        "accreditedInvestor": { "type": "boolean", "nullable": true }
+      }
+    },
+    "transferHistory": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "transferId": { "type": "string" },
+          "transferDate": { "type": "string", "format": "date" },
+          "fromHolderId": { "type": "string" },
+          "toHolderId": { "type": "string" },
+          "shares": { "type": "integer" },
+          "transferType": { "type": "string", "enum": ["SALE", "GIFT", "INHERITANCE", "INTERNAL"] },
+          "pricePerShare": { "type": "number", "nullable": true },
+          "transferAgentConfirmation": { "type": "string", "nullable": true }
+        }
+      }
+    },
+    "corporateActions": {
+      "type": "array",
+      "description": "Stock splits, dividends, etc. affecting this lot",
+      "items": {
+        "type": "object",
+        "properties": {
+          "actionId": { "type": "string" },
+          "actionType": { "type": "string", "enum": ["STOCK_SPLIT", "REVERSE_SPLIT", "STOCK_DIVIDEND", "CONVERSION", "RECLASSIFICATION"] },
+          "actionDate": { "type": "string", "format": "date" },
+          "ratio": { "type": "string", "nullable": true, "description": "e.g., 2:1 for split" },
+          "sharesBeforeAction": { "type": "integer" },
+          "sharesAfterAction": { "type": "integer" },
+          "resolutionRef": { "type": "string" }
+        }
+      }
+    },
+    "retirementDetails": {
+      "type": "object",
+      "nullable": true,
+      "properties": {
+        "retiredDate": { "type": "string", "format": "date" },
+        "retirementMethod": { "type": "string", "enum": ["REPURCHASE", "REDEMPTION", "CANCELLATION", "CONVERSION"] },
+        "repurchasePrice": { "type": "number", "nullable": true },
+        "boardResolutionRef": { "type": "string" }
+      }
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+
+  "states": {
+    "AUTHORIZED": {
+      "description": "Shares authorized by charter but not yet issued",
+      "metadata": {
+        "displayName": "Authorized",
+        "color": "#6C757D"
+      }
+    },
+    "ISSUED": {
+      "description": "Shares issued and held by a shareholder",
+      "metadata": {
+        "displayName": "Issued",
+        "color": "#28A745"
+      }
+    },
+    "TREASURY": {
+      "description": "Shares repurchased and held by the company",
+      "metadata": {
+        "displayName": "Treasury",
+        "color": "#FFC107"
+      }
+    },
+    "TRANSFERRED": {
+      "description": "Transitional state during transfer between holders",
+      "metadata": {
+        "displayName": "In Transfer",
+        "color": "#17A2B8"
+      }
+    },
+    "RETIRED": {
+      "description": "Shares cancelled and returned to authorized but unissued",
+      "metadata": {
+        "displayName": "Retired",
+        "color": "#6C757D"
+      },
+      "terminal": true
+    }
+  },
+
+  "initialState": "AUTHORIZED",
+
+  "transitions": {
+    "authorize_shares": {
+      "from": null,
+      "to": "AUTHORIZED",
+      "description": "Record shares as authorized per charter/amendment",
+      "event": {
+        "name": "authorize_shares",
+        "payload": {
+          "securityId": { "type": "string", "required": true },
+          "entityId": { "type": "string", "required": true },
+          "shareClass": { "type": "string", "required": true },
+          "shareClassName": { "type": "string", "required": true },
+          "shareCount": { "type": "integer", "required": true },
+          "parValue": { "type": "number", "required": true },
+          "authorizedDate": { "type": "string", "format": "date", "required": true },
+          "charterProvision": { "type": "string" }
+        }
+      },
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "securityId",
+          "value": "{{ event.securityId }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "entityId",
+          "value": "{{ event.entityId }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "shareClass",
+          "value": "{{ event.shareClass }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "shareClassName",
+          "value": "{{ event.shareClassName }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "shareCount",
+          "value": "{{ event.shareCount }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "parValue",
+          "value": "{{ event.parValue }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "authorization",
+          "value": {
+            "authorizedDate": "{{ event.authorizedDate }}",
+            "charterProvision": "{{ event.charterProvision }}",
+            "authorizedShares": "{{ event.shareCount }}"
+          }
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "transferHistory",
+          "value": []
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "corporateActions",
+          "value": []
+        }
+      ]
+    },
+
+    "issue_shares": {
+      "from": "AUTHORIZED",
+      "to": "ISSUED",
+      "description": "Issue shares to a holder",
+      "event": {
+        "name": "issue_shares",
+        "payload": {
+          "holderId": { "type": "string", "required": true },
+          "holderType": { "type": "string", "required": true },
+          "holderName": { "type": "string", "required": true },
+          "address": { "type": "object" },
+          "issuanceDate": { "type": "string", "format": "date", "required": true },
+          "issuancePrice": { "type": "number" },
+          "form": { "type": "string", "enum": ["CERTIFICATED", "BOOK_ENTRY", "DRS"], "required": true },
+          "certificateNumber": { "type": "string" },
+          "boardResolutionRef": { "type": "string", "required": true },
+          "consideration": { "type": "object", "required": true },
+          "isRestricted": { "type": "boolean", "default": false },
+          "restrictionType": { "type": "array" },
+          "legends": { "type": "array" },
+          "exemptionUsed": { "type": "string" },
+          "accreditedInvestor": { "type": "boolean" }
+        }
+      },
+      "guards": [
+        {
+          "name": "hasIssuanceResolution",
+          "description": "Board must have approved stock issuance",
+          "crossMachine": {
+            "machine": "corporate-resolution",
+            "instanceRef": "{{ event.boardResolutionRef }}",
+            "requiredState": "EXECUTED"
+          }
+        },
+        {
+          "name": "entityIsActive",
+          "description": "Cannot issue stock if corporation is suspended or dissolved",
+          "crossMachine": {
+            "machine": "corporate-entity",
+            "instanceRef": "{{ context.entityId }}",
+            "requiredState": "ACTIVE"
+          }
+        }
+      ],
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "form",
+          "value": "{{ event.form }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "certificateNumber",
+          "value": "{{ event.certificateNumber }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "issuanceDate",
+          "value": "{{ event.issuanceDate }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "issuancePrice",
+          "value": "{{ event.issuancePrice }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "holder",
+          "value": {
+            "holderId": "{{ event.holderId }}",
+            "holderType": "{{ event.holderType }}",
+            "name": "{{ event.holderName }}",
+            "address": "{{ event.address }}",
+            "acquisitionDate": "{{ event.issuanceDate }}",
+            "acquisitionMethod": "ORIGINAL_ISSUANCE",
+            "costBasis": "{{ event.issuancePrice * context.shareCount }}"
+          }
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "restrictions",
+          "value": {
+            "isRestricted": "{{ event.isRestricted }}",
+            "restrictionType": "{{ event.restrictionType }}",
+            "legends": "{{ event.legends }}"
+          }
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "issuanceDetails",
+          "value": {
+            "boardResolutionRef": "{{ event.boardResolutionRef }}",
+            "consideration": "{{ event.consideration }}",
+            "exemptionUsed": "{{ event.exemptionUsed }}",
+            "accreditedInvestor": "{{ event.accreditedInvestor }}"
+          }
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "SHARES_ISSUED",
+          "payload": {
+            "securityId": "{{ context.securityId }}",
+            "entityId": "{{ context.entityId }}",
+            "shareClass": "{{ context.shareClassName }}",
+            "shares": "{{ context.shareCount }}",
+            "holderId": "{{ event.holderId }}",
+            "holderName": "{{ event.holderName }}"
+          }
+        }
+      ]
+    },
+
+    "initiate_transfer": {
+      "from": "ISSUED",
+      "to": "TRANSFERRED",
+      "description": "Begin transfer of shares to new holder",
+      "event": {
+        "name": "initiate_transfer",
+        "payload": {
+          "transferId": { "type": "string", "required": true },
+          "toHolderId": { "type": "string", "required": true },
+          "toHolderName": { "type": "string", "required": true },
+          "toHolderType": { "type": "string", "required": true },
+          "toAddress": { "type": "object" },
+          "transferType": { "type": "string", "required": true },
+          "pricePerShare": { "type": "number" },
+          "transferDate": { "type": "string", "format": "date", "required": true }
+        }
+      },
+      "guards": [
+        {
+          "name": "restrictionsCleared",
+          "description": "Must clear any transfer restrictions",
+          "expression": "!context.restrictions.isRestricted || context.restrictions.restrictionEndDate == null || new Date() >= new Date(context.restrictions.restrictionEndDate)"
+        },
+        {
+          "name": "rofrSatisfied",
+          "description": "Right of first refusal must be waived or expired",
+          "expression": "context.restrictions.rofr == null"
+        }
+      ],
+      "effects": [
+        {
+          "type": "APPEND_ARRAY",
+          "path": "transferHistory",
+          "value": {
+            "transferId": "{{ event.transferId }}",
+            "transferDate": "{{ event.transferDate }}",
+            "fromHolderId": "{{ context.holder.holderId }}",
+            "toHolderId": "{{ event.toHolderId }}",
+            "shares": "{{ context.shareCount }}",
+            "transferType": "{{ event.transferType }}",
+            "pricePerShare": "{{ event.pricePerShare }}"
+          }
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "TRANSFER_INITIATED",
+          "payload": {
+            "securityId": "{{ context.securityId }}",
+            "transferId": "{{ event.transferId }}",
+            "fromHolderId": "{{ context.holder.holderId }}",
+            "toHolderId": "{{ event.toHolderId }}"
+          }
+        }
+      ]
+    },
+
+    "complete_transfer": {
+      "from": "TRANSFERRED",
+      "to": "ISSUED",
+      "description": "Complete the transfer, update holder",
+      "event": {
+        "name": "complete_transfer",
+        "payload": {
+          "transferAgentConfirmation": { "type": "string" },
+          "newCertificateNumber": { "type": "string" },
+          "toHolderId": { "type": "string", "required": true },
+          "toHolderName": { "type": "string", "required": true },
+          "toHolderType": { "type": "string", "required": true },
+          "toAddress": { "type": "object" },
+          "completedDate": { "type": "string", "format": "date", "required": true },
+          "costBasis": { "type": "number" }
+        }
+      },
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "holder",
+          "value": {
+            "holderId": "{{ event.toHolderId }}",
+            "holderType": "{{ event.toHolderType }}",
+            "name": "{{ event.toHolderName }}",
+            "address": "{{ event.toAddress }}",
+            "acquisitionDate": "{{ event.completedDate }}",
+            "acquisitionMethod": "PURCHASE",
+            "costBasis": "{{ event.costBasis }}"
+          }
+        },
+        {
+          "type": "CONDITIONAL",
+          "condition": "event.newCertificateNumber != null",
+          "then": {
+            "type": "SET_CONTEXT",
+            "path": "certificateNumber",
+            "value": "{{ event.newCertificateNumber }}"
+          }
+        },
+        {
+          "type": "UPDATE_ARRAY_ITEM",
+          "path": "transferHistory",
+          "matchKey": "toHolderId",
+          "matchValue": "{{ event.toHolderId }}",
+          "updates": {
+            "transferAgentConfirmation": "{{ event.transferAgentConfirmation }}"
+          }
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "TRANSFER_COMPLETED",
+          "payload": {
+            "securityId": "{{ context.securityId }}",
+            "newHolderId": "{{ event.toHolderId }}"
+          }
+        }
+      ]
+    },
+
+    "repurchase": {
+      "from": "ISSUED",
+      "to": "TREASURY",
+      "description": "Company repurchases shares from holder",
+      "event": {
+        "name": "repurchase",
+        "payload": {
+          "repurchaseDate": { "type": "string", "format": "date", "required": true },
+          "pricePerShare": { "type": "number", "required": true },
+          "boardResolutionRef": { "type": "string", "required": true },
+          "repurchaseAgreementRef": { "type": "string" }
+        }
+      },
+      "guards": [
+        {
+          "name": "hasRepurchaseResolution",
+          "crossMachine": {
+            "machine": "corporate-resolution",
+            "instanceRef": "{{ event.boardResolutionRef }}",
+            "requiredState": "EXECUTED"
+          }
+        }
+      ],
+      "effects": [
+        {
+          "type": "APPEND_ARRAY",
+          "path": "transferHistory",
+          "value": {
+            "transferId": "REPURCHASE-{{ event.repurchaseDate }}",
+            "transferDate": "{{ event.repurchaseDate }}",
+            "fromHolderId": "{{ context.holder.holderId }}",
+            "toHolderId": "TREASURY",
+            "shares": "{{ context.shareCount }}",
+            "transferType": "INTERNAL",
+            "pricePerShare": "{{ event.pricePerShare }}"
+          }
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "holder",
+          "value": {
+            "holderId": "TREASURY",
+            "holderType": "TREASURY",
+            "name": "Treasury Stock",
+            "acquisitionDate": "{{ event.repurchaseDate }}",
+            "acquisitionMethod": "PURCHASE",
+            "costBasis": "{{ event.pricePerShare * context.shareCount }}"
+          }
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "SHARES_REPURCHASED",
+          "payload": {
+            "securityId": "{{ context.securityId }}",
+            "shares": "{{ context.shareCount }}",
+            "pricePerShare": "{{ event.pricePerShare }}"
+          }
+        }
+      ]
+    },
+
+    "reissue_from_treasury": {
+      "from": "TREASURY",
+      "to": "ISSUED",
+      "description": "Reissue treasury shares to a new holder",
+      "event": {
+        "name": "reissue_from_treasury",
+        "payload": {
+          "holderId": { "type": "string", "required": true },
+          "holderName": { "type": "string", "required": true },
+          "holderType": { "type": "string", "required": true },
+          "address": { "type": "object" },
+          "reissueDate": { "type": "string", "format": "date", "required": true },
+          "issuancePrice": { "type": "number" },
+          "boardResolutionRef": { "type": "string", "required": true }
+        }
+      },
+      "guards": [
+        {
+          "name": "hasReissueResolution",
+          "crossMachine": {
+            "machine": "corporate-resolution",
+            "instanceRef": "{{ event.boardResolutionRef }}",
+            "requiredState": "EXECUTED"
+          }
+        }
+      ],
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "holder",
+          "value": {
+            "holderId": "{{ event.holderId }}",
+            "holderType": "{{ event.holderType }}",
+            "name": "{{ event.holderName }}",
+            "address": "{{ event.address }}",
+            "acquisitionDate": "{{ event.reissueDate }}",
+            "acquisitionMethod": "PURCHASE",
+            "costBasis": "{{ event.issuancePrice * context.shareCount }}"
+          }
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "TREASURY_SHARES_REISSUED",
+          "payload": {
+            "securityId": "{{ context.securityId }}",
+            "holderId": "{{ event.holderId }}"
+          }
+        }
+      ]
+    },
+
+    "retire": {
+      "from": ["ISSUED", "TREASURY"],
+      "to": "RETIRED",
+      "description": "Retire shares (cancel them)",
+      "event": {
+        "name": "retire",
+        "payload": {
+          "retiredDate": { "type": "string", "format": "date", "required": true },
+          "retirementMethod": { "type": "string", "required": true },
+          "boardResolutionRef": { "type": "string", "required": true },
+          "repurchasePrice": { "type": "number" }
+        }
+      },
+      "guards": [
+        {
+          "name": "hasRetirementResolution",
+          "crossMachine": {
+            "machine": "corporate-resolution",
+            "instanceRef": "{{ event.boardResolutionRef }}",
+            "requiredState": "EXECUTED"
+          }
+        }
+      ],
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "retirementDetails",
+          "value": {
+            "retiredDate": "{{ event.retiredDate }}",
+            "retirementMethod": "{{ event.retirementMethod }}",
+            "repurchasePrice": "{{ event.repurchasePrice }}",
+            "boardResolutionRef": "{{ event.boardResolutionRef }}"
+          }
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "holder",
+          "value": null
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "SHARES_RETIRED",
+          "payload": {
+            "securityId": "{{ context.securityId }}",
+            "shareClass": "{{ context.shareClassName }}",
+            "shares": "{{ context.shareCount }}"
+          }
+        }
+      ]
+    },
+
+    "stock_split": {
+      "from": "ISSUED",
+      "to": "ISSUED",
+      "description": "Apply stock split to this lot",
+      "event": {
+        "name": "stock_split",
+        "payload": {
+          "actionId": { "type": "string", "required": true },
+          "splitRatio": { "type": "string", "required": true, "description": "e.g., '2:1' for 2-for-1 split" },
+          "effectiveDate": { "type": "string", "format": "date", "required": true },
+          "resolutionRef": { "type": "string", "required": true },
+          "newShareCount": { "type": "integer", "required": true }
+        }
+      },
+      "effects": [
+        {
+          "type": "APPEND_ARRAY",
+          "path": "corporateActions",
+          "value": {
+            "actionId": "{{ event.actionId }}",
+            "actionType": "STOCK_SPLIT",
+            "actionDate": "{{ event.effectiveDate }}",
+            "ratio": "{{ event.splitRatio }}",
+            "sharesBeforeAction": "{{ context.shareCount }}",
+            "sharesAfterAction": "{{ event.newShareCount }}",
+            "resolutionRef": "{{ event.resolutionRef }}"
+          }
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "shareCount",
+          "value": "{{ event.newShareCount }}"
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "STOCK_SPLIT_APPLIED",
+          "payload": {
+            "securityId": "{{ context.securityId }}",
+            "ratio": "{{ event.splitRatio }}",
+            "newShareCount": "{{ event.newShareCount }}"
+          }
+        }
+      ]
+    },
+
+    "declare_dividend": {
+      "from": "ISSUED",
+      "to": "ISSUED",
+      "description": "Record dividend declaration affecting this lot (for stock dividends)",
+      "event": {
+        "name": "declare_dividend",
+        "payload": {
+          "actionId": { "type": "string", "required": true },
+          "dividendType": { "type": "string", "enum": ["CASH", "STOCK"], "required": true },
+          "recordDate": { "type": "string", "format": "date", "required": true },
+          "paymentDate": { "type": "string", "format": "date", "required": true },
+          "cashAmount": { "type": "number" },
+          "stockShares": { "type": "integer" },
+          "resolutionRef": { "type": "string", "required": true }
+        }
+      },
+      "guards": [
+        {
+          "name": "hasDividendResolution",
+          "crossMachine": {
+            "machine": "corporate-resolution",
+            "instanceRef": "{{ event.resolutionRef }}",
+            "requiredState": "EXECUTED"
+          }
+        }
+      ],
+      "effects": [
+        {
+          "type": "CONDITIONAL",
+          "condition": "event.dividendType === 'STOCK'",
+          "then": {
+            "type": "APPEND_ARRAY",
+            "path": "corporateActions",
+            "value": {
+              "actionId": "{{ event.actionId }}",
+              "actionType": "STOCK_DIVIDEND",
+              "actionDate": "{{ event.paymentDate }}",
+              "sharesBeforeAction": "{{ context.shareCount }}",
+              "sharesAfterAction": "{{ context.shareCount + event.stockShares }}",
+              "resolutionRef": "{{ event.resolutionRef }}"
+            }
+          }
+        },
+        {
+          "type": "CONDITIONAL",
+          "condition": "event.dividendType === 'STOCK'",
+          "then": {
+            "type": "INCREMENT",
+            "path": "shareCount",
+            "amount": "{{ event.stockShares }}"
+          }
+        }
+      ]
+    },
+
+    "remove_restriction": {
+      "from": "ISSUED",
+      "to": "ISSUED",
+      "description": "Remove or update restrictions on the shares",
+      "event": {
+        "name": "remove_restriction",
+        "payload": {
+          "restrictionType": { "type": "string", "required": true },
+          "removedDate": { "type": "string", "format": "date", "required": true },
+          "reason": { "type": "string" },
+          "legalOpinionRef": { "type": "string" }
+        }
+      },
+      "effects": [
+        {
+          "type": "UPDATE_ARRAY",
+          "path": "restrictions.restrictionType",
+          "operation": "REMOVE",
+          "value": "{{ event.restrictionType }}"
+        },
+        {
+          "type": "COMPUTE",
+          "path": "restrictions.isRestricted",
+          "expression": "context.restrictions.restrictionType.length > 0"
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "RESTRICTION_REMOVED",
+          "payload": {
+            "securityId": "{{ context.securityId }}",
+            "restrictionType": "{{ event.restrictionType }}"
+          }
+        }
+      ]
+    }
+  },
+
+  "crossMachineRefs": {
+    "entity": {
+      "machine": "corporate-entity",
+      "description": "Parent corporate entity with share class definitions",
+      "foreignKey": "entityId"
+    },
+    "resolutions": {
+      "machine": "corporate-resolution",
+      "description": "Board resolutions authorizing securities actions",
+      "foreignKey": "entityId"
+    },
+    "shareholders": {
+      "machine": "corporate-shareholders",
+      "description": "Shareholder meetings for determining voting rights",
+      "foreignKey": "entityId"
+    }
+  },
+
+  "metadata": {
+    "author": "OttoChain",
+    "license": "MIT",
+    "tags": ["corporate", "governance", "securities", "stock", "equity", "certificates"],
+    "documentation": "https://ottochain.dev/docs/corporate/securities"
+  }
+}

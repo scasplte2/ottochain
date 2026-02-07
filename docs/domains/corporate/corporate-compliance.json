@@ -1,0 +1,857 @@
+{
+  "$schema": "https://ottochain.dev/schemas/state-machine-v1.json",
+  "name": "corporate-compliance",
+  "version": "1.0.0",
+  "category": "corporate-governance",
+  "description": "Regulatory compliance state machine tracking filing obligations, deadlines, deficiencies, and remediation for corporate entities. Manages annual reports, franchise taxes, registered agent status, and other state/federal requirements.",
+
+  "context": {
+    "complianceId": { "type": "string", "description": "Unique identifier for this compliance record" },
+    "entityId": { "type": "string", "description": "Reference to parent corporate-entity" },
+    "jurisdiction": {
+      "type": "object",
+      "properties": {
+        "state": { "type": "string", "description": "Primary jurisdiction" },
+        "country": { "type": "string", "default": "USA" },
+        "foreignQualifications": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "state": { "type": "string" },
+              "qualificationDate": { "type": "string", "format": "date" },
+              "foreignEntityNumber": { "type": "string" },
+              "status": { "type": "string", "enum": ["ACTIVE", "WITHDRAWN", "REVOKED"] }
+            }
+          }
+        }
+      }
+    },
+    "filingCalendar": {
+      "type": "array",
+      "description": "Required filings and their deadlines",
+      "items": {
+        "type": "object",
+        "properties": {
+          "filingId": { "type": "string" },
+          "filingType": {
+            "type": "string",
+            "enum": ["ANNUAL_REPORT", "BIENNIAL_REPORT", "FRANCHISE_TAX", "STATEMENT_OF_INFORMATION", "REGISTERED_AGENT_UPDATE", "FOREIGN_QUALIFICATION_ANNUAL", "BENEFICIAL_OWNERSHIP", "FEDERAL_TAX_RETURN", "STATE_TAX_RETURN", "SEC_FILING", "OTHER"]
+          },
+          "jurisdiction": { "type": "string" },
+          "frequency": { "type": "string", "enum": ["ANNUAL", "BIENNIAL", "QUARTERLY", "ONE_TIME"] },
+          "dueDate": { "type": "string", "format": "date" },
+          "gracePeriodDays": { "type": "integer", "default": 0 },
+          "estimatedFee": { "type": "number" },
+          "status": { "type": "string", "enum": ["PENDING", "FILED", "OVERDUE", "WAIVED"] },
+          "lastFiledDate": { "type": "string", "format": "date", "nullable": true },
+          "confirmationNumber": { "type": "string", "nullable": true },
+          "notes": { "type": "string", "nullable": true }
+        }
+      }
+    },
+    "registeredAgents": {
+      "type": "array",
+      "description": "Registered agents by jurisdiction",
+      "items": {
+        "type": "object",
+        "properties": {
+          "jurisdiction": { "type": "string" },
+          "agentName": { "type": "string" },
+          "agentAddress": { "type": "object" },
+          "agentPhone": { "type": "string" },
+          "agentEmail": { "type": "string" },
+          "effectiveDate": { "type": "string", "format": "date" },
+          "isThirdParty": { "type": "boolean" },
+          "serviceAgreementRef": { "type": "string", "nullable": true },
+          "renewalDate": { "type": "string", "format": "date", "nullable": true }
+        }
+      }
+    },
+    "deficiencies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "deficiencyId": { "type": "string" },
+          "jurisdiction": { "type": "string" },
+          "type": {
+            "type": "string",
+            "enum": ["ANNUAL_REPORT_MISSING", "FRANCHISE_TAX_DELINQUENT", "REGISTERED_AGENT_LAPSE", "BENEFICIAL_OWNERSHIP_MISSING", "OTHER"]
+          },
+          "description": { "type": "string" },
+          "noticeDate": { "type": "string", "format": "date" },
+          "noticeRef": { "type": "string" },
+          "cureDeadline": { "type": "string", "format": "date" },
+          "penaltyAmount": { "type": "number", "nullable": true },
+          "status": { "type": "string", "enum": ["OPEN", "IN_PROGRESS", "CURED", "PENALTY_ASSESSED", "ADMINISTRATIVE_ACTION"] },
+          "curedDate": { "type": "string", "format": "date", "nullable": true },
+          "curativeActions": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "filingHistory": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "filingId": { "type": "string" },
+          "filingType": { "type": "string" },
+          "jurisdiction": { "type": "string" },
+          "filedDate": { "type": "string", "format": "date" },
+          "periodCovered": { "type": "string" },
+          "confirmationNumber": { "type": "string" },
+          "feePaid": { "type": "number" },
+          "filedBy": { "type": "string" },
+          "documentRef": { "type": "string" }
+        }
+      }
+    },
+    "goodStandingCertificates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "certificateId": { "type": "string" },
+          "jurisdiction": { "type": "string" },
+          "issuedDate": { "type": "string", "format": "date" },
+          "validThrough": { "type": "string", "format": "date", "nullable": true },
+          "documentRef": { "type": "string" },
+          "purpose": { "type": "string" }
+        }
+      }
+    },
+    "complianceScore": {
+      "type": "object",
+      "properties": {
+        "overallStatus": { "type": "string", "enum": ["GREEN", "YELLOW", "RED"] },
+        "openDeficiencies": { "type": "integer" },
+        "overdueFilings": { "type": "integer" },
+        "upcomingDeadlines30Days": { "type": "integer" },
+        "lastAssessedDate": { "type": "string", "format": "date" }
+      }
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+
+  "states": {
+    "COMPLIANT": {
+      "description": "Entity is in good standing in all jurisdictions with no open deficiencies",
+      "metadata": {
+        "displayName": "Compliant / Good Standing",
+        "color": "#28A745"
+      }
+    },
+    "REVIEW_PENDING": {
+      "description": "Compliance review needed; deadline approaching or minor issue flagged",
+      "metadata": {
+        "displayName": "Review Pending",
+        "color": "#FFC107"
+      }
+    },
+    "DEFICIENT": {
+      "description": "One or more deficiencies identified; action required",
+      "metadata": {
+        "displayName": "Deficient",
+        "color": "#DC3545"
+      }
+    },
+    "REMEDIATED": {
+      "description": "Deficiencies cured; awaiting state confirmation of good standing",
+      "metadata": {
+        "displayName": "Remediated - Pending Confirmation",
+        "color": "#17A2B8"
+      }
+    }
+  },
+
+  "initialState": "COMPLIANT",
+
+  "transitions": {
+    "initialize_compliance": {
+      "from": null,
+      "to": "COMPLIANT",
+      "description": "Initialize compliance tracking for an entity",
+      "event": {
+        "name": "initialize_compliance",
+        "payload": {
+          "complianceId": { "type": "string", "required": true },
+          "entityId": { "type": "string", "required": true },
+          "jurisdiction": { "type": "object", "required": true },
+          "registeredAgents": { "type": "array", "required": true },
+          "filingCalendar": { "type": "array" }
+        }
+      },
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "complianceId",
+          "value": "{{ event.complianceId }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "entityId",
+          "value": "{{ event.entityId }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "jurisdiction",
+          "value": "{{ event.jurisdiction }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "registeredAgents",
+          "value": "{{ event.registeredAgents }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "filingCalendar",
+          "value": "{{ event.filingCalendar || [] }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "deficiencies",
+          "value": []
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "filingHistory",
+          "value": []
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "goodStandingCertificates",
+          "value": []
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "complianceScore",
+          "value": {
+            "overallStatus": "GREEN",
+            "openDeficiencies": 0,
+            "overdueFilings": 0,
+            "upcomingDeadlines30Days": 0,
+            "lastAssessedDate": "{{ today() }}"
+          }
+        }
+      ]
+    },
+
+    "add_filing_requirement": {
+      "from": ["COMPLIANT", "REVIEW_PENDING", "DEFICIENT", "REMEDIATED"],
+      "to": null,
+      "description": "Add a new filing requirement to the calendar",
+      "event": {
+        "name": "add_filing_requirement",
+        "payload": {
+          "filingId": { "type": "string", "required": true },
+          "filingType": { "type": "string", "required": true },
+          "jurisdiction": { "type": "string", "required": true },
+          "frequency": { "type": "string", "required": true },
+          "dueDate": { "type": "string", "format": "date", "required": true },
+          "gracePeriodDays": { "type": "integer", "default": 0 },
+          "estimatedFee": { "type": "number" }
+        }
+      },
+      "effects": [
+        {
+          "type": "APPEND_ARRAY",
+          "path": "filingCalendar",
+          "value": {
+            "filingId": "{{ event.filingId }}",
+            "filingType": "{{ event.filingType }}",
+            "jurisdiction": "{{ event.jurisdiction }}",
+            "frequency": "{{ event.frequency }}",
+            "dueDate": "{{ event.dueDate }}",
+            "gracePeriodDays": "{{ event.gracePeriodDays }}",
+            "estimatedFee": "{{ event.estimatedFee }}",
+            "status": "PENDING"
+          }
+        }
+      ]
+    },
+
+    "file_annual_report": {
+      "from": ["COMPLIANT", "REVIEW_PENDING", "DEFICIENT", "REMEDIATED"],
+      "to": null,
+      "description": "Record filing of annual report",
+      "event": {
+        "name": "file_annual_report",
+        "payload": {
+          "filingId": { "type": "string", "required": true },
+          "jurisdiction": { "type": "string", "required": true },
+          "filedDate": { "type": "string", "format": "date", "required": true },
+          "periodCovered": { "type": "string", "required": true },
+          "confirmationNumber": { "type": "string", "required": true },
+          "feePaid": { "type": "number", "required": true },
+          "filedBy": { "type": "string", "required": true },
+          "documentRef": { "type": "string" },
+          "nextDueDate": { "type": "string", "format": "date" }
+        }
+      },
+      "effects": [
+        {
+          "type": "UPDATE_ARRAY_ITEM",
+          "path": "filingCalendar",
+          "matchKey": "filingId",
+          "matchValue": "{{ event.filingId }}",
+          "updates": {
+            "status": "FILED",
+            "lastFiledDate": "{{ event.filedDate }}",
+            "confirmationNumber": "{{ event.confirmationNumber }}",
+            "dueDate": "{{ event.nextDueDate }}"
+          }
+        },
+        {
+          "type": "APPEND_ARRAY",
+          "path": "filingHistory",
+          "value": {
+            "filingId": "{{ event.filingId }}",
+            "filingType": "ANNUAL_REPORT",
+            "jurisdiction": "{{ event.jurisdiction }}",
+            "filedDate": "{{ event.filedDate }}",
+            "periodCovered": "{{ event.periodCovered }}",
+            "confirmationNumber": "{{ event.confirmationNumber }}",
+            "feePaid": "{{ event.feePaid }}",
+            "filedBy": "{{ event.filedBy }}",
+            "documentRef": "{{ event.documentRef }}"
+          }
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "ANNUAL_REPORT_FILED",
+          "payload": {
+            "complianceId": "{{ context.complianceId }}",
+            "entityId": "{{ context.entityId }}",
+            "jurisdiction": "{{ event.jurisdiction }}",
+            "confirmationNumber": "{{ event.confirmationNumber }}"
+          }
+        }
+      ]
+    },
+
+    "pay_franchise_tax": {
+      "from": ["COMPLIANT", "REVIEW_PENDING", "DEFICIENT", "REMEDIATED"],
+      "to": null,
+      "description": "Record payment of franchise tax",
+      "event": {
+        "name": "pay_franchise_tax",
+        "payload": {
+          "filingId": { "type": "string", "required": true },
+          "jurisdiction": { "type": "string", "required": true },
+          "paidDate": { "type": "string", "format": "date", "required": true },
+          "taxYear": { "type": "integer", "required": true },
+          "amountPaid": { "type": "number", "required": true },
+          "confirmationNumber": { "type": "string", "required": true },
+          "nextDueDate": { "type": "string", "format": "date" }
+        }
+      },
+      "effects": [
+        {
+          "type": "UPDATE_ARRAY_ITEM",
+          "path": "filingCalendar",
+          "matchKey": "filingId",
+          "matchValue": "{{ event.filingId }}",
+          "updates": {
+            "status": "FILED",
+            "lastFiledDate": "{{ event.paidDate }}",
+            "confirmationNumber": "{{ event.confirmationNumber }}",
+            "dueDate": "{{ event.nextDueDate }}"
+          }
+        },
+        {
+          "type": "APPEND_ARRAY",
+          "path": "filingHistory",
+          "value": {
+            "filingId": "{{ event.filingId }}",
+            "filingType": "FRANCHISE_TAX",
+            "jurisdiction": "{{ event.jurisdiction }}",
+            "filedDate": "{{ event.paidDate }}",
+            "periodCovered": "{{ event.taxYear }}",
+            "confirmationNumber": "{{ event.confirmationNumber }}",
+            "feePaid": "{{ event.amountPaid }}"
+          }
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "FRANCHISE_TAX_PAID",
+          "payload": {
+            "complianceId": "{{ context.complianceId }}",
+            "entityId": "{{ context.entityId }}",
+            "jurisdiction": "{{ event.jurisdiction }}",
+            "taxYear": "{{ event.taxYear }}"
+          }
+        }
+      ]
+    },
+
+    "update_registered_agent": {
+      "from": ["COMPLIANT", "REVIEW_PENDING", "DEFICIENT", "REMEDIATED"],
+      "to": null,
+      "description": "Update registered agent for a jurisdiction",
+      "event": {
+        "name": "update_registered_agent",
+        "payload": {
+          "jurisdiction": { "type": "string", "required": true },
+          "agentName": { "type": "string", "required": true },
+          "agentAddress": { "type": "object", "required": true },
+          "agentPhone": { "type": "string" },
+          "agentEmail": { "type": "string" },
+          "effectiveDate": { "type": "string", "format": "date", "required": true },
+          "isThirdParty": { "type": "boolean", "default": false },
+          "serviceAgreementRef": { "type": "string" },
+          "filingConfirmation": { "type": "string" }
+        }
+      },
+      "effects": [
+        {
+          "type": "UPSERT_ARRAY",
+          "path": "registeredAgents",
+          "matchKey": "jurisdiction",
+          "matchValue": "{{ event.jurisdiction }}",
+          "value": {
+            "jurisdiction": "{{ event.jurisdiction }}",
+            "agentName": "{{ event.agentName }}",
+            "agentAddress": "{{ event.agentAddress }}",
+            "agentPhone": "{{ event.agentPhone }}",
+            "agentEmail": "{{ event.agentEmail }}",
+            "effectiveDate": "{{ event.effectiveDate }}",
+            "isThirdParty": "{{ event.isThirdParty }}",
+            "serviceAgreementRef": "{{ event.serviceAgreementRef }}"
+          }
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "REGISTERED_AGENT_UPDATED",
+          "payload": {
+            "complianceId": "{{ context.complianceId }}",
+            "entityId": "{{ context.entityId }}",
+            "jurisdiction": "{{ event.jurisdiction }}",
+            "newAgent": "{{ event.agentName }}"
+          }
+        }
+      ]
+    },
+
+    "flag_review": {
+      "from": "COMPLIANT",
+      "to": "REVIEW_PENDING",
+      "description": "Flag entity for compliance review (deadline approaching or issue identified)",
+      "event": {
+        "name": "flag_review",
+        "payload": {
+          "reason": { "type": "string", "required": true },
+          "filingId": { "type": "string" },
+          "dueDate": { "type": "string", "format": "date" }
+        }
+      },
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "complianceScore.overallStatus",
+          "value": "YELLOW"
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "COMPLIANCE_REVIEW_FLAGGED",
+          "payload": {
+            "complianceId": "{{ context.complianceId }}",
+            "entityId": "{{ context.entityId }}",
+            "reason": "{{ event.reason }}"
+          }
+        }
+      ]
+    },
+
+    "note_deficiency": {
+      "from": ["COMPLIANT", "REVIEW_PENDING", "REMEDIATED"],
+      "to": "DEFICIENT",
+      "description": "Record a compliance deficiency",
+      "event": {
+        "name": "note_deficiency",
+        "payload": {
+          "deficiencyId": { "type": "string", "required": true },
+          "jurisdiction": { "type": "string", "required": true },
+          "type": { "type": "string", "required": true },
+          "description": { "type": "string", "required": true },
+          "noticeDate": { "type": "string", "format": "date", "required": true },
+          "noticeRef": { "type": "string" },
+          "cureDeadline": { "type": "string", "format": "date", "required": true },
+          "penaltyAmount": { "type": "number" }
+        }
+      },
+      "effects": [
+        {
+          "type": "APPEND_ARRAY",
+          "path": "deficiencies",
+          "value": {
+            "deficiencyId": "{{ event.deficiencyId }}",
+            "jurisdiction": "{{ event.jurisdiction }}",
+            "type": "{{ event.type }}",
+            "description": "{{ event.description }}",
+            "noticeDate": "{{ event.noticeDate }}",
+            "noticeRef": "{{ event.noticeRef }}",
+            "cureDeadline": "{{ event.cureDeadline }}",
+            "penaltyAmount": "{{ event.penaltyAmount }}",
+            "status": "OPEN",
+            "curativeActions": []
+          }
+        },
+        {
+          "type": "INCREMENT",
+          "path": "complianceScore.openDeficiencies",
+          "amount": 1
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "complianceScore.overallStatus",
+          "value": "RED"
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "DEFICIENCY_NOTED",
+          "payload": {
+            "complianceId": "{{ context.complianceId }}",
+            "entityId": "{{ context.entityId }}",
+            "deficiencyId": "{{ event.deficiencyId }}",
+            "type": "{{ event.type }}",
+            "cureDeadline": "{{ event.cureDeadline }}"
+          }
+        }
+      ]
+    },
+
+    "record_curative_action": {
+      "from": "DEFICIENT",
+      "to": "DEFICIENT",
+      "description": "Record a curative action taken for a deficiency",
+      "event": {
+        "name": "record_curative_action",
+        "payload": {
+          "deficiencyId": { "type": "string", "required": true },
+          "action": { "type": "string", "required": true },
+          "actionDate": { "type": "string", "format": "date", "required": true },
+          "documentRef": { "type": "string" }
+        }
+      },
+      "effects": [
+        {
+          "type": "UPDATE_ARRAY_ITEM",
+          "path": "deficiencies",
+          "matchKey": "deficiencyId",
+          "matchValue": "{{ event.deficiencyId }}",
+          "arrayPath": "curativeActions",
+          "arrayOperation": "APPEND",
+          "value": "{{ event.action }} ({{ event.actionDate }})"
+        },
+        {
+          "type": "UPDATE_ARRAY_ITEM",
+          "path": "deficiencies",
+          "matchKey": "deficiencyId",
+          "matchValue": "{{ event.deficiencyId }}",
+          "updates": { "status": "IN_PROGRESS" }
+        }
+      ]
+    },
+
+    "cure_deficiency": {
+      "from": "DEFICIENT",
+      "to": "REMEDIATED",
+      "description": "Cure a deficiency and submit for state confirmation",
+      "event": {
+        "name": "cure_deficiency",
+        "payload": {
+          "deficiencyId": { "type": "string", "required": true },
+          "curedDate": { "type": "string", "format": "date", "required": true },
+          "confirmationNumber": { "type": "string" },
+          "penaltyPaid": { "type": "number" }
+        }
+      },
+      "guards": [
+        {
+          "name": "isLastOpenDeficiency",
+          "description": "Transition to REMEDIATED only when curing last deficiency",
+          "expression": "context.deficiencies.filter(d => d.status === 'OPEN' || d.status === 'IN_PROGRESS').length === 1"
+        }
+      ],
+      "effects": [
+        {
+          "type": "UPDATE_ARRAY_ITEM",
+          "path": "deficiencies",
+          "matchKey": "deficiencyId",
+          "matchValue": "{{ event.deficiencyId }}",
+          "updates": {
+            "status": "CURED",
+            "curedDate": "{{ event.curedDate }}"
+          }
+        },
+        {
+          "type": "DECREMENT",
+          "path": "complianceScore.openDeficiencies",
+          "amount": 1
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "complianceScore.overallStatus",
+          "value": "YELLOW"
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "DEFICIENCY_CURED",
+          "payload": {
+            "complianceId": "{{ context.complianceId }}",
+            "entityId": "{{ context.entityId }}",
+            "deficiencyId": "{{ event.deficiencyId }}"
+          }
+        }
+      ]
+    },
+
+    "cure_deficiency_remaining": {
+      "from": "DEFICIENT",
+      "to": "DEFICIENT",
+      "description": "Cure one deficiency when others remain",
+      "event": {
+        "name": "cure_deficiency_remaining",
+        "payload": {
+          "deficiencyId": { "type": "string", "required": true },
+          "curedDate": { "type": "string", "format": "date", "required": true },
+          "confirmationNumber": { "type": "string" }
+        }
+      },
+      "guards": [
+        {
+          "name": "hasRemainingDeficiencies",
+          "expression": "context.deficiencies.filter(d => d.status === 'OPEN' || d.status === 'IN_PROGRESS').length > 1"
+        }
+      ],
+      "effects": [
+        {
+          "type": "UPDATE_ARRAY_ITEM",
+          "path": "deficiencies",
+          "matchKey": "deficiencyId",
+          "matchValue": "{{ event.deficiencyId }}",
+          "updates": {
+            "status": "CURED",
+            "curedDate": "{{ event.curedDate }}"
+          }
+        },
+        {
+          "type": "DECREMENT",
+          "path": "complianceScore.openDeficiencies",
+          "amount": 1
+        }
+      ]
+    },
+
+    "confirm_good_standing": {
+      "from": "REMEDIATED",
+      "to": "COMPLIANT",
+      "description": "State confirms entity returned to good standing",
+      "event": {
+        "name": "confirm_good_standing",
+        "payload": {
+          "confirmationDate": { "type": "string", "format": "date", "required": true },
+          "jurisdiction": { "type": "string", "required": true },
+          "certificateRef": { "type": "string" },
+          "validThrough": { "type": "string", "format": "date" }
+        }
+      },
+      "effects": [
+        {
+          "type": "CONDITIONAL",
+          "condition": "event.certificateRef != null",
+          "then": {
+            "type": "APPEND_ARRAY",
+            "path": "goodStandingCertificates",
+            "value": {
+              "certificateId": "{{ event.certificateRef }}",
+              "jurisdiction": "{{ event.jurisdiction }}",
+              "issuedDate": "{{ event.confirmationDate }}",
+              "validThrough": "{{ event.validThrough }}",
+              "documentRef": "{{ event.certificateRef }}",
+              "purpose": "Post-remediation confirmation"
+            }
+          }
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "complianceScore.overallStatus",
+          "value": "GREEN"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "complianceScore.lastAssessedDate",
+          "value": "{{ event.confirmationDate }}"
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "GOOD_STANDING_CONFIRMED",
+          "payload": {
+            "complianceId": "{{ context.complianceId }}",
+            "entityId": "{{ context.entityId }}",
+            "jurisdiction": "{{ event.jurisdiction }}"
+          }
+        }
+      ]
+    },
+
+    "clear_review": {
+      "from": "REVIEW_PENDING",
+      "to": "COMPLIANT",
+      "description": "Clear pending review - no issues found",
+      "event": {
+        "name": "clear_review",
+        "payload": {
+          "clearedDate": { "type": "string", "format": "date", "required": true },
+          "reviewedBy": { "type": "string", "required": true },
+          "notes": { "type": "string" }
+        }
+      },
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "complianceScore.overallStatus",
+          "value": "GREEN"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "complianceScore.lastAssessedDate",
+          "value": "{{ event.clearedDate }}"
+        }
+      ]
+    },
+
+    "request_good_standing_certificate": {
+      "from": ["COMPLIANT"],
+      "to": "COMPLIANT",
+      "description": "Request and record receipt of good standing certificate",
+      "event": {
+        "name": "request_good_standing_certificate",
+        "payload": {
+          "certificateId": { "type": "string", "required": true },
+          "jurisdiction": { "type": "string", "required": true },
+          "issuedDate": { "type": "string", "format": "date", "required": true },
+          "validThrough": { "type": "string", "format": "date" },
+          "documentRef": { "type": "string", "required": true },
+          "purpose": { "type": "string" }
+        }
+      },
+      "effects": [
+        {
+          "type": "APPEND_ARRAY",
+          "path": "goodStandingCertificates",
+          "value": {
+            "certificateId": "{{ event.certificateId }}",
+            "jurisdiction": "{{ event.jurisdiction }}",
+            "issuedDate": "{{ event.issuedDate }}",
+            "validThrough": "{{ event.validThrough }}",
+            "documentRef": "{{ event.documentRef }}",
+            "purpose": "{{ event.purpose }}"
+          }
+        }
+      ]
+    },
+
+    "add_foreign_qualification": {
+      "from": ["COMPLIANT", "REVIEW_PENDING"],
+      "to": null,
+      "description": "Record foreign qualification in a new state",
+      "event": {
+        "name": "add_foreign_qualification",
+        "payload": {
+          "state": { "type": "string", "required": true },
+          "qualificationDate": { "type": "string", "format": "date", "required": true },
+          "foreignEntityNumber": { "type": "string", "required": true },
+          "registeredAgent": { "type": "object", "required": true }
+        }
+      },
+      "effects": [
+        {
+          "type": "APPEND_ARRAY",
+          "path": "jurisdiction.foreignQualifications",
+          "value": {
+            "state": "{{ event.state }}",
+            "qualificationDate": "{{ event.qualificationDate }}",
+            "foreignEntityNumber": "{{ event.foreignEntityNumber }}",
+            "status": "ACTIVE"
+          }
+        },
+        {
+          "type": "APPEND_ARRAY",
+          "path": "registeredAgents",
+          "value": "{{ event.registeredAgent }}"
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "FOREIGN_QUALIFIED",
+          "payload": {
+            "complianceId": "{{ context.complianceId }}",
+            "entityId": "{{ context.entityId }}",
+            "state": "{{ event.state }}"
+          }
+        }
+      ]
+    },
+
+    "assess_compliance": {
+      "from": ["COMPLIANT", "REVIEW_PENDING", "DEFICIENT", "REMEDIATED"],
+      "to": null,
+      "description": "Perform compliance assessment and update score",
+      "event": {
+        "name": "assess_compliance",
+        "payload": {
+          "assessmentDate": { "type": "string", "format": "date", "required": true },
+          "assessedBy": { "type": "string", "required": true }
+        }
+      },
+      "effects": [
+        {
+          "type": "COMPUTE",
+          "path": "complianceScore.openDeficiencies",
+          "expression": "context.deficiencies.filter(d => d.status === 'OPEN' || d.status === 'IN_PROGRESS').length"
+        },
+        {
+          "type": "COMPUTE",
+          "path": "complianceScore.overdueFilings",
+          "expression": "context.filingCalendar.filter(f => f.status === 'OVERDUE').length"
+        },
+        {
+          "type": "COMPUTE",
+          "path": "complianceScore.upcomingDeadlines30Days",
+          "expression": "context.filingCalendar.filter(f => f.status === 'PENDING' && new Date(f.dueDate) <= new Date(Date.now() + 30*24*60*60*1000)).length"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "complianceScore.lastAssessedDate",
+          "value": "{{ event.assessmentDate }}"
+        },
+        {
+          "type": "COMPUTE",
+          "path": "complianceScore.overallStatus",
+          "expression": "context.complianceScore.openDeficiencies > 0 ? 'RED' : (context.complianceScore.overdueFilings > 0 || context.complianceScore.upcomingDeadlines30Days > 2) ? 'YELLOW' : 'GREEN'"
+        }
+      ]
+    }
+  },
+
+  "crossMachineRefs": {
+    "entity": {
+      "machine": "corporate-entity",
+      "description": "Parent corporate entity",
+      "foreignKey": "entityId",
+      "eventTriggers": {
+        "CORPORATION_SUSPENDED": "Triggers transition to DEFICIENT if compliance-related",
+        "CORPORATION_REINSTATED": "May trigger return to COMPLIANT"
+      }
+    }
+  },
+
+  "metadata": {
+    "author": "OttoChain",
+    "license": "MIT",
+    "tags": ["corporate", "governance", "compliance", "regulatory", "filings"],
+    "documentation": "https://ottochain.dev/docs/corporate/compliance"
+  }
+}

@@ -1,0 +1,563 @@
+{
+  "$schema": "https://ottochain.dev/schemas/state-machine-v1.json",
+  "name": "corporate-proxy",
+  "version": "1.0.0",
+  "category": "corporate-governance",
+  "description": "Proxy state machine managing the grant, use, and revocation of shareholder voting proxies. Supports meeting-specific and general proxies with revocability controls.",
+
+  "context": {
+    "proxyId": { "type": "string", "description": "Unique identifier for this proxy" },
+    "entityId": { "type": "string", "description": "Reference to parent corporate-entity" },
+    "grantorId": { "type": "string", "description": "Shareholder granting the proxy" },
+    "grantorName": { "type": "string" },
+    "grantorShares": {
+      "type": "array",
+      "description": "Shares covered by this proxy",
+      "items": {
+        "type": "object",
+        "properties": {
+          "shareClass": { "type": "string" },
+          "shares": { "type": "integer" },
+          "votes": { "type": "integer" },
+          "certificateNumbers": { "type": "array", "items": { "type": "string" }, "nullable": true }
+        }
+      }
+    },
+    "totalVotes": { "type": "integer", "description": "Total votes represented by this proxy" },
+    "holderId": { "type": "string", "description": "Person/entity receiving proxy authority" },
+    "holderName": { "type": "string" },
+    "holderType": {
+      "type": "string",
+      "enum": ["INDIVIDUAL", "MANAGEMENT", "INSTITUTIONAL", "PROXY_SOLICITOR"],
+      "description": "Type of proxy holder"
+    },
+    "proxyType": {
+      "type": "string",
+      "enum": ["SPECIFIC_MEETING", "GENERAL", "LIMITED"],
+      "description": "Scope of proxy authority"
+    },
+    "scope": {
+      "type": "object",
+      "properties": {
+        "meetingId": { "type": "string", "nullable": true, "description": "For meeting-specific proxies" },
+        "meetingDate": { "type": "string", "format": "date", "nullable": true },
+        "agendaItems": { 
+          "type": "array", 
+          "items": { "type": "string" }, 
+          "nullable": true,
+          "description": "Specific agenda items proxy covers (null = all)"
+        },
+        "votingInstructions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "agendaItemId": { "type": "string" },
+              "instruction": { "type": "string", "enum": ["FOR", "AGAINST", "ABSTAIN", "DISCRETIONARY"] },
+              "cumulativeAllocation": { 
+                "type": "object", 
+                "additionalProperties": { "type": "integer" },
+                "nullable": true,
+                "description": "For director elections with cumulative voting"
+              }
+            }
+          }
+        },
+        "discretionaryAuthority": { "type": "boolean", "default": false, "description": "Can vote on matters not specified" }
+      }
+    },
+    "grantDate": { "type": "string", "format": "date" },
+    "effectiveDate": { "type": "string", "format": "date" },
+    "expirationDate": { 
+      "type": "string", 
+      "format": "date", 
+      "description": "Proxies typically expire after 11 months if not earlier"
+    },
+    "revocability": {
+      "type": "object",
+      "properties": {
+        "isRevocable": { "type": "boolean", "default": true },
+        "irrevocableReason": { 
+          "type": "string", 
+          "enum": ["COUPLED_WITH_INTEREST", "VOTING_AGREEMENT", "PLEDGE"],
+          "nullable": true,
+          "description": "Reason for irrevocability if applicable"
+        },
+        "irrevocableUntil": { "type": "string", "format": "date", "nullable": true }
+      }
+    },
+    "proxyCard": {
+      "type": "object",
+      "description": "Physical or electronic proxy card details",
+      "properties": {
+        "cardId": { "type": "string" },
+        "format": { "type": "string", "enum": ["PAPER", "ELECTRONIC", "TELEPHONE"] },
+        "signedDate": { "type": "string", "format": "date" },
+        "signatureVerified": { "type": "boolean", "default": false },
+        "documentRef": { "type": "string" },
+        "controlNumber": { "type": "string", "description": "Unique control number for voting" }
+      }
+    },
+    "votesExercised": {
+      "type": "array",
+      "description": "Record of votes cast using this proxy",
+      "items": {
+        "type": "object",
+        "properties": {
+          "meetingId": { "type": "string" },
+          "agendaItemId": { "type": "string" },
+          "voteCast": { "type": "string", "enum": ["FOR", "AGAINST", "ABSTAIN", "WITHHOLD"] },
+          "voteCount": { "type": "integer" },
+          "votedAt": { "type": "string", "format": "date-time" },
+          "votedBy": { "type": "string" }
+        }
+      }
+    },
+    "revocationDetails": {
+      "type": "object",
+      "nullable": true,
+      "properties": {
+        "revokedAt": { "type": "string", "format": "date-time" },
+        "revokedBy": { "type": "string" },
+        "revocationMethod": { 
+          "type": "string", 
+          "enum": ["WRITTEN_REVOCATION", "LATER_PROXY", "ATTENDANCE_IN_PERSON", "DEATH_INCAPACITY"],
+          "description": "How the proxy was revoked"
+        },
+        "supersedingProxyId": { "type": "string", "nullable": true }
+      }
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+
+  "states": {
+    "GRANTED": {
+      "description": "Proxy has been granted but not yet active (before effective date or meeting)",
+      "metadata": {
+        "displayName": "Granted",
+        "color": "#FFC107"
+      }
+    },
+    "ACTIVE": {
+      "description": "Proxy is active and can be used to vote",
+      "metadata": {
+        "displayName": "Active",
+        "color": "#28A745"
+      }
+    },
+    "VOTED": {
+      "description": "Proxy has been used to cast all applicable votes",
+      "metadata": {
+        "displayName": "Voted",
+        "color": "#007BFF"
+      },
+      "terminal": true
+    },
+    "REVOKED": {
+      "description": "Proxy has been revoked by the grantor or superseded",
+      "metadata": {
+        "displayName": "Revoked",
+        "color": "#DC3545"
+      },
+      "terminal": true
+    },
+    "EXPIRED": {
+      "description": "Proxy has expired without being fully used",
+      "metadata": {
+        "displayName": "Expired",
+        "color": "#6C757D"
+      },
+      "terminal": true
+    }
+  },
+
+  "initialState": "GRANTED",
+
+  "transitions": {
+    "grant_proxy": {
+      "from": null,
+      "to": "GRANTED",
+      "description": "Shareholder grants a proxy",
+      "event": {
+        "name": "grant_proxy",
+        "payload": {
+          "proxyId": { "type": "string", "required": true },
+          "entityId": { "type": "string", "required": true },
+          "grantorId": { "type": "string", "required": true },
+          "grantorName": { "type": "string", "required": true },
+          "grantorShares": { "type": "array", "required": true },
+          "holderId": { "type": "string", "required": true },
+          "holderName": { "type": "string", "required": true },
+          "holderType": { "type": "string", "default": "INDIVIDUAL" },
+          "proxyType": { "type": "string", "required": true },
+          "scope": { "type": "object", "required": true },
+          "effectiveDate": { "type": "string", "format": "date", "required": true },
+          "expirationDate": { "type": "string", "format": "date", "required": true },
+          "revocability": { "type": "object" },
+          "proxyCard": { "type": "object" }
+        }
+      },
+      "guards": [
+        {
+          "name": "grantorIsShareholderOfRecord",
+          "description": "Grantor must be shareholder of record",
+          "expression": "event.grantorShares.length > 0"
+        },
+        {
+          "name": "validExpirationDate",
+          "description": "Expiration cannot exceed 11 months for most proxies",
+          "expression": "(new Date(event.expirationDate) - new Date(event.effectiveDate)) <= 11 * 30 * 24 * 60 * 60 * 1000"
+        }
+      ],
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "proxyId",
+          "value": "{{ event.proxyId }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "entityId",
+          "value": "{{ event.entityId }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "grantorId",
+          "value": "{{ event.grantorId }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "grantorName",
+          "value": "{{ event.grantorName }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "grantorShares",
+          "value": "{{ event.grantorShares }}"
+        },
+        {
+          "type": "COMPUTE",
+          "path": "totalVotes",
+          "expression": "event.grantorShares.reduce((sum, s) => sum + s.votes, 0)"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "holderId",
+          "value": "{{ event.holderId }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "holderName",
+          "value": "{{ event.holderName }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "holderType",
+          "value": "{{ event.holderType }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "proxyType",
+          "value": "{{ event.proxyType }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "scope",
+          "value": "{{ event.scope }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "grantDate",
+          "value": "{{ today() }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "effectiveDate",
+          "value": "{{ event.effectiveDate }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "expirationDate",
+          "value": "{{ event.expirationDate }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "revocability",
+          "value": "{{ event.revocability || { isRevocable: true } }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "proxyCard",
+          "value": "{{ event.proxyCard }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "votesExercised",
+          "value": []
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "PROXY_GRANTED",
+          "payload": {
+            "proxyId": "{{ event.proxyId }}",
+            "grantorId": "{{ event.grantorId }}",
+            "holderId": "{{ event.holderId }}",
+            "totalVotes": "{{ event.grantorShares.reduce((sum, s) => sum + s.votes, 0) }}"
+          }
+        }
+      ]
+    },
+
+    "activate": {
+      "from": "GRANTED",
+      "to": "ACTIVE",
+      "description": "Proxy becomes active (effective date reached or meeting commenced)",
+      "event": {
+        "name": "activate",
+        "payload": {
+          "activatedAt": { "type": "string", "format": "date-time", "required": true }
+        }
+      },
+      "guards": [
+        {
+          "name": "effectiveDateReached",
+          "expression": "new Date() >= new Date(context.effectiveDate)"
+        },
+        {
+          "name": "notExpired",
+          "expression": "new Date() < new Date(context.expirationDate)"
+        }
+      ],
+      "effects": [
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "PROXY_ACTIVATED",
+          "payload": {
+            "proxyId": "{{ context.proxyId }}",
+            "grantorId": "{{ context.grantorId }}"
+          }
+        }
+      ]
+    },
+
+    "vote_proxy": {
+      "from": "ACTIVE",
+      "to": "ACTIVE",
+      "description": "Exercise proxy to cast vote on an agenda item",
+      "event": {
+        "name": "vote_proxy",
+        "payload": {
+          "meetingId": { "type": "string", "required": true },
+          "agendaItemId": { "type": "string", "required": true },
+          "voteCast": { "type": "string", "enum": ["FOR", "AGAINST", "ABSTAIN", "WITHHOLD"], "required": true },
+          "votedBy": { "type": "string", "required": true, "description": "Proxy holder exercising vote" }
+        }
+      },
+      "guards": [
+        {
+          "name": "meetingMatches",
+          "description": "For meeting-specific proxies, meeting must match",
+          "expression": "context.proxyType !== 'SPECIFIC_MEETING' || context.scope.meetingId === event.meetingId"
+        },
+        {
+          "name": "agendaItemCovered",
+          "description": "Agenda item must be within proxy scope",
+          "expression": "context.scope.agendaItems == null || context.scope.agendaItems.includes(event.agendaItemId)"
+        },
+        {
+          "name": "notAlreadyVotedOnItem",
+          "expression": "!context.votesExercised.some(v => v.meetingId === event.meetingId && v.agendaItemId === event.agendaItemId)"
+        },
+        {
+          "name": "isProxyHolder",
+          "expression": "event.votedBy === context.holderId"
+        }
+      ],
+      "effects": [
+        {
+          "type": "APPEND_ARRAY",
+          "path": "votesExercised",
+          "value": {
+            "meetingId": "{{ event.meetingId }}",
+            "agendaItemId": "{{ event.agendaItemId }}",
+            "voteCast": "{{ event.voteCast }}",
+            "voteCount": "{{ context.totalVotes }}",
+            "votedAt": "{{ now() }}",
+            "votedBy": "{{ event.votedBy }}"
+          }
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "PROXY_VOTE_CAST",
+          "payload": {
+            "proxyId": "{{ context.proxyId }}",
+            "grantorId": "{{ context.grantorId }}",
+            "meetingId": "{{ event.meetingId }}",
+            "agendaItemId": "{{ event.agendaItemId }}",
+            "voteCast": "{{ event.voteCast }}",
+            "voteCount": "{{ context.totalVotes }}"
+          }
+        }
+      ]
+    },
+
+    "complete_voting": {
+      "from": "ACTIVE",
+      "to": "VOTED",
+      "description": "All applicable votes have been cast using this proxy",
+      "event": {
+        "name": "complete_voting",
+        "payload": {
+          "completedAt": { "type": "string", "format": "date-time", "required": true },
+          "meetingId": { "type": "string", "required": true }
+        }
+      },
+      "effects": [
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "PROXY_VOTING_COMPLETED",
+          "payload": {
+            "proxyId": "{{ context.proxyId }}",
+            "grantorId": "{{ context.grantorId }}",
+            "meetingId": "{{ event.meetingId }}",
+            "totalVotesExercised": "{{ context.votesExercised.length }}"
+          }
+        }
+      ]
+    },
+
+    "revoke_proxy": {
+      "from": ["GRANTED", "ACTIVE"],
+      "to": "REVOKED",
+      "description": "Revoke the proxy",
+      "event": {
+        "name": "revoke_proxy",
+        "payload": {
+          "revokedBy": { "type": "string", "required": true },
+          "revocationMethod": { "type": "string", "required": true },
+          "supersedingProxyId": { "type": "string" }
+        }
+      },
+      "guards": [
+        {
+          "name": "isRevocable",
+          "description": "Proxy must be revocable (or irrevocability period expired)",
+          "expression": "context.revocability.isRevocable || (context.revocability.irrevocableUntil && new Date() >= new Date(context.revocability.irrevocableUntil))"
+        },
+        {
+          "name": "revokedByGrantor",
+          "description": "Only grantor can revoke (or death/incapacity)",
+          "expression": "event.revokedBy === context.grantorId || event.revocationMethod === 'DEATH_INCAPACITY'"
+        }
+      ],
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "revocationDetails",
+          "value": {
+            "revokedAt": "{{ now() }}",
+            "revokedBy": "{{ event.revokedBy }}",
+            "revocationMethod": "{{ event.revocationMethod }}",
+            "supersedingProxyId": "{{ event.supersedingProxyId }}"
+          }
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "PROXY_REVOKED",
+          "payload": {
+            "proxyId": "{{ context.proxyId }}",
+            "grantorId": "{{ context.grantorId }}",
+            "revocationMethod": "{{ event.revocationMethod }}"
+          }
+        }
+      ]
+    },
+
+    "expire": {
+      "from": ["GRANTED", "ACTIVE"],
+      "to": "EXPIRED",
+      "description": "Proxy expires",
+      "event": {
+        "name": "expire",
+        "payload": {
+          "expiredAt": { "type": "string", "format": "date-time", "required": true }
+        }
+      },
+      "guards": [
+        {
+          "name": "isPastExpiration",
+          "expression": "new Date(event.expiredAt) >= new Date(context.expirationDate)"
+        }
+      ],
+      "effects": [
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "PROXY_EXPIRED",
+          "payload": {
+            "proxyId": "{{ context.proxyId }}",
+            "grantorId": "{{ context.grantorId }}"
+          }
+        }
+      ]
+    },
+
+    "supersede": {
+      "from": ["GRANTED", "ACTIVE"],
+      "to": "REVOKED",
+      "description": "Proxy superseded by a later proxy from the same grantor",
+      "event": {
+        "name": "supersede",
+        "payload": {
+          "supersedingProxyId": { "type": "string", "required": true },
+          "supersededAt": { "type": "string", "format": "date-time", "required": true }
+        }
+      },
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "revocationDetails",
+          "value": {
+            "revokedAt": "{{ event.supersededAt }}",
+            "revokedBy": "{{ context.grantorId }}",
+            "revocationMethod": "LATER_PROXY",
+            "supersedingProxyId": "{{ event.supersedingProxyId }}"
+          }
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "PROXY_SUPERSEDED",
+          "payload": {
+            "proxyId": "{{ context.proxyId }}",
+            "supersedingProxyId": "{{ event.supersedingProxyId }}"
+          }
+        }
+      ]
+    }
+  },
+
+  "crossMachineRefs": {
+    "entity": {
+      "machine": "corporate-entity",
+      "description": "Parent corporate entity",
+      "foreignKey": "entityId"
+    },
+    "shareholders": {
+      "machine": "corporate-shareholders",
+      "description": "Shareholder meeting where proxy may be used",
+      "foreignKey": "scope.meetingId"
+    },
+    "securities": {
+      "machine": "corporate-securities",
+      "description": "Shares represented by this proxy",
+      "foreignKey": "grantorId"
+    }
+  },
+
+  "metadata": {
+    "author": "OttoChain",
+    "license": "MIT",
+    "tags": ["corporate", "governance", "proxy", "voting", "shareholders"],
+    "documentation": "https://ottochain.dev/docs/corporate/proxy"
+  }
+}

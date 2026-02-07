@@ -1,0 +1,859 @@
+{
+  "$schema": "https://ottochain.dev/schemas/state-machine-v1.json",
+  "name": "corporate-shareholders",
+  "version": "1.0.0",
+  "category": "corporate-governance",
+  "description": "Shareholder meeting state machine managing annual/special meetings, record dates, proxy periods, voting, and certification of results. Supports multiple share classes and cumulative voting.",
+
+  "context": {
+    "meetingId": { "type": "string", "description": "Unique identifier for this shareholder meeting" },
+    "entityId": { "type": "string", "description": "Reference to parent corporate-entity" },
+    "meetingType": { 
+      "type": "string", 
+      "enum": ["ANNUAL", "SPECIAL"],
+      "description": "Annual meetings are required; special meetings called for specific purposes"
+    },
+    "fiscalYear": { "type": "integer", "description": "Fiscal year for annual meetings" },
+    "scheduledDate": { "type": "string", "format": "date-time" },
+    "location": { 
+      "type": "object",
+      "properties": {
+        "physical": { "type": "string", "nullable": true },
+        "virtualUrl": { "type": "string", "nullable": true },
+        "isHybrid": { "type": "boolean", "default": false }
+      }
+    },
+    "calledBy": { 
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["BOARD", "SHAREHOLDERS", "COURT"] },
+        "resolutionRef": { "type": "string", "nullable": true },
+        "shareholderPetitionRef": { "type": "string", "nullable": true },
+        "courtOrderRef": { "type": "string", "nullable": true }
+      }
+    },
+    "noticeInfo": {
+      "type": "object",
+      "properties": {
+        "noticeSentDate": { "type": "string", "format": "date" },
+        "noticeMethod": { "type": "string", "enum": ["MAIL", "EMAIL", "ELECTRONIC_ACCESS"] },
+        "minimumNoticeDays": { "type": "integer", "default": 10 },
+        "maximumNoticeDays": { "type": "integer", "default": 60 }
+      }
+    },
+    "recordDate": {
+      "type": "object",
+      "nullable": true,
+      "properties": {
+        "date": { "type": "string", "format": "date" },
+        "setByBoardOn": { "type": "string", "format": "date" },
+        "resolutionRef": { "type": "string" }
+      }
+    },
+    "eligibleVoters": {
+      "type": "array",
+      "description": "Shareholders as of record date with their share counts",
+      "items": {
+        "type": "object",
+        "properties": {
+          "shareholderId": { "type": "string" },
+          "name": { "type": "string" },
+          "shareholdings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "shareClass": { "type": "string" },
+                "shares": { "type": "integer" },
+                "votes": { "type": "integer", "description": "Votes this holding represents" }
+              }
+            }
+          },
+          "totalVotes": { "type": "integer" },
+          "proxyGrantedTo": { "type": "string", "nullable": true, "description": "Proxy holder ID if proxied" },
+          "hasVoted": { "type": "boolean", "default": false }
+        }
+      }
+    },
+    "quorumRequirements": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["SHARES_REPRESENTED", "SHARES_OUTSTANDING"] },
+        "threshold": { "type": "number", "default": 0.5, "description": "Fraction required for quorum" },
+        "sharesRequired": { "type": "integer" },
+        "sharesRepresented": { "type": "integer", "default": 0 },
+        "quorumMet": { "type": "boolean", "default": false }
+      }
+    },
+    "agenda": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "itemId": { "type": "string" },
+          "itemNumber": { "type": "integer" },
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "type": { 
+            "type": "string", 
+            "enum": ["DIRECTOR_ELECTION", "AUDITOR_RATIFICATION", "SAY_ON_PAY", "CHARTER_AMENDMENT", "MERGER", "STOCK_PLAN", "SHAREHOLDER_PROPOSAL", "OTHER"] 
+          },
+          "voteRequired": { 
+            "type": "string", 
+            "enum": ["PLURALITY", "MAJORITY_CAST", "MAJORITY_OUTSTANDING", "SUPERMAJORITY", "UNANIMOUS"],
+            "description": "Vote threshold for approval"
+          },
+          "supermajorityThreshold": { "type": "number", "nullable": true },
+          "eligibleClasses": { "type": "array", "items": { "type": "string" }, "description": "Share classes that can vote on this item" },
+          "allowCumulativeVoting": { "type": "boolean", "default": false, "description": "For director elections" },
+          "status": { "type": "string", "enum": ["PENDING", "VOTING", "CLOSED", "APPROVED", "REJECTED"] }
+        }
+      }
+    },
+    "proxyPeriod": {
+      "type": "object",
+      "nullable": true,
+      "properties": {
+        "startDate": { "type": "string", "format": "date" },
+        "endDate": { "type": "string", "format": "date-time", "description": "Usually meeting start time" },
+        "proxyMaterials": {
+          "type": "object",
+          "properties": {
+            "proxyStatementRef": { "type": "string" },
+            "formOfProxyRef": { "type": "string" },
+            "annualReportRef": { "type": "string", "nullable": true }
+          }
+        }
+      }
+    },
+    "votes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "voteId": { "type": "string" },
+          "agendaItemId": { "type": "string" },
+          "voterId": { "type": "string", "description": "Shareholder or proxy holder ID" },
+          "shareholderId": { "type": "string", "description": "Beneficial owner" },
+          "shareClass": { "type": "string" },
+          "votesFor": { "type": "integer", "default": 0 },
+          "votesAgainst": { "type": "integer", "default": 0 },
+          "votesAbstain": { "type": "integer", "default": 0 },
+          "votesWithhold": { "type": "integer", "default": 0, "description": "For director elections" },
+          "cumulativeVoteAllocation": { 
+            "type": "object", 
+            "additionalProperties": { "type": "integer" },
+            "nullable": true,
+            "description": "For cumulative voting: candidate ID -> votes allocated"
+          },
+          "viaProxy": { "type": "boolean", "default": false },
+          "timestamp": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "voteTallies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "agendaItemId": { "type": "string" },
+          "forVotes": { "type": "integer", "default": 0 },
+          "againstVotes": { "type": "integer", "default": 0 },
+          "abstainVotes": { "type": "integer", "default": 0 },
+          "withholdVotes": { "type": "integer", "default": 0 },
+          "brokerNonVotes": { "type": "integer", "default": 0 },
+          "candidateVotes": { 
+            "type": "object", 
+            "additionalProperties": { "type": "integer" },
+            "nullable": true,
+            "description": "For director elections: candidate ID -> total votes"
+          },
+          "result": { "type": "string", "enum": ["APPROVED", "REJECTED", "PENDING"] },
+          "certified": { "type": "boolean", "default": false }
+        }
+      }
+    },
+    "inspectorOfElections": {
+      "type": "object",
+      "nullable": true,
+      "properties": {
+        "name": { "type": "string" },
+        "company": { "type": "string", "nullable": true },
+        "appointedBy": { "type": "string" },
+        "appointmentDate": { "type": "string", "format": "date" }
+      }
+    },
+    "sessionInfo": {
+      "type": "object",
+      "nullable": true,
+      "properties": {
+        "openedAt": { "type": "string", "format": "date-time" },
+        "chairPerson": { "type": "string" },
+        "secretaryPresent": { "type": "string" },
+        "pollsOpenedAt": { "type": "string", "format": "date-time", "nullable": true },
+        "pollsClosedAt": { "type": "string", "format": "date-time", "nullable": true },
+        "adjournedAt": { "type": "string", "format": "date-time", "nullable": true },
+        "minutesRef": { "type": "string", "nullable": true }
+      }
+    },
+    "certification": {
+      "type": "object",
+      "nullable": true,
+      "properties": {
+        "certifiedAt": { "type": "string", "format": "date-time" },
+        "certifiedBy": { "type": "string" },
+        "certificateRef": { "type": "string" }
+      }
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+
+  "states": {
+    "SCHEDULED": {
+      "description": "Meeting has been scheduled but record date not yet set",
+      "metadata": {
+        "displayName": "Scheduled",
+        "color": "#6C757D"
+      }
+    },
+    "RECORD_DATE_SET": {
+      "description": "Record date established; eligible shareholders determined",
+      "metadata": {
+        "displayName": "Record Date Set",
+        "color": "#17A2B8"
+      }
+    },
+    "PROXY_PERIOD": {
+      "description": "Proxy materials distributed; shareholders may submit proxies",
+      "metadata": {
+        "displayName": "Proxy Period Open",
+        "color": "#FFC107"
+      }
+    },
+    "IN_SESSION": {
+      "description": "Meeting is convened and in progress",
+      "metadata": {
+        "displayName": "In Session",
+        "color": "#007BFF"
+      }
+    },
+    "VOTING": {
+      "description": "Polls are open for voting on agenda items",
+      "metadata": {
+        "displayName": "Voting",
+        "color": "#28A745"
+      }
+    },
+    "CLOSED": {
+      "description": "Meeting concluded; results certified",
+      "metadata": {
+        "displayName": "Closed",
+        "color": "#6C757D"
+      },
+      "terminal": true
+    }
+  },
+
+  "initialState": "SCHEDULED",
+
+  "transitions": {
+    "schedule_annual": {
+      "from": null,
+      "to": "SCHEDULED",
+      "description": "Schedule an annual shareholder meeting",
+      "event": {
+        "name": "schedule_annual",
+        "payload": {
+          "meetingId": { "type": "string", "required": true },
+          "entityId": { "type": "string", "required": true },
+          "fiscalYear": { "type": "integer", "required": true },
+          "scheduledDate": { "type": "string", "format": "date-time", "required": true },
+          "location": { "type": "object" },
+          "boardResolutionRef": { "type": "string", "required": true }
+        }
+      },
+      "guards": [
+        {
+          "name": "boardApproved",
+          "crossMachine": {
+            "machine": "corporate-resolution",
+            "instanceRef": "{{ event.boardResolutionRef }}",
+            "requiredState": "EXECUTED"
+          }
+        }
+      ],
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "meetingId",
+          "value": "{{ event.meetingId }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "entityId",
+          "value": "{{ event.entityId }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "meetingType",
+          "value": "ANNUAL"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "fiscalYear",
+          "value": "{{ event.fiscalYear }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "scheduledDate",
+          "value": "{{ event.scheduledDate }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "location",
+          "value": "{{ event.location }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "calledBy",
+          "value": {
+            "type": "BOARD",
+            "resolutionRef": "{{ event.boardResolutionRef }}"
+          }
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "SHAREHOLDER_MEETING_SCHEDULED",
+          "payload": {
+            "meetingId": "{{ event.meetingId }}",
+            "type": "ANNUAL",
+            "scheduledDate": "{{ event.scheduledDate }}"
+          }
+        }
+      ]
+    },
+
+    "schedule_special": {
+      "from": null,
+      "to": "SCHEDULED",
+      "description": "Schedule a special shareholder meeting",
+      "event": {
+        "name": "schedule_special",
+        "payload": {
+          "meetingId": { "type": "string", "required": true },
+          "entityId": { "type": "string", "required": true },
+          "scheduledDate": { "type": "string", "format": "date-time", "required": true },
+          "location": { "type": "object" },
+          "purpose": { "type": "string", "required": true, "description": "Specific purpose for special meeting" },
+          "calledByType": { "type": "string", "enum": ["BOARD", "SHAREHOLDERS", "COURT"], "required": true },
+          "resolutionRef": { "type": "string" },
+          "petitionRef": { "type": "string" }
+        }
+      },
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "meetingId",
+          "value": "{{ event.meetingId }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "entityId",
+          "value": "{{ event.entityId }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "meetingType",
+          "value": "SPECIAL"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "scheduledDate",
+          "value": "{{ event.scheduledDate }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "calledBy.type",
+          "value": "{{ event.calledByType }}"
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "SPECIAL_MEETING_SCHEDULED",
+          "payload": {
+            "meetingId": "{{ event.meetingId }}",
+            "purpose": "{{ event.purpose }}"
+          }
+        }
+      ]
+    },
+
+    "set_record_date": {
+      "from": "SCHEDULED",
+      "to": "RECORD_DATE_SET",
+      "description": "Board sets the record date for determining eligible shareholders",
+      "event": {
+        "name": "set_record_date",
+        "payload": {
+          "recordDate": { "type": "string", "format": "date", "required": true },
+          "resolutionRef": { "type": "string", "required": true }
+        }
+      },
+      "guards": [
+        {
+          "name": "validRecordDateTiming",
+          "description": "Record date must be 10-60 days before meeting (per most state laws)",
+          "expression": "true"
+        }
+      ],
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "recordDate",
+          "value": {
+            "date": "{{ event.recordDate }}",
+            "setByBoardOn": "{{ today() }}",
+            "resolutionRef": "{{ event.resolutionRef }}"
+          }
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "RECORD_DATE_SET",
+          "payload": {
+            "meetingId": "{{ context.meetingId }}",
+            "recordDate": "{{ event.recordDate }}"
+          }
+        }
+      ]
+    },
+
+    "register_eligible_shareholders": {
+      "from": "RECORD_DATE_SET",
+      "to": "RECORD_DATE_SET",
+      "description": "Register shareholders of record as of record date",
+      "event": {
+        "name": "register_eligible_shareholders",
+        "payload": {
+          "shareholders": { 
+            "type": "array", 
+            "required": true,
+            "items": {
+              "type": "object",
+              "properties": {
+                "shareholderId": { "type": "string" },
+                "name": { "type": "string" },
+                "shareholdings": { "type": "array" }
+              }
+            }
+          },
+          "totalSharesOutstanding": { "type": "integer", "required": true }
+        }
+      },
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "eligibleVoters",
+          "value": "{{ event.shareholders }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "quorumRequirements.sharesRequired",
+          "value": "{{ Math.ceil(event.totalSharesOutstanding * 0.5) }}"
+        }
+      ]
+    },
+
+    "open_proxy_period": {
+      "from": "RECORD_DATE_SET",
+      "to": "PROXY_PERIOD",
+      "description": "Distribute proxy materials and open proxy solicitation period",
+      "event": {
+        "name": "open_proxy_period",
+        "payload": {
+          "startDate": { "type": "string", "format": "date", "required": true },
+          "proxyStatementRef": { "type": "string", "required": true },
+          "formOfProxyRef": { "type": "string", "required": true },
+          "annualReportRef": { "type": "string" },
+          "agenda": { "type": "array", "required": true }
+        }
+      },
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "proxyPeriod",
+          "value": {
+            "startDate": "{{ event.startDate }}",
+            "endDate": "{{ context.scheduledDate }}",
+            "proxyMaterials": {
+              "proxyStatementRef": "{{ event.proxyStatementRef }}",
+              "formOfProxyRef": "{{ event.formOfProxyRef }}",
+              "annualReportRef": "{{ event.annualReportRef }}"
+            }
+          }
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "agenda",
+          "value": "{{ event.agenda }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "noticeInfo.noticeSentDate",
+          "value": "{{ event.startDate }}"
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "PROXY_PERIOD_OPENED",
+          "payload": {
+            "meetingId": "{{ context.meetingId }}",
+            "proxyStatementRef": "{{ event.proxyStatementRef }}"
+          }
+        }
+      ]
+    },
+
+    "add_agenda_item": {
+      "from": ["SCHEDULED", "RECORD_DATE_SET", "PROXY_PERIOD"],
+      "to": null,
+      "description": "Add an item to the meeting agenda (e.g., shareholder proposal)",
+      "event": {
+        "name": "add_agenda_item",
+        "payload": {
+          "itemId": { "type": "string", "required": true },
+          "title": { "type": "string", "required": true },
+          "description": { "type": "string" },
+          "type": { "type": "string", "required": true },
+          "voteRequired": { "type": "string", "required": true },
+          "eligibleClasses": { "type": "array", "items": { "type": "string" } },
+          "allowCumulativeVoting": { "type": "boolean", "default": false }
+        }
+      },
+      "effects": [
+        {
+          "type": "APPEND_ARRAY",
+          "path": "agenda",
+          "value": {
+            "itemId": "{{ event.itemId }}",
+            "itemNumber": "{{ context.agenda.length + 1 }}",
+            "title": "{{ event.title }}",
+            "description": "{{ event.description }}",
+            "type": "{{ event.type }}",
+            "voteRequired": "{{ event.voteRequired }}",
+            "eligibleClasses": "{{ event.eligibleClasses }}",
+            "allowCumulativeVoting": "{{ event.allowCumulativeVoting }}",
+            "status": "PENDING"
+          }
+        }
+      ]
+    },
+
+    "open_meeting": {
+      "from": "PROXY_PERIOD",
+      "to": "IN_SESSION",
+      "description": "Convene the shareholder meeting",
+      "event": {
+        "name": "open_meeting",
+        "payload": {
+          "openedAt": { "type": "string", "format": "date-time", "required": true },
+          "chairPerson": { "type": "string", "required": true },
+          "secretaryPresent": { "type": "string", "required": true },
+          "inspectorOfElections": { "type": "object" },
+          "initialQuorumCount": { "type": "integer", "required": true }
+        }
+      },
+      "guards": [
+        {
+          "name": "quorumPresentOrRepresented",
+          "description": "Must have quorum to proceed",
+          "expression": "event.initialQuorumCount >= context.quorumRequirements.sharesRequired"
+        }
+      ],
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "sessionInfo",
+          "value": {
+            "openedAt": "{{ event.openedAt }}",
+            "chairPerson": "{{ event.chairPerson }}",
+            "secretaryPresent": "{{ event.secretaryPresent }}"
+          }
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "inspectorOfElections",
+          "value": "{{ event.inspectorOfElections }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "quorumRequirements.sharesRepresented",
+          "value": "{{ event.initialQuorumCount }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "quorumRequirements.quorumMet",
+          "value": true
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "SHAREHOLDER_MEETING_OPENED",
+          "payload": {
+            "meetingId": "{{ context.meetingId }}",
+            "sharesRepresented": "{{ event.initialQuorumCount }}"
+          }
+        }
+      ]
+    },
+
+    "open_polls": {
+      "from": "IN_SESSION",
+      "to": "VOTING",
+      "description": "Open polls for voting on agenda items",
+      "event": {
+        "name": "open_polls",
+        "payload": {
+          "pollsOpenedAt": { "type": "string", "format": "date-time", "required": true }
+        }
+      },
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "sessionInfo.pollsOpenedAt",
+          "value": "{{ event.pollsOpenedAt }}"
+        },
+        {
+          "type": "UPDATE_ARRAY_ALL",
+          "path": "agenda",
+          "updates": { "status": "VOTING" }
+        }
+      ]
+    },
+
+    "cast_vote": {
+      "from": "VOTING",
+      "to": "VOTING",
+      "description": "Record a vote from a shareholder or proxy holder",
+      "event": {
+        "name": "cast_vote",
+        "payload": {
+          "voteId": { "type": "string", "required": true },
+          "agendaItemId": { "type": "string", "required": true },
+          "voterId": { "type": "string", "required": true },
+          "shareholderId": { "type": "string", "required": true },
+          "shareClass": { "type": "string", "required": true },
+          "votesFor": { "type": "integer", "default": 0 },
+          "votesAgainst": { "type": "integer", "default": 0 },
+          "votesAbstain": { "type": "integer", "default": 0 },
+          "votesWithhold": { "type": "integer", "default": 0 },
+          "cumulativeVoteAllocation": { "type": "object", "nullable": true },
+          "viaProxy": { "type": "boolean", "default": false }
+        }
+      },
+      "guards": [
+        {
+          "name": "isEligibleVoter",
+          "expression": "context.eligibleVoters.some(v => v.shareholderId === event.shareholderId)"
+        },
+        {
+          "name": "hasNotAlreadyVoted",
+          "description": "Shareholder cannot vote twice on same item",
+          "expression": "!context.votes.some(v => v.shareholderId === event.shareholderId && v.agendaItemId === event.agendaItemId)"
+        },
+        {
+          "name": "validProxyIfApplicable",
+          "description": "If voting via proxy, proxy must be valid",
+          "expression": "!event.viaProxy || true",
+          "crossMachine": {
+            "machine": "corporate-proxy",
+            "condition": "event.viaProxy",
+            "query": "findByGrantor(event.shareholderId)",
+            "requiredState": "ACTIVE"
+          }
+        }
+      ],
+      "effects": [
+        {
+          "type": "APPEND_ARRAY",
+          "path": "votes",
+          "value": {
+            "voteId": "{{ event.voteId }}",
+            "agendaItemId": "{{ event.agendaItemId }}",
+            "voterId": "{{ event.voterId }}",
+            "shareholderId": "{{ event.shareholderId }}",
+            "shareClass": "{{ event.shareClass }}",
+            "votesFor": "{{ event.votesFor }}",
+            "votesAgainst": "{{ event.votesAgainst }}",
+            "votesAbstain": "{{ event.votesAbstain }}",
+            "votesWithhold": "{{ event.votesWithhold }}",
+            "cumulativeVoteAllocation": "{{ event.cumulativeVoteAllocation }}",
+            "viaProxy": "{{ event.viaProxy }}",
+            "timestamp": "{{ now() }}"
+          }
+        },
+        {
+          "type": "UPDATE_ARRAY_ITEM",
+          "path": "eligibleVoters",
+          "matchKey": "shareholderId",
+          "matchValue": "{{ event.shareholderId }}",
+          "updates": { "hasVoted": true }
+        }
+      ]
+    },
+
+    "close_polls": {
+      "from": "VOTING",
+      "to": "IN_SESSION",
+      "description": "Close polls and begin vote tabulation",
+      "event": {
+        "name": "close_polls",
+        "payload": {
+          "pollsClosedAt": { "type": "string", "format": "date-time", "required": true }
+        }
+      },
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "sessionInfo.pollsClosedAt",
+          "value": "{{ event.pollsClosedAt }}"
+        },
+        {
+          "type": "UPDATE_ARRAY_ALL",
+          "path": "agenda",
+          "updates": { "status": "CLOSED" }
+        },
+        {
+          "type": "COMPUTE_TALLIES",
+          "description": "Aggregate votes by agenda item",
+          "targetPath": "voteTallies"
+        }
+      ]
+    },
+
+    "certify_results": {
+      "from": "IN_SESSION",
+      "to": "CLOSED",
+      "description": "Inspector of elections certifies vote results",
+      "event": {
+        "name": "certify_results",
+        "payload": {
+          "certifiedAt": { "type": "string", "format": "date-time", "required": true },
+          "certifiedBy": { "type": "string", "required": true },
+          "certificateRef": { "type": "string", "required": true },
+          "results": { 
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "agendaItemId": { "type": "string" },
+                "result": { "type": "string", "enum": ["APPROVED", "REJECTED"] }
+              }
+            }
+          },
+          "minutesRef": { "type": "string" }
+        }
+      },
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "certification",
+          "value": {
+            "certifiedAt": "{{ event.certifiedAt }}",
+            "certifiedBy": "{{ event.certifiedBy }}",
+            "certificateRef": "{{ event.certificateRef }}"
+          }
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "sessionInfo.adjournedAt",
+          "value": "{{ event.certifiedAt }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "sessionInfo.minutesRef",
+          "value": "{{ event.minutesRef }}"
+        },
+        {
+          "type": "FOR_EACH",
+          "array": "{{ event.results }}",
+          "do": {
+            "type": "UPDATE_ARRAY_ITEM",
+            "path": "voteTallies",
+            "matchKey": "agendaItemId",
+            "matchValue": "{{ item.agendaItemId }}",
+            "updates": { 
+              "result": "{{ item.result }}",
+              "certified": true
+            }
+          }
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "MEETING_RESULTS_CERTIFIED",
+          "payload": {
+            "meetingId": "{{ context.meetingId }}",
+            "results": "{{ event.results }}"
+          }
+        }
+      ]
+    },
+
+    "adjourn_without_action": {
+      "from": ["IN_SESSION", "VOTING"],
+      "to": "CLOSED",
+      "description": "Adjourn meeting without completing agenda (e.g., quorum lost)",
+      "event": {
+        "name": "adjourn_without_action",
+        "payload": {
+          "adjournedAt": { "type": "string", "format": "date-time", "required": true },
+          "reason": { "type": "string", "required": true },
+          "adjournedTo": { "type": "string", "format": "date-time", "nullable": true }
+        }
+      },
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "sessionInfo.adjournedAt",
+          "value": "{{ event.adjournedAt }}"
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "MEETING_ADJOURNED",
+          "payload": {
+            "meetingId": "{{ context.meetingId }}",
+            "reason": "{{ event.reason }}",
+            "adjournedTo": "{{ event.adjournedTo }}"
+          }
+        }
+      ]
+    }
+  },
+
+  "crossMachineRefs": {
+    "entity": {
+      "machine": "corporate-entity",
+      "description": "Parent corporate entity",
+      "foreignKey": "entityId"
+    },
+    "proxies": {
+      "machine": "corporate-proxy",
+      "description": "Proxy grants for this meeting",
+      "foreignKey": "meetingId"
+    },
+    "resolutions": {
+      "machine": "corporate-resolution",
+      "description": "Resolutions resulting from meeting votes",
+      "foreignKey": "meetingId"
+    },
+    "securities": {
+      "machine": "corporate-securities",
+      "description": "Share records for determining voting rights",
+      "foreignKey": "entityId"
+    }
+  },
+
+  "metadata": {
+    "author": "OttoChain",
+    "license": "MIT",
+    "tags": ["corporate", "governance", "shareholders", "voting", "meetings", "proxy"],
+    "documentation": "https://ottochain.dev/docs/corporate/shareholders"
+  }
+}

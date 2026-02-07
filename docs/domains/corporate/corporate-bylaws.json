@@ -1,0 +1,526 @@
+{
+  "$schema": "https://ottochain.dev/schemas/state-machine-v1.json",
+  "name": "corporate-bylaws",
+  "version": "1.0.0",
+  "category": "corporate-governance",
+  "description": "Bylaws state machine tracking the adoption, amendment, and restatement of corporate bylaws. Maintains version history and amendment requirements.",
+
+  "context": {
+    "bylawsId": { "type": "string", "description": "Unique identifier for this bylaws instance" },
+    "entityId": { "type": "string", "description": "Reference to parent corporate-entity" },
+    "currentVersion": { "type": "string", "description": "Current version number (semantic versioning)" },
+    "originalAdoptionDate": { "type": "string", "format": "date" },
+    "lastAmendedDate": { "type": "string", "format": "date", "nullable": true },
+    "documentRef": { "type": "string", "description": "Reference to current bylaws document" },
+    "sections": {
+      "type": "array",
+      "description": "Bylaws organized by section",
+      "items": {
+        "type": "object",
+        "properties": {
+          "sectionId": { "type": "string" },
+          "sectionNumber": { "type": "string", "description": "e.g., 'Article III, Section 2'" },
+          "title": { "type": "string" },
+          "content": { "type": "string" },
+          "amendmentRequirement": {
+            "type": "string",
+            "enum": ["BOARD_ONLY", "BOARD_OR_SHAREHOLDERS", "SHAREHOLDERS_ONLY", "SUPERMAJORITY_SHAREHOLDERS"],
+            "description": "Who can amend this section"
+          },
+          "supermajorityThreshold": { "type": "number", "nullable": true },
+          "lastModifiedVersion": { "type": "string" }
+        }
+      }
+    },
+    "keyProvisions": {
+      "type": "object",
+      "description": "Quick reference to key bylaw provisions",
+      "properties": {
+        "boardSize": {
+          "type": "object",
+          "properties": {
+            "minimum": { "type": "integer" },
+            "maximum": { "type": "integer" },
+            "sectionRef": { "type": "string" }
+          }
+        },
+        "quorumRequirements": {
+          "type": "object",
+          "properties": {
+            "boardQuorum": { "type": "number" },
+            "shareholderQuorum": { "type": "number" },
+            "sectionRef": { "type": "string" }
+          }
+        },
+        "meetingNotice": {
+          "type": "object",
+          "properties": {
+            "annualMeetingNotice": { "type": "integer", "description": "Days of notice required" },
+            "specialMeetingNotice": { "type": "integer" },
+            "boardMeetingNotice": { "type": "integer" },
+            "sectionRef": { "type": "string" }
+          }
+        },
+        "indemnification": {
+          "type": "object",
+          "properties": {
+            "directorsIndemnified": { "type": "boolean" },
+            "officersIndemnified": { "type": "boolean" },
+            "mandatory": { "type": "boolean" },
+            "advancementOfExpenses": { "type": "boolean" },
+            "sectionRef": { "type": "string" }
+          }
+        },
+        "specialMeetingThreshold": {
+          "type": "object",
+          "properties": {
+            "boardCanCall": { "type": "boolean" },
+            "shareholderThreshold": { "type": "number", "description": "% of shares to call special meeting" },
+            "sectionRef": { "type": "string" }
+          }
+        }
+      }
+    },
+    "pendingAmendment": {
+      "type": "object",
+      "nullable": true,
+      "properties": {
+        "amendmentId": { "type": "string" },
+        "description": { "type": "string" },
+        "proposedBy": { "type": "string" },
+        "proposedDate": { "type": "string", "format": "date" },
+        "sectionsAffected": { "type": "array", "items": { "type": "string" } },
+        "proposedChanges": { "type": "array", "items": { "type": "object" } },
+        "approvalRequired": { "type": "string" },
+        "boardApprovalRef": { "type": "string", "nullable": true },
+        "shareholderApprovalRef": { "type": "string", "nullable": true },
+        "status": { "type": "string", "enum": ["PROPOSED", "BOARD_APPROVED", "SHAREHOLDER_APPROVED", "REJECTED"] }
+      }
+    },
+    "amendmentHistory": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "amendmentId": { "type": "string" },
+          "version": { "type": "string" },
+          "description": { "type": "string" },
+          "sectionsAffected": { "type": "array", "items": { "type": "string" } },
+          "effectiveDate": { "type": "string", "format": "date" },
+          "approvedBy": { "type": "string", "enum": ["BOARD", "SHAREHOLDERS", "BOTH"] },
+          "boardResolutionRef": { "type": "string", "nullable": true },
+          "shareholderResolutionRef": { "type": "string", "nullable": true },
+          "documentRef": { "type": "string" }
+        }
+      }
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+
+  "states": {
+    "DRAFT": {
+      "description": "Initial bylaws being drafted prior to incorporation or adoption",
+      "metadata": {
+        "displayName": "Draft",
+        "color": "#FFA500"
+      }
+    },
+    "ADOPTED": {
+      "description": "Bylaws have been formally adopted and are in effect",
+      "metadata": {
+        "displayName": "Adopted",
+        "color": "#28A745"
+      }
+    },
+    "AMENDING": {
+      "description": "Amendment in progress - proposed changes pending approval",
+      "metadata": {
+        "displayName": "Amendment Pending",
+        "color": "#FFC107"
+      }
+    }
+  },
+
+  "initialState": "DRAFT",
+
+  "transitions": {
+    "adopt": {
+      "from": "DRAFT",
+      "to": "ADOPTED",
+      "description": "Initial adoption of bylaws (typically by incorporators or initial board)",
+      "event": {
+        "name": "adopt",
+        "payload": {
+          "adoptionDate": { "type": "string", "format": "date", "required": true },
+          "adoptedBy": { "type": "string", "enum": ["INCORPORATORS", "INITIAL_BOARD"], "required": true },
+          "resolutionRef": { "type": "string", "required": true },
+          "documentRef": { "type": "string", "required": true },
+          "sections": { "type": "array", "required": true },
+          "keyProvisions": { "type": "object" }
+        }
+      },
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "currentVersion",
+          "value": "1.0.0"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "originalAdoptionDate",
+          "value": "{{ event.adoptionDate }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "documentRef",
+          "value": "{{ event.documentRef }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "sections",
+          "value": "{{ event.sections }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "keyProvisions",
+          "value": "{{ event.keyProvisions }}"
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "BYLAWS_ADOPTED",
+          "payload": {
+            "entityId": "{{ context.entityId }}",
+            "bylawsId": "{{ context.bylawsId }}",
+            "version": "1.0.0"
+          }
+        }
+      ]
+    },
+
+    "propose_amendment": {
+      "from": "ADOPTED",
+      "to": "AMENDING",
+      "description": "Propose an amendment to the bylaws",
+      "event": {
+        "name": "propose_amendment",
+        "payload": {
+          "amendmentId": { "type": "string", "required": true },
+          "description": { "type": "string", "required": true },
+          "proposedBy": { "type": "string", "required": true, "description": "Director ID, officer ID, or SHAREHOLDER_PROPOSAL" },
+          "sectionsAffected": { "type": "array", "items": { "type": "string" }, "required": true },
+          "proposedChanges": { 
+            "type": "array", 
+            "required": true,
+            "items": {
+              "type": "object",
+              "properties": {
+                "sectionId": { "type": "string" },
+                "changeType": { "type": "string", "enum": ["MODIFY", "ADD", "DELETE"] },
+                "currentContent": { "type": "string" },
+                "proposedContent": { "type": "string" }
+              }
+            }
+          }
+        }
+      },
+      "guards": [
+        {
+          "name": "validProposer",
+          "description": "Amendment must be proposed by authorized party",
+          "expression": "true"
+        }
+      ],
+      "effects": [
+        {
+          "type": "COMPUTE",
+          "path": "pendingAmendment.approvalRequired",
+          "expression": "context.sections.filter(s => event.sectionsAffected.includes(s.sectionId)).some(s => s.amendmentRequirement === 'SHAREHOLDERS_ONLY' || s.amendmentRequirement === 'SUPERMAJORITY_SHAREHOLDERS') ? 'SHAREHOLDERS_REQUIRED' : 'BOARD_ONLY'"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "pendingAmendment",
+          "value": {
+            "amendmentId": "{{ event.amendmentId }}",
+            "description": "{{ event.description }}",
+            "proposedBy": "{{ event.proposedBy }}",
+            "proposedDate": "{{ today() }}",
+            "sectionsAffected": "{{ event.sectionsAffected }}",
+            "proposedChanges": "{{ event.proposedChanges }}",
+            "status": "PROPOSED"
+          }
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "BYLAW_AMENDMENT_PROPOSED",
+          "payload": {
+            "entityId": "{{ context.entityId }}",
+            "amendmentId": "{{ event.amendmentId }}",
+            "sectionsAffected": "{{ event.sectionsAffected }}"
+          }
+        }
+      ]
+    },
+
+    "board_approve_amendment": {
+      "from": "AMENDING",
+      "to": "AMENDING",
+      "description": "Board approves the proposed amendment",
+      "event": {
+        "name": "board_approve_amendment",
+        "payload": {
+          "resolutionRef": { "type": "string", "required": true },
+          "approvalDate": { "type": "string", "format": "date", "required": true }
+        }
+      },
+      "guards": [
+        {
+          "name": "hasPendingAmendment",
+          "expression": "context.pendingAmendment != null && context.pendingAmendment.status === 'PROPOSED'"
+        },
+        {
+          "name": "boardResolutionExecuted",
+          "crossMachine": {
+            "machine": "corporate-resolution",
+            "instanceRef": "{{ event.resolutionRef }}",
+            "requiredState": "EXECUTED"
+          }
+        }
+      ],
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "pendingAmendment.boardApprovalRef",
+          "value": "{{ event.resolutionRef }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "pendingAmendment.status",
+          "value": "BOARD_APPROVED"
+        }
+      ]
+    },
+
+    "approve_amendment": {
+      "from": "AMENDING",
+      "to": "ADOPTED",
+      "description": "Finalize and approve the amendment (after required approvals obtained)",
+      "event": {
+        "name": "approve_amendment",
+        "payload": {
+          "effectiveDate": { "type": "string", "format": "date", "required": true },
+          "shareholderResolutionRef": { "type": "string", "description": "Required if shareholders must approve" },
+          "newDocumentRef": { "type": "string", "required": true }
+        }
+      },
+      "guards": [
+        {
+          "name": "boardApproved",
+          "description": "Board must have approved",
+          "expression": "context.pendingAmendment.boardApprovalRef != null"
+        },
+        {
+          "name": "shareholderApprovedIfRequired",
+          "description": "If shareholder approval required, must have it",
+          "expression": "context.pendingAmendment.approvalRequired !== 'SHAREHOLDERS_REQUIRED' || event.shareholderResolutionRef != null"
+        }
+      ],
+      "effects": [
+        {
+          "type": "COMPUTE",
+          "path": "currentVersion",
+          "expression": "(parseFloat(context.currentVersion) + 0.1).toFixed(1) + '.0'"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "lastAmendedDate",
+          "value": "{{ event.effectiveDate }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "documentRef",
+          "value": "{{ event.newDocumentRef }}"
+        },
+        {
+          "type": "FOR_EACH",
+          "array": "{{ context.pendingAmendment.proposedChanges }}",
+          "do": {
+            "type": "UPDATE_ARRAY_ITEM",
+            "path": "sections",
+            "matchKey": "sectionId",
+            "matchValue": "{{ item.sectionId }}",
+            "updates": {
+              "content": "{{ item.proposedContent }}",
+              "lastModifiedVersion": "{{ context.currentVersion }}"
+            }
+          }
+        },
+        {
+          "type": "APPEND_ARRAY",
+          "path": "amendmentHistory",
+          "value": {
+            "amendmentId": "{{ context.pendingAmendment.amendmentId }}",
+            "version": "{{ context.currentVersion }}",
+            "description": "{{ context.pendingAmendment.description }}",
+            "sectionsAffected": "{{ context.pendingAmendment.sectionsAffected }}",
+            "effectiveDate": "{{ event.effectiveDate }}",
+            "approvedBy": "{{ event.shareholderResolutionRef ? 'BOTH' : 'BOARD' }}",
+            "boardResolutionRef": "{{ context.pendingAmendment.boardApprovalRef }}",
+            "shareholderResolutionRef": "{{ event.shareholderResolutionRef }}",
+            "documentRef": "{{ event.newDocumentRef }}"
+          }
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "pendingAmendment",
+          "value": null
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "BYLAWS_AMENDED",
+          "payload": {
+            "entityId": "{{ context.entityId }}",
+            "bylawsId": "{{ context.bylawsId }}",
+            "newVersion": "{{ context.currentVersion }}",
+            "effectiveDate": "{{ event.effectiveDate }}"
+          }
+        }
+      ]
+    },
+
+    "reject_amendment": {
+      "from": "AMENDING",
+      "to": "ADOPTED",
+      "description": "Amendment rejected by board or shareholders",
+      "event": {
+        "name": "reject_amendment",
+        "payload": {
+          "rejectedBy": { "type": "string", "enum": ["BOARD", "SHAREHOLDERS"], "required": true },
+          "reason": { "type": "string" }
+        }
+      },
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "pendingAmendment.status",
+          "value": "REJECTED"
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "BYLAW_AMENDMENT_REJECTED",
+          "payload": {
+            "entityId": "{{ context.entityId }}",
+            "amendmentId": "{{ context.pendingAmendment.amendmentId }}",
+            "rejectedBy": "{{ event.rejectedBy }}"
+          }
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "pendingAmendment",
+          "value": null
+        }
+      ]
+    },
+
+    "restate": {
+      "from": "ADOPTED",
+      "to": "ADOPTED",
+      "description": "Complete restatement of bylaws (consolidating all amendments)",
+      "event": {
+        "name": "restate",
+        "payload": {
+          "restatedDate": { "type": "string", "format": "date", "required": true },
+          "boardResolutionRef": { "type": "string", "required": true },
+          "newDocumentRef": { "type": "string", "required": true },
+          "sections": { "type": "array", "required": true },
+          "keyProvisions": { "type": "object" }
+        }
+      },
+      "guards": [
+        {
+          "name": "boardApproved",
+          "crossMachine": {
+            "machine": "corporate-resolution",
+            "instanceRef": "{{ event.boardResolutionRef }}",
+            "requiredState": "EXECUTED"
+          }
+        }
+      ],
+      "effects": [
+        {
+          "type": "COMPUTE",
+          "path": "currentVersion",
+          "expression": "(Math.floor(parseFloat(context.currentVersion)) + 1).toString() + '.0.0'"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "lastAmendedDate",
+          "value": "{{ event.restatedDate }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "documentRef",
+          "value": "{{ event.newDocumentRef }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "sections",
+          "value": "{{ event.sections }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "keyProvisions",
+          "value": "{{ event.keyProvisions }}"
+        },
+        {
+          "type": "APPEND_ARRAY",
+          "path": "amendmentHistory",
+          "value": {
+            "amendmentId": "RESTATEMENT-{{ event.restatedDate }}",
+            "version": "{{ context.currentVersion }}",
+            "description": "Complete Restatement of Bylaws",
+            "sectionsAffected": ["ALL"],
+            "effectiveDate": "{{ event.restatedDate }}",
+            "approvedBy": "BOARD",
+            "boardResolutionRef": "{{ event.boardResolutionRef }}",
+            "documentRef": "{{ event.newDocumentRef }}"
+          }
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "BYLAWS_RESTATED",
+          "payload": {
+            "entityId": "{{ context.entityId }}",
+            "bylawsId": "{{ context.bylawsId }}",
+            "newVersion": "{{ context.currentVersion }}"
+          }
+        }
+      ]
+    }
+  },
+
+  "crossMachineRefs": {
+    "entity": {
+      "machine": "corporate-entity",
+      "description": "Parent corporate entity",
+      "foreignKey": "entityId"
+    },
+    "board": {
+      "machine": "corporate-board",
+      "description": "Board that can amend bylaws",
+      "foreignKey": "entityId"
+    },
+    "shareholders": {
+      "machine": "corporate-shareholders",
+      "description": "Shareholders for bylaw amendments requiring shareholder approval",
+      "foreignKey": "entityId"
+    }
+  },
+
+  "metadata": {
+    "author": "OttoChain",
+    "license": "MIT",
+    "tags": ["corporate", "governance", "bylaws", "amendments"],
+    "documentation": "https://ottochain.dev/docs/corporate/bylaws"
+  }
+}

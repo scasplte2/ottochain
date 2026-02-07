@@ -1,0 +1,465 @@
+{
+  "$schema": "https://ottochain.dev/schemas/state-machine-v1.json",
+  "name": "corporate-committee",
+  "version": "1.0.0",
+  "category": "corporate-governance",
+  "description": "Board committee state machine managing standing and special committees, their charters, membership, independence requirements, and formal actions.",
+
+  "context": {
+    "committeeId": { "type": "string", "description": "Unique identifier for this committee" },
+    "entityId": { "type": "string", "description": "Reference to parent corporate-entity" },
+    "boardId": { "type": "string", "description": "Reference to parent corporate-board" },
+    "name": { "type": "string", "description": "Committee name" },
+    "committeeType": {
+      "type": "string",
+      "enum": ["AUDIT", "COMPENSATION", "NOMINATING_GOVERNANCE", "EXECUTIVE", "RISK", "FINANCE", "SPECIAL", "OTHER"],
+      "description": "Type of committee"
+    },
+    "purpose": { "type": "string", "description": "Brief statement of committee purpose" },
+    "isStanding": { "type": "boolean", "default": true, "description": "Standing vs special (temporary) committee" },
+    "createdDate": { "type": "string", "format": "date" },
+    "disbandDate": { "type": "string", "format": "date", "nullable": true },
+    "charter": {
+      "type": "object",
+      "nullable": true,
+      "properties": {
+        "charterId": { "type": "string" },
+        "version": { "type": "string" },
+        "adoptedDate": { "type": "string", "format": "date" },
+        "lastReviewedDate": { "type": "string", "format": "date" },
+        "documentRef": { "type": "string" },
+        "purposes": { "type": "array", "items": { "type": "string" } },
+        "responsibilities": { "type": "array", "items": { "type": "string" } },
+        "authorityLimits": { "type": "object" },
+        "reportingRequirements": { "type": "string" }
+      }
+    },
+    "membershipRequirements": {
+      "type": "object",
+      "properties": {
+        "minimumMembers": { "type": "integer", "default": 3 },
+        "maximumMembers": { "type": "integer" },
+        "independenceRequired": { "type": "boolean", "default": false },
+        "financialExpertRequired": { "type": "boolean", "default": false, "description": "For audit committee" },
+        "independenceStandard": { 
+          "type": "string", 
+          "enum": ["NYSE", "NASDAQ", "SEC", "CUSTOM"],
+          "nullable": true
+        }
+      }
+    },
+    "members": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "memberId": { "type": "string" },
+          "directorId": { "type": "string" },
+          "name": { "type": "string" },
+          "role": { "type": "string", "enum": ["CHAIR", "MEMBER"] },
+          "appointedDate": { "type": "string", "format": "date" },
+          "appointmentResolutionRef": { "type": "string" },
+          "removedDate": { "type": "string", "format": "date", "nullable": true },
+          "isIndependent": { "type": "boolean" },
+          "isFinancialExpert": { "type": "boolean", "default": false },
+          "status": { "type": "string", "enum": ["ACTIVE", "REMOVED", "RESIGNED"] }
+        }
+      }
+    },
+    "quorumRules": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["MAJORITY", "FIXED"], "default": "MAJORITY" },
+        "threshold": { "type": "number" },
+        "minimumRequired": { "type": "integer" }
+      }
+    },
+    "currentMeeting": {
+      "type": "object",
+      "nullable": true,
+      "properties": {
+        "meetingId": { "type": "string" },
+        "scheduledDate": { "type": "string", "format": "date-time" },
+        "agenda": { "type": "array", "items": { "type": "string" } },
+        "attendees": { "type": "array", "items": { "type": "string" } },
+        "quorumPresent": { "type": "boolean" },
+        "openedAt": { "type": "string", "format": "date-time", "nullable": true },
+        "closedAt": { "type": "string", "format": "date-time", "nullable": true }
+      }
+    },
+    "meetingHistory": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "meetingId": { "type": "string" },
+          "date": { "type": "string", "format": "date" },
+          "attendeeCount": { "type": "integer" },
+          "minutesRef": { "type": "string" },
+          "actionsApproved": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "annualReviewDate": { "type": "string", "format": "date", "nullable": true },
+    "status": { "type": "string", "enum": ["ACTIVE", "DISBANDED"] },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+
+  "states": {
+    "FORMING": {
+      "description": "Committee being formed; members appointed but charter not yet adopted",
+      "metadata": { "displayName": "Forming", "color": "#FFA500" }
+    },
+    "ACTIVE": {
+      "description": "Committee is active with adopted charter and proper membership",
+      "metadata": { "displayName": "Active", "color": "#28A745" }
+    },
+    "IN_MEETING": {
+      "description": "Committee meeting in session with quorum",
+      "metadata": { "displayName": "In Meeting", "color": "#007BFF" }
+    },
+    "NON_COMPLIANT": {
+      "description": "Committee lacks required membership (insufficient members, independence, etc.)",
+      "metadata": { "displayName": "Non-Compliant", "color": "#DC3545" }
+    },
+    "DISBANDED": {
+      "description": "Committee has been disbanded (terminal for special committees)",
+      "metadata": { "displayName": "Disbanded", "color": "#6C757D" },
+      "terminal": true
+    }
+  },
+
+  "initialState": "FORMING",
+
+  "transitions": {
+    "create_committee": {
+      "from": null,
+      "to": "FORMING",
+      "description": "Board creates a new committee",
+      "event": {
+        "name": "create_committee",
+        "payload": {
+          "committeeId": { "type": "string", "required": true },
+          "entityId": { "type": "string", "required": true },
+          "boardId": { "type": "string", "required": true },
+          "name": { "type": "string", "required": true },
+          "committeeType": { "type": "string", "required": true },
+          "purpose": { "type": "string" },
+          "isStanding": { "type": "boolean", "default": true },
+          "membershipRequirements": { "type": "object" },
+          "boardResolutionRef": { "type": "string", "required": true }
+        }
+      },
+      "guards": [
+        {
+          "name": "boardApproved",
+          "crossMachine": {
+            "machine": "corporate-resolution",
+            "instanceRef": "{{ event.boardResolutionRef }}",
+            "requiredState": "EXECUTED"
+          }
+        }
+      ],
+      "effects": [
+        { "type": "SET_CONTEXT", "path": "committeeId", "value": "{{ event.committeeId }}" },
+        { "type": "SET_CONTEXT", "path": "entityId", "value": "{{ event.entityId }}" },
+        { "type": "SET_CONTEXT", "path": "boardId", "value": "{{ event.boardId }}" },
+        { "type": "SET_CONTEXT", "path": "name", "value": "{{ event.name }}" },
+        { "type": "SET_CONTEXT", "path": "committeeType", "value": "{{ event.committeeType }}" },
+        { "type": "SET_CONTEXT", "path": "purpose", "value": "{{ event.purpose }}" },
+        { "type": "SET_CONTEXT", "path": "isStanding", "value": "{{ event.isStanding }}" },
+        { "type": "SET_CONTEXT", "path": "membershipRequirements", "value": "{{ event.membershipRequirements }}" },
+        { "type": "SET_CONTEXT", "path": "createdDate", "value": "{{ today() }}" },
+        { "type": "SET_CONTEXT", "path": "status", "value": "ACTIVE" },
+        { "type": "SET_CONTEXT", "path": "members", "value": [] },
+        { "type": "EMIT_EVENT", "eventType": "COMMITTEE_CREATED", "payload": { "committeeId": "{{ event.committeeId }}", "name": "{{ event.name }}", "type": "{{ event.committeeType }}" } }
+      ]
+    },
+
+    "appoint_member": {
+      "from": ["FORMING", "ACTIVE", "NON_COMPLIANT"],
+      "to": null,
+      "description": "Appoint a director to the committee",
+      "event": {
+        "name": "appoint_member",
+        "payload": {
+          "memberId": { "type": "string", "required": true },
+          "directorId": { "type": "string", "required": true },
+          "name": { "type": "string", "required": true },
+          "role": { "type": "string", "enum": ["CHAIR", "MEMBER"], "default": "MEMBER" },
+          "isIndependent": { "type": "boolean", "required": true },
+          "isFinancialExpert": { "type": "boolean", "default": false },
+          "boardResolutionRef": { "type": "string", "required": true }
+        }
+      },
+      "guards": [
+        {
+          "name": "isActiveDirector",
+          "description": "Must be an active director on the board",
+          "crossMachine": {
+            "machine": "corporate-board",
+            "instanceRef": "{{ context.boardId }}",
+            "query": "directors.some(d => d.directorId === event.directorId && d.status === 'ACTIVE')"
+          }
+        },
+        {
+          "name": "notAlreadyMember",
+          "expression": "!context.members.some(m => m.directorId === event.directorId && m.status === 'ACTIVE')"
+        },
+        {
+          "name": "meetsIndependenceIfRequired",
+          "expression": "!context.membershipRequirements.independenceRequired || event.isIndependent"
+        }
+      ],
+      "effects": [
+        {
+          "type": "CONDITIONAL",
+          "condition": "event.role === 'CHAIR'",
+          "then": { "type": "UPDATE_ARRAY_ALL", "path": "members", "filter": "m => m.status === 'ACTIVE' && m.role === 'CHAIR'", "updates": { "role": "MEMBER" } }
+        },
+        {
+          "type": "APPEND_ARRAY",
+          "path": "members",
+          "value": {
+            "memberId": "{{ event.memberId }}",
+            "directorId": "{{ event.directorId }}",
+            "name": "{{ event.name }}",
+            "role": "{{ event.role }}",
+            "appointedDate": "{{ today() }}",
+            "appointmentResolutionRef": "{{ event.boardResolutionRef }}",
+            "isIndependent": "{{ event.isIndependent }}",
+            "isFinancialExpert": "{{ event.isFinancialExpert }}",
+            "status": "ACTIVE"
+          }
+        },
+        { "type": "EMIT_EVENT", "eventType": "COMMITTEE_MEMBER_APPOINTED", "payload": { "committeeId": "{{ context.committeeId }}", "directorId": "{{ event.directorId }}", "role": "{{ event.role }}" } }
+      ]
+    },
+
+    "remove_member": {
+      "from": ["ACTIVE", "NON_COMPLIANT", "IN_MEETING"],
+      "to": null,
+      "description": "Remove a member from the committee",
+      "event": {
+        "name": "remove_member",
+        "payload": {
+          "memberId": { "type": "string", "required": true },
+          "reason": { "type": "string" },
+          "boardResolutionRef": { "type": "string", "required": true }
+        }
+      },
+      "effects": [
+        {
+          "type": "UPDATE_ARRAY_ITEM",
+          "path": "members",
+          "matchKey": "memberId",
+          "matchValue": "{{ event.memberId }}",
+          "updates": { "status": "REMOVED", "removedDate": "{{ today() }}" }
+        },
+        { "type": "EMIT_EVENT", "eventType": "COMMITTEE_MEMBER_REMOVED", "payload": { "committeeId": "{{ context.committeeId }}", "memberId": "{{ event.memberId }}" } }
+      ]
+    },
+
+    "adopt_charter": {
+      "from": ["FORMING", "ACTIVE"],
+      "to": "ACTIVE",
+      "description": "Board adopts or updates the committee charter",
+      "event": {
+        "name": "adopt_charter",
+        "payload": {
+          "charterId": { "type": "string", "required": true },
+          "version": { "type": "string", "required": true },
+          "documentRef": { "type": "string", "required": true },
+          "purposes": { "type": "array", "items": { "type": "string" } },
+          "responsibilities": { "type": "array", "items": { "type": "string" } },
+          "authorityLimits": { "type": "object" },
+          "reportingRequirements": { "type": "string" },
+          "boardResolutionRef": { "type": "string", "required": true }
+        }
+      },
+      "guards": [
+        {
+          "name": "hasMinimumMembers",
+          "expression": "context.members.filter(m => m.status === 'ACTIVE').length >= context.membershipRequirements.minimumMembers"
+        },
+        {
+          "name": "boardApproved",
+          "crossMachine": {
+            "machine": "corporate-resolution",
+            "instanceRef": "{{ event.boardResolutionRef }}",
+            "requiredState": "EXECUTED"
+          }
+        }
+      ],
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "charter",
+          "value": {
+            "charterId": "{{ event.charterId }}",
+            "version": "{{ event.version }}",
+            "adoptedDate": "{{ today() }}",
+            "lastReviewedDate": "{{ today() }}",
+            "documentRef": "{{ event.documentRef }}",
+            "purposes": "{{ event.purposes }}",
+            "responsibilities": "{{ event.responsibilities }}",
+            "authorityLimits": "{{ event.authorityLimits }}",
+            "reportingRequirements": "{{ event.reportingRequirements }}"
+          }
+        },
+        { "type": "EMIT_EVENT", "eventType": "COMMITTEE_CHARTER_ADOPTED", "payload": { "committeeId": "{{ context.committeeId }}", "charterId": "{{ event.charterId }}", "version": "{{ event.version }}" } }
+      ]
+    },
+
+    "call_meeting": {
+      "from": "ACTIVE",
+      "to": "ACTIVE",
+      "description": "Schedule a committee meeting",
+      "event": {
+        "name": "call_meeting",
+        "payload": {
+          "meetingId": { "type": "string", "required": true },
+          "scheduledDate": { "type": "string", "format": "date-time", "required": true },
+          "agenda": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "guards": [
+        { "name": "noConflictingMeeting", "expression": "context.currentMeeting == null || context.currentMeeting.closedAt != null" }
+      ],
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "currentMeeting",
+          "value": { "meetingId": "{{ event.meetingId }}", "scheduledDate": "{{ event.scheduledDate }}", "agenda": "{{ event.agenda }}", "attendees": [], "quorumPresent": false }
+        }
+      ]
+    },
+
+    "open_meeting": {
+      "from": "ACTIVE",
+      "to": "IN_MEETING",
+      "description": "Open committee meeting once quorum present",
+      "event": {
+        "name": "open_meeting",
+        "payload": {
+          "openedAt": { "type": "string", "format": "date-time", "required": true },
+          "attendees": { "type": "array", "items": { "type": "string" }, "required": true }
+        }
+      },
+      "guards": [
+        { "name": "hasPendingMeeting", "expression": "context.currentMeeting != null && context.currentMeeting.openedAt == null" },
+        { "name": "quorumPresent", "expression": "event.attendees.length >= Math.ceil(context.members.filter(m => m.status === 'ACTIVE').length * 0.5)" }
+      ],
+      "effects": [
+        { "type": "SET_CONTEXT", "path": "currentMeeting.openedAt", "value": "{{ event.openedAt }}" },
+        { "type": "SET_CONTEXT", "path": "currentMeeting.attendees", "value": "{{ event.attendees }}" },
+        { "type": "SET_CONTEXT", "path": "currentMeeting.quorumPresent", "value": true }
+      ]
+    },
+
+    "adjourn_meeting": {
+      "from": "IN_MEETING",
+      "to": "ACTIVE",
+      "description": "Adjourn the committee meeting",
+      "event": {
+        "name": "adjourn_meeting",
+        "payload": {
+          "closedAt": { "type": "string", "format": "date-time", "required": true },
+          "minutesRef": { "type": "string" },
+          "actionsApproved": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "effects": [
+        { "type": "SET_CONTEXT", "path": "currentMeeting.closedAt", "value": "{{ event.closedAt }}" },
+        {
+          "type": "APPEND_ARRAY",
+          "path": "meetingHistory",
+          "value": {
+            "meetingId": "{{ context.currentMeeting.meetingId }}",
+            "date": "{{ context.currentMeeting.scheduledDate }}",
+            "attendeeCount": "{{ context.currentMeeting.attendees.length }}",
+            "minutesRef": "{{ event.minutesRef }}",
+            "actionsApproved": "{{ event.actionsApproved }}"
+          }
+        },
+        { "type": "SET_CONTEXT", "path": "currentMeeting", "value": null }
+      ]
+    },
+
+    "flag_non_compliant": {
+      "from": "ACTIVE",
+      "to": "NON_COMPLIANT",
+      "description": "Committee falls below membership or independence requirements",
+      "event": {
+        "name": "flag_non_compliant",
+        "payload": {
+          "reason": { "type": "string", "required": true },
+          "flaggedDate": { "type": "string", "format": "date", "required": true }
+        }
+      },
+      "effects": [
+        { "type": "EMIT_EVENT", "eventType": "COMMITTEE_NON_COMPLIANT", "payload": { "committeeId": "{{ context.committeeId }}", "reason": "{{ event.reason }}" } }
+      ]
+    },
+
+    "restore_compliance": {
+      "from": "NON_COMPLIANT",
+      "to": "ACTIVE",
+      "description": "Committee restored to compliance after appointments",
+      "event": {
+        "name": "restore_compliance",
+        "payload": { "restoredDate": { "type": "string", "format": "date", "required": true } }
+      },
+      "guards": [
+        { "name": "meetsRequirements", "expression": "context.members.filter(m => m.status === 'ACTIVE').length >= context.membershipRequirements.minimumMembers" }
+      ],
+      "effects": [
+        { "type": "EMIT_EVENT", "eventType": "COMMITTEE_COMPLIANCE_RESTORED", "payload": { "committeeId": "{{ context.committeeId }}" } }
+      ]
+    },
+
+    "disband": {
+      "from": ["ACTIVE", "NON_COMPLIANT", "FORMING"],
+      "to": "DISBANDED",
+      "description": "Disband the committee",
+      "event": {
+        "name": "disband",
+        "payload": {
+          "disbandDate": { "type": "string", "format": "date", "required": true },
+          "reason": { "type": "string" },
+          "boardResolutionRef": { "type": "string", "required": true },
+          "finalReportRef": { "type": "string" }
+        }
+      },
+      "guards": [
+        {
+          "name": "boardApproved",
+          "crossMachine": {
+            "machine": "corporate-resolution",
+            "instanceRef": "{{ event.boardResolutionRef }}",
+            "requiredState": "EXECUTED"
+          }
+        }
+      ],
+      "effects": [
+        { "type": "SET_CONTEXT", "path": "disbandDate", "value": "{{ event.disbandDate }}" },
+        { "type": "SET_CONTEXT", "path": "status", "value": "DISBANDED" },
+        { "type": "UPDATE_ARRAY_ALL", "path": "members", "filter": "m => m.status === 'ACTIVE'", "updates": { "status": "REMOVED", "removedDate": "{{ event.disbandDate }}" } },
+        { "type": "EMIT_EVENT", "eventType": "COMMITTEE_DISBANDED", "payload": { "committeeId": "{{ context.committeeId }}", "reason": "{{ event.reason }}" } }
+      ]
+    }
+  },
+
+  "crossMachineRefs": {
+    "board": { "machine": "corporate-board", "description": "Parent board", "foreignKey": "boardId" },
+    "resolutions": { "machine": "corporate-resolution", "description": "Resolutions authorizing committee actions", "foreignKey": "committeeId" }
+  },
+
+  "metadata": {
+    "author": "OttoChain",
+    "license": "MIT",
+    "tags": ["corporate", "governance", "committee", "board", "audit", "compensation"],
+    "documentation": "https://ottochain.dev/docs/corporate/committee"
+  }
+}

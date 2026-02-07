@@ -1,0 +1,592 @@
+{
+  "$schema": "https://ottochain.dev/schemas/state-machine-v1.json",
+  "name": "corporate-entity",
+  "version": "1.0.0",
+  "category": "corporate-governance",
+  "description": "Master corporate record tracking the lifecycle of a business entity from incorporation through dissolution. Manages legal identity, share structure, and corporate status.",
+  
+  "context": {
+    "entityId": { "type": "string", "description": "Unique identifier for this corporate entity" },
+    "legalName": { "type": "string", "description": "Full legal name of the corporation" },
+    "tradeName": { "type": "string", "nullable": true, "description": "DBA or trade name if different" },
+    "entityType": { 
+      "type": "string", 
+      "enum": ["C_CORP", "S_CORP", "B_CORP", "LLC", "LP", "LLP"],
+      "description": "Legal entity type"
+    },
+    "jurisdiction": {
+      "type": "object",
+      "properties": {
+        "state": { "type": "string", "description": "State of incorporation (e.g., DE, NV, WY)" },
+        "country": { "type": "string", "default": "USA" },
+        "foreignQualifications": { 
+          "type": "array", 
+          "items": { "type": "string" },
+          "description": "States where foreign qualified to do business"
+        }
+      }
+    },
+    "formationDate": { "type": "string", "format": "date", "description": "Date of incorporation" },
+    "fiscalYearEnd": { "type": "string", "description": "Fiscal year end (MM-DD format)" },
+    "registeredAgent": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "address": { "type": "object" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "effectiveDate": { "type": "string", "format": "date" }
+      }
+    },
+    "principalOffice": {
+      "type": "object",
+      "properties": {
+        "street": { "type": "string" },
+        "city": { "type": "string" },
+        "state": { "type": "string" },
+        "zip": { "type": "string" },
+        "country": { "type": "string", "default": "USA" }
+      }
+    },
+    "shareStructure": {
+      "type": "object",
+      "properties": {
+        "classes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "className": { "type": "string", "description": "e.g., Common, Series A Preferred" },
+              "classId": { "type": "string" },
+              "authorized": { "type": "integer", "description": "Total shares authorized" },
+              "issued": { "type": "integer", "description": "Shares currently issued" },
+              "outstanding": { "type": "integer", "description": "Issued minus treasury" },
+              "treasury": { "type": "integer", "description": "Shares held by company" },
+              "parValue": { "type": "number", "description": "Par value per share" },
+              "votingRights": { "type": "boolean", "description": "Whether class has voting rights" },
+              "votesPerShare": { "type": "number", "default": 1 },
+              "liquidationPreference": { "type": "number", "nullable": true, "description": "Liquidation preference multiple" },
+              "dividendRate": { "type": "number", "nullable": true, "description": "Annual dividend rate %" },
+              "convertible": { "type": "boolean", "default": false },
+              "conversionRatio": { "type": "number", "nullable": true },
+              "antidilution": { 
+                "type": "string", 
+                "enum": ["NONE", "BROAD_BASED", "NARROW_BASED", "FULL_RATCHET"],
+                "nullable": true 
+              }
+            }
+          }
+        },
+        "totalAuthorized": { "type": "integer", "description": "Sum of all authorized shares" },
+        "totalIssued": { "type": "integer" },
+        "totalOutstanding": { "type": "integer" }
+      }
+    },
+    "incorporators": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "address": { "type": "object" },
+          "signatureDate": { "type": "string", "format": "date" }
+        }
+      }
+    },
+    "ein": { "type": "string", "nullable": true, "description": "Federal EIN" },
+    "stateIds": { 
+      "type": "object", 
+      "additionalProperties": { "type": "string" },
+      "description": "State-specific entity IDs keyed by state code"
+    },
+    "suspensionReason": { "type": "string", "nullable": true },
+    "suspensionDate": { "type": "string", "format": "date", "nullable": true },
+    "dissolutionDate": { "type": "string", "format": "date", "nullable": true },
+    "dissolutionReason": { "type": "string", "nullable": true },
+    "charterAmendments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "amendmentId": { "type": "string" },
+          "description": { "type": "string" },
+          "effectiveDate": { "type": "string", "format": "date" },
+          "resolutionRef": { "type": "string", "description": "Reference to approving resolution" },
+          "filedDate": { "type": "string", "format": "date" }
+        }
+      }
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+
+  "states": {
+    "INCORPORATING": {
+      "description": "Initial state during formation process. Articles filed but not yet approved by state.",
+      "metadata": {
+        "displayName": "Incorporating",
+        "color": "#FFA500"
+      }
+    },
+    "ACTIVE": {
+      "description": "Corporation is in good standing and authorized to conduct business.",
+      "metadata": {
+        "displayName": "Active / Good Standing",
+        "color": "#28A745"
+      }
+    },
+    "SUSPENDED": {
+      "description": "Corporate powers suspended due to compliance failure (tax, filings, etc). Can be reinstated.",
+      "metadata": {
+        "displayName": "Suspended",
+        "color": "#DC3545"
+      }
+    },
+    "DISSOLVED": {
+      "description": "Corporation has been legally dissolved. Terminal state.",
+      "metadata": {
+        "displayName": "Dissolved",
+        "color": "#6C757D"
+      },
+      "terminal": true
+    }
+  },
+
+  "initialState": "INCORPORATING",
+
+  "transitions": {
+    "incorporate": {
+      "from": "INCORPORATING",
+      "to": "ACTIVE",
+      "description": "State approves articles of incorporation, corporation comes into existence",
+      "event": {
+        "name": "incorporate",
+        "payload": {
+          "approvalDate": { "type": "string", "format": "date", "required": true },
+          "stateFileNumber": { "type": "string", "required": true },
+          "certificateOfIncorporation": { "type": "string", "description": "Document reference" }
+        }
+      },
+      "guards": [
+        {
+          "name": "hasRequiredFormationDocs",
+          "description": "Articles of incorporation filed, incorporators signed, registered agent designated",
+          "expression": "context.legalName != null && context.jurisdiction.state != null && context.registeredAgent != null && context.incorporators.length > 0"
+        },
+        {
+          "name": "hasAuthorizedShares",
+          "description": "At least one share class authorized",
+          "expression": "context.shareStructure.classes.length > 0 && context.shareStructure.totalAuthorized > 0"
+        }
+      ],
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "formationDate",
+          "value": "{{ event.approvalDate }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "stateIds.{{ context.jurisdiction.state }}",
+          "value": "{{ event.stateFileNumber }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "updatedAt",
+          "value": "{{ now() }}"
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "CORPORATION_FORMED",
+          "payload": {
+            "entityId": "{{ context.entityId }}",
+            "legalName": "{{ context.legalName }}",
+            "jurisdiction": "{{ context.jurisdiction.state }}",
+            "formationDate": "{{ event.approvalDate }}"
+          }
+        }
+      ]
+    },
+
+    "amend_charter": {
+      "from": "ACTIVE",
+      "to": "ACTIVE",
+      "description": "Amend the certificate/articles of incorporation (requires shareholder approval for most amendments)",
+      "event": {
+        "name": "amend_charter",
+        "payload": {
+          "amendmentId": { "type": "string", "required": true },
+          "description": { "type": "string", "required": true },
+          "amendmentType": { 
+            "type": "string", 
+            "enum": ["NAME_CHANGE", "SHARE_AUTHORIZATION", "PURPOSE_CHANGE", "OTHER"],
+            "required": true 
+          },
+          "resolutionRef": { "type": "string", "required": true, "description": "Reference to board/shareholder resolution" },
+          "effectiveDate": { "type": "string", "format": "date", "required": true },
+          "filedDate": { "type": "string", "format": "date", "required": true },
+          "newShareAuthorization": { 
+            "type": "object", 
+            "nullable": true,
+            "description": "If increasing/changing authorized shares"
+          },
+          "newLegalName": { "type": "string", "nullable": true }
+        }
+      },
+      "guards": [
+        {
+          "name": "hasApprovedResolution",
+          "description": "Charter amendment must be backed by an executed resolution",
+          "expression": "event.resolutionRef != null",
+          "crossMachine": {
+            "machine": "corporate-resolution",
+            "instanceRef": "{{ event.resolutionRef }}",
+            "requiredState": "EXECUTED"
+          }
+        }
+      ],
+      "effects": [
+        {
+          "type": "APPEND_ARRAY",
+          "path": "charterAmendments",
+          "value": {
+            "amendmentId": "{{ event.amendmentId }}",
+            "description": "{{ event.description }}",
+            "effectiveDate": "{{ event.effectiveDate }}",
+            "resolutionRef": "{{ event.resolutionRef }}",
+            "filedDate": "{{ event.filedDate }}"
+          }
+        },
+        {
+          "type": "CONDITIONAL",
+          "condition": "event.newLegalName != null",
+          "then": {
+            "type": "SET_CONTEXT",
+            "path": "legalName",
+            "value": "{{ event.newLegalName }}"
+          }
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "updatedAt",
+          "value": "{{ now() }}"
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "CHARTER_AMENDED",
+          "payload": {
+            "entityId": "{{ context.entityId }}",
+            "amendmentId": "{{ event.amendmentId }}",
+            "amendmentType": "{{ event.amendmentType }}"
+          }
+        }
+      ]
+    },
+
+    "update_share_class": {
+      "from": "ACTIVE",
+      "to": "ACTIVE",
+      "description": "Update authorized shares for an existing class or add new class (requires charter amendment)",
+      "event": {
+        "name": "update_share_class",
+        "payload": {
+          "classId": { "type": "string", "required": true },
+          "className": { "type": "string", "required": true },
+          "authorized": { "type": "integer", "required": true },
+          "parValue": { "type": "number", "required": true },
+          "votingRights": { "type": "boolean", "required": true },
+          "votesPerShare": { "type": "number", "default": 1 },
+          "liquidationPreference": { "type": "number", "nullable": true },
+          "dividendRate": { "type": "number", "nullable": true },
+          "convertible": { "type": "boolean", "default": false },
+          "charterAmendmentRef": { "type": "string", "required": true }
+        }
+      },
+      "guards": [
+        {
+          "name": "charterAmended",
+          "description": "Share class changes require charter amendment to be filed",
+          "expression": "context.charterAmendments.some(a => a.amendmentId === event.charterAmendmentRef)"
+        }
+      ],
+      "effects": [
+        {
+          "type": "UPSERT_ARRAY",
+          "path": "shareStructure.classes",
+          "matchKey": "classId",
+          "matchValue": "{{ event.classId }}",
+          "value": {
+            "classId": "{{ event.classId }}",
+            "className": "{{ event.className }}",
+            "authorized": "{{ event.authorized }}",
+            "issued": 0,
+            "outstanding": 0,
+            "treasury": 0,
+            "parValue": "{{ event.parValue }}",
+            "votingRights": "{{ event.votingRights }}",
+            "votesPerShare": "{{ event.votesPerShare }}",
+            "liquidationPreference": "{{ event.liquidationPreference }}",
+            "dividendRate": "{{ event.dividendRate }}",
+            "convertible": "{{ event.convertible }}"
+          }
+        },
+        {
+          "type": "COMPUTE",
+          "path": "shareStructure.totalAuthorized",
+          "expression": "context.shareStructure.classes.reduce((sum, c) => sum + c.authorized, 0)"
+        }
+      ]
+    },
+
+    "update_registered_agent": {
+      "from": "ACTIVE",
+      "to": "ACTIVE",
+      "description": "Change the registered agent on file with the state",
+      "event": {
+        "name": "update_registered_agent",
+        "payload": {
+          "name": { "type": "string", "required": true },
+          "address": { "type": "object", "required": true },
+          "phone": { "type": "string" },
+          "email": { "type": "string" },
+          "effectiveDate": { "type": "string", "format": "date", "required": true },
+          "filingConfirmation": { "type": "string", "description": "State filing confirmation number" }
+        }
+      },
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "registeredAgent",
+          "value": {
+            "name": "{{ event.name }}",
+            "address": "{{ event.address }}",
+            "phone": "{{ event.phone }}",
+            "email": "{{ event.email }}",
+            "effectiveDate": "{{ event.effectiveDate }}"
+          }
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "REGISTERED_AGENT_CHANGED",
+          "payload": {
+            "entityId": "{{ context.entityId }}",
+            "newAgent": "{{ event.name }}",
+            "effectiveDate": "{{ event.effectiveDate }}"
+          }
+        }
+      ]
+    },
+
+    "suspend": {
+      "from": "ACTIVE",
+      "to": "SUSPENDED",
+      "description": "State suspends corporate powers (typically for tax/filing noncompliance)",
+      "event": {
+        "name": "suspend",
+        "payload": {
+          "reason": { 
+            "type": "string", 
+            "enum": ["FRANCHISE_TAX_DELINQUENT", "ANNUAL_REPORT_MISSING", "REGISTERED_AGENT_LAPSE", "ADMINISTRATIVE", "OTHER"],
+            "required": true 
+          },
+          "suspensionDate": { "type": "string", "format": "date", "required": true },
+          "stateNotice": { "type": "string", "description": "Reference to state notice" },
+          "cureDeadline": { "type": "string", "format": "date", "nullable": true }
+        }
+      },
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "suspensionReason",
+          "value": "{{ event.reason }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "suspensionDate",
+          "value": "{{ event.suspensionDate }}"
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "CORPORATION_SUSPENDED",
+          "payload": {
+            "entityId": "{{ context.entityId }}",
+            "reason": "{{ event.reason }}",
+            "cureDeadline": "{{ event.cureDeadline }}"
+          }
+        }
+      ]
+    },
+
+    "reinstate": {
+      "from": "SUSPENDED",
+      "to": "ACTIVE",
+      "description": "Cure deficiencies and reinstate corporate powers",
+      "event": {
+        "name": "reinstate",
+        "payload": {
+          "reinstatementDate": { "type": "string", "format": "date", "required": true },
+          "curativeActions": { 
+            "type": "array", 
+            "items": { "type": "string" },
+            "description": "List of actions taken to cure",
+            "required": true
+          },
+          "stateConfirmation": { "type": "string", "required": true },
+          "penaltiesPaid": { "type": "number", "nullable": true }
+        }
+      },
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "suspensionReason",
+          "value": null
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "suspensionDate",
+          "value": null
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "CORPORATION_REINSTATED",
+          "payload": {
+            "entityId": "{{ context.entityId }}",
+            "reinstatementDate": "{{ event.reinstatementDate }}"
+          }
+        }
+      ]
+    },
+
+    "dissolve_voluntary": {
+      "from": "ACTIVE",
+      "to": "DISSOLVED",
+      "description": "Voluntary dissolution approved by board and shareholders",
+      "event": {
+        "name": "dissolve_voluntary",
+        "payload": {
+          "dissolutionDate": { "type": "string", "format": "date", "required": true },
+          "boardResolutionRef": { "type": "string", "required": true },
+          "shareholderResolutionRef": { "type": "string", "required": true },
+          "windingUpPlan": { "type": "string", "description": "Reference to winding up plan" },
+          "certificateOfDissolution": { "type": "string" }
+        }
+      },
+      "guards": [
+        {
+          "name": "boardApproved",
+          "description": "Board must approve dissolution",
+          "crossMachine": {
+            "machine": "corporate-resolution",
+            "instanceRef": "{{ event.boardResolutionRef }}",
+            "requiredState": "EXECUTED"
+          }
+        },
+        {
+          "name": "shareholdersApproved",
+          "description": "Shareholders must approve dissolution (typically majority or supermajority)",
+          "crossMachine": {
+            "machine": "corporate-resolution",
+            "instanceRef": "{{ event.shareholderResolutionRef }}",
+            "requiredState": "EXECUTED"
+          }
+        }
+      ],
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "dissolutionDate",
+          "value": "{{ event.dissolutionDate }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "dissolutionReason",
+          "value": "VOLUNTARY"
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "CORPORATION_DISSOLVED",
+          "payload": {
+            "entityId": "{{ context.entityId }}",
+            "dissolutionType": "VOLUNTARY",
+            "dissolutionDate": "{{ event.dissolutionDate }}"
+          }
+        }
+      ]
+    },
+
+    "dissolve_administrative": {
+      "from": "SUSPENDED",
+      "to": "DISSOLVED",
+      "description": "Administrative dissolution by state after prolonged suspension",
+      "event": {
+        "name": "dissolve_administrative",
+        "payload": {
+          "dissolutionDate": { "type": "string", "format": "date", "required": true },
+          "stateOrder": { "type": "string", "required": true },
+          "reason": { "type": "string", "required": true }
+        }
+      },
+      "effects": [
+        {
+          "type": "SET_CONTEXT",
+          "path": "dissolutionDate",
+          "value": "{{ event.dissolutionDate }}"
+        },
+        {
+          "type": "SET_CONTEXT",
+          "path": "dissolutionReason",
+          "value": "ADMINISTRATIVE: {{ event.reason }}"
+        },
+        {
+          "type": "EMIT_EVENT",
+          "eventType": "CORPORATION_DISSOLVED",
+          "payload": {
+            "entityId": "{{ context.entityId }}",
+            "dissolutionType": "ADMINISTRATIVE",
+            "dissolutionDate": "{{ event.dissolutionDate }}"
+          }
+        }
+      ]
+    }
+  },
+
+  "crossMachineRefs": {
+    "board": {
+      "machine": "corporate-board",
+      "description": "Board of directors for this entity",
+      "foreignKey": "entityId"
+    },
+    "officers": {
+      "machine": "corporate-officers",
+      "description": "Executive officers for this entity",
+      "foreignKey": "entityId"
+    },
+    "bylaws": {
+      "machine": "corporate-bylaws",
+      "description": "Governing bylaws for this entity",
+      "foreignKey": "entityId"
+    },
+    "shareholders": {
+      "machine": "corporate-shareholders",
+      "description": "Shareholder meeting instances",
+      "foreignKey": "entityId"
+    },
+    "securities": {
+      "machine": "corporate-securities",
+      "description": "Stock issuance records",
+      "foreignKey": "entityId"
+    },
+    "compliance": {
+      "machine": "corporate-compliance",
+      "description": "Regulatory compliance tracking",
+      "foreignKey": "entityId"
+    }
+  },
+
+  "metadata": {
+    "author": "OttoChain",
+    "license": "MIT",
+    "tags": ["corporate", "governance", "entity", "formation"],
+    "documentation": "https://ottochain.dev/docs/corporate/entity"
+  }
+}
