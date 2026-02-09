@@ -19,6 +19,7 @@ import sendSignedUpdate from './lib/sendDataTransaction.ts';
 import getMetagraphEnv from './lib/metagraphEnv.ts';
 import type { StatesMap, Wallets, GeneratorFn, ValidatorFn } from './lib/types.ts';
 import { HttpClient } from '@ottochain/sdk';
+import { waitForOrdinalConfirmation } from './lib/ordinalConfirmation.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -566,61 +567,66 @@ async function runFlow(
       // Snapshot initial state before sending
       const initialStates = await getInitialStates(ml0Env);
 
-      // Send with retries.
-      // DL1 may temporarily reject mutations after a create step because its
-      // OnChain cache hasn't refreshed yet (snapshot propagation delay).
-      // When that happens the first attempt gets CidNotFound/FiberIdNotFound,
-      // and subsequent retries with the *same* signed payload are rejected as
-      // duplicate ("Invalid signature"). To work around this, we re-generate
-      // and re-sign the message on every retry so each attempt has a unique
-      // content hash for the DL1's dedup cache.
-      let sendAttempt = 0;
+      // Send transaction and wait for ML0 confirmation using ordinal-based tracking.
+      // If N ordinals pass without the transaction appearing in state, automatically
+      // regenerate and resubmit. This adapts to ML0's actual consensus speed.
+      const sendToNodes = async (msg: unknown) => {
+        await sendSignedUpdate(msg, wallets, dl1Urls);
+      };
+
+      // Helper to regenerate message with fresh sequence number
+      const regenerateMessage = async () => {
+        if (!isCreateStep) {
+          try {
+            const ml0Client = new HttpClient(
+              `${ml0Urls[0]}/data-application/v1/${entityPath}`
+            );
+            const existing = (await ml0Client.get<unknown>('')) as Record<string, unknown> | null;
+            if (existing && typeof existing === 'object') {
+              const freshSeqNum = (existing as { sequenceNumber?: number }).sequenceNumber ?? -1;
+              if (freshSeqNum >= 0) {
+                (stepOptions as Record<string, unknown>).targetSequenceNumber = freshSeqNum;
+              }
+            }
+          } catch {
+            // Entity might not exist yet — keep current options
+          }
+        }
+        return generator!({
+          cid: activeCid,
+          wallets,
+          options: stepOptions!,
+        });
+      };
+
+      // Initial send (with basic retry for immediate DL1 rejections)
       let currentMessage = message;
-      while (true) {
+      let sendSuccess = false;
+      for (let sendAttempt = 0; sendAttempt < 3; sendAttempt++) {
         try {
-          await sendSignedUpdate(currentMessage, wallets, dl1Urls);
+          await sendToNodes(currentMessage);
+          sendSuccess = true;
           break;
         } catch (sendErr) {
-          sendAttempt++;
           const errMsg = (sendErr as Error).message;
-          if (sendAttempt >= maxRetries || !errMsg.includes('400')) {
+          if (!errMsg.includes('400') || sendAttempt >= 2) {
             throw sendErr;
           }
-          w(` (retry ${sendAttempt}/${maxRetries})...`);
-          await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
-
-          // Re-generate the message so the next attempt has a fresh content hash.
-          // For mutations, also re-fetch the current sequence number in case
-          // the fiber was created/updated since the last attempt.
-          if (!isCreateStep) {
-            try {
-              const ml0Client = new HttpClient(
-                `${ml0Urls[0]}/data-application/v1/${entityPath}`
-              );
-              const existing = (await ml0Client.get<unknown>('')) as Record<string, unknown> | null;
-              if (existing && typeof existing === 'object') {
-                const freshSeqNum = (existing as { sequenceNumber?: number }).sequenceNumber ?? -1;
-                if (freshSeqNum >= 0) {
-                  (stepOptions as Record<string, unknown>).targetSequenceNumber = freshSeqNum;
-                }
-              }
-            } catch {
-              // Entity might not exist yet — keep current options
-            }
-          }
-          currentMessage = generator!({
-            cid: activeCid,
-            wallets,
-            options: stepOptions!,
-          });
+          w(` (send retry)...`);
+          await new Promise((r) => setTimeout(r, 1000));
+          currentMessage = await regenerateMessage();
         }
       }
 
-      // Poll ML0 to confirm the transaction was processed
-      await waitForMl0Confirmation(
-        ml0Urls[0],
+      if (!sendSuccess) {
+        throw new Error(`Failed to send transaction for ${step.action}`);
+      }
+
+      // Ordinal-based confirmation with auto-resubmit
+      await waitForOrdinalConfirmation({
+        ml0BaseUrl: ml0Urls[0],
         entityPath,
-        (data) => {
+        predicate: (data) => {
           if (!data || typeof data !== 'object') return false;
           const record = data as { sequenceNumber?: number; status?: string };
           if (isCreateStep) {
@@ -629,11 +635,17 @@ async function runFlow(
           // For transitions/invocations: sequenceNumber must have increased
           return (record.sequenceNumber ?? -1) > preSendSeqNum;
         },
-        maxRetries,
-        retryDelayMs,
-        `${step.action} on ${activeCid}`,
-        log
-      );
+        resubmit: async () => {
+          const freshMessage = await regenerateMessage();
+          await sendToNodes(freshMessage);
+        },
+        ordinalThreshold: 5,
+        maxResubmits: 3,
+        pollIntervalMs: 2000,
+        maxTotalTimeMs: 300000,
+        label: `${step.action} on ${activeCid}`,
+        log: log ? { write: (s: string) => log.write(s) } : undefined,
+      });
 
       // Wait for DL1 OnChain state to catch up with ML0.
       // After ML0 confirms the step, the snapshot still needs to propagate
