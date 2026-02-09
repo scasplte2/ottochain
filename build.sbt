@@ -18,6 +18,11 @@ ThisBuild / assemblyMergeStrategy := {
     oldStrategy(x)
 }
 
+// Coverage configuration
+ThisBuild / coverageMinimumStmtTotal := 70
+ThisBuild / coverageFailOnMinimum := false
+ThisBuild / coverageExcludedPackages := ".*\\.proto\\..*;.*BuildInfo.*"
+
 lazy val commonSettings = Seq(
   scalacOptions ++= List("-Ymacro-annotations", "-Yrangepos", "-Wconf:cat=unused:info", "-language:reflectiveCalls"),
   scalafmtOnCompile := true,
