@@ -73,6 +73,23 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Extract version from tag
+        id: version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Notify deploy repo
+        if: startsWith(github.ref, 'refs/tags/v') && secrets.DEPLOY_REPO_TOKEN != ''
+        env:
+          GH_TOKEN: ${{ secrets.DEPLOY_REPO_TOKEN }}
+        run: |
+          gh api repos/ottobot-ai/ottochain-deploy/dispatches \
+            -f event_type=version-bump \
+            -f 'client_payload={"component":"ottochain","version":"${{ steps.version.outputs.version }}"}'
+          echo "✅ Notified deploy repo to bump ottochain to v${{ steps.version.outputs.version }}"
+
       - name: Summary
         run: |
           echo "## 🐳 Docker Build Complete" >> $GITHUB_STEP_SUMMARY
@@ -83,3 +100,7 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
+          if [ -n "${{ steps.version.outputs.version }}" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "📦 Version bump PR will be created in ottochain-deploy" >> $GITHUB_STEP_SUMMARY
+          fi
