@@ -192,7 +192,7 @@ object FiberRules {
           Set.empty
       }
 
-    /** Validates that targetSequenceNumber matches the fiber's current sequence number */
+    /** Validates that targetSequenceNumber is at or ahead of the fiber's current sequence number (allows batching) */
     def sequenceNumberMatches[F[_]: Applicative](
       fiberId:              UUID,
       targetSequenceNumber: FiberOrdinal,
@@ -206,7 +206,7 @@ object FiberRules {
         ) { commit =>
           Validated
             .condNec(
-              commit.sequenceNumber === targetSequenceNumber,
+              commit.sequenceNumber <= targetSequenceNumber,
               (),
               Errors.SequenceNumberMismatch(
                 fiberId,
