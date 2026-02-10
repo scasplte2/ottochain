@@ -51,10 +51,8 @@ RUN apt-get update && apt-get install -y curl gnupg git && \
     curl -sL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x2EE0EA64E40A89B84B2DF73499E82A75642AC823" | apt-key add && \
     apt-get update && apt-get install -y sbt
 
-# Copy tessellation SDK from previous stage
+# Copy tessellation SDK from previous stage (only ivy2 - .sbt cache can cause conflicts)
 COPY --from=tess-builder /root/.ivy2 /root/.ivy2
-COPY --from=tess-builder /root/.sbt /root/.sbt
-COPY --from=tess-builder /root/.cache /root/.cache
 
 WORKDIR /metakit
 
@@ -74,10 +72,8 @@ RUN apt-get update && apt-get install -y curl gnupg && \
 
 WORKDIR /ottochain
 
-# Copy ivy cache with tessellation SDK + metakit
+# Copy ivy cache with tessellation SDK + metakit (only ivy2 - .sbt cache can cause conflicts)
 COPY --from=metakit-builder /root/.ivy2 /root/.ivy2
-COPY --from=metakit-builder /root/.sbt /root/.sbt
-COPY --from=metakit-builder /root/.cache /root/.cache
 
 # Copy build files first (better caching)
 COPY build.sbt .
