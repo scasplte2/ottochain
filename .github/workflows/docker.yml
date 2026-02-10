@@ -1,6 +1,8 @@
 name: Build & Push Docker Image
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:
@@ -35,6 +37,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # For release events, checkout the tag; for workflow_dispatch use input; else use ref
+          ref: ${{ github.event.release.tag_name || inputs.tag || github.ref }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -47,6 +52,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Determine version
+        id: version-input
+        run: |
+          # Priority: workflow_dispatch input > release tag > git ref
+          if [ -n "${{ inputs.tag }}" ]; then
+            echo "version=${{ inputs.tag }}" >> $GITHUB_OUTPUT
+          elif [ -n "${{ github.event.release.tag_name }}" ]; then
+            echo "version=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            echo "version=" >> $GITHUB_OUTPUT
+          fi
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -55,10 +74,10 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{version}},value=${{ steps.version-input.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.version-input.outputs.version }}
             type=sha,prefix=
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.event.release.tag_name != '' }}
 
       - name: Build and push
         uses: docker/build-push-action@v5
@@ -75,13 +94,15 @@ jobs:
 
       - name: Extract version from tag
         id: version
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || github.event.release.tag_name != '' || inputs.tag != ''
         run: |
-          VERSION="${GITHUB_REF#refs/tags/v}"
+          TAG="${{ inputs.tag || github.event.release.tag_name || github.ref }}"
+          VERSION="${TAG#refs/tags/}"
+          VERSION="${VERSION#v}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Notify deploy repo
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || github.event.release.tag_name != '' || inputs.tag != ''
         env:
           DEPLOY_TOKEN: ${{ secrets.DEPLOY_REPO_TOKEN }}
         run: |
