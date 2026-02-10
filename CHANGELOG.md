@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.3](https://github.com/scasplte2/ottochain/compare/v0.6.2...v0.6.3) (2026-02-10)
+
+
+### Bug Fixes
+
+* **ci:** strip whitespace from sbt version output ([ed8492f](https://github.com/scasplte2/ottochain/commit/ed8492fd82133523d92afcd741ee91f4e7888127))
+* **ci:** trigger release on GitHub release published event ([#58](https://github.com/scasplte2/ottochain/issues/58)) ([361de4c](https://github.com/scasplte2/ottochain/commit/361de4cdbe7d2a470e215b208e8b029798a597ac))
+
 ## [0.6.2](https://github.com/scasplte2/ottochain/compare/v0.6.1...v0.6.2) (2026-02-10)
 
 
