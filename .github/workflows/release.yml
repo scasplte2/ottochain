@@ -41,16 +41,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-sbt-
 
-      - name: Get version from tag
+      - name: Get version from sbt-dynver
         id: version
         run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
+          # sbt-dynver automatically determines version from git tags
+          VERSION=$(sbt -Dsbt.log.noformat=true --error "print version" | tail -1)
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          echo "Tag version: $VERSION"
-
-      - name: Set version in sbt
-        run: |
-          echo 'ThisBuild / version := "${{ steps.version.outputs.VERSION }}"' > version.sbt
+          echo "Dynver version: $VERSION"
 
       - name: Build JARs
         run: |

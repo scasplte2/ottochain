@@ -82,8 +82,10 @@ lazy val root = (project in file("."))
   ).aggregate(proto, models, sharedData, currencyL0, currencyL1, dataL1)
 
 lazy val proto = (project in file("modules/proto"))
+  .dependsOn(models)
   .settings(
     commonSettings,
+    commonTestSettings,
     name := "ottochain-proto",
     Compile / PB.targets := Seq(
       scalapb.gen(flatPackage = true) -> (Compile / sourceManaged).value / "scalapb",
