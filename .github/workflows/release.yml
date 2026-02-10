@@ -1,0 +1,135 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  JAVA_VERSION: '21'
+
+jobs:
+  build-and-release:
+    name: Build and Release JARs
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: 'sbt'
+
+      - name: Setup sbt
+        uses: sbt/setup-sbt@v1
+
+      - name: Get version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Tag version: $VERSION"
+
+      - name: Set version in sbt
+        run: |
+          echo 'ThisBuild / version := "${{ steps.version.outputs.VERSION }}"' > version.sbt
+          
+      - name: Build JARs
+        run: |
+          echo "Building JAR artifacts..."
+          sbt assembly
+          
+      - name: Collect JAR artifacts
+        run: |
+          mkdir -p release-jars
+          
+          # Find and copy JAR files with predictable names
+          find modules/l0/target/scala-2.13 -name "*assembly*.jar" -exec cp {} release-jars/metagraph-l0-${{ steps.version.outputs.VERSION }}.jar \;
+          find modules/l1/target/scala-2.13 -name "*assembly*.jar" -exec cp {} release-jars/currency-l1-${{ steps.version.outputs.VERSION }}.jar \;
+          find modules/data_l1/target/scala-2.13 -name "*assembly*.jar" -exec cp {} release-jars/data-l1-${{ steps.version.outputs.VERSION }}.jar \;
+          
+          # Verify files exist
+          ls -la release-jars/
+          
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get previous tag for changelog
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+          
+          if [ -n "$PREV_TAG" ]; then
+            echo "## Changes since $PREV_TAG" >> CHANGELOG.md
+            git log ${PREV_TAG}..HEAD --oneline --pretty=format:"- %s" >> CHANGELOG.md
+          else
+            echo "## Initial Release" >> CHANGELOG.md
+            echo "First automated release of OttoChain metagraph JARs." >> CHANGELOG.md
+          fi
+          
+          echo "CHANGELOG_FILE=CHANGELOG.md" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: actions/create-release@v1
+        id: create_release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: OttoChain v${{ steps.version.outputs.VERSION }}
+          body_path: CHANGELOG.md
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.VERSION, 'alpha') || contains(steps.version.outputs.VERSION, 'beta') || contains(steps.version.outputs.VERSION, 'rc') }}
+
+      - name: Upload metagraph-l0 JAR
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: release-jars/metagraph-l0-${{ steps.version.outputs.VERSION }}.jar
+          asset_name: metagraph-l0-${{ steps.version.outputs.VERSION }}.jar
+          asset_content_type: application/java-archive
+
+      - name: Upload currency-l1 JAR
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: release-jars/currency-l1-${{ steps.version.outputs.VERSION }}.jar
+          asset_name: currency-l1-${{ steps.version.outputs.VERSION }}.jar
+          asset_content_type: application/java-archive
+
+      - name: Upload data-l1 JAR
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: release-jars/data-l1-${{ steps.version.outputs.VERSION }}.jar
+          asset_name: data-l1-${{ steps.version.outputs.VERSION }}.jar
+          asset_content_type: application/java-archive
+
+      - name: Notify deployment repo
+        if: success()
+        run: |
+          # Trigger update in ottochain-deploy repo by dispatching repository_dispatch event
+          curl -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/ottobot-ai/ottochain-deploy/dispatches \
+            -d '{"event_type":"ottochain_release","client_payload":{"version":"${{ steps.version.outputs.VERSION }}","tag":"${{ github.ref_name }}","run_id":"${{ github.run_id }}"}}'
+
+      - name: Summary
+        run: |
+          echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version:** ${{ steps.version.outputs.VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tag:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **JARs:** 3 artifacts uploaded" >> $GITHUB_STEP_SUMMARY
+          echo "- **Release URL:** ${{ steps.create_release.outputs.html_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Notification:** Deploy repo notified" >> $GITHUB_STEP_SUMMARY
