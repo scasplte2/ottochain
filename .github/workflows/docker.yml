@@ -81,13 +81,19 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Notify deploy repo
-        if: startsWith(github.ref, 'refs/tags/v') && secrets.DEPLOY_REPO_TOKEN != ''
+        if: startsWith(github.ref, 'refs/tags/v')
         env:
-          GH_TOKEN: ${{ secrets.DEPLOY_REPO_TOKEN }}
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_REPO_TOKEN }}
         run: |
-          gh api repos/ottobot-ai/ottochain-deploy/dispatches \
-            -f event_type=version-bump \
-            -f 'client_payload={"component":"ottochain","version":"${{ steps.version.outputs.version }}"}'
+          if [ -z "$DEPLOY_TOKEN" ]; then
+            echo "⚠️ DEPLOY_REPO_TOKEN not set, skipping notification"
+            exit 0
+          fi
+          curl -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token $DEPLOY_TOKEN" \
+            https://api.github.com/repos/ottobot-ai/ottochain-deploy/dispatches \
+            -d '{"event_type":"version-bump","client_payload":{"component":"ottochain","version":"${{ steps.version.outputs.version }}"}}'
           echo "✅ Notified deploy repo to bump ottochain to v${{ steps.version.outputs.version }}"
 
       - name: Summary
