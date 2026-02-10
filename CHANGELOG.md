@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.2](https://github.com/scasplte2/ottochain/compare/v0.6.1...v0.6.2) (2026-02-10)
+
+
+### Bug Fixes
+
+* **ci:** add workflow_dispatch trigger to release.yml ([#55](https://github.com/scasplte2/ottochain/issues/55)) ([3a1f9ab](https://github.com/scasplte2/ottochain/commit/3a1f9abfade20d32350846e7fe1c2ec5b5eab776))
+
 ## [0.6.1](https://github.com/scasplte2/ottochain/compare/v0.6.0...v0.6.1) (2026-02-10)
 
 
