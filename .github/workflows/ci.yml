@@ -61,10 +61,20 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '21'
-          cache: 'sbt'
 
       - name: Set up sbt
         uses: sbt/setup-sbt@v1
+
+      - name: Cache sbt
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.sbt
+            ~/.ivy2/cache
+            ~/.cache/coursier
+          key: ${{ runner.os }}-sbt-${{ hashFiles('**/*.sbt', 'project/plugins.sbt', 'project/build.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-sbt-
 
       - name: Check formatting (scalafmt)
         run: sbt scalafmtCheckAll
@@ -72,7 +82,7 @@ jobs:
       - name: Check linting (scalafix)
         run: sbt "scalafixAll --check"
 
-  # Unit tests
+  # Unit tests with coverage
   test:
     name: Unit Tests & Coverage
     runs-on: ubuntu-latest
@@ -86,10 +96,20 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '21'
-          cache: 'sbt'
 
       - name: Set up sbt
         uses: sbt/setup-sbt@v1
+
+      - name: Cache sbt
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.sbt
+            ~/.ivy2/cache
+            ~/.cache/coursier
+          key: ${{ runner.os }}-sbt-${{ hashFiles('**/*.sbt', 'project/plugins.sbt', 'project/build.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-sbt-
 
       - name: Run tests with coverage
         run: sbt clean coverage sharedData/test coverageReport
