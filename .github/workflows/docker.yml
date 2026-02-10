@@ -22,7 +22,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ottobot-ai/ottochain-metagraph
+  IMAGE_NAME: scasplte2/ottochain-metagraph
 
 jobs:
   build:
