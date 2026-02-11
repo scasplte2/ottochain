@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.8](https://github.com/scasplte2/ottochain/compare/v0.6.7...v0.6.8) (2026-02-11)
+
+
+### Bug Fixes
+
+* **ci:** use version.sbt to override sbt-dynver ([#69](https://github.com/scasplte2/ottochain/issues/69)) ([6a82ccf](https://github.com/scasplte2/ottochain/commit/6a82ccf53fa276c3815f11af6455b95bbb962af5))
+
 ## [0.6.7](https://github.com/scasplte2/ottochain/compare/v0.6.6...v0.6.7) (2026-02-11)
 
 
