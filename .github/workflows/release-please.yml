@@ -21,6 +21,9 @@ jobs:
         id: release
         uses: googleapis/release-please-action@v4
         with:
+          # Use PAT to allow triggering other workflows (release.yml, docker.yml)
+          # GITHUB_TOKEN cannot trigger other workflows due to GitHub security
+          token: ${{ secrets.RELEASE_TOKEN }}
           # Use config file for settings
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
