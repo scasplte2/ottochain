@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/scasplte2/ottochain/compare/v0.7.0...v0.7.1) (2026-02-11)
+
+
+### Features
+
+* add justfile for local development and testing ([c84fc24](https://github.com/scasplte2/ottochain/commit/c84fc24146bd9fc71f1afa74a0cd0546c00c7603))
+
 ## [0.7.0](https://github.com/scasplte2/ottochain/compare/v0.6.8...v0.7.0) (2026-02-11)
 
 
