@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.4](https://github.com/scasplte2/ottochain/compare/v0.6.3...v0.6.4) (2026-02-11)
+
+
+### Bug Fixes
+
+* **ci:** trigger docker build on GitHub release published event ([#59](https://github.com/scasplte2/ottochain/issues/59)) ([c0464e0](https://github.com/scasplte2/ottochain/commit/c0464e00dc1e083ecb2db4f71ab55a6308401c32))
+
 ## [0.6.3](https://github.com/scasplte2/ottochain/compare/v0.6.2...v0.6.3) (2026-02-10)
 
 
