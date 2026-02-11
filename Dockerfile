@@ -88,7 +88,10 @@ RUN sbt update
 # Copy source and build metagraph JARs (ML0, CL1, DL1)
 COPY . .
 # Override sbt-dynver with explicit version (no .git in Docker context)
-RUN sbt -Dversion=${OTTOCHAIN_VERSION} "currencyL0/assembly" "currencyL1/assembly" "dataL1/assembly"
+# Write version.sbt to override dynver's automatic version detection
+RUN echo "ThisBuild / version := \"${OTTOCHAIN_VERSION}\"" > version.sbt && \
+    cat version.sbt && \
+    sbt "currencyL0/assembly" "currencyL1/assembly" "dataL1/assembly"
 
 # ============ Stage 4: Runtime ============
 FROM eclipse-temurin:21-jre
