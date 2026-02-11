@@ -40,8 +40,9 @@ jobs:
         with:
           # For release events, checkout the tag; for workflow_dispatch use input; else use ref
           ref: ${{ github.event.release.tag_name || inputs.tag || github.ref }}
-          # Need full history for sbt-dynver to determine version from tags
+          # Need full history AND tags for sbt-dynver to determine version
           fetch-depth: 0
+          fetch-tags: true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
