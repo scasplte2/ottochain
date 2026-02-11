@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.5](https://github.com/scasplte2/ottochain/compare/v0.6.4...v0.6.5) (2026-02-11)
+
+
+### Bug Fixes
+
+* **ci:** add fetch-depth 0 for sbt-dynver version detection ([#62](https://github.com/scasplte2/ottochain/issues/62)) ([efcbb33](https://github.com/scasplte2/ottochain/commit/efcbb33cc7a1143fd008554706d958fc9d8fe51f))
+* **ci:** use PAT for release-please to trigger other workflows ([#64](https://github.com/scasplte2/ottochain/issues/64)) ([6d42814](https://github.com/scasplte2/ottochain/commit/6d42814c16216d95db400435828ef8875fa4e1c7))
+
 ## [0.6.4](https://github.com/scasplte2/ottochain/compare/v0.6.3...v0.6.4) (2026-02-11)
 
 
