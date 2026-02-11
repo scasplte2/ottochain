@@ -60,14 +60,22 @@ jobs:
         run: |
           # Priority: workflow_dispatch input > release tag > git ref
           if [ -n "${{ inputs.tag }}" ]; then
-            echo "version=${{ inputs.tag }}" >> $GITHUB_OUTPUT
+            RAW_VERSION="${{ inputs.tag }}"
           elif [ -n "${{ github.event.release.tag_name }}" ]; then
-            echo "version=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+            RAW_VERSION="${{ github.event.release.tag_name }}"
           elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+            RAW_VERSION="${GITHUB_REF#refs/tags/}"
           else
-            echo "version=" >> $GITHUB_OUTPUT
+            RAW_VERSION=""
           fi
+          
+          # Output raw version (may have v prefix) for metadata action
+          echo "version=$RAW_VERSION" >> $GITHUB_OUTPUT
+          
+          # Output clean version (no v prefix) for build arg
+          CLEAN_VERSION="${RAW_VERSION#v}"
+          echo "clean_version=$CLEAN_VERSION" >> $GITHUB_OUTPUT
+          echo "Using version: $CLEAN_VERSION"
 
       - name: Extract metadata
         id: meta
@@ -92,6 +100,7 @@ jobs:
           build-args: |
             TESSELLATION_VERSION=${{ inputs.tessellation_version || 'v4.0.0-rc.2' }}
             METAKIT_VERSION=${{ inputs.metakit_version || 'main' }}
+            OTTOCHAIN_VERSION=${{ steps.version-input.outputs.clean_version || '0.0.0-docker' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

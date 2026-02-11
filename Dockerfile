@@ -12,6 +12,7 @@
 
 ARG TESSELLATION_VERSION=v4.0.0-rc.2
 ARG METAKIT_VERSION=main
+ARG OTTOCHAIN_VERSION=0.0.0-docker
 
 # ============ Stage 1: Build Tessellation ============
 FROM eclipse-temurin:21-jdk AS tess-builder
@@ -65,6 +66,8 @@ RUN sbt publishLocal
 # ============ Stage 3: Build OttoChain ============
 FROM eclipse-temurin:21-jdk AS otto-builder
 
+ARG OTTOCHAIN_VERSION
+
 RUN apt-get update && apt-get install -y curl gnupg && \
     echo "deb https://repo.scala-sbt.org/scalasbt/debian all main" > /etc/apt/sources.list.d/sbt.list && \
     curl -sL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x2EE0EA64E40A89B84B2DF73499E82A75642AC823" | apt-key add && \
@@ -84,7 +87,8 @@ RUN sbt update
 
 # Copy source and build metagraph JARs (ML0, CL1, DL1)
 COPY . .
-RUN sbt "currencyL0/assembly" "currencyL1/assembly" "dataL1/assembly"
+# Override sbt-dynver with explicit version (no .git in Docker context)
+RUN sbt -Dversion=${OTTOCHAIN_VERSION} "currencyL0/assembly" "currencyL1/assembly" "dataL1/assembly"
 
 # ============ Stage 4: Runtime ============
 FROM eclipse-temurin:21-jre
