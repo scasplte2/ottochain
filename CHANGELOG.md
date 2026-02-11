@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.6](https://github.com/scasplte2/ottochain/compare/v0.6.5...v0.6.6) (2026-02-11)
+
+
+### Bug Fixes
+
+* **ci:** add fetch-tags for sbt-dynver version detection ([#65](https://github.com/scasplte2/ottochain/issues/65)) ([0868523](https://github.com/scasplte2/ottochain/commit/086852319f0156b557cdab842d1632222a0647b0))
+
 ## [0.6.5](https://github.com/scasplte2/ottochain/compare/v0.6.4...v0.6.5) (2026-02-11)
 
 
