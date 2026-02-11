@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.7.0](https://github.com/scasplte2/ottochain/compare/v0.6.8...v0.7.0) (2026-02-11)
+
+
+### ⚠ BREAKING CHANGES
+
+* Requires tessellation v4.0.0-rc.2+ which reads keystore configuration from CL_KEYSTORE, CL_KEYALIAS, CL_PASSWORD env vars.
+
+### Bug Fixes
+
+* update CLI flags for tessellation v4.x compatibility ([d5c26c7](https://github.com/scasplte2/ottochain/commit/d5c26c7c757bf43194093386acba03706a7b5369))
+
 ## [0.6.8](https://github.com/scasplte2/ottochain/compare/v0.6.7...v0.6.8) (2026-02-11)
 
 
