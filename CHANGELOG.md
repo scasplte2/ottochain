@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.7](https://github.com/scasplte2/ottochain/compare/v0.6.6...v0.6.7) (2026-02-11)
+
+
+### Bug Fixes
+
+* **ci:** pass version as build arg to Docker ([#67](https://github.com/scasplte2/ottochain/issues/67)) ([d863a75](https://github.com/scasplte2/ottochain/commit/d863a75700216a8fe8777902a1f024f1b0b07cca))
+
 ## [0.6.6](https://github.com/scasplte2/ottochain/compare/v0.6.5...v0.6.6) (2026-02-11)
 
 
