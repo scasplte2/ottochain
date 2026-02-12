@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.2](https://github.com/scasplte2/ottochain/compare/v0.7.1...v0.7.2) (2026-02-12)
+
+
+### Bug Fixes
+
+* normalize enum values to UPPER_CASE ([#73](https://github.com/scasplte2/ottochain/issues/73)) ([c9a78b6](https://github.com/scasplte2/ottochain/commit/c9a78b6053bdd41e9e9d1dfdae822ae479f71084))
+
 ## [0.7.1](https://github.com/scasplte2/ottochain/compare/v0.7.0...v0.7.1) (2026-02-11)
 
 
