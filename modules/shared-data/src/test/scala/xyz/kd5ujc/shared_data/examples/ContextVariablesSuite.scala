@@ -36,7 +36,7 @@ object ContextVariablesSuite extends SimpleIOSuite {
         "from": { "value": "START" },
         "to": { "value": "DONE" },
         "eventName": "finish",
-        "guard": { ">": [{ "var": "$ordinal" }, 0] },
+        "guard": { ">=": [{ "var": "$ordinal" }, 0] },
         "effect": { 
           "merge": [
             { "var": "state" },

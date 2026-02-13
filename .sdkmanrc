@@ -1,0 +1,2 @@
+# Enable auto-env in SDKMAN: sdkman_auto_env=true in ~/.sdkman/etc/config
+java=21.0.9-tem
