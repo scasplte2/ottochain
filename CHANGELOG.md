@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.7.3](https://github.com/scasplte2/ottochain/compare/v0.7.2...v0.7.3) (2026-02-13)
+
+
+### Features
+
+* expose $ordinal to JSON Logic evaluation context ([#75](https://github.com/scasplte2/ottochain/issues/75)) ([b3c5dcf](https://github.com/scasplte2/ottochain/commit/b3c5dcfb2a58c73a2418a6aa92d2f9a048daaf2d))
+
+
+### Bug Fixes
+
+* smart run mode detection for all layers on restart ([#76](https://github.com/scasplte2/ottochain/issues/76)) ([b334388](https://github.com/scasplte2/ottochain/commit/b33438850f2b67ff128f07ac62ceee33a8feaab7))
+
 ## [0.7.2](https://github.com/scasplte2/ottochain/compare/v0.7.1...v0.7.2) (2026-02-12)
 
 
