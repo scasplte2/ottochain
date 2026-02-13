@@ -69,6 +69,12 @@ object ExecutionOps {
   ): G[io.constellationnetwork.metagraph_sdk.json_logic.gas.GasConfig] =
     A.reader(_.jlvmGasConfig)
 
+  def askSnapshotHash[G[_]](implicit A: Ask[G, FiberContext]): G[io.constellationnetwork.security.hash.Hash] =
+    A.reader(_.lastSnapshotHash)
+
+  def askEpochProgress[G[_]](implicit A: Ask[G, FiberContext]): G[io.constellationnetwork.schema.epoch.EpochProgress] =
+    A.reader(_.epochProgress)
+
   def checkLimits[G[_]: Monad](implicit
     S: Stateful[G, ExecutionState],
     A: Ask[G, FiberContext]

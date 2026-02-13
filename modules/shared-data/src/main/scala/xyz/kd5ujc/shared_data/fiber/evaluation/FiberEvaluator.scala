@@ -111,7 +111,10 @@ object FiberEvaluator {
           case Nil => (FiberResult.GuardFailed(attemptedGuards): FiberResult).pure[G]
           case transition :: rest =>
             for {
-              contextProvider <- ContextProvider.make[F](calculatedState).pure[G]
+              ordinal         <- ExecutionOps.askOrdinal[G]
+              snapshotHash    <- ExecutionOps.askSnapshotHash[G]
+              epochProgress   <- ExecutionOps.askEpochProgress[G]
+              contextProvider <- ContextProvider.make[F](calculatedState, ordinal, snapshotHash, epochProgress).pure[G]
               contextData <- contextProvider
                 .buildContext(
                   fiber,

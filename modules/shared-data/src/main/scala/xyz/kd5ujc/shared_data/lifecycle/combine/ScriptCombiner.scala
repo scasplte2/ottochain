@@ -50,7 +50,9 @@ class ScriptCombiner[F[_]: Async: SecurityProvider](
   def invokeScript(
     update: Signed[Updates.InvokeScript]
   ): CombineResult[F] = for {
-    currentOrdinal <- ctx.getCurrentOrdinal
+    currentOrdinal   <- ctx.getCurrentOrdinal
+    lastSnapshotHash <- ctx.getLastSnapshotHash
+    epochProgress    <- ctx.getEpochProgress
 
     // Verify oracle exists and sequence number matches before processing
     oracleRecord <- current.calculated.scripts
@@ -77,9 +79,11 @@ class ScriptCombiner[F[_]: Async: SecurityProvider](
 
     // Delegate to FiberOrchestrator for consistent gas metering
     orchestrator = FiberEngine.make[F](
-      current.calculated,
-      currentOrdinal,
-      executionLimits
+      calculatedState = current.calculated,
+      ordinal = currentOrdinal,
+      limits = executionLimits,
+      lastSnapshotHash = lastSnapshotHash,
+      epochProgress = epochProgress
     )
 
     input = FiberInput.MethodCall(

@@ -12,7 +12,9 @@ import io.constellationnetwork.metagraph_sdk.json_logic._
 import io.constellationnetwork.metagraph_sdk.json_logic.gas.GasConfig
 import io.constellationnetwork.metagraph_sdk.json_logic.runtime.JsonLogicEvaluator
 import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
+import io.constellationnetwork.schema.epoch.EpochProgress
 import io.constellationnetwork.security.SecurityProvider
+import io.constellationnetwork.security.hash.Hash
 
 import xyz.kd5ujc.schema.fiber._
 import xyz.kd5ujc.schema.{CalculatedState, Records}
@@ -550,7 +552,14 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
 
         limits = ExecutionLimits(maxDepth = 10, maxGas = 100_000L)
 
-        ctx = FiberContext(ordinal, limits, GasConfig.Default, FiberGasConfig.Default)
+        ctx = FiberContext(
+          ordinal = ordinal,
+          lastSnapshotHash = Hash.empty,
+          epochProgress = EpochProgress(eu.timepit.refined.types.numeric.NonNegLong.unsafeFrom(0L)),
+          limits = limits,
+          jlvmGasConfig = GasConfig.Default,
+          fiberGasConfig = FiberGasConfig.Default
+        )
         dispatcher = TriggerDispatcher.make[IO, FiberT[IO, *]]
         result <- dispatcher
           .dispatch(triggers, calculatedState)

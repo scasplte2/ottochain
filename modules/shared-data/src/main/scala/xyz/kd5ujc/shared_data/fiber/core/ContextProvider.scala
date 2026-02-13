@@ -7,7 +7,10 @@ import cats.effect.Async
 import cats.syntax.all._
 
 import io.constellationnetwork.metagraph_sdk.json_logic._
+import io.constellationnetwork.schema.SnapshotOrdinal
+import io.constellationnetwork.schema.epoch.EpochProgress
 import io.constellationnetwork.security.SecurityProvider
+import io.constellationnetwork.security.hash.Hash
 import io.constellationnetwork.security.signature.signature.SignatureProof
 
 import xyz.kd5ujc.schema.fiber.FiberLogEntry.OracleInvocation
@@ -63,8 +66,18 @@ object ContextProvider {
 
   /**
    * Create a ContextProvider with access to CalculatedState for dependency resolution.
+   *
+   * @param calculatedState Current calculated state for dependency lookups
+   * @param ordinal Current snapshot ordinal, exposed as $ordinal in context
+   * @param lastSnapshotHash Parent snapshot hash, exposed as $lastSnapshotHash for randomness
+   * @param epochProgress Current epoch progress, exposed as $epochProgress
    */
-  def make[F[_]: Async: SecurityProvider](calculatedState: CalculatedState): ContextProvider[F] =
+  def make[F[_]: Async: SecurityProvider](
+    calculatedState:  CalculatedState,
+    ordinal:          SnapshotOrdinal,
+    lastSnapshotHash: Hash,
+    epochProgress:    EpochProgress
+  ): ContextProvider[F] =
     new ContextProvider[F] {
 
       def buildContext(
@@ -107,17 +120,20 @@ object ContextProvider {
           oraclesData  <- buildOraclesContext(dependencies)
         } yield MapValue(
           Map(
-            ReservedKeys.STATE            -> fiber.stateData,
-            ReservedKeys.EVENT            -> payload,
-            ReservedKeys.EVENT_NAME       -> StrValue(eventName),
-            ReservedKeys.MACHINE_ID       -> StrValue(fiber.fiberId.toString),
-            ReservedKeys.CURRENT_STATE_ID -> StrValue(fiber.currentState.value),
-            ReservedKeys.SEQUENCE_NUMBER  -> IntValue(fiber.sequenceNumber.value.value),
-            ReservedKeys.PROOFS           -> ArrayValue(proofsData),
-            ReservedKeys.MACHINES         -> machinesData,
-            ReservedKeys.PARENT           -> parentData,
-            ReservedKeys.CHILDREN         -> childrenData,
-            ReservedKeys.SCRIPT_ORACLES   -> oraclesData
+            ReservedKeys.STATE              -> fiber.stateData,
+            ReservedKeys.EVENT              -> payload,
+            ReservedKeys.EVENT_NAME         -> StrValue(eventName),
+            ReservedKeys.MACHINE_ID         -> StrValue(fiber.fiberId.toString),
+            ReservedKeys.CURRENT_STATE_ID   -> StrValue(fiber.currentState.value),
+            ReservedKeys.SEQUENCE_NUMBER    -> IntValue(fiber.sequenceNumber.value.value),
+            ReservedKeys.ORDINAL            -> IntValue(ordinal.value.value),
+            ReservedKeys.LAST_SNAPSHOT_HASH -> StrValue(lastSnapshotHash.value),
+            ReservedKeys.EPOCH_PROGRESS     -> IntValue(epochProgress.value.value),
+            ReservedKeys.PROOFS             -> ArrayValue(proofsData),
+            ReservedKeys.MACHINES           -> machinesData,
+            ReservedKeys.PARENT             -> parentData,
+            ReservedKeys.CHILDREN           -> childrenData,
+            ReservedKeys.SCRIPT_ORACLES     -> oraclesData
           )
         )
 
@@ -147,14 +163,17 @@ object ContextProvider {
           childrenData <- buildChildrenContext(fiber)
         } yield MapValue(
           Map(
-            ReservedKeys.STATE            -> fiber.stateData,
-            ReservedKeys.EVENT            -> input.content,
-            ReservedKeys.EVENT_NAME       -> StrValue(input.key),
-            ReservedKeys.MACHINE_ID       -> StrValue(fiber.fiberId.toString),
-            ReservedKeys.CURRENT_STATE_ID -> StrValue(fiber.currentState.value),
-            ReservedKeys.SEQUENCE_NUMBER  -> IntValue(fiber.sequenceNumber.value.value),
-            ReservedKeys.PARENT           -> parentData,
-            ReservedKeys.CHILDREN         -> childrenData
+            ReservedKeys.STATE              -> fiber.stateData,
+            ReservedKeys.EVENT              -> input.content,
+            ReservedKeys.EVENT_NAME         -> StrValue(input.key),
+            ReservedKeys.MACHINE_ID         -> StrValue(fiber.fiberId.toString),
+            ReservedKeys.CURRENT_STATE_ID   -> StrValue(fiber.currentState.value),
+            ReservedKeys.SEQUENCE_NUMBER    -> IntValue(fiber.sequenceNumber.value.value),
+            ReservedKeys.ORDINAL            -> IntValue(ordinal.value.value),
+            ReservedKeys.LAST_SNAPSHOT_HASH -> StrValue(lastSnapshotHash.value),
+            ReservedKeys.EPOCH_PROGRESS     -> IntValue(epochProgress.value.value),
+            ReservedKeys.PARENT             -> parentData,
+            ReservedKeys.CHILDREN           -> childrenData
           )
         )
 

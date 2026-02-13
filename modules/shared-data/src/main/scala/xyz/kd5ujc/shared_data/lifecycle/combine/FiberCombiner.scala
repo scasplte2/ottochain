@@ -75,7 +75,9 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
   def processFiberEvent(
     update: Signed[Updates.TransitionStateMachine]
   ): CombineResult[F] = for {
-    currentOrdinal <- ctx.getCurrentOrdinal
+    currentOrdinal   <- ctx.getCurrentOrdinal
+    lastSnapshotHash <- ctx.getLastSnapshotHash
+    epochProgress    <- ctx.getEpochProgress
 
     // Defense-in-depth: reject stale sequence numbers that slipped through validation
     fiberRecord <- current.calculated.stateMachines
@@ -97,9 +99,11 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
     proofsList = update.proofs.toList
 
     orchestrator = FiberEngine.make[F](
-      current.calculated,
-      currentOrdinal,
-      executionLimits
+      calculatedState = current.calculated,
+      ordinal = currentOrdinal,
+      limits = executionLimits,
+      lastSnapshotHash = lastSnapshotHash,
+      epochProgress = epochProgress
     )
 
     outcome <- orchestrator.process(update.fiberId, input, proofsList)

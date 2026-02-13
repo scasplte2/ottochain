@@ -12,7 +12,9 @@ import io.constellationnetwork.metagraph_sdk.json_logic.{JsonLogicValue, NullVal
 import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
 import io.constellationnetwork.schema.SnapshotOrdinal
 import io.constellationnetwork.schema.address.Address
+import io.constellationnetwork.schema.epoch.EpochProgress
 import io.constellationnetwork.security.SecurityProvider
+import io.constellationnetwork.security.hash.Hash
 import io.constellationnetwork.security.signature.signature.SignatureProof
 
 import xyz.kd5ujc.schema.fiber.FiberLogEntry.{EventReceipt, OracleInvocation}
@@ -52,12 +54,21 @@ trait FiberEngine[F[_]] {
 
 object FiberEngine {
 
+  // Default values for optional context fields (used in tests)
+  private val DefaultSnapshotHash: Hash = Hash.empty
+
+  private val DefaultEpochProgress: EpochProgress = EpochProgress(
+    eu.timepit.refined.types.numeric.NonNegLong.unsafeFrom(0L)
+  )
+
   def make[F[_]: Async: SecurityProvider](
-    calculatedState: CalculatedState,
-    ordinal:         SnapshotOrdinal,
-    limits:          ExecutionLimits = ExecutionLimits(),
-    gasConfig:       GasConfig = GasConfig.Default,
-    fiberGasConfig:  FiberGasConfig = FiberGasConfig.Default
+    calculatedState:  CalculatedState,
+    ordinal:          SnapshotOrdinal,
+    limits:           ExecutionLimits = ExecutionLimits(),
+    lastSnapshotHash: Hash = DefaultSnapshotHash,
+    epochProgress:    EpochProgress = DefaultEpochProgress,
+    gasConfig:        GasConfig = GasConfig.Default,
+    fiberGasConfig:   FiberGasConfig = FiberGasConfig.Default
   ): FiberEngine[F] = {
     new FiberEngine[F] {
 
@@ -67,7 +78,7 @@ object FiberEngine {
         proofs:  List[SignatureProof]
       ): F[TransactionResult] =
         processInternal(fiberId, input, proofs)
-          .run(FiberContext(ordinal, limits, gasConfig, fiberGasConfig))
+          .run(FiberContext(ordinal, lastSnapshotHash, epochProgress, limits, gasConfig, fiberGasConfig))
           .runA(ExecutionState.initial)
 
       private def processInternal(
@@ -202,8 +213,11 @@ object FiberEngine {
             ifFalse = {
               val processor = SpawnProcessor.make[F, FiberT[F, *]]
               for {
+                currentOrdinal <- ExecutionOps.askOrdinal[FiberT[F, *]]
+                snapshotHash   <- ExecutionOps.askSnapshotHash[FiberT[F, *]]
+                epochProgress  <- ExecutionOps.askEpochProgress[FiberT[F, *]]
                 contextData <- ContextProvider
-                  .make[F](calculatedState)
+                  .make[F](calculatedState, currentOrdinal, snapshotHash, epochProgress)
                   .buildTriggerContext(updatedFiber, input)
                   .liftFiber
                 knownFibers = calculatedState.stateMachines.keySet ++ calculatedState.scripts.keySet

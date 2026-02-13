@@ -58,6 +58,9 @@ object ReservedKeys {
   val MACHINE_ID = "machineId"
   val CURRENT_STATE_ID = "currentStateId"
   val SEQUENCE_NUMBER = "sequenceNumber"
+  val ORDINAL = "$ordinal" // Current snapshot ordinal - use for deadline comparisons
+  val LAST_SNAPSHOT_HASH = "$lastSnapshotHash" // Hash of parent snapshot - use for randomness, verification
+  val EPOCH_PROGRESS = "$epochProgress" // Current epoch progress
   val PROOFS = "proofs"
   val ADDRESS = "address"
   val ID = "id"
