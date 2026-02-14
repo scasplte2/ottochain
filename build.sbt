@@ -46,7 +46,7 @@ lazy val commonSettings = Seq(
     Libraries.pureconfigCore,
     Libraries.pureconfigCats
   )
-)
+) ++ coverageSettings
 
 lazy val commonTestSettings = Seq(
   testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
@@ -56,6 +56,13 @@ lazy val commonTestSettings = Seq(
       Libraries.weaverDiscipline,
       Libraries.weaverScalaCheck
   ).map(_ % Test)
+)
+
+lazy val coverageSettings = Seq(
+  coverageMinimumStmtTotal := 70,
+  coverageFailOnMinimum := true,
+  coverageHighlighting := true,
+  coverageExcludedPackages := "xyz.kd5ujc.buildinfo.*"
 )
 
 lazy val buildInfoSettings = Seq(

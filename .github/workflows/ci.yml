@@ -7,8 +7,47 @@ on:
     branches: [main]
 
 jobs:
+  # Validate commit messages follow Conventional Commits
+  conventional-commits:
+    name: Conventional Commits
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate PR commits
+        shell: bash
+        run: |
+          # Get commits in this PR
+          COMMITS=$(git log --format="%s" origin/${{ github.base_ref }}..${{ github.event.pull_request.head.sha }})
+
+          # Conventional commit pattern
+          PATTERN="^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?(!)?: .+"
+
+          FAILED=0
+          while IFS= read -r MSG; do
+            if [[ -z "$MSG" ]]; then
+              continue
+            fi
+            if ! echo "$MSG" | grep -qE "$PATTERN"; then
+              echo "❌ Non-conventional commit: $MSG"
+              FAILED=1
+            else
+              echo "✅ $MSG"
+            fi
+          done <<< "$COMMITS"
+
+          if [[ $FAILED -eq 1 ]]; then
+            echo ""
+            echo "Commits must follow Conventional Commits: https://www.conventionalcommits.org"
+            echo "Format: <type>[optional scope]: <description>"
+            echo "Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert"
+            exit 1
+          fi
+
   # Code quality: formatting and linting
-  # Note: Conventional commit validation is in commit-validation.yml
   code-quality:
     name: Code Quality
     runs-on: ubuntu-latest
@@ -22,20 +61,10 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '21'
+          cache: 'sbt'
 
       - name: Set up sbt
         uses: sbt/setup-sbt@v1
-
-      - name: Cache sbt
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.sbt
-            ~/.ivy2/cache
-            ~/.cache/coursier
-          key: ${{ runner.os }}-sbt-${{ hashFiles('**/*.sbt', 'project/plugins.sbt', 'project/build.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-sbt-
 
       - name: Check formatting (scalafmt)
         run: sbt scalafmtCheckAll
@@ -43,9 +72,9 @@ jobs:
       - name: Check linting (scalafix)
         run: sbt "scalafixAll --check"
 
-  # Unit tests with coverage
+  # Unit tests
   test:
-    name: Unit Tests & Coverage
+    name: Unit Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -57,30 +86,20 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '21'
+          cache: 'sbt'
 
       - name: Set up sbt
         uses: sbt/setup-sbt@v1
 
-      - name: Cache sbt
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.sbt
-            ~/.ivy2/cache
-            ~/.cache/coursier
-          key: ${{ runner.os }}-sbt-${{ hashFiles('**/*.sbt', 'project/plugins.sbt', 'project/build.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-sbt-
+      - name: Run unit tests with coverage
+        run: sbt clean coverage test coverageReport
 
-      - name: Run tests with coverage
-        run: sbt clean coverage sharedData/test coverageReport
-
-      - name: Upload coverage to Codecov
+      - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4
         with:
-          file: ./target/scala-2.13/scoverage-report/scoverage.xml
+          files: ./target/scala-2.13/scoverage-report/scoverage.xml,./modules/shared-data/target/scala-2.13/scoverage-report/scoverage.xml,./modules/l0/target/scala-2.13/scoverage-report/scoverage.xml,./modules/l1/target/scala-2.13/scoverage-report/scoverage.xml,./modules/data_l1/target/scala-2.13/scoverage-report/scoverage.xml
           flags: unittests
-          name: codecov-umbrella
+          name: ottochain-coverage
           fail_ci_if_error: false
 
       - name: Test report summary
@@ -88,7 +107,7 @@ jobs:
         run: |
           echo "## Test Results" >> $GITHUB_STEP_SUMMARY
           if [ $? -eq 0 ]; then
-            echo "✅ All tests passed" >> $GITHUB_STEP_SUMMARY
+            echo "✅ All tests passed with coverage" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ Some tests failed" >> $GITHUB_STEP_SUMMARY
           fi
