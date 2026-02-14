@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.4](https://github.com/scasplte2/ottochain/compare/v0.7.3...v0.7.4) (2026-02-14)
+
+
+### Bug Fixes
+
+* **entrypoint:** auto-detect rollback hash for L0 restarts ([#78](https://github.com/scasplte2/ottochain/issues/78)) ([74534bf](https://github.com/scasplte2/ottochain/commit/74534bf8490771187c0333aec969b2120e2ebc45))
+
 ## [0.7.3](https://github.com/scasplte2/ottochain/compare/v0.7.2...v0.7.3) (2026-02-13)
 
 
