@@ -243,13 +243,47 @@ if [ "${RUN_MODE}" = "run-genesis" ]; then
   fi
 fi
 
+# Rollback hash handling for run-rollback mode (L0 layers only)
+# run-rollback requires the hash of the snapshot to roll back to
+ROLLBACK_ARG=""
+if [ "${RUN_MODE}" = "run-rollback" ]; then
+  HASH_DIR="${DATA_DIR}/snapshot/hash"
+  
+  # Allow explicit override via ROLLBACK_HASH env var
+  if [ -n "${ROLLBACK_HASH}" ]; then
+    ROLLBACK_ARG="${ROLLBACK_HASH}"
+    echo "Using explicit rollback hash: ${ROLLBACK_ARG}"
+  elif [ -d "${HASH_DIR}" ]; then
+    # Find the latest snapshot hash by looking at the most recent file in hash directory
+    # Structure: hash/<prefix>/<prefix2>/<full_hash>
+    # The filename IS the hash
+    LATEST_HASH_FILE=$(find "${HASH_DIR}" -type f -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+    
+    if [ -n "${LATEST_HASH_FILE}" ]; then
+      ROLLBACK_ARG=$(basename "${LATEST_HASH_FILE}")
+      echo "Auto-detected rollback hash from latest snapshot: ${ROLLBACK_ARG}"
+    fi
+  fi
+  
+  if [ -z "${ROLLBACK_ARG}" ]; then
+    echo "Error: run-rollback requires a snapshot hash but none found"
+    echo "Expected: snapshots in ${HASH_DIR}/<prefix>/<prefix2>/<hash>"
+    echo "Or set ROLLBACK_HASH env var explicitly"
+    exit 1
+  fi
+fi
+
 # Add any extra args passed to container
 ARGS="${ARGS} $@"
 
 # Build final command
-# For run-genesis, the genesis file is a positional argument after the subcommand
+# Positional arguments go after options:
+#   run-genesis <genesis_file>
+#   run-rollback <rollback_hash>
 if [ "${RUN_MODE}" = "run-genesis" ] && [ -n "${GENESIS_ARG}" ]; then
   CMD="java ${JAVA_OPTS} -jar \"${JAR}\" ${RUN_MODE} ${ARGS} \"${GENESIS_ARG}\""
+elif [ "${RUN_MODE}" = "run-rollback" ] && [ -n "${ROLLBACK_ARG}" ]; then
+  CMD="java ${JAVA_OPTS} -jar \"${JAR}\" ${RUN_MODE} ${ARGS} \"${ROLLBACK_ARG}\""
 else
   CMD="java ${JAVA_OPTS} -jar \"${JAR}\" ${RUN_MODE} ${ARGS}"
 fi
