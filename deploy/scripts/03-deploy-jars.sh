@@ -16,13 +16,55 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../config/deploy-config.sh"
 source "$SCRIPT_DIR/utils.sh"
 
-# Help message
-if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
-  show_help "03-deploy-jars.sh" \
-    "./deploy/scripts/03-deploy-jars.sh" \
-    "Deploy built metagraph JARs to all nodes"
-  exit 0
-fi
+# Parse arguments
+FROM_GITHUB=false
+GITHUB_VERSION="latest"
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --help|-h)
+      cat << EOF
+Deploy OttoChain metagraph JARs to all nodes
+
+USAGE:
+    ./deploy/scripts/03-deploy-jars.sh [OPTIONS]
+
+OPTIONS:
+    -h, --help           Show this help message
+    --from-github        Download JARs from GitHub Releases (recommended)
+    --version VER        Specific version to download from GitHub (default: latest)
+
+METHODS:
+    Default:             Use locally built JARs (requires sbt assembly)
+    --from-github:       Download pre-built JARs from GitHub Releases
+
+EXAMPLES:
+    ./deploy/scripts/03-deploy-jars.sh                    # Use local JARs
+    ./deploy/scripts/03-deploy-jars.sh --from-github     # Download latest
+    ./deploy/scripts/03-deploy-jars.sh --from-github --version 0.7.4
+
+DESCRIPTION:
+    Deploy built metagraph JARs to all nodes. The --from-github option
+    eliminates the need for manual 'sbt assembly' builds by downloading
+    pre-built JARs from GitHub Releases.
+EOF
+      exit 0
+      ;;
+    --from-github)
+      FROM_GITHUB=true
+      shift
+      ;;
+    --version)
+      GITHUB_VERSION="$2"
+      shift 2
+      ;;
+    *)
+      print_error "Unknown option: $1"
+      print_error "Use --help for usage information"
+      exit 1
+      ;;
+  esac
+done
 
 print_title "Ottochain Metagraph - Deploy JARs"
 
@@ -44,8 +86,40 @@ fi
 # Change to project root
 cd "$PROJECT_ROOT"
 
-# Locate built JARs
-print_title "Locating Built JARs"
+# Handle GitHub download if requested
+if [[ "$FROM_GITHUB" == "true" ]]; then
+  print_title "Downloading JARs from GitHub Releases"
+  
+  if [[ ! -f "$SCRIPT_DIR/download-ottochain-jars.sh" ]]; then
+    print_error "GitHub download script not found: $SCRIPT_DIR/download-ottochain-jars.sh"
+    exit 1
+  fi
+  
+  # Download JARs from GitHub
+  if [[ "$GITHUB_VERSION" == "latest" ]]; then
+    print_status "Downloading latest release JARs..."
+    if ! "$SCRIPT_DIR/download-ottochain-jars.sh" --verify; then
+      print_error "Failed to download JARs from GitHub Releases"
+      exit 1
+    fi
+  else
+    print_status "Downloading JARs for version $GITHUB_VERSION..."
+    if ! "$SCRIPT_DIR/download-ottochain-jars.sh" --version "$GITHUB_VERSION" --verify; then
+      print_error "Failed to download JARs for version $GITHUB_VERSION"
+      exit 1
+    fi
+  fi
+  
+  print_success "GitHub JARs downloaded successfully"
+  echo ""
+fi
+
+# Locate JARs (either built or downloaded)
+if [[ "$FROM_GITHUB" == "true" ]]; then
+  print_title "Locating Downloaded JARs"
+else
+  print_title "Locating Built JARs"
+fi
 
 declare -A JAR_PATHS
 declare -A JAR_HASHES
@@ -58,14 +132,27 @@ for module_spec in "${MODULES[@]}"; do
 
   print_status "Locating $target_dir JAR..."
 
-  # Find the JAR file
-  jar_file=$(find "$PROJECT_ROOT/modules"/*/target/scala-2.13/ -name "${jar_pattern}-*.jar" -type f 2>/dev/null | head -1)
+  if [[ "$FROM_GITHUB" == "true" ]]; then
+    # Use downloaded JAR from GitHub
+    jar_file="$SCRIPT_DIR/../jars/$target_jar_name"
+    
+    if [[ ! -f "$jar_file" ]]; then
+      print_error "Downloaded JAR not found: $jar_file"
+      print_status "GitHub JAR download may have failed"
+      LOCATE_SUCCESS=false
+      continue
+    fi
+  else
+    # Find locally built JAR file
+    jar_file=$(find "$PROJECT_ROOT/modules"/*/target/scala-2.13/ -name "${jar_pattern}-*.jar" -type f 2>/dev/null | head -1)
 
-  if [[ -z "$jar_file" ]] || [[ ! -f "$jar_file" ]]; then
-    print_error "JAR file not found for $target_dir (pattern: ${jar_pattern}-*.jar)"
-    print_status "Run ./deploy/scripts/02-build-jars.sh first to build the JARs"
-    LOCATE_SUCCESS=false
-    continue
+    if [[ -z "$jar_file" ]] || [[ ! -f "$jar_file" ]]; then
+      print_error "JAR file not found for $target_dir (pattern: ${jar_pattern}-*.jar)"
+      print_status "Run ./deploy/scripts/02-build-jars.sh first to build the JARs"
+      print_status "Or use --from-github to download pre-built JARs"
+      LOCATE_SUCCESS=false
+      continue
+    fi
   fi
 
   # Calculate hash
@@ -164,6 +251,14 @@ print_title "Deployment Summary"
 
 print_success "All JARs deployed successfully to all nodes!"
 print_status ""
+
+if [[ "$FROM_GITHUB" == "true" ]]; then
+  print_status "✅ Source: GitHub Releases (v$GITHUB_VERSION) - No manual builds needed!"
+else
+  print_status "📦 Source: Local builds (sbt assembly)"
+fi
+
+print_status ""
 print_status "Deployed modules:"
 
 for module_spec in "${MODULES[@]}"; do
@@ -177,6 +272,8 @@ for i in "${!NODE_IPS[@]}"; do
   print_status "  Node $((i+1)) (${NODE_IPS[$i]}): ~/$REMOTE_CODE_DIR/"
 done
 
+print_status ""
+print_status "💡 Pro tip: Use --from-github to skip manual builds in the future"
 print_status ""
 print_status "Next steps:"
 print_status "  Create genesis: ./deploy/scripts/04-create-genesis.sh"

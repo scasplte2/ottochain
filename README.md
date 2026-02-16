@@ -48,6 +48,26 @@ graph LR
 - 🚀 [Deployment Guide](docs/guides/deployment.md) — Deploy your metagraph
 - 🧪 [Testing Terminal](docs/guides/terminal-usage.md) — Interactive CLI for testing
 
+## 🚀 Automated Builds & Deployment
+
+**No more manual JAR builds!** OttoChain has fully automated JAR builds via GitHub Actions.
+
+```bash
+# Download latest release JARs (no sbt assembly needed!)
+./deploy/scripts/download-ottochain-jars.sh
+
+# Deploy with one command
+./deploy/scripts/03-deploy-jars.sh --from-github
+```
+
+**Benefits:**
+- ⚡ **30 seconds** vs 5-10 minutes for local builds
+- ✅ **Consistent builds** across all deployments
+- 🔗 **GitHub Releases integration** with automatic versioning
+- 🛡️ **SHA256 verification** for integrity
+
+See [Deployment Guide](deploy/README.md) for full automation details.
+
 ## Architecture
 
 OttoChain runs three layers on each node, built on Constellation's Tessellation framework:

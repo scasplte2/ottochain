@@ -19,12 +19,38 @@ Bash scripts for deploying and managing the Ottochain metagraph on Digital Ocean
 
 ### For Fresh Deployments
 
+**🚀 Recommended (Automated JARs):**
 ```bash
 # 1. Configure nodes in deploy/config/deploy-config.sh
 # 2. Setup nodes
 ./deploy/scripts/01-setup-nodes.sh
 
-# 3. Build JARs
+# 3. Deploy JARs from GitHub Releases (no build needed!)
+./deploy/scripts/03-deploy-jars.sh --from-github
+
+# 4. Create genesis
+./deploy/scripts/04-create-genesis.sh
+
+# 5. Create owner message
+./deploy/scripts/05-create-owner-message.sh
+
+# 6. Start cluster (genesis mode)
+./deploy/scripts/genesis-start.sh
+
+# 7. Verify
+./deploy/scripts/status.sh
+```
+
+**📦 Legacy (Manual Build):**
+<details>
+<summary>Click to expand manual build process</summary>
+
+```bash
+# 1. Configure nodes in deploy/config/deploy-config.sh
+# 2. Setup nodes
+./deploy/scripts/01-setup-nodes.sh
+
+# 3. Build JARs (takes ~5-10 minutes)
 ./deploy/scripts/02-build-jars.sh
 
 # 4. Deploy JARs
@@ -42,6 +68,54 @@ Bash scripts for deploying and managing the Ottochain metagraph on Digital Ocean
 # 8. Verify
 ./deploy/scripts/status.sh
 ```
+</details>
+
+## 🚀 JAR Automation (NEW)
+
+**No more manual `sbt assembly` builds!** 
+
+OttoChain now has fully automated JAR builds via GitHub Actions. Every commit to main triggers automated builds, and every release publishes JARs to GitHub Releases.
+
+### Download Pre-built JARs
+
+```bash
+# Download latest release
+./deploy/scripts/download-ottochain-jars.sh
+
+# Download specific version  
+./deploy/scripts/download-ottochain-jars.sh --version 0.7.4
+
+# List available versions
+./deploy/scripts/download-ottochain-jars.sh --list
+
+# Download with verification
+./deploy/scripts/download-ottochain-jars.sh --verify
+```
+
+### Deploy with Automation
+
+```bash
+# Deploy latest JARs (downloads automatically)
+./deploy/scripts/03-deploy-jars.sh --from-github
+
+# Deploy specific version
+./deploy/scripts/03-deploy-jars.sh --from-github --version 0.7.4
+```
+
+### Benefits
+
+- ✅ **No build time** - Download takes ~30 seconds vs 5-10 minutes for sbt assembly
+- ✅ **Consistent builds** - Same JARs for all deployments  
+- ✅ **No Java/sbt setup** - No need for local development environment
+- ✅ **Automatic releases** - Every GitHub tag triggers JAR publishing
+- ✅ **Verified downloads** - SHA256 verification ensures integrity
+
+### How It Works
+
+1. **Developer pushes to main** → GitHub Actions builds JARs
+2. **Release is tagged** → JARs are published to GitHub Releases  
+3. **Deployer runs script** → JARs downloaded from releases
+4. **Zero manual builds** → Deployment is faster and more reliable
 
 ## Available Scripts
 
@@ -50,8 +124,9 @@ Bash scripts for deploying and managing the Ottochain metagraph on Digital Ocean
 | Script | Purpose | When to Use |
 |--------|---------|-------------|
 | `01-setup-nodes.sh` | Setup nodes (directories, keystores, genesis.csv) | Once, initial setup |
-| `02-build-jars.sh` | Build metagraph JARs locally | After code changes |
-| `03-deploy-jars.sh` | Deploy JARs to all nodes | After building |
+| `02-build-jars.sh` | Build metagraph JARs locally | **Legacy** - use GitHub releases instead |
+| `03-deploy-jars.sh` | Deploy JARs to all nodes | After building OR with `--from-github` |
+| `download-ottochain-jars.sh` | **NEW** - Download JARs from GitHub Releases | **Recommended** - replaces manual builds |
 | `04-create-genesis.sh` | Create genesis snapshot | Once, initial deployment |
 | `05-create-owner-message.sh` | Generate multi-signed owner message | Once, after genesis |
 

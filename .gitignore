@@ -137,3 +137,6 @@ poetry.lock
 # Local development
 .local/
 .env
+
+# Downloaded JAR artifacts
+deploy/jars/*.jar

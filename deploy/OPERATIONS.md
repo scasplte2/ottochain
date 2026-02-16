@@ -332,9 +332,40 @@ echo "$VERSION - $DATE" >> /opt/ottochain/backups/versions.log
 
 ## Updating OttoChain Code
 
-### Build New JARs
+### Download Pre-built JARs (Recommended)
+
+**✅ NEW AUTOMATED PROCESS** - No more manual `sbt assembly`!
 
 ```bash
+# Download latest release JARs
+cd /path/to/ottochain
+./deploy/scripts/download-ottochain-jars.sh --verify
+
+# Copy to all nodes
+for node_ip in 1.2.3.4 5.6.7.8 9.10.11.12; do
+  scp deploy/jars/*.jar root@$node_ip:/opt/ottochain/jars/
+done
+```
+
+**Available options:**
+```bash
+# Download specific version
+./deploy/scripts/download-ottochain-jars.sh --version 0.7.4
+
+# List available versions
+./deploy/scripts/download-ottochain-jars.sh --list
+
+# Download latest with verification
+./deploy/scripts/download-ottochain-jars.sh --verify
+```
+
+### Manual Build (Legacy - Not Recommended)
+
+<details>
+<summary>📜 Click to expand legacy manual build process</summary>
+
+```bash
+# ⚠️ DEPRECATED: Use automated GitHub Releases instead
 # On dev machine
 cd /path/to/ottochain
 git pull origin main
@@ -348,6 +379,9 @@ scp modules/l0/target/scala-2.13/*-assembly-*.jar root@<HOST>:/opt/ottochain/jar
 scp modules/l1/target/scala-2.13/*-assembly-*.jar root@<HOST>:/opt/ottochain/jars/currency-l1.jar
 scp modules/data_l1/target/scala-2.13/*-assembly-*.jar root@<HOST>:/opt/ottochain/jars/data-l1.jar
 ```
+
+**Note:** Manual builds are no longer necessary. GitHub Actions automatically builds JARs on every release and publishes them to GitHub Releases. Use the automated download script above.
+</details>
 
 ### Rolling Update (Zero Downtime for L1)
 
