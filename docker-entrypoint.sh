@@ -80,15 +80,22 @@ fi
 # ============================================================
 # Check for existing ordinal data (indicates restart vs fresh start)
 # ============================================================
+# Tessellation stores ordinals in incremental_snapshot/ordinal (current).
+# Legacy: snapshot/ordinal (deprecated but may exist in older data).
+# Check incremental_snapshot first, fall back to snapshot for compatibility.
 
-ORDINAL_DIR="${DATA_DIR}/snapshot/ordinal"
 HAS_ORDINAL_DATA=false
+ORDINAL_DIR=""
 
-if [ -d "${ORDINAL_DIR}" ] && [ "$(ls -A ${ORDINAL_DIR} 2>/dev/null)" ]; then
-  HAS_ORDINAL_DATA=true
-  ORDINAL_COUNT=$(ls -1 "${ORDINAL_DIR}" 2>/dev/null | wc -l)
-  echo "Found existing ordinal data: ${ORDINAL_COUNT} ordinal(s) in ${ORDINAL_DIR}"
-fi
+for CHECK_DIR in "${DATA_DIR}/incremental_snapshot/ordinal" "${DATA_DIR}/snapshot/ordinal"; do
+  if [ -d "${CHECK_DIR}" ] && [ "$(ls -A ${CHECK_DIR} 2>/dev/null)" ]; then
+    HAS_ORDINAL_DATA=true
+    ORDINAL_DIR="${CHECK_DIR}"
+    ORDINAL_COUNT=$(find "${CHECK_DIR}" -type f 2>/dev/null | wc -l)
+    echo "Found existing ordinal data: ${ORDINAL_COUNT} file(s) in ${ORDINAL_DIR}"
+    break
+  fi
+done
 
 # IS_INITIAL marks this as the first/genesis node for its layer
 # Can be set explicitly, or inferred from RUN_MODE containing "genesis" or "initial"
@@ -245,29 +252,59 @@ fi
 
 # Rollback hash handling for run-rollback mode (L0 layers only)
 # run-rollback requires the hash of the snapshot to roll back to
+#
+# Tessellation storage structure (incremental_snapshot/):
+#   ordinal/<bucket>/<ordinal_number>  - snapshot data, filename is ordinal
+#   hash/<prefix1>/<prefix2>/<hash>    - hardlink to same data, filename is hash
+#
+# Strategy: Find highest ordinal, then lookup its hash via hardlink inode.
 ROLLBACK_ARG=""
 if [ "${RUN_MODE}" = "run-rollback" ]; then
-  HASH_DIR="${DATA_DIR}/snapshot/hash"
-  
   # Allow explicit override via ROLLBACK_HASH env var
   if [ -n "${ROLLBACK_HASH}" ]; then
     ROLLBACK_ARG="${ROLLBACK_HASH}"
     echo "Using explicit rollback hash: ${ROLLBACK_ARG}"
-  elif [ -d "${HASH_DIR}" ]; then
-    # Find the latest snapshot hash by looking at the most recent file in hash directory
-    # Structure: hash/<prefix>/<prefix2>/<full_hash>
-    # The filename IS the hash
-    LATEST_HASH_FILE=$(find "${HASH_DIR}" -type f -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+  else
+    ORDINAL_BASE="${DATA_DIR}/incremental_snapshot/ordinal"
+    HASH_BASE="${DATA_DIR}/incremental_snapshot/hash"
     
-    if [ -n "${LATEST_HASH_FILE}" ]; then
-      ROLLBACK_ARG=$(basename "${LATEST_HASH_FILE}")
-      echo "Auto-detected rollback hash from latest snapshot: ${ROLLBACK_ARG}"
+    # Fall back to deprecated snapshot/ if incremental_snapshot doesn't exist
+    if [ ! -d "${ORDINAL_BASE}" ]; then
+      ORDINAL_BASE="${DATA_DIR}/snapshot/ordinal"
+      HASH_BASE="${DATA_DIR}/snapshot/hash"
+    fi
+    
+    if [ -d "${ORDINAL_BASE}" ]; then
+      # Find highest ordinal number across all buckets
+      # Ordinal files are named by their ordinal number (1, 2, 3, ...)
+      HIGHEST_ORDINAL_FILE=$(find "${ORDINAL_BASE}" -type f -name '[0-9]*' 2>/dev/null | \
+        while read f; do basename "$f"; done | sort -n | tail -1)
+      
+      if [ -n "${HIGHEST_ORDINAL_FILE}" ]; then
+        # Find the actual file path
+        ORDINAL_PATH=$(find "${ORDINAL_BASE}" -type f -name "${HIGHEST_ORDINAL_FILE}" | head -1)
+        
+        if [ -n "${ORDINAL_PATH}" ] && [ -f "${ORDINAL_PATH}" ]; then
+          echo "Found highest ordinal: ${HIGHEST_ORDINAL_FILE} at ${ORDINAL_PATH}"
+          
+          # Get inode and find hardlinked hash file
+          INODE=$(stat -c %i "${ORDINAL_PATH}" 2>/dev/null)
+          if [ -n "${INODE}" ] && [ -d "${HASH_BASE}" ]; then
+            HASH_FILE=$(find "${HASH_BASE}" -inum "${INODE}" 2>/dev/null | head -1)
+            if [ -n "${HASH_FILE}" ]; then
+              ROLLBACK_ARG=$(basename "${HASH_FILE}")
+              echo "Auto-detected rollback hash: ${ROLLBACK_ARG}"
+              echo "  From ordinal: ${HIGHEST_ORDINAL_FILE}"
+            fi
+          fi
+        fi
+      fi
     fi
   fi
   
   if [ -z "${ROLLBACK_ARG}" ]; then
     echo "Error: run-rollback requires a snapshot hash but none found"
-    echo "Expected: snapshots in ${HASH_DIR}/<prefix>/<prefix2>/<hash>"
+    echo "Expected: ordinals in \${DATA_DIR}/incremental_snapshot/ordinal/"
     echo "Or set ROLLBACK_HASH env var explicitly"
     exit 1
   fi
