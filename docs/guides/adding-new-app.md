@@ -590,10 +590,281 @@ pnpm update @ottochain/sdk --force
 
 ---
 
+## Scala Unit Tests (ottochain)
+
+For testing state machine logic **before** SDK integration, use the Scala test suites in ottochain. This is useful for validating guards, effects, and edge cases at the fiber engine level.
+
+**Repo:** `scasplte2/ottochain` (upstream) or `ottobot-ai/ottochain` (fork)
+**Path:** `modules/shared-data/src/test/scala/xyz/kd5ujc/shared_data/examples/`
+
+### Existing example suites
+
+| Suite | Description |
+|-------|-------------|
+| `TokenEscrowSuite.scala` | Two-party escrow with timeout |
+| `TimeLockedEscrowSuite.scala` | Escrow with epoch-based deadlines |
+| `AgentIdentityLifecycleSuite.scala` | Agent registration, reputation, suspension |
+| `PredictionMarketSuite.scala` | Market creation, betting, settlement |
+| `VotingSuite.scala` | Proposal voting with quorum |
+| `TicTacToeGameSuite.scala` | Turn-based game state machine |
+| `ContractLifecycleSuite.scala` | Multi-party contract lifecycle |
+| `NftMarketplaceSuite.scala` | NFT listing and purchase |
+
+### Running tests
+
+```bash
+cd ~/repos/ottochain
+
+# Source SDKMAN (required for sbt/java)
+source ~/.sdkman/bin/sdkman-init.sh
+
+# Run all shared-data tests
+sbt 'sharedData/test'
+
+# Run a specific suite
+sbt 'sharedData/testOnly *EscrowSuite*'
+
+# Run with verbose output
+sbt 'sharedData/testOnly *EscrowSuite* -- --verbose'
+```
+
+### Test framework: Weaver-cats
+
+OttoChain uses [Weaver](https://disneystreaming.github.io/weaver-test/) (not ScalaTest). Test suites extend `SimpleIOSuite`:
+
+```scala
+import weaver.SimpleIOSuite
+import cats.effect.IO
+
+object MyDomainSuite extends SimpleIOSuite {
+  
+  test("should transition from FUNDED to RELEASED") {
+    for {
+      fiber   <- createFiber(initialState = "FUNDED", data = escrowData)
+      result  <- transitionFiber(fiber.id, "release", payload)
+    } yield expect(result.currentState.value == "RELEASED")
+  }
+}
+```
+
+### Test helpers location
+
+- **Fixtures:** `modules/shared-test/src/main/scala/xyz/kd5ujc/shared_test/`
+- **Extractors:** `FiberExtractors.scala` — helpers for asserting fiber state
+- **Generators:** Property-based test data generators
+
+---
+
+## E2E / Integration Test Infrastructure
+
+Beyond unit tests, OttoChain has full E2E testing that spins up the metagraph locally.
+
+### Local stack (ottochain-services)
+
+```bash
+cd ~/repos/ottochain-services
+
+# Start metagraph + all services (bridge, indexer, gateway)
+./scripts/start-local-stack.sh
+
+# Stop everything
+./scripts/stop-local-stack.sh
+```
+
+This starts:
+- 3-node metagraph (L0, CL1, DL1)
+- Bridge API (port 3030)
+- Indexer (port 3031)
+- Gateway GraphQL (port 4000)
+- PostgreSQL (port 5432)
+
+### Running E2E tests
+
+```bash
+# Full integration test suite
+./scripts/integration-test.sh
+
+# Or run specific test files
+cd packages/bridge
+pnpm test -- test/e2e.test.ts
+pnpm test -- test/sm.test.ts
+```
+
+### Test files
+
+| File | Purpose | Lines |
+|------|---------|------:|
+| `packages/bridge/test/e2e.test.ts` | Full lifecycle E2E tests | ~18K |
+| `packages/bridge/test/sm.test.ts` | State machine unit tests | ~31K |
+| `scripts/integration-test.sh` | CI integration runner | ~12K |
+
+### Smoke tests (deployed environments)
+
+For testing against scratch/staging:
+
+```bash
+# Set environment
+export BRIDGE_URL=https://bridge.scratch.ottochain.dev
+export ML0_URL=https://ml0-0.scratch.ottochain.dev:9200
+
+# Run subset of tests
+pnpm test -- test/e2e.test.ts --grep "create contract"
+```
+
+---
+
+## Fiber Engine Internals
+
+When debugging guard failures or unexpected transitions, you may need to understand the Scala fiber engine.
+
+### Key source locations
+
+| Component | Path |
+|-----------|------|
+| State machine types | `modules/models/src/main/scala/xyz/kd5ujc/schema/fiber/` |
+| Fiber processing | `modules/shared-data/src/main/scala/xyz/kd5ujc/shared_data/fiber/` |
+| JSON Logic evaluation | Uses `io.constellationnetwork.metagraph_sdk.json_logic` |
+| Update types | `modules/models/src/main/scala/xyz/kd5ujc/schema/Updates.scala` |
+
+### Key types
+
+```scala
+// StateMachineDefinition — the schema
+case class StateMachineDefinition(
+  metadata:     Option[StateMachineMetadata],
+  states:       Map[String, StateDefinition],
+  initialState: StateId,
+  transitions:  List[TransitionDefinition]
+)
+
+// TransitionDefinition — a single allowed transition  
+case class TransitionDefinition(
+  from:      StateId,
+  to:        StateId,
+  eventName: String,
+  guard:     Option[Json],  // JSON Logic expression
+  effect:    Option[Json]   // JSON Logic transformation
+)
+
+// FiberState — runtime state of a fiber
+case class FiberState(
+  fiberId:        String,
+  currentState:   StateId,
+  stateData:      Json,
+  sequenceNumber: Long,
+  definition:     StateMachineDefinition
+)
+```
+
+### Context variables available in guards/effects
+
+| Variable | Type | Description |
+|----------|------|-------------|
+| `state` | Object | Current `stateData` of the fiber |
+| `event` | Object | Transition payload (includes `agent`, custom fields) |
+| `$epochProgress` | Number | Monotonic epoch counter (use for deadlines) |
+| `$timestamp` | String | Wall clock ISO timestamp (avoid for guards) |
+| `$ordinal` | Number | Global snapshot ordinal |
+| `$parentState` | Object | Parent fiber's state (if child fiber) |
+
+---
+
+## Debugging & Troubleshooting
+
+### Guard failure diagnosis
+
+When a transition fails, the rejection reason appears in:
+
+1. **Bridge response** — HTTP 400 with error details
+2. **ML0 rejected updates** — `GET /snapshots/latest` includes rejected transactions
+3. **Webhook events** — If configured, `dispatchRejection()` sends failure details
+4. **FiberLogEntry** — On-chain log of all transitions (successful and failed)
+
+### Common error messages
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `Guard evaluation failed` | JSON Logic guard returned false | Check guard conditions, verify `event.agent` matches expected |
+| `Invalid sequence number` | Stale `targetSequenceNumber` | Use `getFiberSequenceNumber()` immediately before submit |
+| `Transition not found` | No matching `from → eventName` | Verify current state, check `eventName` spelling |
+| `Fiber not found` | Invalid `fiberId` or not yet indexed | Wait for indexer sync, verify UUID format |
+
+### Viewing fiber state
+
+```bash
+# Via bridge
+curl http://localhost:3030/fiber/<fiberId>
+
+# Via ML0 directly  
+curl http://localhost:9200/state-machines/<fiberId>
+
+# Via indexer (includes history)
+curl http://localhost:3031/state-machines/<fiberId>?includeHistory=true
+```
+
+### Enabling verbose logging
+
+```bash
+# Bridge (Node.js)
+DEBUG=ottochain:* pnpm start
+
+# Metagraph (Scala) — set in docker-compose or entrypoint
+export JAVA_OPTS="-Dlogback.configurationFile=logback-debug.xml"
+```
+
+---
+
+## Proto Definitions (Typed Domains)
+
+For domains that need **strongly typed** messages beyond JSON, add protobuf definitions to the SDK.
+
+**Path:** `ottochain-sdk/src/proto/<domain>.proto`
+
+### When to use proto
+
+- High-frequency domains where type safety prevents bugs
+- Domains with complex nested structures
+- When you need generated TypeScript types for the explorer/bridge
+
+### Example proto
+
+```protobuf
+// src/proto/escrow.proto
+syntax = "proto3";
+package ottochain.escrow;
+
+message EscrowState {
+  string escrow_id = 1;
+  string creator = 2;
+  string recipient = 3;
+  uint64 amount = 4;
+  string status = 5;
+  string created_at = 6;
+}
+
+message ReleasePayload {
+  string escrow_id = 1;
+  string agent = 2;
+}
+```
+
+### Generating types
+
+```bash
+cd ottochain-sdk
+pnpm proto:generate   # Runs buf + ts-proto
+pnpm build            # Rebuilds dist/
+```
+
+Generated types appear in `src/generated/` and are exported from the SDK.
+
+---
+
 ## Further Reading
 
 - `docs/guides/json-logic-primer.md` — JSON Logic operators and patterns
 - `docs/guides/state-machine-design.md` — State machine design principles
-- `docs/fiber-engine/` — How the Scala fiber engine processes transitions
+- `docs/fiber-engine/README.md` — How the Scala fiber engine processes transitions
 - `packages/bridge/src/metagraph.ts` — submitTransaction, waitForSequence, retry logic
-- `packages/bridge/test/lifecycle.test.ts` — Complete lifecycle test examples
+- `packages/bridge/test/e2e.test.ts` — Complete E2E test examples
+- `modules/shared-data/src/test/scala/xyz/kd5ujc/shared_data/examples/` — Scala unit test examples
