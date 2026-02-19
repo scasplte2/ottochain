@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.7.5](https://github.com/scasplte2/ottochain/compare/v0.7.4...v0.7.5) (2026-02-19)
+
+
+### Bug Fixes
+
+* **entrypoint:** use incremental_snapshot for state detection ([#88](https://github.com/scasplte2/ottochain/issues/88)) ([84ed899](https://github.com/scasplte2/ottochain/commit/84ed899c7ae88b350cd19c8f83e152db3c71599c))
+
+
+### Documentation
+
+* add comprehensive 'Adding a New App' guide ([#86](https://github.com/scasplte2/ottochain/issues/86)) ([374f673](https://github.com/scasplte2/ottochain/commit/374f673f27fd0fd5cb74c60425fa27b31d558d7b))
+
 ## [0.7.4](https://github.com/scasplte2/ottochain/compare/v0.7.3...v0.7.4) (2026-02-14)
 
 
