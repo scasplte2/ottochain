@@ -1,0 +1,28 @@
+{
+  "principalAddress": "DAG123abc456def789ghi012jkl345mno678pqr901",
+  "delegateAddress": "DAG789def012ghi345jkl678mno901pqr234stu567",
+  "scope": {
+    "allowedOperations": [
+      "CreateStateMachine",
+      "TransitionStateMachine"
+    ],
+    "maxGasPerTx": 100000,
+    "maxTotalGas": 500000,
+    "fiberTypes": ["*"],
+    "timeWindow": {
+      "startOrdinal": 1000,
+      "endOrdinal": 2000
+    }
+  },
+  "approach": "session_key",
+  "expiresAt": 2500,
+  "createdAt": 1000,
+  "isActive": false,
+  "usageCount": 0,
+  "sessionKeys": [],
+  "metadata": {
+    "purpose": "E2E testing of delegation system",
+    "testSuite": "delegated-signing-flow",
+    "version": "1.0"
+  }
+}

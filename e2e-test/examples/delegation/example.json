@@ -1,0 +1,354 @@
+{
+  "name": "Delegated Signing Flow",
+  "description": "Complete end-to-end test for delegation lifecycle: grant → use → revoke → reject expired",
+  "type": "delegation-integration",
+  "definition": "delegation-definition.json",
+  "initialData": "delegation-initial-data.json",
+  "actors": [
+    {
+      "name": "principal",
+      "description": "The user who grants delegation authority",
+      "role": "delegator",
+      "privateKey": "principal_test_key_64_chars_long_0123456789abcdef0123456789abcdef"
+    },
+    {
+      "name": "agent",
+      "description": "The relayer who acts on behalf of principal",
+      "role": "delegate",
+      "privateKey": "agent_test_key_64_chars_long_fedcba9876543210fedcba9876543210fed"
+    },
+    {
+      "name": "unauthorized",
+      "description": "Actor without delegation permissions",
+      "role": "observer",
+      "privateKey": "unauthorized_key_64_chars_long_1111111111111111111111111111111111"
+    }
+  ],
+  "delegation": {
+    "scope": {
+      "allowedOperations": ["CreateStateMachine", "TransitionStateMachine"],
+      "maxGasPerTx": 100000,
+      "maxTotalGas": 500000,
+      "timeWindow": {
+        "start": "2024-01-01T00:00:00Z",
+        "duration": "1h"
+      }
+    },
+    "approach": "session_key",
+    "sessionKey": {
+      "expiresIn": "30m",
+      "permissions": {
+        "maxTransactionsPerHour": 10
+      }
+    }
+  },
+  "events": [
+    {
+      "name": "grantDelegation",
+      "description": "Principal grants delegation authority to agent",
+      "file": "event-grant-delegation.ts",
+      "actor": "principal",
+      "target": "agent",
+      "expectedResult": "delegation_active"
+    },
+    {
+      "name": "createFiberDelegated",
+      "description": "Agent creates state machine on behalf of principal",
+      "file": "event-create-fiber-delegated.ts",
+      "actor": "agent",
+      "onBehalfOf": "principal",
+      "expectedResult": "fiber_created"
+    },
+    {
+      "name": "transitionFiberDelegated",
+      "description": "Agent transitions state machine using delegation",
+      "file": "event-transition-fiber-delegated.ts",
+      "actor": "agent",
+      "onBehalfOf": "principal",
+      "expectedResult": "state_transitioned"
+    },
+    {
+      "name": "revokeDelegation",
+      "description": "Principal revokes delegation authority",
+      "file": "event-revoke-delegation.ts",
+      "actor": "principal",
+      "target": "agent",
+      "expectedResult": "delegation_revoked"
+    },
+    {
+      "name": "attemptAfterRevocation",
+      "description": "Agent attempts operation after revocation (should fail)",
+      "file": "event-attempt-after-revocation.ts",
+      "actor": "agent",
+      "onBehalfOf": "principal",
+      "expectedResult": "delegation_revoked_error"
+    },
+    {
+      "name": "expireDelegation",
+      "description": "Wait for delegation to expire naturally",
+      "file": "event-expire-delegation.ts",
+      "expectedResult": "delegation_expired"
+    },
+    {
+      "name": "attemptAfterExpiry",
+      "description": "Agent attempts operation after expiry (should fail)",
+      "file": "event-attempt-after-expiry.ts", 
+      "actor": "agent",
+      "onBehalfOf": "principal",
+      "expectedResult": "delegation_expired_error"
+    },
+    {
+      "name": "unauthorizedAttempt",
+      "description": "Unauthorized actor attempts delegated operation (should fail)",
+      "file": "event-unauthorized-attempt.ts",
+      "actor": "unauthorized",
+      "onBehalfOf": "principal",
+      "expectedResult": "delegation_not_found_error"
+    }
+  ],
+  "testFlows": [
+    {
+      "name": "Complete Delegation Lifecycle - Happy Path",
+      "description": "Full flow: grant → create fiber → transition → revoke",
+      "steps": [
+        { 
+          "action": "grantDelegation",
+          "event": "event-grant-delegation.ts",
+          "expectedResult": "delegation_active",
+          "validation": [
+            "delegation.isActive === true",
+            "delegation.principalAddress === actors.principal.address",
+            "delegation.delegateAddress === actors.agent.address"
+          ]
+        },
+        { 
+          "action": "createStateMachine",
+          "event": "event-create-fiber-delegated.ts",
+          "expectedResult": "fiber_created",
+          "validation": [
+            "fiber.owners.includes(actors.principal.address)",
+            "transaction.signedBy === actors.agent.address",
+            "transaction.delegationContext.principalAddress === actors.principal.address"
+          ]
+        },
+        { 
+          "action": "transitionStateMachine", 
+          "event": "event-transition-fiber-delegated.ts",
+          "expectedResult": "state_transitioned",
+          "validation": [
+            "fiber.currentState === 'active'",
+            "transaction.signedBy === actors.agent.address",
+            "delegation.usageCount === 2"
+          ]
+        },
+        { 
+          "action": "revokeDelegation",
+          "event": "event-revoke-delegation.ts",
+          "expectedResult": "delegation_revoked",
+          "validation": [
+            "delegation.isActive === false",
+            "delegation.revokedAt !== null",
+            "delegation.revokedBy === actors.principal.address"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Revocation Enforcement",
+      "description": "Verify that operations fail after delegation is revoked",
+      "dependsOn": ["Complete Delegation Lifecycle - Happy Path"],
+      "steps": [
+        { 
+          "action": "attemptOperation",
+          "event": "event-attempt-after-revocation.ts",
+          "expectedResult": "delegation_revoked_error",
+          "validation": [
+            "error.code === 'DELEGATION_REVOKED'",
+            "error.delegationId !== null",
+            "transaction.rejected === true"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Expiration Enforcement", 
+      "description": "Verify that operations fail after delegation expires",
+      "setup": [
+        { "action": "grantDelegation", "event": "event-grant-delegation.ts" },
+        { "action": "waitForExpiry", "event": "event-expire-delegation.ts" }
+      ],
+      "steps": [
+        { 
+          "action": "attemptOperation",
+          "event": "event-attempt-after-expiry.ts",
+          "expectedResult": "delegation_expired_error",
+          "validation": [
+            "error.code === 'DELEGATION_EXPIRED'",
+            "error.expiresAt < currentTime",
+            "transaction.rejected === true"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Authorization Validation",
+      "description": "Verify that unauthorized actors cannot use delegations",
+      "setup": [
+        { "action": "grantDelegation", "event": "event-grant-delegation.ts" }
+      ],
+      "steps": [
+        { 
+          "action": "attemptOperation",
+          "event": "event-unauthorized-attempt.ts",
+          "expectedResult": "delegation_not_found_error",
+          "validation": [
+            "error.code === 'DELEGATION_NOT_FOUND'",
+            "transaction.signedBy === actors.unauthorized.address",
+            "transaction.rejected === true"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Scope Enforcement",
+      "description": "Verify that operations outside delegation scope are rejected",
+      "setup": [
+        { "action": "grantDelegation", "event": "event-grant-delegation.ts" }
+      ],
+      "steps": [
+        { 
+          "action": "attemptOutOfScopeOperation",
+          "event": "event-out-of-scope-attempt.ts",
+          "expectedResult": "insufficient_permissions_error",
+          "validation": [
+            "error.code === 'INSUFFICIENT_PERMISSIONS'",
+            "error.requestedOperation === 'DeleteStateMachine'",
+            "error.allowedOperations.includes('CreateStateMachine')",
+            "transaction.rejected === true"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Gas Limit Enforcement", 
+      "description": "Verify that gas limits in delegation scope are enforced",
+      "setup": [
+        { "action": "grantDelegation", "event": "event-grant-delegation.ts" }
+      ],
+      "steps": [
+        { 
+          "action": "attemptHighGasOperation",
+          "event": "event-high-gas-attempt.ts",
+          "expectedResult": "gas_limit_exceeded_error",
+          "validation": [
+            "error.code === 'GAS_LIMIT_EXCEEDED'",
+            "error.requestedGas > delegation.scope.maxGasPerTx",
+            "transaction.rejected === true"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Session Key Management",
+      "description": "Verify session key creation and management",
+      "steps": [
+        { 
+          "action": "grantDelegation",
+          "event": "event-grant-delegation.ts",
+          "expectedResult": "delegation_active"
+        },
+        { 
+          "action": "createSessionKey",
+          "event": "event-create-session-key.ts",
+          "expectedResult": "session_key_created",
+          "validation": [
+            "sessionKey.delegationId === delegation.id",
+            "sessionKey.expiresAt > currentTime",
+            "sessionKey.publicKey !== null"
+          ]
+        },
+        { 
+          "action": "useSessionKey",
+          "event": "event-use-session-key.ts",
+          "expectedResult": "operation_successful",
+          "validation": [
+            "transaction.sessionKeyUsed === true",
+            "sessionKey.usageCount === 1"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Batch Operations",
+      "description": "Verify that multiple operations can be performed in batch",
+      "setup": [
+        { "action": "grantDelegation", "event": "event-grant-delegation.ts" }
+      ],
+      "steps": [
+        { 
+          "action": "batchOperations",
+          "event": "event-batch-operations.ts",
+          "expectedResult": "batch_successful",
+          "validation": [
+            "batch.results.length === 3",
+            "batch.results.every(r => r.success === true)",
+            "delegation.usageCount === 3"
+          ]
+        }
+      ]
+    }
+  ],
+  "validation": {
+    "stateValidation": {
+      "delegation": [
+        "id is unique UUID",
+        "principalAddress matches granting user",
+        "delegateAddress matches authorized agent",
+        "isActive reflects current status",
+        "usageCount tracks operations performed",
+        "scope contains valid operation restrictions"
+      ],
+      "sessionKey": [
+        "publicKey is valid cryptographic key",
+        "expiresAt is future timestamp",
+        "delegationId references valid delegation",
+        "usageCount tracks key usage"
+      ],
+      "transaction": [
+        "signedBy indicates actual signer",
+        "delegationContext includes principal info",
+        "gasUsed is within delegation limits",
+        "rejected flag indicates validation result"
+      ]
+    },
+    "errorValidation": {
+      "DELEGATION_REVOKED": "Operation rejected due to revoked delegation",
+      "DELEGATION_EXPIRED": "Operation rejected due to expired delegation",
+      "DELEGATION_NOT_FOUND": "No valid delegation found for signer",
+      "INSUFFICIENT_PERMISSIONS": "Operation not allowed by delegation scope",
+      "GAS_LIMIT_EXCEEDED": "Gas usage exceeds delegation limits",
+      "SESSION_EXPIRED": "Session key has expired",
+      "INVALID_SIGNATURE": "Cryptographic signature validation failed"
+    }
+  },
+  "assertions": {
+    "metagraphState": [
+      "All delegation records are properly stored in CalculatedState",
+      "Revoked delegations are not usable for new operations",
+      "Expired delegations are automatically cleaned up",
+      "Session keys are properly linked to parent delegations"
+    ],
+    "bridgeIntegration": [
+      "Bridge correctly validates delegation signatures",
+      "Bridge properly constructs delegation context",
+      "Bridge handles delegation errors gracefully",
+      "Bridge enforces scope restrictions"
+    ],
+    "endToEndFlow": [
+      "Complete lifecycle can be executed without errors",
+      "State transitions are properly validated",
+      "Error conditions are properly handled",
+      "Cleanup occurs after test completion"
+    ]
+  }
+}

@@ -1,0 +1,95 @@
+{
+  "name": "DelegationCredential",
+  "description": "State machine for managing delegation credentials and lifecycle",
+  "initialState": "pending",
+  "states": {
+    "pending": {
+      "description": "Delegation has been created but not yet activated",
+      "isFinal": false,
+      "allowedTransitions": ["active", "revoked"]
+    },
+    "active": {
+      "description": "Delegation is active and can be used for operations", 
+      "isFinal": false,
+      "allowedTransitions": ["revoked", "expired"]
+    },
+    "revoked": {
+      "description": "Delegation has been explicitly revoked by principal",
+      "isFinal": true,
+      "allowedTransitions": []
+    },
+    "expired": {
+      "description": "Delegation has reached its expiration time",
+      "isFinal": true, 
+      "allowedTransitions": []
+    }
+  },
+  "transitions": [
+    {
+      "eventName": "activate",
+      "from": { "value": "pending" },
+      "to": { "value": "active" },
+      "guard": {
+        "and": [
+          { "===": [{ "var": "event.type" }, "ACTIVATE_DELEGATION"] },
+          { ">": [{ "var": "event.expiresAt" }, { "var": "$ordinal" }] },
+          { "===": [{ "var": "event.signer" }, { "var": "state.principalAddress" }] }
+        ]
+      }
+    },
+    {
+      "eventName": "revoke",
+      "from": { "anyOf": ["pending", "active"] },
+      "to": { "value": "revoked" },
+      "guard": {
+        "and": [
+          { "===": [{ "var": "event.type" }, "REVOKE_DELEGATION"] },
+          { "===": [{ "var": "event.signer" }, { "var": "state.principalAddress" }] }
+        ]
+      }
+    },
+    {
+      "eventName": "expire",
+      "from": { "value": "active" },
+      "to": { "value": "expired" },
+      "guard": {
+        "and": [
+          { ">=": [{ "var": "$ordinal" }, { "var": "state.expiresAt" }] },
+          { "===": [{ "var": "state.currentState" }, "active"] }
+        ]
+      }
+    }
+  ],
+  "contextVariables": {
+    "delegation": {
+      "description": "Delegation context variables available in JLVM",
+      "variables": [
+        "delegation.principalAddr - Address of the delegation grantor",
+        "delegation.delegateAddr - Address of the authorized delegate", 
+        "delegation.isActive - Boolean indicating if delegation is currently active",
+        "delegation.scope - Array of allowed operations",
+        "delegation.expiresAt - Ordinal when delegation expires",
+        "delegation.usageCount - Number of operations performed using this delegation"
+      ]
+    }
+  },
+  "validation": {
+    "onCreate": {
+      "required": ["principalAddress", "delegateAddress", "scope", "expiresAt"],
+      "principalAddress": { "type": "string", "pattern": "^DAG[a-zA-Z0-9]{39}$" },
+      "delegateAddress": { "type": "string", "pattern": "^DAG[a-zA-Z0-9]{39}$" },
+      "scope": {
+        "type": "object",
+        "required": ["allowedOperations"],
+        "allowedOperations": { "type": "array", "minItems": 1 }
+      },
+      "expiresAt": { "type": "number", "minimum": 0 }
+    },
+    "onTransition": {
+      "signatureValidation": "Required for all state transitions",
+      "ownershipValidation": "Only principal can revoke delegation",
+      "scopeValidation": "Operations must be within delegation scope",
+      "expiryValidation": "Expired delegations cannot be used"
+    }
+  }
+}
