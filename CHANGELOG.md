@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.6](https://github.com/scasplte2/ottochain/compare/v0.7.5...v0.7.6) (2026-02-22)
+
+
+### Bug Fixes
+
+* use magnolia customizable codecs with useDefaults ([#93](https://github.com/scasplte2/ottochain/issues/93)) ([1561734](https://github.com/scasplte2/ottochain/commit/15617345f59600b78bdfa72e64b45ecd99c78993))
+
 ## [0.7.5](https://github.com/scasplte2/ottochain/compare/v0.7.4...v0.7.5) (2026-02-19)
 
 
