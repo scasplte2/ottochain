@@ -36,7 +36,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           # For release events, checkout the tag; for workflow_dispatch use input; else use ref
           ref: ${{ github.event.release.tag_name || inputs.tag || github.ref }}
