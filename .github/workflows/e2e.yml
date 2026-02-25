@@ -37,7 +37,7 @@ jobs:
           node-version: '20'
 
       - name: Install just
-        uses: extractions/setup-just@v2
+        uses: extractions/setup-just@v3
 
       - name: Clone tessellation
         run: |
