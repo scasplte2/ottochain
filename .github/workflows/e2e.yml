@@ -50,11 +50,34 @@ jobs:
           git apply ../e2e-test/patches/v4.0.0-rc.2-compile-fix.patch
           git apply ../e2e-test/patches/v4.0.0-rc.2-java21-deps.patch
 
+      - name: Extract pre-built tessellation JARs
+        run: |
+          echo "Pulling pre-built tessellation base image..."
+          docker pull ghcr.io/ottobot-ai/tessellation-base:v${TESSELLATION_VERSION}
+
+          # Create a temporary container to extract JARs (no need to run it)
+          docker create --name tess-base ghcr.io/ottobot-ai/tessellation-base:v${TESSELLATION_VERSION}
+
+          # Place JARs at the paths tessellation's just up expects (SKIP_ASSEMBLY=true)
+          mkdir -p tessellation/modules/dag-l0/target/scala-2.13
+          mkdir -p tessellation/modules/dag-l1/target/scala-2.13
+
+          docker cp tess-base:/jars/gl0/. tessellation/modules/dag-l0/target/scala-2.13/
+          docker cp tess-base:/jars/gl1/. tessellation/modules/dag-l1/target/scala-2.13/
+
+          docker rm tess-base
+
+          echo "Extracted JARs:"
+          ls -lh tessellation/modules/dag-l0/target/scala-2.13/*.jar \
+                  tessellation/modules/dag-l1/target/scala-2.13/*.jar
+
       - name: Start cluster
         working-directory: tessellation
         run: |
           export TESSELLATION_VERSION="${TESSELLATION_VERSION}"
-          just up --metagraph="${GITHUB_WORKSPACE}" --dl1 --data
+          # SKIP_ASSEMBLY=true: skip tessellation JAR rebuild (we use pre-built base image)
+          # PUBLISH=false: skip sdk/publishLocal (OttoChain uses metakit, not tessellation-sdk directly)
+          SKIP_ASSEMBLY=true PUBLISH=false just up --metagraph="${GITHUB_WORKSPACE}" --dl1 --data
 
       - name: Wait for cluster health
         run: |

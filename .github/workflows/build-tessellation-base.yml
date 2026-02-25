@@ -1,0 +1,118 @@
+name: Build Tessellation Base Image
+
+# Builds pre-built Tessellation GL0/GL1 JARs into a Docker image and publishes
+# to ghcr.io/ottobot-ai/tessellation-base:v{VERSION}.
+#
+# E2E CI pulls this image to skip ~5-8 min of tessellation assembly (SKIP_ASSEMBLY=true).
+# Metagraph JARs (ml0/cl1/dl1) are intentionally excluded — they change every PR.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tessellation_version:
+        description: 'Tessellation version to build (e.g. 4.0.0-rc.2)'
+        required: false
+
+  push:
+    branches:
+      - main
+    paths:
+      - 'build.sbt'
+      - 'project/**'
+      - 'e2e-test/patches/**'
+      - 'tessellation-base.Dockerfile'
+
+env:
+  TESSELLATION_VERSION: "4.0.0-rc.2"
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ghcr.io/ottobot-ai/tessellation-base
+
+jobs:
+  build:
+    name: Build and Publish Tessellation Base Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set tessellation version
+        run: |
+          VERSION="${{ github.event.inputs.tessellation_version || env.TESSELLATION_VERSION }}"
+          echo "TESSELLATION_VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'sbt'
+
+      - name: Set up sbt
+        uses: sbt/setup-sbt@v1
+
+      - name: Clone tessellation
+        run: |
+          git clone --depth 1 --branch "v${TESSELLATION_VERSION}" \
+            https://github.com/Constellation-Labs/tessellation.git tessellation
+
+      - name: Apply tessellation patches
+        working-directory: tessellation
+        run: |
+          for patch in ../e2e-test/patches/*.patch; do
+            if [ -f "$patch" ]; then
+              git apply --check "$patch" 2>/dev/null && \
+                git apply "$patch" && \
+                echo "Applied: $(basename $patch)" || \
+                echo "Skip (already applied): $(basename $patch)"
+            fi
+          done
+
+      - name: Build tessellation JARs (GL0 + GL1)
+        working-directory: tessellation
+        run: sbt dagL0/assembly dagL1/assembly
+
+      - name: Collect JARs for Docker build context
+        run: |
+          mkdir -p jars/gl0 jars/gl1
+
+          find tessellation/modules/dag-l0/target/scala-2.13/ \
+            -name "tessellation-dag-l0-assembly*.jar" \
+            -not -name "*javadoc*" -not -name "*sources*" \
+            | head -1 | xargs -I{} cp {} jars/gl0/
+
+          find tessellation/modules/dag-l1/target/scala-2.13/ \
+            -name "tessellation-dag-l1-assembly*.jar" \
+            -not -name "*javadoc*" -not -name "*sources*" \
+            | head -1 | xargs -I{} cp {} jars/gl1/
+
+          echo "Collected JARs:"
+          ls -lh jars/gl0/ jars/gl1/
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: tessellation-base.Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:v${{ env.TESSELLATION_VERSION }}
+            ${{ env.IMAGE_NAME }}:latest
+
+      - name: Push version alias tag
+        run: |
+          # Ensure the version tag is explicitly pushed as a named alias
+          docker push ${{ env.IMAGE_NAME }}:v${TESSELLATION_VERSION}
+          echo "✅ Published: ${{ env.IMAGE_NAME }}:v${TESSELLATION_VERSION}"
+          echo "✅ Published: ${{ env.IMAGE_NAME }}:latest"
