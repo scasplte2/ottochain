@@ -79,7 +79,7 @@ lazy val buildInfoSettings = Seq(
 lazy val root = (project in file("."))
   .settings(
     name := "ottochain"
-  ).aggregate(proto, models, sharedData, currencyL0, currencyL1, dataL1)
+  ).aggregate(proto, models, sharedData, currencyL0, currencyL1, dataL1, ci)
 
 lazy val proto = (project in file("modules/proto"))
   .dependsOn(models)
@@ -153,4 +153,15 @@ lazy val dataL1 = (project in file("modules/data_l1"))
     commonSettings,
     commonTestSettings,
     name := "ottochain-data-l1"
+  )
+
+lazy val ci = (project in file("modules/ci"))
+  .settings(
+    commonSettings,
+    commonTestSettings,
+    name := "ottochain-ci",
+    libraryDependencies ++= Seq(
+      Libraries.catsEffect,
+      Libraries.catsCore
+    )
   )
