@@ -180,7 +180,17 @@ smoke tag="local":
 
 TESSELLATION_DIR := env_var_or_default("TESSELLATION_DIR", env_var("HOME") + "/repos/tessellation")
 
+# Resolve tessellation version from metakit dependency on Maven Central
+resolve-tess-version:
+    #!/usr/bin/env bash
+    METAKIT_VER=$(grep 'val metakit =' project/Dependencies.scala | head -1 | grep -o '"[^"]*"' | tr -d '"')
+    TESS_VER=$(curl -sf "https://repo1.maven.org/maven2/io/constellationnetwork/metakit_2.13/${METAKIT_VER}/metakit_2.13-${METAKIT_VER}.pom" \
+      | grep -A1 'tessellation-sdk' | grep '<version>' | grep -o '[0-9][^<]*')
+    echo "ottochain → metakit ${METAKIT_VER} → tessellation ${TESS_VER}"
+
 # Run full E2E test suite (start cluster, test, stop)
+# Uses --hypergraph-release to download pre-built tessellation JARs instead of building from source.
+# metakit + tessellation-sdk resolve from Maven Central — no publishLocal needed.
 e2e:
     #!/usr/bin/env bash
     set -e
@@ -199,22 +209,19 @@ e2e:
         exit 1
     fi
     
-    # Apply patches if needed
-    echo "📦 Checking tessellation patches..."
-    cd "{{ TESSELLATION_DIR }}"
-    git diff --quiet || echo "   (tessellation has local changes)"
+    # Resolve tessellation version from metakit dependency
+    METAKIT_VER=$(grep 'val metakit =' project/Dependencies.scala | head -1 | grep -o '"[^"]*"' | tr -d '"')
+    TESS_VER=$(curl -sf "https://repo1.maven.org/maven2/io/constellationnetwork/metakit_2.13/${METAKIT_VER}/metakit_2.13-${METAKIT_VER}.pom" \
+      | grep -A1 'tessellation-sdk' | grep '<version>' | grep -o '[0-9][^<]*')
+    echo "Dependency chain: ottochain → metakit ${METAKIT_VER} → tessellation ${TESS_VER}"
     
     OTTOCHAIN_DIR="{{ justfile_directory() }}"
-    for patch in "$OTTOCHAIN_DIR/e2e-test/patches"/*.patch; do
-        if [ -f "$patch" ]; then
-            git apply --check "$patch" 2>/dev/null && git apply "$patch" && echo "   Applied $(basename $patch)" || echo "   Patch already applied: $(basename $patch)"
-        fi
-    done
     
-    # Start cluster
+    # Start cluster with pre-built hypergraph release
     echo ""
-    echo "🔧 Starting E2E cluster..."
-    just up --metagraph="$OTTOCHAIN_DIR" --dl1 --data
+    echo "🔧 Starting E2E cluster (hypergraph release v${TESS_VER})..."
+    cd "{{ TESSELLATION_DIR }}"
+    just up --hypergraph-release="v${TESS_VER}" --metagraph="$OTTOCHAIN_DIR" --dl1 --data
     
     cd "$OTTOCHAIN_DIR"
     
@@ -236,6 +243,7 @@ e2e:
     just down
 
 # Start E2E cluster (for interactive development)
+# Uses --hypergraph-release to skip building tessellation from source.
 e2e-up:
     #!/usr/bin/env bash
     set -e
@@ -250,17 +258,16 @@ e2e-up:
         exit 1
     fi
     
+    # Resolve tessellation version from metakit dependency
+    METAKIT_VER=$(grep 'val metakit =' project/Dependencies.scala | head -1 | grep -o '"[^"]*"' | tr -d '"')
+    TESS_VER=$(curl -sf "https://repo1.maven.org/maven2/io/constellationnetwork/metakit_2.13/${METAKIT_VER}/metakit_2.13-${METAKIT_VER}.pom" \
+      | grep -A1 'tessellation-sdk' | grep '<version>' | grep -o '[0-9][^<]*')
+    echo "Dependency chain: ottochain → metakit ${METAKIT_VER} → tessellation ${TESS_VER}"
+    
+    OTTOCHAIN_DIR="{{ justfile_directory() }}"
     cd "{{ TESSELLATION_DIR }}"
     
-    # Apply patches
-    OTTOCHAIN_DIR="{{ justfile_directory() }}"
-    for patch in "$OTTOCHAIN_DIR/e2e-test/patches"/*.patch; do
-        if [ -f "$patch" ]; then
-            git apply --check "$patch" 2>/dev/null && git apply "$patch" || true
-        fi
-    done
-    
-    just up --metagraph="$OTTOCHAIN_DIR" --dl1 --data
+    just up --hypergraph-release="v${TESS_VER}" --metagraph="$OTTOCHAIN_DIR" --dl1 --data
     
     cd "$OTTOCHAIN_DIR"
     just _e2e-wait

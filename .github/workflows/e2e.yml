@@ -6,6 +6,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      tessellation_version:
+        description: 'Tessellation version override (e.g., v4.0.0-rc.6)'
+        required: false
+        type: string
 
 jobs:
   e2e:
@@ -37,54 +42,44 @@ jobs:
         uses: extractions/setup-just@v3
 
       # Resolve tessellation version from the dependency chain:
-      #   ottochain → metakit (version in project/Dependencies.scala)
-      #   metakit → tessellation (version in metakit's Dependencies.scala at that tag)
+      #   ottochain → metakit (version in Dependencies.scala)
+      #   metakit POM on Maven Central → tessellation-sdk version
       - name: Resolve tessellation version
         id: versions
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           METAKIT_VER=$(grep 'val metakit =' project/Dependencies.scala | head -1 | grep -o '"[^"]*"' | tr -d '"')
           echo "metakit=${METAKIT_VER}" >> $GITHUB_OUTPUT
 
-          TESS_VER=$(gh api "repos/Constellation-Labs/metakit/contents/project/Dependencies.scala?ref=v${METAKIT_VER}" \
-            --jq '.content' | base64 -d | grep 'val tessellation =' | grep -o '"[^"]*"' | tr -d '"')
-          echo "tessellation=${TESS_VER}" >> $GITHUB_OUTPUT
+          # Allow workflow_dispatch override
+          if [ -n "${{ inputs.tessellation_version }}" ]; then
+            TESS_VER="${{ inputs.tessellation_version }}"
+            TESS_VER="${TESS_VER#v}"
+            echo "tessellation=${TESS_VER}" >> $GITHUB_OUTPUT
+            echo "Dependency chain: ottochain → metakit ${METAKIT_VER} → tessellation ${TESS_VER} (override)"
+          else
+            # Resolve from metakit POM on Maven Central
+            TESS_VER=$(curl -sf "https://repo1.maven.org/maven2/io/constellationnetwork/metakit_2.13/${METAKIT_VER}/metakit_2.13-${METAKIT_VER}.pom" \
+              | grep -A1 'tessellation-sdk' | grep '<version>' | grep -o '[0-9][^<]*')
+            echo "tessellation=${TESS_VER}" >> $GITHUB_OUTPUT
+            echo "Dependency chain: ottochain → metakit ${METAKIT_VER} → tessellation ${TESS_VER}"
+          fi
 
-          echo "Dependency chain: ottochain → metakit ${METAKIT_VER} → tessellation ${TESS_VER}"
-
-      - name: Clone tessellation
+      # Clone tessellation for its Docker infrastructure (compose-runner, Dockerfiles, scripts).
+      # We do NOT build tessellation — all JARs come from pre-built releases.
+      - name: Clone tessellation infrastructure
         run: |
           git clone --depth 1 --branch "v${{ steps.versions.outputs.tessellation }}" \
             https://github.com/Constellation-Labs/tessellation.git tessellation
 
-      - name: Apply tessellation patches
-        working-directory: tessellation
-        run: |
-          for patch in ../e2e-test/patches/*.patch; do
-            echo "Applying $(basename $patch)..."
-            git apply "$patch"
-          done
-
-      # Download pre-built GL0/GL1/keytool/wallet JARs from tessellation release.
-      # This avoids building tessellation assembly (~5-10 min savings).
-      # We still build tessellation SDK from source (needed for metakit/ottochain compilation).
+      # Download pre-built GL0/GL1/keytool/wallet JARs from tessellation GitHub release.
+      # metakit and tessellation-sdk resolve from Maven Central via sbt — no publishLocal needed.
       - name: Download tessellation release JARs
         working-directory: tessellation
         run: |
           bash docker/bin/download-release-jars.sh "v${{ steps.versions.outputs.tessellation }}" docker/jars
 
-      - name: Build tessellation SDK (publishLocal)
-        working-directory: tessellation
-        run: sbt --error sdk/publishLocal
-
-      - name: Clone and build metakit (publishLocal)
-        run: |
-          git clone --depth 1 --branch "v${{ steps.versions.outputs.metakit }}" \
-            https://github.com/Constellation-Labs/metakit.git metakit
-          cd metakit
-          sbt --error publishLocal
-
+      # Only build ottochain metagraph JARs from source.
+      # metakit + tessellation-sdk are resolved from Maven Central.
       - name: Build metagraph JARs
         run: sbt --error "currencyL0/assembly" "currencyL1/assembly" "dataL1/assembly"
 
@@ -100,11 +95,9 @@ jobs:
 
       - name: Start cluster
         working-directory: tessellation
-        env:
-          SKIP_ASSEMBLY: "true"
         run: |
-          export TESSELLATION_VERSION="${{ steps.versions.outputs.tessellation }}"
-          bash docker/bin/compose-runner.sh --up --metagraph="${GITHUB_WORKSPACE}" --dl1 --data
+          just up --hypergraph-release="v${{ steps.versions.outputs.tessellation }}" \
+            --skip-metagraph-assembly --metagraph="${GITHUB_WORKSPACE}" --dl1 --data
 
       - name: Wait for cluster health
         run: |

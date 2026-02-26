@@ -8,7 +8,7 @@ object Dependencies {
     val catsMtl = "1.3.1"
     val enumeratum = "1.7.5"
     val decline = "2.5.0"
-    val metakit = "1.7.0-rc.4"
+    val metakit = "1.7.0-rc.8"
     val pureConfig = "0.17.5"
     val weaver = "0.10.1"
 
