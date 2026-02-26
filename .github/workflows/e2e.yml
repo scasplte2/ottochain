@@ -7,9 +7,6 @@ on:
     branches: [main]
   workflow_dispatch:
 
-env:
-  TESSELLATION_VERSION: "4.0.0-rc.2"
-
 jobs:
   e2e:
     name: E2E Tests
@@ -39,30 +36,78 @@ jobs:
       - name: Install just
         uses: extractions/setup-just@v3
 
+      # Resolve tessellation version from the dependency chain:
+      #   ottochain → metakit (version in project/Dependencies.scala)
+      #   metakit → tessellation (version in metakit's Dependencies.scala at that tag)
+      - name: Resolve tessellation version
+        id: versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          METAKIT_VER=$(grep 'val metakit =' project/Dependencies.scala | head -1 | grep -o '"[^"]*"' | tr -d '"')
+          echo "metakit=${METAKIT_VER}" >> $GITHUB_OUTPUT
+
+          TESS_VER=$(gh api "repos/Constellation-Labs/metakit/contents/project/Dependencies.scala?ref=v${METAKIT_VER}" \
+            --jq '.content' | base64 -d | grep 'val tessellation =' | grep -o '"[^"]*"' | tr -d '"')
+          echo "tessellation=${TESS_VER}" >> $GITHUB_OUTPUT
+
+          echo "Dependency chain: ottochain → metakit ${METAKIT_VER} → tessellation ${TESS_VER}"
+
       - name: Clone tessellation
         run: |
-          git clone --depth 1 --branch "v${TESSELLATION_VERSION}" \
+          git clone --depth 1 --branch "v${{ steps.versions.outputs.tessellation }}" \
             https://github.com/Constellation-Labs/tessellation.git tessellation
 
       - name: Apply tessellation patches
         working-directory: tessellation
         run: |
-          git apply ../e2e-test/patches/v4.0.0-rc.2-compile-fix.patch
-          git apply ../e2e-test/patches/v4.0.0-rc.2-java21-deps.patch
+          for patch in ../e2e-test/patches/*.patch; do
+            echo "Applying $(basename $patch)..."
+            git apply "$patch"
+          done
+
+      # Download pre-built GL0/GL1/keytool/wallet JARs from tessellation release.
+      # This avoids building tessellation assembly (~5-10 min savings).
+      # We still build tessellation SDK from source (needed for metakit/ottochain compilation).
+      - name: Download tessellation release JARs
+        working-directory: tessellation
+        run: |
+          bash docker/bin/download-release-jars.sh "v${{ steps.versions.outputs.tessellation }}" docker/jars
+
+      - name: Build tessellation SDK (publishLocal)
+        working-directory: tessellation
+        run: sbt --error sdk/publishLocal
+
+      - name: Clone and build metakit (publishLocal)
+        run: |
+          git clone --depth 1 --branch "v${{ steps.versions.outputs.metakit }}" \
+            https://github.com/Constellation-Labs/metakit.git metakit
+          cd metakit
+          sbt --error publishLocal
+
+      - name: Build metagraph JARs
+        run: sbt --error "currencyL0/assembly" "currencyL1/assembly" "dataL1/assembly"
+
+      - name: Stage metagraph JARs
+        run: |
+          for layer in l0:ml0 l1:cl1 data_l1:dl1; do
+            module="${layer%%:*}"; target="${layer#*:}"
+            jar=$(ls -1t modules/${module}/target/scala-2.13/*-assembly*.jar | head -1)
+            cp "$jar" tessellation/docker/jars/${target}.jar
+            echo "✓ ${target}.jar ($(stat -c%s "$jar") bytes)"
+          done
+          ls -la tessellation/docker/jars/
 
       - name: Start cluster
         working-directory: tessellation
+        env:
+          SKIP_ASSEMBLY: "true"
         run: |
-          export TESSELLATION_VERSION="${TESSELLATION_VERSION}"
-          just up --metagraph="${GITHUB_WORKSPACE}" --dl1 --data
+          export TESSELLATION_VERSION="${{ steps.versions.outputs.tessellation }}"
+          bash docker/bin/compose-runner.sh --up --metagraph="${GITHUB_WORKSPACE}" --dl1 --data
 
       - name: Wait for cluster health
         run: |
-          # Tessellation auto-join handles validator joining via CL_DOCKER_JOIN=true
-          # DL1 validators have initial delays: node 1 = 42s, node 2 = 54s
-          # Plus 10 retries * 10s delay = up to 154s for full join
-          # We wait up to 4 minutes (240s) for all nodes to be Ready
-          
           wait_for_node() {
             local name=$1 port=$2 max_wait=${3:-120}
             local iterations=$((max_wait / 2))
@@ -94,21 +139,14 @@ jobs:
           
           if [ "$CLUSTER_SIZE" -lt 3 ]; then
             echo "::error::DL1 cluster size is $CLUSTER_SIZE (expected 3)"
-            echo ""
-            echo "Cluster info:"
             curl -s http://localhost:9400/cluster/info | jq . || true
-            echo ""
-            echo "DL1-1 state: $(curl -s http://localhost:9410/node/state 2>/dev/null || echo 'unreachable')"
-            echo "DL1-2 state: $(curl -s http://localhost:9420/node/state 2>/dev/null || echo 'unreachable')"
             exit 1
           fi
-          
           echo "✓ DL1 cluster has $CLUSTER_SIZE peers"
 
       - name: Verify ML0 ordinal progression
         run: |
           echo "Checking ML0 ordinal progression..."
-          # Wait a bit for consensus to warm up after node startup
           sleep 10
           ORD1=$(curl -sf http://localhost:9200/snapshots/latest 2>/dev/null | jq -r '.value.ordinal // .ordinal // empty' || echo "")
           if [ -z "$ORD1" ]; then
@@ -125,11 +163,6 @@ jobs:
               echo "  After 60s total: $ORD3"
               if [ "$ORD1" = "$ORD3" ]; then
                 echo "::error::ML0 consensus stalled — ordinal stuck at $ORD1 for 60 seconds"
-                echo "## ⚠️ ML0 Consensus Stall Detected" >> $GITHUB_STEP_SUMMARY
-                echo "Ordinal stuck at \`$ORD1\` for 60 seconds after warmup." >> $GITHUB_STEP_SUMMARY
-                echo "" >> $GITHUB_STEP_SUMMARY
-                echo "### Cluster Info" >> $GITHUB_STEP_SUMMARY
-                curl -sf http://localhost:9200/cluster/info 2>/dev/null | jq . >> $GITHUB_STEP_SUMMARY || true
                 exit 1
               fi
               echo "  ✓ Ordinals advancing after grace period ($ORD1 → $ORD3)"
@@ -141,9 +174,6 @@ jobs:
       - name: Install E2E dependencies
         working-directory: e2e-test
         run: npm ci
-
-      # Note: Canary check removed - it was causing false failures during DL1 warmup.
-      # The actual E2E tests handle retries properly.
 
       - name: Run E2E tests
         working-directory: e2e-test
@@ -159,25 +189,16 @@ jobs:
           echo '```json' >> $GITHUB_STEP_SUMMARY
           curl -sf http://localhost:9200/cluster/info 2>/dev/null | jq . >> $GITHUB_STEP_SUMMARY || echo "Failed to fetch" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          echo "### ML0 Latest Snapshot Ordinal" >> $GITHUB_STEP_SUMMARY
-          echo '```json' >> $GITHUB_STEP_SUMMARY
-          curl -sf http://localhost:9200/snapshots/latest 2>/dev/null | jq '{ordinal: (.value.ordinal // .ordinal), hash: (.value.hash // .hash)}' >> $GITHUB_STEP_SUMMARY || echo "Failed to fetch" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
 
           echo "### GL0 Cluster Info" >> $GITHUB_STEP_SUMMARY
           echo '```json' >> $GITHUB_STEP_SUMMARY
           curl -sf http://localhost:9000/cluster/info 2>/dev/null | jq . >> $GITHUB_STEP_SUMMARY || echo "Failed to fetch" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
 
           echo "### DL1-0 Cluster Info" >> $GITHUB_STEP_SUMMARY
           echo '```json' >> $GITHUB_STEP_SUMMARY
           curl -sf http://localhost:9400/cluster/info 2>/dev/null | jq . >> $GITHUB_STEP_SUMMARY || echo "Failed to fetch" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
 
           echo "### Container Logs (last 50 lines)" >> $GITHUB_STEP_SUMMARY
           for container in gl0-0 ml0-0 dl1-0; do
@@ -185,7 +206,6 @@ jobs:
             echo '```' >> $GITHUB_STEP_SUMMARY
             docker logs "$container" --tail 50 2>&1 >> $GITHUB_STEP_SUMMARY || echo "Container not found" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
           done
 
       - name: Cleanup
