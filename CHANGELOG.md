@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.8](https://github.com/scasplte2/ottochain/compare/v0.7.7...v0.7.8) (2026-02-26)
+
+
+### Bug Fixes
+
+* **ci:** remove duplicate release trigger ([#120](https://github.com/scasplte2/ottochain/issues/120)) ([99aa56d](https://github.com/scasplte2/ottochain/commit/99aa56da41fd2b2efea665fdae4988dd893d6492))
+* **docker:** use published JARs instead of building from source ([#121](https://github.com/scasplte2/ottochain/issues/121)) ([127c358](https://github.com/scasplte2/ottochain/commit/127c35894f036dcc9c7241407c3be8b3e5750874))
+
 ## [0.7.7](https://github.com/scasplte2/ottochain/compare/v0.7.6...v0.7.7) (2026-02-26)
 
 
