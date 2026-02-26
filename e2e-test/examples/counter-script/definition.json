@@ -75,7 +75,7 @@
       }
     ]
   },
-  "initialState": 0,
+  "initialState": {"value": 0},
   "accessControl": {
     "Public": {}
   }
