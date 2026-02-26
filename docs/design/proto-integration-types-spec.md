@@ -111,7 +111,7 @@ Based on code audit of `Records.scala` vs `records.proto`:
 modules/proto/src/test/scala/xyz/kd5ujc/proto/ProtoAdaptersIntegrationTest.scala
 ```
 
-### Group A: Binary Round-Trip — StateMachineFiberRecord (4 tests)
+### Group A: Binary Round-Trip — StateMachineFiberRecord (5 tests)
 
 **A1: Minimal StateMachineFiberRecord round-trips via proto binary**
 ```
@@ -186,6 +186,29 @@ Test ALL valid FiberStatus values:
   FiberStatus.Failed   ↔ FIBER_STATUS_FAILED    (value=3)
 
 Assert: proto FiberStatus value 0 (UNSPECIFIED) returns Left("Unrecognized FiberStatus: 0")
+```
+
+**A5: Optional fields absent in proto map to None in hand-written types**
+```
+Context: PR #93 introduced magnolia customizable codecs (@derive(customizableEncoder, customizableDecoder)
+with useDefaults = true) to handle absent JSON keys by falling back to Scala default values.
+ProtoAdapters must handle the same "absent field" semantics for proto binary encoding.
+
+Given a proto.StateMachineFiberRecord with ONLY required fields set:
+  - fiberId: valid UUID string
+  - sequenceNumber: Some(FiberOrdinal(1L))
+  - owners: Seq(valid hex address)
+  - status: FIBER_STATUS_ACTIVE
+  (parentFiberId NOT set — optional String, proto default = "")
+  (lastReceipt NOT set — optional EventReceipt, proto default = None)
+  (childFiberIds NOT set — repeated field, proto default = empty Seq)
+
+When fromProtoSMRecord(minimalProto) is called
+
+Then result.isRight == true
+Assert: result.value.parentFiberId.isEmpty == true   (proto "" → Scala None, not Some(""))
+Assert: result.value.lastReceipt.isEmpty == true      (proto absent → Scala None)
+Assert: result.value.childFiberIds.isEmpty == true    (proto empty Seq → Scala Set.empty)
 ```
 
 ---
@@ -380,7 +403,7 @@ val jlv: JsonLogicValue = json2.as[JsonLogicValue].getOrElse(JsonLogicValue.Null
 
 | # | Criterion | Owner |
 |---|-----------|-------|
-| AC1 | All 15 tests are written as **failing** weaver tests in `ProtoAdaptersIntegrationTest.scala` | @code |
+| AC1 | All 16 tests are written as **failing** weaver tests in `ProtoAdaptersIntegrationTest.scala` | @code |
 | AC2 | `ProtoAdapters.toProtoSMRecord` maps all 14 fields of `StateMachineFiberRecord` | @work |
 | AC3 | `ProtoAdapters.fromProtoSMRecord` returns `Either[String, StateMachineFiberRecord]` — no throws | @work |
 | AC4 | `ProtoAdapters.toProtoScriptRecord` maps all 11 fields of `ScriptFiberRecord` | @work |
@@ -389,7 +412,7 @@ val jlv: JsonLogicValue = json2.as[JsonLogicValue].getOrElse(JsonLogicValue.Null
 | AC7 | `StateMachineDefinition` encodes as proto `Struct` losslessly (Group A test A3) | @work |
 | AC8 | `JsonLogicValue` ↔ `google.protobuf.Value` via scalapb-circe bridge (AC2/AC4 sub-requirement) | @work |
 | AC9 | Cross-language binary compatibility verified (C1/C2 — TypeScript can decode Scala proto output) | @code |
-| AC10 | `sbt proto/test` runs all 15 tests in CI — no new CI job needed (PR #96 already added `proto/test`) | @work |
+| AC10 | `sbt proto/test` runs all 16 tests in CI — no new CI job needed (PR #96 already added `proto/test`) | @work |
 | AC11 | `FiberStatus.UNSPECIFIED` (0) returns `Left` from `fromProto` — never silently accepted | @code |
 
 ---

@@ -246,6 +246,28 @@ object ProtoAdaptersIntegrationTest extends SimpleIOSuite {
     expect(failedResult.value.status == FiberStatus.Failed)
   }
 
+  test("A5: Optional fields absent in proto map to None in hand-written types") {
+    // Validates proto "not set" → Scala None mapping
+    // Relates to PR #93 magnolia customizable codecs (useDefaults = true for absent JSON keys)
+    // ProtoAdapters must handle the same "absent field" semantics for proto binary
+    val minimalProto = proto.StateMachineFiberRecord(
+      fiberId = testUUID.toString,
+      sequenceNumber = Some(proto.FiberOrdinal(value = 1L)),
+      owners = Seq(testAddress.hex.value),
+      status = proto.FiberStatus.FIBER_STATUS_ACTIVE
+      // parentFiberId NOT set (optional String field)
+      // lastReceipt NOT set   (optional EventReceipt field)
+      // childFiberIds NOT set (repeated field → empty)
+    )
+
+    val result = ProtoAdapters.fromProtoSMRecord(minimalProto)
+
+    expect(result.isRight) and
+    expect(result.value.parentFiberId.isEmpty) and
+    expect(result.value.lastReceipt.isEmpty) and
+    expect(result.value.childFiberIds.isEmpty)
+  }
+
   // ======= Group B: Binary Round-Trip — ScriptFiberRecord (3 tests) =======
 
   test("B1: Minimal ScriptFiberRecord round-trips via proto binary") {
