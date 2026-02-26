@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.7](https://github.com/scasplte2/ottochain/compare/v0.7.6...v0.7.7) (2026-02-26)
+
+
+### Code Refactoring
+
+* unwrap StateId to plain string codec ([#115](https://github.com/scasplte2/ottochain/issues/115)) ([a8b2863](https://github.com/scasplte2/ottochain/commit/a8b2863cca5274a065513fc147e6565d7804310b))
+
 ## [0.7.6](https://github.com/scasplte2/ottochain/compare/v0.7.5...v0.7.6) (2026-02-22)
 
 
