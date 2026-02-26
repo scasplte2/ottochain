@@ -64,19 +64,39 @@ jobs:
             echo "Dependency chain: ottochain → metakit ${METAKIT_VER} → tessellation ${TESS_VER}"
           fi
 
-      # Clone tessellation for its Docker infrastructure (compose-runner, Dockerfiles, scripts).
-      # We do NOT build tessellation — all JARs come from pre-built releases.
+      # Clone tessellation develop for Docker infrastructure (compose-runner, Dockerfiles, scripts).
+      # Develop has the latest compose-runner with SKIP_ASSEMBLY support for pre-staged JARs.
+      # We do NOT build tessellation — all deps resolve from Maven Central.
       - name: Clone tessellation infrastructure
         run: |
-          git clone --depth 1 --branch "v${{ steps.versions.outputs.tessellation }}" \
+          git clone --depth 1 --branch develop \
             https://github.com/Constellation-Labs/tessellation.git tessellation
 
       # Download pre-built GL0/GL1/keytool/wallet JARs from tessellation GitHub release.
       # metakit and tessellation-sdk resolve from Maven Central via sbt — no publishLocal needed.
       - name: Download tessellation release JARs
-        working-directory: tessellation
         run: |
-          bash docker/bin/download-release-jars.sh "v${{ steps.versions.outputs.tessellation }}" docker/jars
+          TESS_TAG="v${{ steps.versions.outputs.tessellation }}"
+          REPO="Constellation-Labs/tessellation"
+          BASE_URL="https://github.com/${REPO}/releases/download/${TESS_TAG}"
+          JARS_DIR="tessellation/docker/jars"
+          mkdir -p "$JARS_DIR"
+
+          echo "Downloading tessellation JARs from release ${TESS_TAG}..."
+          declare -A JAR_MAP=(
+            ["cl-node.jar"]="gl0.jar"
+            ["cl-dag-l1.jar"]="gl1.jar"
+            ["cl-keytool.jar"]="keytool.jar"
+            ["cl-wallet.jar"]="wallet.jar"
+          )
+
+          for release_name in "${!JAR_MAP[@]}"; do
+            local_name="${JAR_MAP[$release_name]}"
+            echo "  ${release_name} → ${local_name}"
+            curl -fsSL -o "${JARS_DIR}/${local_name}" "${BASE_URL}/${release_name}"
+            echo "    ✓ $(stat -c%s "${JARS_DIR}/${local_name}") bytes"
+          done
+          ls -la "$JARS_DIR"
 
       # Only build ottochain metagraph JARs from source.
       # metakit + tessellation-sdk are resolved from Maven Central.
@@ -93,11 +113,13 @@ jobs:
           done
           ls -la tessellation/docker/jars/
 
+      # Start cluster with SKIP_ASSEMBLY since all JARs are pre-staged in docker/jars/.
+      # --hypergraph-release sets TESSELLATION_VERSION for the Docker image tag.
       - name: Start cluster
         working-directory: tessellation
         run: |
           just up --hypergraph-release="v${{ steps.versions.outputs.tessellation }}" \
-            --skip-metagraph-assembly --metagraph="${GITHUB_WORKSPACE}" --dl1 --data
+            --skip-assembly --metagraph="${GITHUB_WORKSPACE}" --dl1 --data
 
       - name: Wait for cluster health
         run: |
