@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+package ottochain.v1;
+
+import "scalapb/scalapb.proto";
+
+option (scalapb.options) = {
+  flat_package: true
+  single_file: true
+  preserve_unknown_fields: false
+};
+
+/**
+ * Token behavior encoding: 4-bit TDEG model.
+ *
+ * Bit 3 (8): T = Transferable
+ * Bit 2 (4): D = Divisible
+ * Bit 1 (2): E = Expirable
+ * Bit 0 (1): G = Governable
+ *
+ * TokenBehavior.value = T×8 + D×4 + E×2 + G×1  (0..15)
+ */
+enum TokenBehaviorType {
+  TOKEN_BEHAVIOR_TYPE_UNSPECIFIED = 0;
+
+  // Soulbound (T=0)
+  SOULBOUND_RECEIPT         = 1;   // value=0: T=0, D=0, E=0, G=0
+  GOVERNED_BADGE            = 2;   // value=1: T=0, D=0, E=0, G=1
+  EXPIRABLE_CREDENTIAL      = 3;   // value=2: T=0, D=0, E=1, G=0
+  GOVERNED_LICENSE          = 4;   // value=3: T=0, D=0, E=1, G=1
+  LOYALTY_POINTS            = 5;   // value=4: T=0, D=1, E=0, G=0
+  GOVERNED_ALLOCATION       = 6;   // value=5: T=0, D=1, E=0, G=1
+  EXPIRABLE_POINTS          = 7;   // value=6: T=0, D=1, E=1, G=0
+  GOVERNED_EXPIRABLE_POINTS = 8;   // value=7: T=0, D=1, E=1, G=1
+
+  // Transferable (T=1)
+  NFT                         = 9;   // value=8:  T=1, D=0, E=0, G=0
+  GOVERNED_NFT                = 10;  // value=9:  T=1, D=0, E=0, G=1
+  EXPIRABLE_NFT               = 11;  // value=10: T=1, D=0, E=1, G=0
+  GOVERNED_EXPIRABLE_NFT      = 12;  // value=11: T=1, D=0, E=1, G=1
+  FUNGIBLE_TOKEN              = 13;  // value=12: T=1, D=1, E=0, G=0
+  GOVERNED_FUNGIBLE_TOKEN     = 14;  // value=13: T=1, D=1, E=0, G=1
+  EXPIRABLE_FUNGIBLE_TOKEN    = 15;  // value=14: T=1, D=1, E=1, G=0
+  GOVERNED_EXPIRABLE_FUNGIBLE = 16;  // value=15: T=1, D=1, E=1, G=1
+}
+
+/** Token operation types for legality checking */
+enum TokenOperationType {
+  TOKEN_OPERATION_TYPE_UNSPECIFIED = 0;
+  MINT       = 1;
+  BURN       = 2;
+  TRANSFER   = 3;
+  SPLIT      = 4;
+  MERGE      = 5;
+  SET_POLICY = 6;
+  EXPIRE     = 7;
+  EXTEND     = 8;
+}
+
+/**
+ * Token behavior wire format.
+ * Use behavior_value for the raw 4-bit integer (0–15), or behavior_type for named enum.
+ */
+message TokenBehaviorMessage {
+  oneof behavior {
+    int32           behavior_value = 1;  // 0–15 direct TDEG encoding
+    TokenBehaviorType behavior_type = 2; // Named enum form
+  }
+}
