@@ -90,17 +90,17 @@ object WebhookDispatcher {
 
         registry.listActive.flatMap { subscribers =>
           if (subscribers.isEmpty) {
-            F.unit
+            logger.info(s"No active webhook subscribers for ordinal ${notification.ordinal}")
           } else {
-            logger.debug(
+            logger.info(
               s"Dispatching webhook to ${subscribers.size} subscribers for ordinal ${notification.ordinal}"
             ) *>
             subscribers.traverse_ { sub =>
               deliverToSubscriber(sub, body)
                 .flatTap(_ => registry.markSuccess(sub.id))
-                .flatTap(_ => logger.debug(s"Webhook delivered to ${sub.callbackUrl}"))
+                .flatTap(_ => logger.info(s"Webhook delivered to ${sub.callbackUrl}"))
                 .handleErrorWith { err =>
-                  logger.warn(s"Webhook delivery failed for ${sub.callbackUrl}: ${err.getMessage}") *>
+                  logger.error(s"Webhook delivery failed for ${sub.callbackUrl}: ${err.getMessage}") *>
                   registry.markFailure(sub.id)
                 }
             }

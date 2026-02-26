@@ -100,12 +100,15 @@ object ML0Service {
                     }
                   )
 
-                  // Fire-and-forget: start webhook dispatch but don't wait for it
-                  Async[F].start(dispatcher.dispatch(snapshot, stats)).void
+                  // Fire-and-forget: start webhook dispatch but log any errors
+                  Async[F].start(
+                    dispatcher.dispatch(snapshot, stats)
+                      .handleErrorWith(err => logger.error(err)(s"Webhook dispatch fiber crashed for ordinal ${snapshot.ordinal.value}"))
+                  ).void
                 }
 
               case None =>
-                Async[F].unit
+                logger.info("Webhook dispatcher not configured (WEBHOOK_URL not set)")
             }
           } yield ()).handleErrorWith(logger.error(_)("Error during onSnapshotConsensusResult"))
 
