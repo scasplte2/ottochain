@@ -1,5 +1,5 @@
 {
-  "eventType": { "value": "reset_board" },
+  "eventType": "reset_board",
   "payload": {},
   "idempotencyKey": null
 }

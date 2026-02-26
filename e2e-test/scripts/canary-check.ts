@@ -57,7 +57,7 @@ async function main() {
 
   // Minimal state machine definition — single state, no transitions
   const definition = {
-    initialState: { value: 'alive' },
+    initialState: 'alive',
     states: {
       alive: { transitions: {} },
     },

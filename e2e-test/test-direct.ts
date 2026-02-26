@@ -8,9 +8,9 @@ const message = {
     fiberId: 'direct-' + Date.now(),
     definition: { 
       metadata: { name: 'Test' }, 
-      states: { init: { id: { value: 'init' }, isFinal: false, metadata: null } }, 
+      states: { init: { id: 'init', isFinal: false, metadata: null } }, 
       transitions: [], 
-      initialState: { value: 'init' } 
+      initialState: 'init' 
     },
     initialData: { status: 'PROPOSED' },
     parentFiberId: null,

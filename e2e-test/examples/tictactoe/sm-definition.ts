@@ -16,32 +16,32 @@ export default (context: Record<string, unknown>) => {
   return {
     states: {
       setup: {
-        id: { value: 'setup' },
+        id: 'setup',
         isFinal: false,
         metadata: null,
       },
       playing: {
-        id: { value: 'playing' },
+        id: 'playing',
         isFinal: false,
         metadata: null,
       },
       finished: {
-        id: { value: 'finished' },
+        id: 'finished',
         isFinal: true,
         metadata: null,
       },
       cancelled: {
-        id: { value: 'cancelled' },
+        id: 'cancelled',
         isFinal: true,
         metadata: null,
       },
     },
-    initialState: { value: 'setup' },
+    initialState: 'setup',
     transitions: [
       // setup -> playing (start_game)
       {
-        from: { value: 'setup' },
-        to: { value: 'playing' },
+        from: 'setup',
+        to: 'playing',
         eventName: 'start_game',
         guard: {
           and: [
@@ -70,8 +70,8 @@ export default (context: Record<string, unknown>) => {
 
       // playing -> playing (make_move, game continues)
       {
-        from: { value: 'playing' },
-        to: { value: 'playing' },
+        from: 'playing',
+        to: 'playing',
         eventName: 'make_move',
         guard: {
           '===': [{ var: `scripts.${oracleFiberId}.state.status` }, 'InProgress'],
@@ -95,8 +95,8 @@ export default (context: Record<string, unknown>) => {
 
       // playing -> finished (make_move, game ends with win/draw)
       {
-        from: { value: 'playing' },
-        to: { value: 'finished' },
+        from: 'playing',
+        to: 'finished',
         eventName: 'make_move',
         guard: {
           or: [
@@ -133,8 +133,8 @@ export default (context: Record<string, unknown>) => {
 
       // playing -> playing (reset_board, start new round)
       {
-        from: { value: 'playing' },
-        to: { value: 'playing' },
+        from: 'playing',
+        to: 'playing',
         eventName: 'reset_board',
         guard: {
           or: [
@@ -155,8 +155,8 @@ export default (context: Record<string, unknown>) => {
 
       // playing -> cancelled (cancel_game)
       {
-        from: { value: 'playing' },
-        to: { value: 'cancelled' },
+        from: 'playing',
+        to: 'cancelled',
         eventName: 'cancel_game',
         guard: { '==': [1, 1] },
         effect: {
@@ -176,8 +176,8 @@ export default (context: Record<string, unknown>) => {
 
       // setup -> cancelled (cancel_game before start)
       {
-        from: { value: 'setup' },
-        to: { value: 'cancelled' },
+        from: 'setup',
+        to: 'cancelled',
         eventName: 'cancel_game',
         guard: { '==': [1, 1] },
         effect: {

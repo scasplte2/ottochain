@@ -1,5 +1,5 @@
 {
-  "eventType": { "value": "make_move" },
+  "eventType": "make_move",
   "payload": {
     "player": "X",
     "cell": 0

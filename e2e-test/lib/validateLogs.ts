@@ -51,7 +51,7 @@ export async function validateEventLogs(
     }
 
     console.log(
-      `${TAG}\x1b[32m Event receipt verified (${lastReceipt.eventName}: ${lastReceipt.fromState && (lastReceipt.fromState as { value: string }).value} → ${lastReceipt.toState && (lastReceipt.toState as { value: string }).value}) for fiberId = ${ctx.fiberId} at ${ml0Url}\x1b[0m`
+      `${TAG}\x1b[32m Event receipt verified (${lastReceipt.eventName}: ${lastReceipt.fromState && lastReceipt.fromState} → ${lastReceipt.toState && lastReceipt.toState}) for fiberId = ${ctx.fiberId} at ${ml0Url}\x1b[0m`
     );
   }
 }

@@ -1,162 +1,308 @@
 {
   "states": {
     "setup": {
-      "id": {"value": "setup"},
+      "id": "setup",
       "isFinal": false,
       "metadata": null
     },
     "playing": {
-      "id": {"value": "playing"},
+      "id": "playing",
       "isFinal": false,
       "metadata": null
     },
     "finished": {
-      "id": {"value": "finished"},
+      "id": "finished",
       "isFinal": true,
       "metadata": null
     },
     "cancelled": {
-      "id": {"value": "cancelled"},
+      "id": "cancelled",
       "isFinal": true,
       "metadata": null
     }
   },
-  "initialState": {"value": "setup"},
+  "initialState": "setup",
   "transitions": [
     {
-      "from": {"value": "setup"},
-      "to": {"value": "playing"},
-      "eventType": {"value": "start_game"},
+      "from": "setup",
+      "to": "playing",
+      "eventType": {
+        "value": "start_game"
+      },
       "guard": {
         "and": [
-          {"!!": [{"var": "event.playerX"}]},
-          {"!!": [{"var": "event.playerO"}]},
-          {"!!": [{"var": "event.gameId"}]}
+          {
+            "!!": [
+              {
+                "var": "event.playerX"
+              }
+            ]
+          },
+          {
+            "!!": [
+              {
+                "var": "event.playerO"
+              }
+            ]
+          },
+          {
+            "!!": [
+              {
+                "var": "event.gameId"
+              }
+            ]
+          }
         ]
       },
       "effect": {
         "_oracleCall": {
-          "fiberId": {"var": "state.oracleFiberId"},
+          "fiberId": {
+            "var": "state.oracleFiberId"
+          },
           "method": "initialize",
           "args": {
-            "playerX": {"var": "event.playerX"},
-            "playerO": {"var": "event.playerO"},
-            "gameId": {"var": "event.gameId"}
+            "playerX": {
+              "var": "event.playerX"
+            },
+            "playerO": {
+              "var": "event.playerO"
+            },
+            "gameId": {
+              "var": "event.gameId"
+            }
           }
         },
-        "gameId": {"var": "event.gameId"},
-        "playerX": {"var": "event.playerX"},
-        "playerO": {"var": "event.playerO"},
+        "gameId": {
+          "var": "event.gameId"
+        },
+        "playerX": {
+          "var": "event.playerX"
+        },
+        "playerO": {
+          "var": "event.playerO"
+        },
         "status": "initialized"
       },
       "dependencies": []
     },
     {
-      "from": {"value": "playing"},
-      "to": {"value": "playing"},
-      "eventType": {"value": "make_move"},
-      "guard": {
-        "===": [{"var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.status"}, "InProgress"]
+      "from": "playing",
+      "to": "playing",
+      "eventType": {
+        "value": "make_move"
       },
-      "effect": {
-        "_oracleCall": {
-          "fiberId": {"var": "state.oracleFiberId"},
-          "method": "makeMove",
-          "args": {
-            "player": {"var": "event.player"},
-            "cell": {"var": "event.cell"}
-          }
-        },
-        "lastMove": {
-          "player": {"var": "event.player"},
-          "cell": {"var": "event.cell"}
-        }
-      },
-      "dependencies": ["11111111-1111-1111-1111-111111111111"]
-    },
-    {
-      "from": {"value": "playing"},
-      "to": {"value": "finished"},
-      "eventType": {"value": "make_move"},
       "guard": {
-        "or": [
-          {"===": [{"var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.status"}, "Won"]},
-          {"===": [{"var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.status"}, "Draw"]}
+        "===": [
+          {
+            "var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.status"
+          },
+          "InProgress"
         ]
       },
       "effect": {
         "_oracleCall": {
-          "fiberId": {"var": "state.oracleFiberId"},
+          "fiberId": {
+            "var": "state.oracleFiberId"
+          },
           "method": "makeMove",
           "args": {
-            "player": {"var": "event.player"},
-            "cell": {"var": "event.cell"}
+            "player": {
+              "var": "event.player"
+            },
+            "cell": {
+              "var": "event.cell"
+            }
           }
         },
-        "finalStatus": {"var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.status"},
-        "winner": {"var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.winner"},
-        "finalBoard": {"var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.board"},
+        "lastMove": {
+          "player": {
+            "var": "event.player"
+          },
+          "cell": {
+            "var": "event.cell"
+          }
+        }
+      },
+      "dependencies": [
+        "11111111-1111-1111-1111-111111111111"
+      ]
+    },
+    {
+      "from": "playing",
+      "to": "finished",
+      "eventType": {
+        "value": "make_move"
+      },
+      "guard": {
+        "or": [
+          {
+            "===": [
+              {
+                "var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.status"
+              },
+              "Won"
+            ]
+          },
+          {
+            "===": [
+              {
+                "var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.status"
+              },
+              "Draw"
+            ]
+          }
+        ]
+      },
+      "effect": {
+        "_oracleCall": {
+          "fiberId": {
+            "var": "state.oracleFiberId"
+          },
+          "method": "makeMove",
+          "args": {
+            "player": {
+              "var": "event.player"
+            },
+            "cell": {
+              "var": "event.cell"
+            }
+          }
+        },
+        "finalStatus": {
+          "var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.status"
+        },
+        "winner": {
+          "var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.winner"
+        },
+        "finalBoard": {
+          "var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.board"
+        },
         "_outputs": [
           {
             "outputType": "game_completed",
             "data": {
-              "gameId": {"var": "state.gameId"},
-              "winner": {"var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.winner"},
-              "status": {"var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.status"},
-              "moveCount": {"var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.moveCount"}
+              "gameId": {
+                "var": "state.gameId"
+              },
+              "winner": {
+                "var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.winner"
+              },
+              "status": {
+                "var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.status"
+              },
+              "moveCount": {
+                "var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.moveCount"
+              }
             }
           }
         ]
       },
-      "dependencies": ["11111111-1111-1111-1111-111111111111"]
+      "dependencies": [
+        "11111111-1111-1111-1111-111111111111"
+      ]
     },
     {
-      "from": {"value": "playing"},
-      "to": {"value": "playing"},
-      "eventType": {"value": "reset_board"},
+      "from": "playing",
+      "to": "playing",
+      "eventType": {
+        "value": "reset_board"
+      },
       "guard": {
         "or": [
-          {"===": [{"var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.status"}, "Won"]},
-          {"===": [{"var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.status"}, "Draw"]}
+          {
+            "===": [
+              {
+                "var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.status"
+              },
+              "Won"
+            ]
+          },
+          {
+            "===": [
+              {
+                "var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.status"
+              },
+              "Draw"
+            ]
+          }
         ]
       },
       "effect": {
         "_oracleCall": {
-          "fiberId": {"var": "state.oracleFiberId"},
+          "fiberId": {
+            "var": "state.oracleFiberId"
+          },
           "method": "resetGame",
           "args": {}
         },
-        "roundCount": {"+": [{"var": "state.roundCount"}, 1]}
+        "roundCount": {
+          "+": [
+            {
+              "var": "state.roundCount"
+            },
+            1
+          ]
+        }
       },
-      "dependencies": ["11111111-1111-1111-1111-111111111111"]
+      "dependencies": [
+        "11111111-1111-1111-1111-111111111111"
+      ]
     },
     {
-      "from": {"value": "playing"},
-      "to": {"value": "cancelled"},
-      "eventType": {"value": "cancel_game"},
-      "guard": {"==": [1, 1]},
+      "from": "playing",
+      "to": "cancelled",
+      "eventType": {
+        "value": "cancel_game"
+      },
+      "guard": {
+        "==": [
+          1,
+          1
+        ]
+      },
       "effect": {
         "_oracleCall": {
-          "fiberId": {"var": "state.oracleFiberId"},
+          "fiberId": {
+            "var": "state.oracleFiberId"
+          },
           "method": "cancelGame",
           "args": {
-            "requestedBy": {"var": "event.requestedBy"},
-            "reason": {"var": "event.reason"}
+            "requestedBy": {
+              "var": "event.requestedBy"
+            },
+            "reason": {
+              "var": "event.reason"
+            }
           }
         },
-        "cancelledBy": {"var": "event.requestedBy"},
-        "cancelReason": {"var": "event.reason"}
+        "cancelledBy": {
+          "var": "event.requestedBy"
+        },
+        "cancelReason": {
+          "var": "event.reason"
+        }
       },
       "dependencies": []
     },
     {
-      "from": {"value": "setup"},
-      "to": {"value": "cancelled"},
-      "eventType": {"value": "cancel_game"},
-      "guard": {"==": [1, 1]},
+      "from": "setup",
+      "to": "cancelled",
+      "eventType": {
+        "value": "cancel_game"
+      },
+      "guard": {
+        "==": [
+          1,
+          1
+        ]
+      },
       "effect": {
-        "cancelledBy": {"var": "event.requestedBy"},
-        "cancelReason": {"var": "event.reason"}
+        "cancelledBy": {
+          "var": "event.requestedBy"
+        },
+        "cancelReason": {
+          "var": "event.reason"
+        }
       },
       "dependencies": []
     }

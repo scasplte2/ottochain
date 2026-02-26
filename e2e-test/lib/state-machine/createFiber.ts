@@ -63,14 +63,14 @@ export const validator = ({ cid, statesMap, options }: { cid: string; statesMap:
     if (typeof options.definition === 'string') {
       expectedInitialState = JSON.parse(
         fs.readFileSync(path.resolve(options.definition), 'utf8')
-      ).initialState.value;
+      ).initialState;
     } else {
-      expectedInitialState = (options.definition as { initialState: { value: string } }).initialState.value;
+      expectedInitialState = (options.definition as { initialState: string }).initialState;
     }
 
-    if (finalRecord.currentState.value !== expectedInitialState) {
+    if (finalRecord.currentState !== expectedInitialState) {
       throw new Error(
-        `\x1b[33m[createFiber.validator]\x1b[0m Expected currentState "${expectedInitialState}" but found "${finalRecord.currentState.value}" for fiberId = ${cid} at ${url}.`
+        `\x1b[33m[createFiber.validator]\x1b[0m Expected currentState "${expectedInitialState}" but found "${finalRecord.currentState}" for fiberId = ${cid} at ${url}.`
       );
     }
 

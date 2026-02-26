@@ -6,7 +6,7 @@ import { validateEventLogs } from '../validateLogs.ts';
 
 export interface ProcessEventOptions {
   event?: string;
-  eventData?: { eventName?: string; payload?: unknown; eventType?: { value: string }; [key: string]: unknown };
+  eventData?: { eventName?: string; payload?: unknown; eventType?: string; [key: string]: unknown };
   expectedState?: string;
   targetSequenceNumber?: number;
 }
@@ -31,10 +31,10 @@ export const generator = ({ cid, options }: { cid: string; wallets?: unknown; op
   // Support both new format { eventName, payload } and old format { eventType: { value }, payload }
   const eventName: string =
     (eventData.eventName as string) ??
-    (eventData.eventType as { value: string })?.value;
+    eventData.eventType as string;
 
   if (!eventName) {
-    throw new Error('Event must have either "eventName" or "eventType.value"');
+    throw new Error('Event must have either "eventName" or "eventType"');
   }
 
   const msg: TransitionStateMachine = {
@@ -74,7 +74,7 @@ export const validator = async ({ cid, statesMap, options, ml0Urls }: { cid: str
     if (finalRecord.lastReceipt?.success) {
       console.log(
         `\x1b[33m[processEvent.validator]\x1b[32m Event processed successfully for fiberId = ${cid} at ${url}. ` +
-          `Transition: ${finalRecord.lastReceipt.fromState.value} → ${finalRecord.lastReceipt.toState.value}\x1b[0m`
+          `Transition: ${finalRecord.lastReceipt.fromState} → ${finalRecord.lastReceipt.toState}\x1b[0m`
       );
     } else if (finalRecord.lastReceipt?.errorMessage) {
       console.log(
@@ -87,9 +87,9 @@ export const validator = async ({ cid, statesMap, options, ml0Urls }: { cid: str
     }
 
     if (options.expectedState) {
-      if (finalRecord.currentState.value !== options.expectedState) {
+      if (finalRecord.currentState !== options.expectedState) {
         throw new Error(
-          `\x1b[33m[processEvent.validator]\x1b[0m Expected state "${options.expectedState}" but found "${finalRecord.currentState.value}" for fiberId = ${cid} at ${url}.`
+          `\x1b[33m[processEvent.validator]\x1b[0m Expected state "${options.expectedState}" but found "${finalRecord.currentState}" for fiberId = ${cid} at ${url}.`
         );
       }
     }
@@ -99,7 +99,7 @@ export const validator = async ({ cid, statesMap, options, ml0Urls }: { cid: str
   if (ml0Urls && ml0Urls.length > 0) {
     const eventName =
       options.eventData?.eventName ??
-      (options.eventData?.eventType as { value: string } | undefined)?.value;
+      options.eventData?.eventType as string | undefined;
     await validateEventLogs({ ml0Urls, fiberId: cid }, eventName);
   }
 };

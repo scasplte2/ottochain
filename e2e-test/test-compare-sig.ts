@@ -8,9 +8,9 @@ const message = {
     fiberId: 'compare-test-' + Date.now(),
     definition: { 
       metadata: { name: 'Market', version: '1.0.0' }, 
-      states: { PROPOSED: { id: { value: 'PROPOSED' }, isFinal: false } }, 
+      states: { PROPOSED: { id: 'PROPOSED', isFinal: false } }, 
       transitions: [], 
-      initialState: { value: 'PROPOSED' } 
+      initialState: 'PROPOSED' 
     },
     initialData: { status: 'PROPOSED', creator: keyPair.address },
     parentFiberId: null,

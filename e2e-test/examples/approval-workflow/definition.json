@@ -1,50 +1,101 @@
 {
   "states": {
     "draft": {
-      "id": { "value": "draft" },
+      "id": "draft",
       "isFinal": false,
       "metadata": null
     },
     "submitted": {
-      "id": { "value": "submitted" },
+      "id": "submitted",
       "isFinal": false,
       "metadata": null
     },
     "approved": {
-      "id": { "value": "approved" },
+      "id": "approved",
       "isFinal": true,
       "metadata": null
     },
     "rejected": {
-      "id": { "value": "rejected" },
+      "id": "rejected",
       "isFinal": true,
       "metadata": null
     }
   },
-  "initialState": { "value": "draft" },
+  "initialState": "draft",
   "transitions": [
     {
-      "from": { "value": "draft" },
-      "to": { "value": "submitted" },
+      "from": "draft",
+      "to": "submitted",
       "eventName": "submit",
-      "guard": { "==": [1, 1] },
-      "effect": { "merge": [{ "var": "state" }, { "submittedAt": { "var": "event.timestamp" } }] },
+      "guard": {
+        "==": [
+          1,
+          1
+        ]
+      },
+      "effect": {
+        "merge": [
+          {
+            "var": "state"
+          },
+          {
+            "submittedAt": {
+              "var": "event.timestamp"
+            }
+          }
+        ]
+      },
       "dependencies": []
     },
     {
-      "from": { "value": "submitted" },
-      "to": { "value": "approved" },
+      "from": "submitted",
+      "to": "approved",
       "eventName": "approve",
-      "guard": { "==": [1, 1] },
-      "effect": { "merge": [{ "var": "state" }, { "approvedBy": { "var": "event.approver" } }] },
+      "guard": {
+        "==": [
+          1,
+          1
+        ]
+      },
+      "effect": {
+        "merge": [
+          {
+            "var": "state"
+          },
+          {
+            "approvedBy": {
+              "var": "event.approver"
+            }
+          }
+        ]
+      },
       "dependencies": []
     },
     {
-      "from": { "value": "submitted" },
-      "to": { "value": "rejected" },
+      "from": "submitted",
+      "to": "rejected",
       "eventName": "reject",
-      "guard": { "==": [1, 1] },
-      "effect": { "merge": [{ "var": "state" }, { "rejectedBy": { "var": "event.approver" }, "reason": { "var": "event.reason" } }] },
+      "guard": {
+        "==": [
+          1,
+          1
+        ]
+      },
+      "effect": {
+        "merge": [
+          {
+            "var": "state"
+          },
+          {
+            "rejectedBy": {
+              "var": "event.approver"
+            },
+            "reason": {
+              "var": "event.reason"
+            }
+          }
+        ]
+      },
       "dependencies": []
     }
   ],

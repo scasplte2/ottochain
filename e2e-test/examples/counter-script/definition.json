@@ -1,22 +1,81 @@
 {
   "scriptProgram": {
     "if": [
-      { "==": [{ "var": "method" }, "increment"] },
-      { "merge": [{ "var": "state" }, { "value": { "+": [{ "var": "state.value" }, 1] } }] },
-      { "if": [
-        { "==": [{ "var": "method" }, "decrement"] },
-        { "merge": [{ "var": "state" }, { "value": { "-": [{ "var": "state.value" }, 1] } }] },
-        { "if": [
-          { "==": [{ "var": "method" }, "reset"] },
-          { "value": 0 },
-          { "var": "state" }
-        ]}
-      ]}
+      {
+        "==": [
+          {
+            "var": "method"
+          },
+          "increment"
+        ]
+      },
+      {
+        "merge": [
+          {
+            "var": "state"
+          },
+          {
+            "value": {
+              "+": [
+                {
+                  "var": "state.value"
+                },
+                1
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "if": [
+          {
+            "==": [
+              {
+                "var": "method"
+              },
+              "decrement"
+            ]
+          },
+          {
+            "merge": [
+              {
+                "var": "state"
+              },
+              {
+                "value": {
+                  "-": [
+                    {
+                      "var": "state.value"
+                    },
+                    1
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "if": [
+              {
+                "==": [
+                  {
+                    "var": "method"
+                  },
+                  "reset"
+                ]
+              },
+              {
+                "value": 0
+              },
+              {
+                "var": "state"
+              }
+            ]
+          }
+        ]
+      }
     ]
   },
-  "initialState": {
-    "value": 0
-  },
+  "initialState": 0,
   "accessControl": {
     "Public": {}
   }

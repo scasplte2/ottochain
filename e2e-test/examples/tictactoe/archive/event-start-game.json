@@ -1,5 +1,5 @@
 {
-  "eventType": { "value": "start_game" },
+  "eventType": "start_game",
   "payload": {
     "playerX": "PLACEHOLDER",
     "playerO": "PLACEHOLDER",

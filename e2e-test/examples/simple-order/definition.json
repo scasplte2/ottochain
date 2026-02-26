@@ -1,63 +1,125 @@
 {
   "states": {
     "pending": {
-      "id": { "value": "pending" },
+      "id": "pending",
       "isFinal": false,
       "metadata": null
     },
     "confirmed": {
-      "id": { "value": "confirmed" },
+      "id": "confirmed",
       "isFinal": false,
       "metadata": null
     },
     "shipped": {
-      "id": { "value": "shipped" },
+      "id": "shipped",
       "isFinal": false,
       "metadata": null
     },
     "delivered": {
-      "id": { "value": "delivered" },
+      "id": "delivered",
       "isFinal": true,
       "metadata": null
     },
     "cancelled": {
-      "id": { "value": "cancelled" },
+      "id": "cancelled",
       "isFinal": true,
       "metadata": null
     }
   },
-  "initialState": { "value": "pending" },
+  "initialState": "pending",
   "transitions": [
     {
-      "from": { "value": "pending" },
-      "to": { "value": "confirmed" },
+      "from": "pending",
+      "to": "confirmed",
       "eventName": "confirm",
-      "guard": { "==": [1, 1] },
-      "effect": { "merge": [{ "var": "state" }, { "var": "event" }] },
+      "guard": {
+        "==": [
+          1,
+          1
+        ]
+      },
+      "effect": {
+        "merge": [
+          {
+            "var": "state"
+          },
+          {
+            "var": "event"
+          }
+        ]
+      },
       "dependencies": []
     },
     {
-      "from": { "value": "pending" },
-      "to": { "value": "cancelled" },
+      "from": "pending",
+      "to": "cancelled",
       "eventName": "cancel",
-      "guard": { "==": [1, 1] },
-      "effect": { "merge": [{ "var": "state" }, { "cancelReason": { "var": "event.reason" } }] },
+      "guard": {
+        "==": [
+          1,
+          1
+        ]
+      },
+      "effect": {
+        "merge": [
+          {
+            "var": "state"
+          },
+          {
+            "cancelReason": {
+              "var": "event.reason"
+            }
+          }
+        ]
+      },
       "dependencies": []
     },
     {
-      "from": { "value": "confirmed" },
-      "to": { "value": "shipped" },
+      "from": "confirmed",
+      "to": "shipped",
       "eventName": "ship",
-      "guard": { "==": [1, 1] },
-      "effect": { "merge": [{ "var": "state" }, { "trackingNumber": { "var": "event.trackingNumber" } }] },
+      "guard": {
+        "==": [
+          1,
+          1
+        ]
+      },
+      "effect": {
+        "merge": [
+          {
+            "var": "state"
+          },
+          {
+            "trackingNumber": {
+              "var": "event.trackingNumber"
+            }
+          }
+        ]
+      },
       "dependencies": []
     },
     {
-      "from": { "value": "shipped" },
-      "to": { "value": "delivered" },
+      "from": "shipped",
+      "to": "delivered",
       "eventName": "deliver",
-      "guard": { "==": [1, 1] },
-      "effect": { "merge": [{ "var": "state" }, { "deliveredAt": { "var": "event.timestamp" } }] },
+      "guard": {
+        "==": [
+          1,
+          1
+        ]
+      },
+      "effect": {
+        "merge": [
+          {
+            "var": "state"
+          },
+          {
+            "deliveredAt": {
+              "var": "event.timestamp"
+            }
+          }
+        ]
+      },
       "dependencies": []
     }
   ],
