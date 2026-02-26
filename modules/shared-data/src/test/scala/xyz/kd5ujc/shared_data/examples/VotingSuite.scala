@@ -40,23 +40,23 @@ object VotingSuite extends SimpleIOSuite {
         machineJson = """
         {
           "states": {
-            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false, "metadata": null },
-            "voting": { "id": { "value": "voting" }, "isFinal": false, "metadata": null },
-            "COMPLETED": { "id": { "value": "COMPLETED" }, "isFinal": true, "metadata": null }
+            "PENDING": { "id": "PENDING", "isFinal": false, "metadata": null },
+            "voting": { "id": "voting", "isFinal": false, "metadata": null },
+            "COMPLETED": { "id": "COMPLETED", "isFinal": true, "metadata": null }
           },
-          "initialState": { "value": "PENDING" },
+          "initialState": "PENDING",
           "transitions": [
             {
-              "from": { "value": "PENDING" },
-              "to": { "value": "voting" },
+              "from": "PENDING",
+              "to": "voting",
               "eventName": "startVoting",
               "guard": { "==": [1, 1] },
               "effect": { "merge": [{ "var": "state" }, { "candidates": { "var": "event.candidates" } }] },
               "dependencies": []
             },
             {
-              "from": { "value": "voting" },
-              "to": { "value": "COMPLETED" },
+              "from": "voting",
+              "to": "COMPLETED",
               "eventName": "endVoting",
               "guard": { "==": [1, 1] },
               "effect": { "var": "state" },

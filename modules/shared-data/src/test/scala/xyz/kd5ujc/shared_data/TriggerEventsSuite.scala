@@ -34,14 +34,14 @@ object TriggerEventsSuite extends SimpleIOSuite {
         initiatorJson = s"""
         {
           "states": {
-            "idle": { "id": { "value": "idle" }, "isFinal": false },
-            "triggered": { "id": { "value": "triggered" }, "isFinal": false }
+            "idle": { "id": "idle", "isFinal": false },
+            "triggered": { "id": "triggered", "isFinal": false }
           },
-          "initialState": { "value": "idle" },
+          "initialState": "idle",
           "transitions": [
             {
-              "from": { "value": "idle" },
-              "to": { "value": "triggered" },
+              "from": "idle",
+              "to": "triggered",
               "eventName": "start",
               "guard": true,
               "effect": {
@@ -67,14 +67,14 @@ object TriggerEventsSuite extends SimpleIOSuite {
         targetJson = """
         {
           "states": {
-            "inactive": { "id": { "value": "inactive" }, "isFinal": false },
-            "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
+            "inactive": { "id": "inactive", "isFinal": false },
+            "ACTIVE": { "id": "ACTIVE", "isFinal": false }
           },
-          "initialState": { "value": "inactive" },
+          "initialState": "inactive",
           "transitions": [
             {
-              "from": { "value": "inactive" },
-              "to": { "value": "ACTIVE" },
+              "from": "inactive",
+              "to": "ACTIVE",
               "eventName": "activate",
               "guard": true,
               "effect": [
@@ -165,14 +165,14 @@ object TriggerEventsSuite extends SimpleIOSuite {
         machineAJson = s"""
         {
           "states": {
-            "idle": { "id": { "value": "idle" }, "isFinal": false },
-            "done": { "id": { "value": "done" }, "isFinal": false }
+            "idle": { "id": "idle", "isFinal": false },
+            "done": { "id": "done", "isFinal": false }
           },
-          "initialState": { "value": "idle" },
+          "initialState": "idle",
           "transitions": [
             {
-              "from": { "value": "idle" },
-              "to": { "value": "done" },
+              "from": "idle",
+              "to": "done",
               "eventName": "start",
               "guard": true,
               "effect": {
@@ -197,14 +197,14 @@ object TriggerEventsSuite extends SimpleIOSuite {
         machineBJson = s"""
         {
           "states": {
-            "idle": { "id": { "value": "idle" }, "isFinal": false },
-            "done": { "id": { "value": "done" }, "isFinal": false }
+            "idle": { "id": "idle", "isFinal": false },
+            "done": { "id": "done", "isFinal": false }
           },
-          "initialState": { "value": "idle" },
+          "initialState": "idle",
           "transitions": [
             {
-              "from": { "value": "idle" },
-              "to": { "value": "done" },
+              "from": "idle",
+              "to": "done",
               "eventName": "continue",
               "guard": true,
               "effect": {
@@ -229,14 +229,14 @@ object TriggerEventsSuite extends SimpleIOSuite {
         machineCJson = """
         {
           "states": {
-            "idle": { "id": { "value": "idle" }, "isFinal": false },
-            "done": { "id": { "value": "done" }, "isFinal": true }
+            "idle": { "id": "idle", "isFinal": false },
+            "done": { "id": "done", "isFinal": true }
           },
-          "initialState": { "value": "idle" },
+          "initialState": "idle",
           "transitions": [
             {
-              "from": { "value": "idle" },
-              "to": { "value": "done" },
+              "from": "idle",
+              "to": "done",
               "eventName": "finish",
               "guard": true,
               "effect": {
@@ -333,14 +333,14 @@ object TriggerEventsSuite extends SimpleIOSuite {
         sourceJson = s"""
         {
           "states": {
-            "idle": { "id": { "value": "idle" }, "isFinal": false },
-            "sent": { "id": { "value": "sent" }, "isFinal": false }
+            "idle": { "id": "idle", "isFinal": false },
+            "sent": { "id": "sent", "isFinal": false }
           },
-          "initialState": { "value": "idle" },
+          "initialState": "idle",
           "transitions": [
             {
-              "from": { "value": "idle" },
-              "to": { "value": "sent" },
+              "from": "idle",
+              "to": "sent",
               "eventName": "send",
               "guard": true,
               "effect": {
@@ -367,14 +367,14 @@ object TriggerEventsSuite extends SimpleIOSuite {
         targetJson = """
         {
           "states": {
-            "idle": { "id": { "value": "idle" }, "isFinal": false },
-            "received": { "id": { "value": "received" }, "isFinal": false }
+            "idle": { "id": "idle", "isFinal": false },
+            "received": { "id": "received", "isFinal": false }
           },
-          "initialState": { "value": "idle" },
+          "initialState": "idle",
           "transitions": [
             {
-              "from": { "value": "idle" },
-              "to": { "value": "received" },
+              "from": "idle",
+              "to": "received",
               "eventName": "receive",
               "guard": true,
               "effect": [
@@ -481,14 +481,14 @@ object TriggerEventsSuite extends SimpleIOSuite {
         sourceJson = s"""
         {
           "states": {
-            "idle": { "id": { "value": "idle" }, "isFinal": false },
-            "attempted": { "id": { "value": "attempted" }, "isFinal": false }
+            "idle": { "id": "idle", "isFinal": false },
+            "attempted": { "id": "attempted", "isFinal": false }
           },
-          "initialState": { "value": "idle" },
+          "initialState": "idle",
           "transitions": [
             {
-              "from": { "value": "idle" },
-              "to": { "value": "attempted" },
+              "from": "idle",
+              "to": "attempted",
               "eventName": "try_trigger",
               "guard": true,
               "effect": {
@@ -555,14 +555,14 @@ object TriggerEventsSuite extends SimpleIOSuite {
         machineAJson = s"""
         {
           "states": {
-            "idle": { "id": { "value": "idle" }, "isFinal": false },
-            "pinged": { "id": { "value": "pinged" }, "isFinal": false }
+            "idle": { "id": "idle", "isFinal": false },
+            "pinged": { "id": "pinged", "isFinal": false }
           },
-          "initialState": { "value": "idle" },
+          "initialState": "idle",
           "transitions": [
             {
-              "from": { "value": "idle" },
-              "to": { "value": "pinged" },
+              "from": "idle",
+              "to": "pinged",
               "eventName": "ping",
               "guard": true,
               "effect": {
@@ -578,8 +578,8 @@ object TriggerEventsSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "pinged" },
-              "to": { "value": "idle" },
+              "from": "pinged",
+              "to": "idle",
               "eventName": "ping",
               "guard": true,
               "effect": {
@@ -602,14 +602,14 @@ object TriggerEventsSuite extends SimpleIOSuite {
         machineBJson = s"""
         {
           "states": {
-            "idle": { "id": { "value": "idle" }, "isFinal": false },
-            "ponged": { "id": { "value": "ponged" }, "isFinal": false }
+            "idle": { "id": "idle", "isFinal": false },
+            "ponged": { "id": "ponged", "isFinal": false }
           },
-          "initialState": { "value": "idle" },
+          "initialState": "idle",
           "transitions": [
             {
-              "from": { "value": "idle" },
-              "to": { "value": "ponged" },
+              "from": "idle",
+              "to": "ponged",
               "eventName": "pong",
               "guard": true,
               "effect": {
@@ -625,8 +625,8 @@ object TriggerEventsSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "ponged" },
-              "to": { "value": "idle" },
+              "from": "ponged",
+              "to": "idle",
               "eventName": "pong",
               "guard": true,
               "effect": {

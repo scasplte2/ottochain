@@ -27,14 +27,14 @@ object ContextVariablesSuite extends SimpleIOSuite {
   private val ordinalCheckMachine = """
   {
     "states": {
-      "START": { "id": { "value": "START" }, "isFinal": false, "metadata": null },
-      "DONE": { "id": { "value": "DONE" }, "isFinal": true, "metadata": null }
+      "START": { "id": "START", "isFinal": false, "metadata": null },
+      "DONE": { "id": "DONE", "isFinal": true, "metadata": null }
     },
-    "initialState": { "value": "START" },
+    "initialState": "START",
     "transitions": [
       {
-        "from": { "value": "START" },
-        "to": { "value": "DONE" },
+        "from": "START",
+        "to": "DONE",
         "eventName": "finish",
         "guard": { ">=": [{ "var": "$ordinal" }, 0] },
         "effect": { 
@@ -54,14 +54,14 @@ object ContextVariablesSuite extends SimpleIOSuite {
   private val contextCaptureMachine = """
   {
     "states": {
-      "START": { "id": { "value": "START" }, "isFinal": false, "metadata": null },
-      "CAPTURED": { "id": { "value": "CAPTURED" }, "isFinal": true, "metadata": null }
+      "START": { "id": "START", "isFinal": false, "metadata": null },
+      "CAPTURED": { "id": "CAPTURED", "isFinal": true, "metadata": null }
     },
-    "initialState": { "value": "START" },
+    "initialState": "START",
     "transitions": [
       {
-        "from": { "value": "START" },
-        "to": { "value": "CAPTURED" },
+        "from": "START",
+        "to": "CAPTURED",
         "eventName": "capture",
         "guard": { "==": [1, 1] },
         "effect": { 
@@ -85,14 +85,14 @@ object ContextVariablesSuite extends SimpleIOSuite {
   private val ordinalGuardMachine = """
   {
     "states": {
-      "LOCKED": { "id": { "value": "LOCKED" }, "isFinal": false, "metadata": null },
-      "UNLOCKED": { "id": { "value": "UNLOCKED" }, "isFinal": true, "metadata": null }
+      "LOCKED": { "id": "LOCKED", "isFinal": false, "metadata": null },
+      "UNLOCKED": { "id": "UNLOCKED", "isFinal": true, "metadata": null }
     },
-    "initialState": { "value": "LOCKED" },
+    "initialState": "LOCKED",
     "transitions": [
       {
-        "from": { "value": "LOCKED" },
-        "to": { "value": "UNLOCKED" },
+        "from": "LOCKED",
+        "to": "UNLOCKED",
         "eventName": "unlock",
         "guard": { ">=": [{ "var": "$ordinal" }, { "var": "state.minOrdinal" }] },
         "effect": { "var": "state" },

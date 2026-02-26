@@ -42,19 +42,19 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
           """{
           "states": {
             "locked": {
-              "id": { "value": "locked" },
+              "id": "locked",
               "isFinal": false
             },
             "unlocked": {
-              "id": { "value": "unlocked" },
+              "id": "unlocked",
               "isFinal": true
             }
           },
-          "initialState": { "value": "locked" },
+          "initialState": "locked",
           "transitions": [
             {
-              "from": { "value": "locked" },
-              "to": { "value": "unlocked" },
+              "from": "locked",
+              "to": "unlocked",
               "eventName": "unlock",
               "guard": {
                 ">=": [
@@ -155,23 +155,23 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
           """{
           "states": {
             "PENDING": {
-              "id": { "value": "PENDING" },
+              "id": "PENDING",
               "isFinal": false
             },
             "claimed": {
-              "id": { "value": "claimed" },
+              "id": "claimed",
               "isFinal": true
             },
             "refunded": {
-              "id": { "value": "refunded" },
+              "id": "refunded",
               "isFinal": true
             }
           },
-          "initialState": { "value": "PENDING" },
+          "initialState": "PENDING",
           "transitions": [
             {
-              "from": { "value": "PENDING" },
-              "to": { "value": "claimed" },
+              "from": "PENDING",
+              "to": "claimed",
               "eventName": "claim",
               "guard": {
                 "and": [
@@ -198,8 +198,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "PENDING" },
-              "to": { "value": "refunded" },
+              "from": "PENDING",
+              "to": "refunded",
               "eventName": "refund",
               "guard": {
                 "and": [
@@ -389,20 +389,20 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
         orderJson =
           s"""{
           "states": {
-            "placed": { "id": { "value": "placed" }, "isFinal": false },
-            "funded": { "id": { "value": "funded" }, "isFinal": false },
-            "shipped": { "id": { "value": "shipped" }, "isFinal": false },
-            "in_transit": { "id": { "value": "in_transit" }, "isFinal": false },
-            "delivered": { "id": { "value": "delivered" }, "isFinal": false },
-            "inspecting": { "id": { "value": "inspecting" }, "isFinal": false },
-            "COMPLETED": { "id": { "value": "COMPLETED" }, "isFinal": true },
-            "DISPUTED": { "id": { "value": "DISPUTED" }, "isFinal": true }
+            "placed": { "id": "placed", "isFinal": false },
+            "funded": { "id": "funded", "isFinal": false },
+            "shipped": { "id": "shipped", "isFinal": false },
+            "in_transit": { "id": "in_transit", "isFinal": false },
+            "delivered": { "id": "delivered", "isFinal": false },
+            "inspecting": { "id": "inspecting", "isFinal": false },
+            "COMPLETED": { "id": "COMPLETED", "isFinal": true },
+            "DISPUTED": { "id": "DISPUTED", "isFinal": true }
           },
-          "initialState": { "value": "placed" },
+          "initialState": "placed",
           "transitions": [
             {
-              "from": { "value": "placed" },
-              "to": { "value": "funded" },
+              "from": "placed",
+              "to": "funded",
               "eventName": "confirm_funding",
               "guard": {
                 "===": [
@@ -417,8 +417,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": ["${escrowfiberId}"]
             },
             {
-              "from": { "value": "funded" },
-              "to": { "value": "shipped" },
+              "from": "funded",
+              "to": "shipped",
               "eventName": "ship",
               "guard": true,
               "effect": [
@@ -428,8 +428,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "shipped" },
-              "to": { "value": "in_transit" },
+              "from": "shipped",
+              "to": "in_transit",
               "eventName": "accept_shipment",
               "guard": {
                 "===": [
@@ -444,8 +444,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": ["${shippingfiberId}"]
             },
             {
-              "from": { "value": "in_transit" },
-              "to": { "value": "delivered" },
+              "from": "in_transit",
+              "to": "delivered",
               "eventName": "confirm_delivery",
               "guard": {
                 "===": [
@@ -460,8 +460,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": ["${shippingfiberId}"]
             },
             {
-              "from": { "value": "delivered" },
-              "to": { "value": "inspecting" },
+              "from": "delivered",
+              "to": "inspecting",
               "eventName": "start_inspection",
               "guard": {
                 "===": [
@@ -476,8 +476,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": ["${inspectionfiberId}"]
             },
             {
-              "from": { "value": "inspecting" },
-              "to": { "value": "COMPLETED" },
+              "from": "inspecting",
+              "to": "COMPLETED",
               "eventName": "complete_order",
               "guard": {
                 "and": [
@@ -502,8 +502,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": ["${inspectionfiberId}", "${escrowfiberId}"]
             },
             {
-              "from": { "value": "inspecting" },
-              "to": { "value": "DISPUTED" },
+              "from": "inspecting",
+              "to": "DISPUTED",
               "eventName": "dispute",
               "guard": {
                 "===": [
@@ -523,19 +523,19 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
         escrowJson =
           s"""{
           "states": {
-            "empty": { "id": { "value": "empty" }, "isFinal": false },
-            "locked": { "id": { "value": "locked" }, "isFinal": false },
-            "held": { "id": { "value": "held" }, "isFinal": false },
-            "releasing": { "id": { "value": "releasing" }, "isFinal": false },
-            "released": { "id": { "value": "released" }, "isFinal": true },
-            "refunding": { "id": { "value": "refunding" }, "isFinal": false },
-            "refunded": { "id": { "value": "refunded" }, "isFinal": true }
+            "empty": { "id": "empty", "isFinal": false },
+            "locked": { "id": "locked", "isFinal": false },
+            "held": { "id": "held", "isFinal": false },
+            "releasing": { "id": "releasing", "isFinal": false },
+            "released": { "id": "released", "isFinal": true },
+            "refunding": { "id": "refunding", "isFinal": false },
+            "refunded": { "id": "refunded", "isFinal": true }
           },
-          "initialState": { "value": "empty" },
+          "initialState": "empty",
           "transitions": [
             {
-              "from": { "value": "empty" },
-              "to": { "value": "locked" },
+              "from": "empty",
+              "to": "locked",
               "eventName": "lock_funds",
               "guard": {
                 ">=": [
@@ -551,8 +551,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "locked" },
-              "to": { "value": "held" },
+              "from": "locked",
+              "to": "held",
               "eventName": "hold",
               "guard": {
                 "===": [
@@ -567,8 +567,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": ["${shippingfiberId}"]
             },
             {
-              "from": { "value": "held" },
-              "to": { "value": "releasing" },
+              "from": "held",
+              "to": "releasing",
               "eventName": "release",
               "guard": {
                 "and": [
@@ -611,8 +611,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": ["${orderfiberId}", "${inspectionfiberId}", "${shippingfiberId}", "${insurancefiberId}"]
             },
             {
-              "from": { "value": "releasing" },
-              "to": { "value": "released" },
+              "from": "releasing",
+              "to": "released",
               "eventName": "finalize_release",
               "guard": true,
               "effect": [
@@ -622,8 +622,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "held" },
-              "to": { "value": "refunding" },
+              "from": "held",
+              "to": "refunding",
               "eventName": "refund",
               "guard": {
                 "or": [
@@ -648,8 +648,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": ["${inspectionfiberId}", "${shippingfiberId}"]
             },
             {
-              "from": { "value": "refunding" },
-              "to": { "value": "refunded" },
+              "from": "refunding",
+              "to": "refunded",
               "eventName": "finalize_refund",
               "guard": true,
               "effect": [
@@ -664,20 +664,20 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
         shippingJson =
           s"""{
           "states": {
-            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false },
-            "picked_up": { "id": { "value": "picked_up" }, "isFinal": false },
-            "in_transit": { "id": { "value": "in_transit" }, "isFinal": false },
-            "customs": { "id": { "value": "customs" }, "isFinal": false },
-            "out_for_delivery": { "id": { "value": "out_for_delivery" }, "isFinal": false },
-            "delivered": { "id": { "value": "delivered" }, "isFinal": true },
-            "lost": { "id": { "value": "lost" }, "isFinal": true },
-            "damaged": { "id": { "value": "damaged" }, "isFinal": true }
+            "PENDING": { "id": "PENDING", "isFinal": false },
+            "picked_up": { "id": "picked_up", "isFinal": false },
+            "in_transit": { "id": "in_transit", "isFinal": false },
+            "customs": { "id": "customs", "isFinal": false },
+            "out_for_delivery": { "id": "out_for_delivery", "isFinal": false },
+            "delivered": { "id": "delivered", "isFinal": true },
+            "lost": { "id": "lost", "isFinal": true },
+            "damaged": { "id": "damaged", "isFinal": true }
           },
-          "initialState": { "value": "PENDING" },
+          "initialState": "PENDING",
           "transitions": [
             {
-              "from": { "value": "PENDING" },
-              "to": { "value": "picked_up" },
+              "from": "PENDING",
+              "to": "picked_up",
               "eventName": "pickup",
               "guard": true,
               "effect": [
@@ -689,8 +689,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "picked_up" },
-              "to": { "value": "in_transit" },
+              "from": "picked_up",
+              "to": "in_transit",
               "eventName": "checkpoint",
               "guard": true,
               "effect": [
@@ -700,8 +700,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "in_transit" },
-              "to": { "value": "customs" },
+              "from": "in_transit",
+              "to": "customs",
               "eventName": "enter_customs",
               "guard": true,
               "effect": [
@@ -711,8 +711,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "customs" },
-              "to": { "value": "out_for_delivery" },
+              "from": "customs",
+              "to": "out_for_delivery",
               "eventName": "clear_customs",
               "guard": {
                 "===": [
@@ -727,8 +727,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": ["${insurancefiberId}"]
             },
             {
-              "from": { "value": "out_for_delivery" },
-              "to": { "value": "delivered" },
+              "from": "out_for_delivery",
+              "to": "delivered",
               "eventName": "deliver",
               "guard": true,
               "effect": [
@@ -738,8 +738,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "in_transit" },
-              "to": { "value": "lost" },
+              "from": "in_transit",
+              "to": "lost",
               "eventName": "report_lost",
               "guard": {
                 ">": [
@@ -754,8 +754,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "in_transit" },
-              "to": { "value": "damaged" },
+              "from": "in_transit",
+              "to": "damaged",
               "eventName": "report_damage",
               "guard": {
                 "===": [
@@ -776,17 +776,17 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
         inspectionJson =
           """{
           "states": {
-            "inactive": { "id": { "value": "inactive" }, "isFinal": false },
-            "scheduled": { "id": { "value": "scheduled" }, "isFinal": false },
-            "in_progress": { "id": { "value": "in_progress" }, "isFinal": false },
-            "passed": { "id": { "value": "passed" }, "isFinal": true },
-            "failed": { "id": { "value": "failed" }, "isFinal": true }
+            "inactive": { "id": "inactive", "isFinal": false },
+            "scheduled": { "id": "scheduled", "isFinal": false },
+            "in_progress": { "id": "in_progress", "isFinal": false },
+            "passed": { "id": "passed", "isFinal": true },
+            "failed": { "id": "failed", "isFinal": true }
           },
-          "initialState": { "value": "inactive" },
+          "initialState": "inactive",
           "transitions": [
             {
-              "from": { "value": "inactive" },
-              "to": { "value": "scheduled" },
+              "from": "inactive",
+              "to": "scheduled",
               "eventName": "schedule",
               "guard": true,
               "effect": [
@@ -796,8 +796,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "scheduled" },
-              "to": { "value": "in_progress" },
+              "from": "scheduled",
+              "to": "in_progress",
               "eventName": "begin_inspection",
               "guard": true,
               "effect": [
@@ -807,8 +807,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "in_progress" },
-              "to": { "value": "passed" },
+              "from": "in_progress",
+              "to": "passed",
               "eventName": "complete_inspection",
               "guard": {
                 "and": [
@@ -835,8 +835,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "in_progress" },
-              "to": { "value": "failed" },
+              "from": "in_progress",
+              "to": "failed",
               "eventName": "complete_inspection",
               "guard": {
                 "or": [
@@ -869,18 +869,18 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
         insuranceJson =
           s"""{
           "states": {
-            "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false },
-            "claim_filed": { "id": { "value": "claim_filed" }, "isFinal": false },
-            "investigating": { "id": { "value": "investigating" }, "isFinal": false },
-            "approved": { "id": { "value": "approved" }, "isFinal": false },
-            "denied": { "id": { "value": "denied" }, "isFinal": true },
-            "settled": { "id": { "value": "settled" }, "isFinal": true }
+            "ACTIVE": { "id": "ACTIVE", "isFinal": false },
+            "claim_filed": { "id": "claim_filed", "isFinal": false },
+            "investigating": { "id": "investigating", "isFinal": false },
+            "approved": { "id": "approved", "isFinal": false },
+            "denied": { "id": "denied", "isFinal": true },
+            "settled": { "id": "settled", "isFinal": true }
           },
-          "initialState": { "value": "ACTIVE" },
+          "initialState": "ACTIVE",
           "transitions": [
             {
-              "from": { "value": "ACTIVE" },
-              "to": { "value": "claim_filed" },
+              "from": "ACTIVE",
+              "to": "claim_filed",
               "eventName": "file_claim",
               "guard": {
                 "or": [
@@ -912,8 +912,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": ["${shippingfiberId}", "${inspectionfiberId}"]
             },
             {
-              "from": { "value": "claim_filed" },
-              "to": { "value": "investigating" },
+              "from": "claim_filed",
+              "to": "investigating",
               "eventName": "investigate",
               "guard": true,
               "effect": [
@@ -923,8 +923,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "investigating" },
-              "to": { "value": "approved" },
+              "from": "investigating",
+              "to": "approved",
               "eventName": "decide",
               "guard": {
                 "or": [
@@ -969,8 +969,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": ["${shippingfiberId}", "${inspectionfiberId}"]
             },
             {
-              "from": { "value": "investigating" },
-              "to": { "value": "denied" },
+              "from": "investigating",
+              "to": "denied",
               "eventName": "decide",
               "guard": {
                 "!": [
@@ -1019,8 +1019,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": ["${shippingfiberId}", "${inspectionfiberId}"]
             },
             {
-              "from": { "value": "approved" },
-              "to": { "value": "settled" },
+              "from": "approved",
+              "to": "settled",
               "eventName": "settle",
               "guard": true,
               "effect": [
@@ -1311,31 +1311,31 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
           """{
           "states": {
             "PROPOSED": {
-              "id": { "value": "PROPOSED" },
+              "id": "PROPOSED",
               "isFinal": false
             },
             "open": {
-              "id": { "value": "open" },
+              "id": "open",
               "isFinal": false
             },
             "closing": {
-              "id": { "value": "closing" },
+              "id": "closing",
               "isFinal": false
             },
             "finalized": {
-              "id": { "value": "finalized" },
+              "id": "finalized",
               "isFinal": true
             },
             "aborted": {
-              "id": { "value": "aborted" },
+              "id": "aborted",
               "isFinal": true
             }
           },
-          "initialState": { "value": "PROPOSED" },
+          "initialState": "PROPOSED",
           "transitions": [
             {
-              "from": { "value": "PROPOSED" },
-              "to": { "value": "open" },
+              "from": "PROPOSED",
+              "to": "open",
               "eventName": "collect",
               "guard": { "var": "state.hasQuorum" },
               "effect": [
@@ -1345,8 +1345,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "open" },
-              "to": { "value": "closing" },
+              "from": "open",
+              "to": "closing",
               "eventName": "close",
               "guard": {
                 ">=": [
@@ -1361,8 +1361,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "closing" },
-              "to": { "value": "finalized" },
+              "from": "closing",
+              "to": "finalized",
               "eventName": "collect",
               "guard": {
                 ">=": [
@@ -1378,8 +1378,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "PROPOSED" },
-              "to": { "value": "aborted" },
+              "from": "PROPOSED",
+              "to": "aborted",
               "eventName": "abort",
               "guard": true,
               "effect": [
@@ -1396,23 +1396,23 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
           s"""{
           "states": {
             "PENDING": {
-              "id": { "value": "PENDING" },
+              "id": "PENDING",
               "isFinal": false
             },
             "submitted": {
-              "id": { "value": "submitted" },
+              "id": "submitted",
               "isFinal": false
             },
             "REJECTED": {
-              "id": { "value": "REJECTED" },
+              "id": "REJECTED",
               "isFinal": true
             }
           },
-          "initialState": { "value": "PENDING" },
+          "initialState": "PENDING",
           "transitions": [
             {
-              "from": { "value": "PENDING" },
-              "to": { "value": "submitted" },
+              "from": "PENDING",
+              "to": "submitted",
               "eventName": "submit",
               "guard": {
                 "===": [
@@ -1429,8 +1429,8 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
               "dependencies": ["${proposalfiberId}"]
             },
             {
-              "from": { "value": "PENDING" },
-              "to": { "value": "REJECTED" },
+              "from": "PENDING",
+              "to": "REJECTED",
               "eventName": "submit",
               "guard": {
                 "!==": [
@@ -1452,19 +1452,19 @@ object JsonEncodedStateMachineSuite extends SimpleIOSuite {
           """{
           "states": {
             "idle": {
-              "id": { "value": "idle" },
+              "id": "idle",
               "isFinal": false
             },
             "voted": {
-              "id": { "value": "voted" },
+              "id": "voted",
               "isFinal": false
             }
           },
-          "initialState": { "value": "idle" },
+          "initialState": "idle",
           "transitions": [
             {
-              "from": { "value": "idle" },
-              "to": { "value": "voted" },
+              "from": "idle",
+              "to": "voted",
               "eventName": "vote",
               "guard": true,
               "effect": [

@@ -57,14 +57,14 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
         machineJson = s"""
         {
           "states": {
-            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false },
-            "validated": { "id": { "value": "validated" }, "isFinal": false }
+            "PENDING": { "id": "PENDING", "isFinal": false },
+            "validated": { "id": "validated", "isFinal": false }
           },
-          "initialState": { "value": "PENDING" },
+          "initialState": "PENDING",
           "transitions": [
             {
-              "from": { "value": "PENDING" },
-              "to": { "value": "validated" },
+              "from": "PENDING",
+              "to": "validated",
               "eventName": "submit",
               "guard": true,
               "effect": {
@@ -170,14 +170,14 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
         machineJson = s"""
         {
           "states": {
-            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false },
-            "validated": { "id": { "value": "validated" }, "isFinal": false }
+            "PENDING": { "id": "PENDING", "isFinal": false },
+            "validated": { "id": "validated", "isFinal": false }
           },
-          "initialState": { "value": "PENDING" },
+          "initialState": "PENDING",
           "transitions": [
             {
-              "from": { "value": "PENDING" },
-              "to": { "value": "validated" },
+              "from": "PENDING",
+              "to": "validated",
               "eventName": "submit",
               "guard": true,
               "effect": {
@@ -259,14 +259,14 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
         machineJson = s"""
         {
           "states": {
-            "locked": { "id": { "value": "locked" }, "isFinal": false },
-            "unlocked": { "id": { "value": "unlocked" }, "isFinal": false }
+            "locked": { "id": "locked", "isFinal": false },
+            "unlocked": { "id": "unlocked", "isFinal": false }
           },
-          "initialState": { "value": "locked" },
+          "initialState": "locked",
           "transitions": [
             {
-              "from": { "value": "locked" },
-              "to": { "value": "unlocked" },
+              "from": "locked",
+              "to": "unlocked",
               "eventName": "unlock",
               "guard": {
                 ">=": [
@@ -369,15 +369,15 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
         machineJson = s"""
         {
           "states": {
-            "idle": { "id": { "value": "idle" }, "isFinal": false },
-            "processing": { "id": { "value": "processing" }, "isFinal": false },
-            "COMPLETED": { "id": { "value": "COMPLETED" }, "isFinal": false }
+            "idle": { "id": "idle", "isFinal": false },
+            "processing": { "id": "processing", "isFinal": false },
+            "COMPLETED": { "id": "COMPLETED", "isFinal": false }
           },
-          "initialState": { "value": "idle" },
+          "initialState": "idle",
           "transitions": [
             {
-              "from": { "value": "idle" },
-              "to": { "value": "processing" },
+              "from": "idle",
+              "to": "processing",
               "eventName": "initiate",
               "guard": true,
               "effect": {
@@ -393,8 +393,8 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
               "dependencies": ["$oracleFiberId"]
             },
             {
-              "from": { "value": "processing" },
-              "to": { "value": "COMPLETED" },
+              "from": "processing",
+              "to": "COMPLETED",
               "eventName": "finalize",
               "guard": true,
               "effect": [
@@ -508,14 +508,14 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
         machineJson = s"""
         {
           "states": {
-            "idle": { "id": { "value": "idle" }, "isFinal": false },
-            "validated": { "id": { "value": "validated" }, "isFinal": false }
+            "idle": { "id": "idle", "isFinal": false },
+            "validated": { "id": "validated", "isFinal": false }
           },
-          "initialState": { "value": "idle" },
+          "initialState": "idle",
           "transitions": [
             {
-              "from": { "value": "idle" },
-              "to": { "value": "validated" },
+              "from": "idle",
+              "to": "validated",
               "eventName": "validate",
               "guard": true,
               "effect": {

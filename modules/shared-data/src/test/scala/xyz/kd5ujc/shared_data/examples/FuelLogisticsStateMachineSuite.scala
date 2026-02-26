@@ -45,23 +45,23 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
         contractJson =
           s"""{
           "states": {
-            "draft": { "id": { "value": "draft" }, "isFinal": false },
-            "supplier_review": { "id": { "value": "supplier_review" }, "isFinal": false },
-            "supplier_approved": { "id": { "value": "supplier_approved" }, "isFinal": false },
-            "gps_ready": { "id": { "value": "gps_ready" }, "isFinal": false },
-            "in_transit": { "id": { "value": "in_transit" }, "isFinal": false },
-            "delivered": { "id": { "value": "delivered" }, "isFinal": false },
-            "quality_check": { "id": { "value": "quality_check" }, "isFinal": false },
-            "inspected": { "id": { "value": "inspected" }, "isFinal": false },
-            "settling": { "id": { "value": "settling" }, "isFinal": false },
-            "settled": { "id": { "value": "settled" }, "isFinal": true },
-            "REJECTED": { "id": { "value": "REJECTED" }, "isFinal": true }
+            "draft": { "id": "draft", "isFinal": false },
+            "supplier_review": { "id": "supplier_review", "isFinal": false },
+            "supplier_approved": { "id": "supplier_approved", "isFinal": false },
+            "gps_ready": { "id": "gps_ready", "isFinal": false },
+            "in_transit": { "id": "in_transit", "isFinal": false },
+            "delivered": { "id": "delivered", "isFinal": false },
+            "quality_check": { "id": "quality_check", "isFinal": false },
+            "inspected": { "id": "inspected", "isFinal": false },
+            "settling": { "id": "settling", "isFinal": false },
+            "settled": { "id": "settled", "isFinal": true },
+            "REJECTED": { "id": "REJECTED", "isFinal": true }
           },
-          "initialState": { "value": "draft" },
+          "initialState": "draft",
           "transitions": [
             {
-              "from": { "value": "draft" },
-              "to": { "value": "supplier_review" },
+              "from": "draft",
+              "to": "supplier_review",
               "eventName": "submit_for_approval",
               "guard": {
                 "and": [
@@ -76,8 +76,8 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "supplier_review" },
-              "to": { "value": "supplier_approved" },
+              "from": "supplier_review",
+              "to": "supplier_approved",
               "eventName": "supplier_approved",
               "guard": {
                 "===": [
@@ -93,8 +93,8 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
               "dependencies": ["${supplierfiberId}"]
             },
             {
-              "from": { "value": "supplier_approved" },
-              "to": { "value": "gps_ready" },
+              "from": "supplier_approved",
+              "to": "gps_ready",
               "eventName": "prepare_shipment",
               "guard": {
                 "===": [
@@ -111,8 +111,8 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
               "dependencies": ["${gpsTrackerfiberId}"]
             },
             {
-              "from": { "value": "gps_ready" },
-              "to": { "value": "in_transit" },
+              "from": "gps_ready",
+              "to": "in_transit",
               "eventName": "begin_transit",
               "guard": {
                 "and": [
@@ -138,8 +138,8 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
               "dependencies": ["${gpsTrackerfiberId}"]
             },
             {
-              "from": { "value": "in_transit" },
-              "to": { "value": "delivered" },
+              "from": "in_transit",
+              "to": "delivered",
               "eventName": "confirm_delivery",
               "guard": {
                 "and": [
@@ -166,8 +166,8 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
               "dependencies": ["${gpsTrackerfiberId}"]
             },
             {
-              "from": { "value": "delivered" },
-              "to": { "value": "quality_check" },
+              "from": "delivered",
+              "to": "quality_check",
               "eventName": "initiate_inspection",
               "guard": {
                 "===": [
@@ -182,8 +182,8 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
               "dependencies": ["${inspectionfiberId}"]
             },
             {
-              "from": { "value": "quality_check" },
-              "to": { "value": "inspected" },
+              "from": "quality_check",
+              "to": "inspected",
               "eventName": "inspection_complete",
               "guard": {
                 "and": [
@@ -210,8 +210,8 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
               "dependencies": ["${inspectionfiberId}"]
             },
             {
-              "from": { "value": "quality_check" },
-              "to": { "value": "REJECTED" },
+              "from": "quality_check",
+              "to": "REJECTED",
               "eventName": "inspection_complete",
               "guard": {
                 "or": [
@@ -238,8 +238,8 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
               "dependencies": ["${inspectionfiberId}"]
             },
             {
-              "from": { "value": "inspected" },
-              "to": { "value": "settling" },
+              "from": "inspected",
+              "to": "settling",
               "eventName": "initiate_settlement",
               "guard": true,
               "effect": [
@@ -250,8 +250,8 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "settling" },
-              "to": { "value": "settled" },
+              "from": "settling",
+              "to": "settled",
               "eventName": "finalize_settlement",
               "guard": {
                 ">=": [
@@ -275,17 +275,17 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
         gpsTrackerJson =
           """{
           "states": {
-            "inactive": { "id": { "value": "inactive" }, "isFinal": false },
-            "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false },
-            "tracking": { "id": { "value": "tracking" }, "isFinal": false },
-            "stopped": { "id": { "value": "stopped" }, "isFinal": false },
-            "archived": { "id": { "value": "archived" }, "isFinal": true }
+            "inactive": { "id": "inactive", "isFinal": false },
+            "ACTIVE": { "id": "ACTIVE", "isFinal": false },
+            "tracking": { "id": "tracking", "isFinal": false },
+            "stopped": { "id": "stopped", "isFinal": false },
+            "archived": { "id": "archived", "isFinal": true }
           },
-          "initialState": { "value": "inactive" },
+          "initialState": "inactive",
           "transitions": [
             {
-              "from": { "value": "inactive" },
-              "to": { "value": "ACTIVE" },
+              "from": "inactive",
+              "to": "ACTIVE",
               "eventName": "activate",
               "guard": true,
               "effect": [
@@ -298,8 +298,8 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "ACTIVE" },
-              "to": { "value": "tracking" },
+              "from": "ACTIVE",
+              "to": "tracking",
               "eventName": "start_tracking",
               "guard": true,
               "effect": [
@@ -314,8 +314,8 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "tracking" },
-              "to": { "value": "tracking" },
+              "from": "tracking",
+              "to": "tracking",
               "eventName": "log_position",
               "guard": {
                 "<": [
@@ -333,8 +333,8 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "tracking" },
-              "to": { "value": "stopped" },
+              "from": "tracking",
+              "to": "stopped",
               "eventName": "stop_tracking",
               "guard": {
                 ">=": [
@@ -351,8 +351,8 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "stopped" },
-              "to": { "value": "archived" },
+              "from": "stopped",
+              "to": "archived",
               "eventName": "archive",
               "guard": true,
               "effect": [
@@ -369,16 +369,16 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
         supplierApprovalJson =
           """{
           "states": {
-            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false },
-            "reviewing": { "id": { "value": "reviewing" }, "isFinal": false },
-            "approved": { "id": { "value": "approved" }, "isFinal": false },
-            "REJECTED": { "id": { "value": "REJECTED" }, "isFinal": true }
+            "PENDING": { "id": "PENDING", "isFinal": false },
+            "reviewing": { "id": "reviewing", "isFinal": false },
+            "approved": { "id": "approved", "isFinal": false },
+            "REJECTED": { "id": "REJECTED", "isFinal": true }
           },
-          "initialState": { "value": "PENDING" },
+          "initialState": "PENDING",
           "transitions": [
             {
-              "from": { "value": "PENDING" },
-              "to": { "value": "reviewing" },
+              "from": "PENDING",
+              "to": "reviewing",
               "eventName": "begin_review",
               "guard": true,
               "effect": [
@@ -389,8 +389,8 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "reviewing" },
-              "to": { "value": "approved" },
+              "from": "reviewing",
+              "to": "approved",
               "eventName": "approve",
               "guard": {
                 "and": [
@@ -407,8 +407,8 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "reviewing" },
-              "to": { "value": "REJECTED" },
+              "from": "reviewing",
+              "to": "REJECTED",
               "eventName": "approve",
               "guard": {
                 "or": [
@@ -431,17 +431,17 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
         qualityInspectionJson =
           """{
           "states": {
-            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false },
-            "scheduled": { "id": { "value": "scheduled" }, "isFinal": false },
-            "inspecting": { "id": { "value": "inspecting" }, "isFinal": false },
-            "passed": { "id": { "value": "passed" }, "isFinal": true },
-            "failed": { "id": { "value": "failed" }, "isFinal": true }
+            "PENDING": { "id": "PENDING", "isFinal": false },
+            "scheduled": { "id": "scheduled", "isFinal": false },
+            "inspecting": { "id": "inspecting", "isFinal": false },
+            "passed": { "id": "passed", "isFinal": true },
+            "failed": { "id": "failed", "isFinal": true }
           },
-          "initialState": { "value": "PENDING" },
+          "initialState": "PENDING",
           "transitions": [
             {
-              "from": { "value": "PENDING" },
-              "to": { "value": "scheduled" },
+              "from": "PENDING",
+              "to": "scheduled",
               "eventName": "schedule",
               "guard": true,
               "effect": [
@@ -452,8 +452,8 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "scheduled" },
-              "to": { "value": "inspecting" },
+              "from": "scheduled",
+              "to": "inspecting",
               "eventName": "begin_inspection",
               "guard": true,
               "effect": [
@@ -463,8 +463,8 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "inspecting" },
-              "to": { "value": "passed" },
+              "from": "inspecting",
+              "to": "passed",
               "eventName": "complete",
               "guard": {
                 "and": [
@@ -481,8 +481,8 @@ object FuelLogisticsStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "inspecting" },
-              "to": { "value": "failed" },
+              "from": "inspecting",
+              "to": "failed",
               "eventName": "complete",
               "guard": {
                 "or": [

@@ -212,14 +212,14 @@ object OracleAccessControlSuite extends SimpleIOSuite {
         machineJson = s"""
         {
           "states": {
-            "idle": { "id": { "value": "idle" }, "isFinal": false },
-            "validated": { "id": { "value": "validated" }, "isFinal": false }
+            "idle": { "id": "idle", "isFinal": false },
+            "validated": { "id": "validated", "isFinal": false }
           },
-          "initialState": { "value": "idle" },
+          "initialState": "idle",
           "transitions": [
             {
-              "from": { "value": "idle" },
-              "to": { "value": "validated" },
+              "from": "idle",
+              "to": "validated",
               "eventName": "validate",
               "guard": true,
               "effect": {
@@ -302,14 +302,14 @@ object OracleAccessControlSuite extends SimpleIOSuite {
         machineJson = s"""
         {
           "states": {
-            "idle": { "id": { "value": "idle" }, "isFinal": false },
-            "validated": { "id": { "value": "validated" }, "isFinal": false }
+            "idle": { "id": "idle", "isFinal": false },
+            "validated": { "id": "validated", "isFinal": false }
           },
-          "initialState": { "value": "idle" },
+          "initialState": "idle",
           "transitions": [
             {
-              "from": { "value": "idle" },
-              "to": { "value": "validated" },
+              "from": "idle",
+              "to": "validated",
               "eventName": "validate",
               "guard": true,
               "effect": {
@@ -403,14 +403,14 @@ object OracleAccessControlSuite extends SimpleIOSuite {
         machineJson = s"""
         {
           "states": {
-            "idle": { "id": { "value": "idle" }, "isFinal": false },
-            "triggered": { "id": { "value": "triggered" }, "isFinal": false }
+            "idle": { "id": "idle", "isFinal": false },
+            "triggered": { "id": "triggered", "isFinal": false }
           },
-          "initialState": { "value": "idle" },
+          "initialState": "idle",
           "transitions": [
             {
-              "from": { "value": "idle" },
-              "to": { "value": "triggered" },
+              "from": "idle",
+              "to": "triggered",
               "eventName": "trigger",
               "guard": true,
               "effect": {

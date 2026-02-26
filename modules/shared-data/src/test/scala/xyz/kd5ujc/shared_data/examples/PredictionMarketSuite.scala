@@ -43,18 +43,18 @@ object PredictionMarketSuite extends SimpleIOSuite {
   private val predictionMarketMachine =
     """|{
        |  "states": {
-       |    "PROPOSED": { "id": { "value": "PROPOSED" }, "isFinal": false, "metadata": null },
-       |    "open": { "id": { "value": "open" }, "isFinal": false, "metadata": null },
-       |    "closed": { "id": { "value": "closed" }, "isFinal": false, "metadata": null },
-       |    "resolving": { "id": { "value": "resolving" }, "isFinal": false, "metadata": null },
-       |    "resolved": { "id": { "value": "resolved" }, "isFinal": true, "metadata": null },
-       |    "CANCELLED": { "id": { "value": "CANCELLED" }, "isFinal": true, "metadata": null }
+       |    "PROPOSED": { "id": "PROPOSED", "isFinal": false, "metadata": null },
+       |    "open": { "id": "open", "isFinal": false, "metadata": null },
+       |    "closed": { "id": "closed", "isFinal": false, "metadata": null },
+       |    "resolving": { "id": "resolving", "isFinal": false, "metadata": null },
+       |    "resolved": { "id": "resolved", "isFinal": true, "metadata": null },
+       |    "CANCELLED": { "id": "CANCELLED", "isFinal": true, "metadata": null }
        |  },
-       |  "initialState": { "value": "PROPOSED" },
+       |  "initialState": "PROPOSED",
        |  "transitions": [
        |    {
-       |      "from": { "value": "PROPOSED" },
-       |      "to": { "value": "open" },
+       |      "from": "PROPOSED",
+       |      "to": "open",
        |      "eventName": "fund",
        |      "guard": { "==": [1, 1] },
        |      "effect": {
@@ -66,16 +66,16 @@ object PredictionMarketSuite extends SimpleIOSuite {
        |      "dependencies": []
        |    },
        |    {
-       |      "from": { "value": "PROPOSED" },
-       |      "to": { "value": "CANCELLED" },
+       |      "from": "PROPOSED",
+       |      "to": "CANCELLED",
        |      "eventName": "cancel",
        |      "guard": { "==": [1, 1] },
        |      "effect": { "var": "state" },
        |      "dependencies": []
        |    },
        |    {
-       |      "from": { "value": "open" },
-       |      "to": { "value": "open" },
+       |      "from": "open",
+       |      "to": "open",
        |      "eventName": "addPosition",
        |      "guard": { "==": [1, 1] },
        |      "effect": {
@@ -99,16 +99,16 @@ object PredictionMarketSuite extends SimpleIOSuite {
        |      "dependencies": []
        |    },
        |    {
-       |      "from": { "value": "open" },
-       |      "to": { "value": "closed" },
+       |      "from": "open",
+       |      "to": "closed",
        |      "eventName": "close",
        |      "guard": { ">=": [{ "count": [{ "var": "state.positions" }] }, 1] },
        |      "effect": { "var": "state" },
        |      "dependencies": []
        |    },
        |    {
-       |      "from": { "value": "closed" },
-       |      "to": { "value": "resolving" },
+       |      "from": "closed",
+       |      "to": "resolving",
        |      "eventName": "triggerResolution",
        |      "guard": { "==": [1, 1] },
        |      "effect": {
@@ -120,8 +120,8 @@ object PredictionMarketSuite extends SimpleIOSuite {
        |      "dependencies": []
        |    },
        |    {
-       |      "from": { "value": "resolving" },
-       |      "to": { "value": "resolving" },
+       |      "from": "resolving",
+       |      "to": "resolving",
        |      "eventName": "submitVote",
        |      "guard": {
        |        ">=": [{ "var": "event.oracleReputation" }, { "var": "state.minReputation" }]
@@ -146,8 +146,8 @@ object PredictionMarketSuite extends SimpleIOSuite {
        |      "dependencies": []
        |    },
        |    {
-       |      "from": { "value": "resolving" },
-       |      "to": { "value": "resolved" },
+       |      "from": "resolving",
+       |      "to": "resolved",
        |      "eventName": "finalize",
        |      "guard": {
        |        ">=": [

@@ -40,40 +40,40 @@ object TokenEscrowSuite extends SimpleIOSuite {
         machineJson = """
         {
           "states": {
-            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false, "metadata": null },
-            "funded": { "id": { "value": "funded" }, "isFinal": false, "metadata": null },
-            "released": { "id": { "value": "released" }, "isFinal": true, "metadata": null },
-            "refunded": { "id": { "value": "refunded" }, "isFinal": true, "metadata": null }
+            "PENDING": { "id": "PENDING", "isFinal": false, "metadata": null },
+            "funded": { "id": "funded", "isFinal": false, "metadata": null },
+            "released": { "id": "released", "isFinal": true, "metadata": null },
+            "refunded": { "id": "refunded", "isFinal": true, "metadata": null }
           },
-          "initialState": { "value": "PENDING" },
+          "initialState": "PENDING",
           "transitions": [
             {
-              "from": { "value": "PENDING" },
-              "to": { "value": "funded" },
+              "from": "PENDING",
+              "to": "funded",
               "eventName": "fund",
               "guard": { "==": [1, 1] },
               "effect": { "merge": [{ "var": "state" }, { "depositor": { "var": "event.depositor" }, "amount": { "var": "event.amount" } }] },
               "dependencies": []
             },
             {
-              "from": { "value": "funded" },
-              "to": { "value": "released" },
+              "from": "funded",
+              "to": "released",
               "eventName": "release",
               "guard": { "==": [1, 1] },
               "effect": { "merge": [{ "var": "state" }, { "beneficiary": { "var": "event.beneficiary" } }] },
               "dependencies": []
             },
             {
-              "from": { "value": "funded" },
-              "to": { "value": "refunded" },
+              "from": "funded",
+              "to": "refunded",
               "eventName": "refund",
               "guard": { "==": [1, 1] },
               "effect": { "var": "state" },
               "dependencies": []
             },
             {
-              "from": { "value": "funded" },
-              "to": { "value": "refunded" },
+              "from": "funded",
+              "to": "refunded",
               "eventName": "expire",
               "guard": { "==": [1, 1] },
               "effect": { "var": "state" },
@@ -150,32 +150,32 @@ object TokenEscrowSuite extends SimpleIOSuite {
         machineJson = """
         {
           "states": {
-            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false, "metadata": null },
-            "funded": { "id": { "value": "funded" }, "isFinal": false, "metadata": null },
-            "released": { "id": { "value": "released" }, "isFinal": true, "metadata": null },
-            "refunded": { "id": { "value": "refunded" }, "isFinal": true, "metadata": null }
+            "PENDING": { "id": "PENDING", "isFinal": false, "metadata": null },
+            "funded": { "id": "funded", "isFinal": false, "metadata": null },
+            "released": { "id": "released", "isFinal": true, "metadata": null },
+            "refunded": { "id": "refunded", "isFinal": true, "metadata": null }
           },
-          "initialState": { "value": "PENDING" },
+          "initialState": "PENDING",
           "transitions": [
             {
-              "from": { "value": "PENDING" },
-              "to": { "value": "funded" },
+              "from": "PENDING",
+              "to": "funded",
               "eventName": "fund",
               "guard": { "==": [1, 1] },
               "effect": { "merge": [{ "var": "state" }, { "depositor": { "var": "event.depositor" }, "amount": { "var": "event.amount" } }] },
               "dependencies": []
             },
             {
-              "from": { "value": "funded" },
-              "to": { "value": "released" },
+              "from": "funded",
+              "to": "released",
               "eventName": "release",
               "guard": { "==": [1, 1] },
               "effect": { "merge": [{ "var": "state" }, { "beneficiary": { "var": "event.beneficiary" } }] },
               "dependencies": []
             },
             {
-              "from": { "value": "funded" },
-              "to": { "value": "refunded" },
+              "from": "funded",
+              "to": "refunded",
               "eventName": "refund",
               "guard": { "==": [1, 1] },
               "effect": { "var": "state" },
@@ -240,40 +240,40 @@ object TokenEscrowSuite extends SimpleIOSuite {
         machineJson = """
         {
           "states": {
-            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false, "metadata": null },
-            "funded": { "id": { "value": "funded" }, "isFinal": false, "metadata": null },
-            "released": { "id": { "value": "released" }, "isFinal": true, "metadata": null },
-            "refunded": { "id": { "value": "refunded" }, "isFinal": true, "metadata": null }
+            "PENDING": { "id": "PENDING", "isFinal": false, "metadata": null },
+            "funded": { "id": "funded", "isFinal": false, "metadata": null },
+            "released": { "id": "released", "isFinal": true, "metadata": null },
+            "refunded": { "id": "refunded", "isFinal": true, "metadata": null }
           },
-          "initialState": { "value": "PENDING" },
+          "initialState": "PENDING",
           "transitions": [
             {
-              "from": { "value": "PENDING" },
-              "to": { "value": "funded" },
+              "from": "PENDING",
+              "to": "funded",
               "eventName": "fund",
               "guard": { "==": [1, 1] },
               "effect": { "merge": [{ "var": "state" }, { "depositor": { "var": "event.depositor" }, "amount": { "var": "event.amount" } }] },
               "dependencies": []
             },
             {
-              "from": { "value": "funded" },
-              "to": { "value": "released" },
+              "from": "funded",
+              "to": "released",
               "eventName": "release",
               "guard": { "==": [1, 1] },
               "effect": { "merge": [{ "var": "state" }, { "beneficiary": { "var": "event.beneficiary" } }] },
               "dependencies": []
             },
             {
-              "from": { "value": "funded" },
-              "to": { "value": "refunded" },
+              "from": "funded",
+              "to": "refunded",
               "eventName": "refund",
               "guard": { "==": [1, 1] },
               "effect": { "var": "state" },
               "dependencies": []
             },
             {
-              "from": { "value": "funded" },
-              "to": { "value": "refunded" },
+              "from": "funded",
+              "to": "refunded",
               "eventName": "expire",
               "guard": { "==": [1, 1] },
               "effect": { "var": "state" },

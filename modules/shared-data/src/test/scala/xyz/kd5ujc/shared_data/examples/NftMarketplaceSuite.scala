@@ -111,26 +111,26 @@ object NftMarketplaceSuite extends SimpleIOSuite {
           s"""{
           "states": {
             "listed": {
-              "id": { "value": "listed" },
+              "id": "listed",
               "isFinal": false,
               "metadata": "NFT is listed for sale"
             },
             "sold": {
-              "id": { "value": "sold" },
+              "id": "sold",
               "isFinal": true,
               "metadata": "NFT has been sold"
             },
             "CANCELLED": {
-              "id": { "value": "CANCELLED" },
+              "id": "CANCELLED",
               "isFinal": true,
               "metadata": "Listing was cancelled"
             }
           },
-          "initialState": { "value": "listed" },
+          "initialState": "listed",
           "transitions": [
             {
-              "from": { "value": "listed" },
-              "to": { "value": "sold" },
+              "from": "listed",
+              "to": "sold",
               "eventName": "purchase",
               "guard": {
                 ">=": [
@@ -169,8 +169,8 @@ object NftMarketplaceSuite extends SimpleIOSuite {
               "dependencies": ["${royaltyOracleId}"]
             },
             {
-              "from": { "value": "listed" },
-              "to": { "value": "CANCELLED" },
+              "from": "listed",
+              "to": "CANCELLED",
               "eventName": "cancel",
               "guard": {
                 "===": [
@@ -196,16 +196,16 @@ object NftMarketplaceSuite extends SimpleIOSuite {
           s"""{
           "states": {
             "ACTIVE": {
-              "id": { "value": "ACTIVE" },
+              "id": "ACTIVE",
               "isFinal": false,
               "metadata": "Marketplace is active"
             }
           },
-          "initialState": { "value": "ACTIVE" },
+          "initialState": "ACTIVE",
           "transitions": [
             {
-              "from": { "value": "ACTIVE" },
-              "to": { "value": "ACTIVE" },
+              "from": "ACTIVE",
+              "to": "ACTIVE",
               "eventName": "createListing",
               "guard": true,
               "effect": {
@@ -227,26 +227,26 @@ object NftMarketplaceSuite extends SimpleIOSuite {
                     "definition": {
                       "states": {
                         "listed": {
-                          "id": { "value": "listed" },
+                          "id": "listed",
                           "isFinal": false,
                           "metadata": "NFT is listed for sale"
                         },
                         "sold": {
-                          "id": { "value": "sold" },
+                          "id": "sold",
                           "isFinal": true,
                           "metadata": "NFT has been sold"
                         },
                         "CANCELLED": {
-                          "id": { "value": "CANCELLED" },
+                          "id": "CANCELLED",
                           "isFinal": true,
                           "metadata": "Listing was cancelled"
                         }
                       },
-                      "initialState": { "value": "listed" },
+                      "initialState": "listed",
                       "transitions": [
                         {
-                          "from": { "value": "listed" },
-                          "to": { "value": "sold" },
+                          "from": "listed",
+                          "to": "sold",
                           "eventName": "purchase",
                           "guard": {
                             ">=": [
@@ -285,8 +285,8 @@ object NftMarketplaceSuite extends SimpleIOSuite {
                           "dependencies": ["${royaltyOracleId}"]
                         },
                         {
-                          "from": { "value": "listed" },
-                          "to": { "value": "CANCELLED" },
+                          "from": "listed",
+                          "to": "CANCELLED",
                           "eventName": "cancel",
                           "guard": {
                             "===": [

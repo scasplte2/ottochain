@@ -35,15 +35,15 @@ object ParentChildStateMachineSuite extends SimpleIOSuite {
 
         orderJson = s"""{
           "states": {
-            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false },
-            "confirmed": { "id": { "value": "confirmed" }, "isFinal": false },
-            "shipped": { "id": { "value": "shipped" }, "isFinal": true }
+            "PENDING": { "id": "PENDING", "isFinal": false },
+            "confirmed": { "id": "confirmed", "isFinal": false },
+            "shipped": { "id": "shipped", "isFinal": true }
           },
-          "initialState": { "value": "PENDING" },
+          "initialState": "PENDING",
           "transitions": [
             {
-              "from": { "value": "PENDING" },
-              "to": { "value": "confirmed" },
+              "from": "PENDING",
+              "to": "confirmed",
               "eventName": "confirm",
               "guard": true,
               "effect": {
@@ -64,8 +64,8 @@ object ParentChildStateMachineSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "confirmed" },
-              "to": { "value": "shipped" },
+              "from": "confirmed",
+              "to": "shipped",
               "eventName": "ship",
               "guard": true,
               "effect": [
@@ -173,14 +173,14 @@ object ParentChildStateMachineSuite extends SimpleIOSuite {
 
         parentJson = s"""{
           "states": {
-            "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false },
-            "SUSPENDED": { "id": { "value": "SUSPENDED" }, "isFinal": false }
+            "ACTIVE": { "id": "ACTIVE", "isFinal": false },
+            "SUSPENDED": { "id": "SUSPENDED", "isFinal": false }
           },
-          "initialState": { "value": "ACTIVE" },
+          "initialState": "ACTIVE",
           "transitions": [
             {
-              "from": { "value": "ACTIVE" },
-              "to": { "value": "SUSPENDED" },
+              "from": "ACTIVE",
+              "to": "SUSPENDED",
               "eventName": "suspend",
               "guard": true,
               "effect": {
@@ -193,14 +193,14 @@ object ParentChildStateMachineSuite extends SimpleIOSuite {
 
         childJson = s"""{
           "states": {
-            "running": { "id": { "value": "running" }, "isFinal": false },
-            "paused": { "id": { "value": "paused" }, "isFinal": false }
+            "running": { "id": "running", "isFinal": false },
+            "paused": { "id": "paused", "isFinal": false }
           },
-          "initialState": { "value": "running" },
+          "initialState": "running",
           "transitions": [
             {
-              "from": { "value": "running" },
-              "to": { "value": "paused" },
+              "from": "running",
+              "to": "paused",
               "eventName": "check_parent",
               "guard": {
                 "===": [
@@ -352,14 +352,14 @@ object ParentChildStateMachineSuite extends SimpleIOSuite {
 
         json = s"""{
           "states": {
-            "idle": { "id": { "value": "idle" }, "isFinal": false },
-            "notified": { "id": { "value": "notified" }, "isFinal": false }
+            "idle": { "id": "idle", "isFinal": false },
+            "notified": { "id": "notified", "isFinal": false }
           },
-          "initialState": { "value": "idle" },
+          "initialState": "idle",
           "transitions": [
             {
-              "from": { "value": "idle" },
-              "to": { "value": "notified" },
+              "from": "idle",
+              "to": "notified",
               "eventName": "alert",
               "guard": true,
               "effect": {
@@ -440,14 +440,14 @@ object ParentChildStateMachineSuite extends SimpleIOSuite {
 
         json = s"""{
           "states": {
-            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false },
-            "done": { "id": { "value": "done" }, "isFinal": true }
+            "PENDING": { "id": "PENDING", "isFinal": false },
+            "done": { "id": "done", "isFinal": true }
           },
-          "initialState": { "value": "PENDING" },
+          "initialState": "PENDING",
           "transitions": [
             {
-              "from": { "value": "PENDING" },
-              "to": { "value": "done" },
+              "from": "PENDING",
+              "to": "done",
               "eventName": "complete",
               "guard": true,
               "effect": [
@@ -527,14 +527,14 @@ object ParentChildStateMachineSuite extends SimpleIOSuite {
 
         json = s"""{
           "states": {
-            "a": { "id": { "value": "a" }, "isFinal": false },
-            "b": { "id": { "value": "b" }, "isFinal": false }
+            "a": { "id": "a", "isFinal": false },
+            "b": { "id": "b", "isFinal": false }
           },
-          "initialState": { "value": "a" },
+          "initialState": "a",
           "transitions": [
             {
-              "from": { "value": "a" },
-              "to": { "value": "b" },
+              "from": "a",
+              "to": "b",
               "eventName": "go",
               "guard": true,
               "effect": { "status": "b" },

@@ -45,15 +45,15 @@ object TimeLockedEscrowSuite extends SimpleIOSuite {
   private val escrowMachineJson: String =
     s"""|{
         |  "states": {
-        |    "FUNDED": { "id": { "value": "FUNDED" }, "isFinal": false, "metadata": null },
-        |    "CLAIMED": { "id": { "value": "CLAIMED" }, "isFinal": true, "metadata": null },
-        |    "REFUNDED": { "id": { "value": "REFUNDED" }, "isFinal": true, "metadata": null }
+        |    "FUNDED": { "id": "FUNDED", "isFinal": false, "metadata": null },
+        |    "CLAIMED": { "id": "CLAIMED", "isFinal": true, "metadata": null },
+        |    "REFUNDED": { "id": "REFUNDED", "isFinal": true, "metadata": null }
         |  },
-        |  "initialState": { "value": "FUNDED" },
+        |  "initialState": "FUNDED",
         |  "transitions": [
         |    {
-        |      "from": { "value": "FUNDED" },
-        |      "to": { "value": "CLAIMED" },
+        |      "from": "FUNDED",
+        |      "to": "CLAIMED",
         |      "eventName": "claim",
         |      "guard": {
         |        "and": [
@@ -73,8 +73,8 @@ object TimeLockedEscrowSuite extends SimpleIOSuite {
         |      "dependencies": []
         |    },
         |    {
-        |      "from": { "value": "FUNDED" },
-        |      "to": { "value": "REFUNDED" },
+        |      "from": "FUNDED",
+        |      "to": "REFUNDED",
         |      "eventName": "refund",
         |      "guard": {
         |        "and": [

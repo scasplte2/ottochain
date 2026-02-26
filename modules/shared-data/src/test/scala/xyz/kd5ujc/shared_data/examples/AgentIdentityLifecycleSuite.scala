@@ -63,18 +63,18 @@ object AgentIdentityLifecycleSuite extends SimpleIOSuite {
         agentIdentityJson =
           s"""{
           "states": {
-            "REGISTERED": { "id": { "value": "REGISTERED" }, "isFinal": false },
-            "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false },
-            "CHALLENGED": { "id": { "value": "CHALLENGED" }, "isFinal": false },
-            "SUSPENDED": { "id": { "value": "SUSPENDED" }, "isFinal": false },
-            "PROBATION": { "id": { "value": "PROBATION" }, "isFinal": false },
-            "WITHDRAWN": { "id": { "value": "WITHDRAWN" }, "isFinal": true }
+            "REGISTERED": { "id": "REGISTERED", "isFinal": false },
+            "ACTIVE": { "id": "ACTIVE", "isFinal": false },
+            "CHALLENGED": { "id": "CHALLENGED", "isFinal": false },
+            "SUSPENDED": { "id": "SUSPENDED", "isFinal": false },
+            "PROBATION": { "id": "PROBATION", "isFinal": false },
+            "WITHDRAWN": { "id": "WITHDRAWN", "isFinal": true }
           },
-          "initialState": { "value": "REGISTERED" },
+          "initialState": "REGISTERED",
           "transitions": [
             {
-              "from": { "value": "REGISTERED" },
-              "to": { "value": "ACTIVE" },
+              "from": "REGISTERED",
+              "to": "ACTIVE",
               "eventName": "first_attestation",
               "guard": {
                 "and": [
@@ -97,8 +97,8 @@ object AgentIdentityLifecycleSuite extends SimpleIOSuite {
               "dependencies": ["${platformfiberId}"]
             },
             {
-              "from": { "value": "ACTIVE" },
-              "to": { "value": "ACTIVE" },
+              "from": "ACTIVE",
+              "to": "ACTIVE",
               "eventName": "submit_attestation",
               "guard": {
                 "and": [
@@ -126,8 +126,8 @@ object AgentIdentityLifecycleSuite extends SimpleIOSuite {
               "dependencies": ["${platformfiberId}"]
             },
             {
-              "from": { "value": "ACTIVE" },
-              "to": { "value": "ACTIVE" },
+              "from": "ACTIVE",
+              "to": "ACTIVE",
               "eventName": "submit_violation",
               "guard": {
                 "===": [ { "var": "machines.${platformfiberId}.state.status" }, "VERIFIED" ]
@@ -144,8 +144,8 @@ object AgentIdentityLifecycleSuite extends SimpleIOSuite {
               "dependencies": ["${platformfiberId}"]
             },
             {
-              "from": { "value": "ACTIVE" },
-              "to": { "value": "CHALLENGED" },
+              "from": "ACTIVE",
+              "to": "CHALLENGED",
               "eventName": "file_challenge",
               "guard": {
                 "and": [
@@ -164,8 +164,8 @@ object AgentIdentityLifecycleSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "CHALLENGED" },
-              "to": { "value": "ACTIVE" },
+              "from": "CHALLENGED",
+              "to": "ACTIVE",
               "eventName": "dismiss_challenge",
               "guard": {
                 ">=": [ { "var": "event.dismissalVotes" }, 3 ]
@@ -179,8 +179,8 @@ object AgentIdentityLifecycleSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "CHALLENGED" },
-              "to": { "value": "SUSPENDED" },
+              "from": "CHALLENGED",
+              "to": "SUSPENDED",
               "eventName": "uphold_challenge",
               "guard": {
                 ">=": [ { "var": "event.upholdVotes" }, 3 ]
@@ -197,8 +197,8 @@ object AgentIdentityLifecycleSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "SUSPENDED" },
-              "to": { "value": "PROBATION" },
+              "from": "SUSPENDED",
+              "to": "PROBATION",
               "eventName": "begin_probation",
               "guard": {
                 "and": [
@@ -218,8 +218,8 @@ object AgentIdentityLifecycleSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "PROBATION" },
-              "to": { "value": "PROBATION" },
+              "from": "PROBATION",
+              "to": "PROBATION",
               "eventName": "probation_attestation",
               "guard": {
                 "and": [
@@ -236,8 +236,8 @@ object AgentIdentityLifecycleSuite extends SimpleIOSuite {
               "dependencies": ["${platformfiberId}"]
             },
             {
-              "from": { "value": "PROBATION" },
-              "to": { "value": "ACTIVE" },
+              "from": "PROBATION",
+              "to": "ACTIVE",
               "eventName": "complete_probation",
               "guard": {
                 "<=": [ { "var": "state.probationAttestationsRequired" }, 0 ]
@@ -250,8 +250,8 @@ object AgentIdentityLifecycleSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "ACTIVE" },
-              "to": { "value": "WITHDRAWN" },
+              "from": "ACTIVE",
+              "to": "WITHDRAWN",
               "eventName": "withdraw",
               "guard": true,
               "effect": [
@@ -271,16 +271,16 @@ object AgentIdentityLifecycleSuite extends SimpleIOSuite {
         platformRegistryJson =
           """{
           "states": {
-            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false },
-            "VERIFIED": { "id": { "value": "VERIFIED" }, "isFinal": false },
-            "SUSPENDED": { "id": { "value": "SUSPENDED" }, "isFinal": false },
-            "revoked": { "id": { "value": "revoked" }, "isFinal": true }
+            "PENDING": { "id": "PENDING", "isFinal": false },
+            "VERIFIED": { "id": "VERIFIED", "isFinal": false },
+            "SUSPENDED": { "id": "SUSPENDED", "isFinal": false },
+            "revoked": { "id": "revoked", "isFinal": true }
           },
-          "initialState": { "value": "PENDING" },
+          "initialState": "PENDING",
           "transitions": [
             {
-              "from": { "value": "PENDING" },
-              "to": { "value": "VERIFIED" },
+              "from": "PENDING",
+              "to": "VERIFIED",
               "eventName": "verify_platform",
               "guard": {
                 "and": [
@@ -298,8 +298,8 @@ object AgentIdentityLifecycleSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "VERIFIED" },
-              "to": { "value": "VERIFIED" },
+              "from": "VERIFIED",
+              "to": "VERIFIED",
               "eventName": "record_attestation_submitted",
               "guard": true,
               "effect": [
@@ -309,8 +309,8 @@ object AgentIdentityLifecycleSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "VERIFIED" },
-              "to": { "value": "SUSPENDED" },
+              "from": "VERIFIED",
+              "to": "SUSPENDED",
               "eventName": "suspend_platform",
               "guard": true,
               "effect": [
@@ -321,8 +321,8 @@ object AgentIdentityLifecycleSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "SUSPENDED" },
-              "to": { "value": "VERIFIED" },
+              "from": "SUSPENDED",
+              "to": "VERIFIED",
               "eventName": "reinstate_platform",
               "guard": true,
               "effect": [
@@ -332,8 +332,8 @@ object AgentIdentityLifecycleSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "SUSPENDED" },
-              "to": { "value": "revoked" },
+              "from": "SUSPENDED",
+              "to": "revoked",
               "eventName": "revoke_platform",
               "guard": true,
               "effect": [
@@ -1265,18 +1265,18 @@ object AgentIdentityLifecycleSuite extends SimpleIOSuite {
   private def agentIdentityDefinitionJson(platformfiberId: java.util.UUID): String =
     s"""{
       "states": {
-        "REGISTERED": { "id": { "value": "REGISTERED" }, "isFinal": false },
-        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false },
-        "CHALLENGED": { "id": { "value": "CHALLENGED" }, "isFinal": false },
-        "SUSPENDED": { "id": { "value": "SUSPENDED" }, "isFinal": false },
-        "PROBATION": { "id": { "value": "PROBATION" }, "isFinal": false },
-        "WITHDRAWN": { "id": { "value": "WITHDRAWN" }, "isFinal": true }
+        "REGISTERED": { "id": "REGISTERED", "isFinal": false },
+        "ACTIVE": { "id": "ACTIVE", "isFinal": false },
+        "CHALLENGED": { "id": "CHALLENGED", "isFinal": false },
+        "SUSPENDED": { "id": "SUSPENDED", "isFinal": false },
+        "PROBATION": { "id": "PROBATION", "isFinal": false },
+        "WITHDRAWN": { "id": "WITHDRAWN", "isFinal": true }
       },
-      "initialState": { "value": "REGISTERED" },
+      "initialState": "REGISTERED",
       "transitions": [
         {
-          "from": { "value": "REGISTERED" },
-          "to": { "value": "ACTIVE" },
+          "from": "REGISTERED",
+          "to": "ACTIVE",
           "eventName": "first_attestation",
           "guard": {
             "and": [
@@ -1299,8 +1299,8 @@ object AgentIdentityLifecycleSuite extends SimpleIOSuite {
           "dependencies": ["${platformfiberId}"]
         },
         {
-          "from": { "value": "ACTIVE" },
-          "to": { "value": "ACTIVE" },
+          "from": "ACTIVE",
+          "to": "ACTIVE",
           "eventName": "submit_attestation",
           "guard": {
             "and": [
@@ -1328,8 +1328,8 @@ object AgentIdentityLifecycleSuite extends SimpleIOSuite {
           "dependencies": ["${platformfiberId}"]
         },
         {
-          "from": { "value": "ACTIVE" },
-          "to": { "value": "ACTIVE" },
+          "from": "ACTIVE",
+          "to": "ACTIVE",
           "eventName": "submit_violation",
           "guard": {
             "===": [ { "var": "machines.${platformfiberId}.state.status" }, "VERIFIED" ]
@@ -1346,8 +1346,8 @@ object AgentIdentityLifecycleSuite extends SimpleIOSuite {
           "dependencies": ["${platformfiberId}"]
         },
         {
-          "from": { "value": "ACTIVE" },
-          "to": { "value": "CHALLENGED" },
+          "from": "ACTIVE",
+          "to": "CHALLENGED",
           "eventName": "file_challenge",
           "guard": {
             "and": [
@@ -1366,8 +1366,8 @@ object AgentIdentityLifecycleSuite extends SimpleIOSuite {
           "dependencies": []
         },
         {
-          "from": { "value": "CHALLENGED" },
-          "to": { "value": "ACTIVE" },
+          "from": "CHALLENGED",
+          "to": "ACTIVE",
           "eventName": "dismiss_challenge",
           "guard": {
             ">=": [ { "var": "event.dismissalVotes" }, 3 ]
@@ -1381,8 +1381,8 @@ object AgentIdentityLifecycleSuite extends SimpleIOSuite {
           "dependencies": []
         },
         {
-          "from": { "value": "CHALLENGED" },
-          "to": { "value": "SUSPENDED" },
+          "from": "CHALLENGED",
+          "to": "SUSPENDED",
           "eventName": "uphold_challenge",
           "guard": {
             ">=": [ { "var": "event.upholdVotes" }, 3 ]
@@ -1399,8 +1399,8 @@ object AgentIdentityLifecycleSuite extends SimpleIOSuite {
           "dependencies": []
         },
         {
-          "from": { "value": "SUSPENDED" },
-          "to": { "value": "PROBATION" },
+          "from": "SUSPENDED",
+          "to": "PROBATION",
           "eventName": "begin_probation",
           "guard": {
             "and": [
@@ -1420,8 +1420,8 @@ object AgentIdentityLifecycleSuite extends SimpleIOSuite {
           "dependencies": []
         },
         {
-          "from": { "value": "PROBATION" },
-          "to": { "value": "PROBATION" },
+          "from": "PROBATION",
+          "to": "PROBATION",
           "eventName": "probation_attestation",
           "guard": {
             "and": [
@@ -1438,8 +1438,8 @@ object AgentIdentityLifecycleSuite extends SimpleIOSuite {
           "dependencies": ["${platformfiberId}"]
         },
         {
-          "from": { "value": "PROBATION" },
-          "to": { "value": "ACTIVE" },
+          "from": "PROBATION",
+          "to": "ACTIVE",
           "eventName": "complete_probation",
           "guard": {
             "<=": [ { "var": "state.probationAttestationsRequired" }, 0 ]
@@ -1452,8 +1452,8 @@ object AgentIdentityLifecycleSuite extends SimpleIOSuite {
           "dependencies": []
         },
         {
-          "from": { "value": "ACTIVE" },
-          "to": { "value": "WITHDRAWN" },
+          "from": "ACTIVE",
+          "to": "WITHDRAWN",
           "eventName": "withdraw",
           "guard": true,
           "effect": [
@@ -1471,16 +1471,16 @@ object AgentIdentityLifecycleSuite extends SimpleIOSuite {
   private val platformRegistryDefinitionJson: String =
     """{
       "states": {
-        "PENDING": { "id": { "value": "PENDING" }, "isFinal": false },
-        "VERIFIED": { "id": { "value": "VERIFIED" }, "isFinal": false },
-        "SUSPENDED": { "id": { "value": "SUSPENDED" }, "isFinal": false },
-        "revoked": { "id": { "value": "revoked" }, "isFinal": true }
+        "PENDING": { "id": "PENDING", "isFinal": false },
+        "VERIFIED": { "id": "VERIFIED", "isFinal": false },
+        "SUSPENDED": { "id": "SUSPENDED", "isFinal": false },
+        "revoked": { "id": "revoked", "isFinal": true }
       },
-      "initialState": { "value": "PENDING" },
+      "initialState": "PENDING",
       "transitions": [
         {
-          "from": { "value": "PENDING" },
-          "to": { "value": "VERIFIED" },
+          "from": "PENDING",
+          "to": "VERIFIED",
           "eventName": "verify_platform",
           "guard": {
             "and": [
@@ -1498,8 +1498,8 @@ object AgentIdentityLifecycleSuite extends SimpleIOSuite {
           "dependencies": []
         },
         {
-          "from": { "value": "VERIFIED" },
-          "to": { "value": "VERIFIED" },
+          "from": "VERIFIED",
+          "to": "VERIFIED",
           "eventName": "record_attestation_submitted",
           "guard": true,
           "effect": [
@@ -1509,8 +1509,8 @@ object AgentIdentityLifecycleSuite extends SimpleIOSuite {
           "dependencies": []
         },
         {
-          "from": { "value": "VERIFIED" },
-          "to": { "value": "SUSPENDED" },
+          "from": "VERIFIED",
+          "to": "SUSPENDED",
           "eventName": "suspend_platform",
           "guard": true,
           "effect": [
@@ -1521,8 +1521,8 @@ object AgentIdentityLifecycleSuite extends SimpleIOSuite {
           "dependencies": []
         },
         {
-          "from": { "value": "SUSPENDED" },
-          "to": { "value": "VERIFIED" },
+          "from": "SUSPENDED",
+          "to": "VERIFIED",
           "eventName": "reinstate_platform",
           "guard": true,
           "effect": [
@@ -1532,8 +1532,8 @@ object AgentIdentityLifecycleSuite extends SimpleIOSuite {
           "dependencies": []
         },
         {
-          "from": { "value": "SUSPENDED" },
-          "to": { "value": "revoked" },
+          "from": "SUSPENDED",
+          "to": "revoked",
           "eventName": "revoke_platform",
           "guard": true,
           "effect": [

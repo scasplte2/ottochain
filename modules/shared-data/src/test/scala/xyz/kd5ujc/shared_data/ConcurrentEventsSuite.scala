@@ -31,13 +31,13 @@ object ConcurrentEventsSuite extends SimpleIOSuite {
   private val counterDefinitionJson =
     """|{
        |  "states": {
-       |    "counting": { "id": { "value": "counting" }, "isFinal": false }
+       |    "counting": { "id": "counting", "isFinal": false }
        |  },
-       |  "initialState": { "value": "counting" },
+       |  "initialState": "counting",
        |  "transitions": [
        |    {
-       |      "from": { "value": "counting" },
-       |      "to": { "value": "counting" },
+       |      "from": "counting",
+       |      "to": "counting",
        |      "eventName": "increment",
        |      "guard": true,
        |      "effect": {
@@ -49,8 +49,8 @@ object ConcurrentEventsSuite extends SimpleIOSuite {
        |      "dependencies": []
        |    },
        |    {
-       |      "from": { "value": "counting" },
-       |      "to": { "value": "counting" },
+       |      "from": "counting",
+       |      "to": "counting",
        |      "eventName": "add",
        |      "guard": true,
        |      "effect": {
@@ -200,13 +200,13 @@ object ConcurrentEventsSuite extends SimpleIOSuite {
   private val historyDefinitionJson =
     """|{
        |  "states": {
-       |    "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
+       |    "ACTIVE": { "id": "ACTIVE", "isFinal": false }
        |  },
-       |  "initialState": { "value": "ACTIVE" },
+       |  "initialState": "ACTIVE",
        |  "transitions": [
        |    {
-       |      "from": { "value": "ACTIVE" },
-       |      "to": { "value": "ACTIVE" },
+       |      "from": "ACTIVE",
+       |      "to": "ACTIVE",
        |      "eventName": "record",
        |      "guard": true,
        |      "effect": {

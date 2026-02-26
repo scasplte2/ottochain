@@ -52,18 +52,18 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
   def manufacturerStateMachineJson(): String =
     s"""{
       "states": {
-        "idle": { "id": { "value": "idle" }, "isFinal": false },
-        "production_scheduled": { "id": { "value": "production_scheduled" }, "isFinal": false },
-        "producing": { "id": { "value": "producing" }, "isFinal": false },
-        "inventory_full": { "id": { "value": "inventory_full" }, "isFinal": false },
-        "shipping": { "id": { "value": "shipping" }, "isFinal": false },
-        "supply_shortage": { "id": { "value": "supply_shortage" }, "isFinal": false }
+        "idle": { "id": "idle", "isFinal": false },
+        "production_scheduled": { "id": "production_scheduled", "isFinal": false },
+        "producing": { "id": "producing", "isFinal": false },
+        "inventory_full": { "id": "inventory_full", "isFinal": false },
+        "shipping": { "id": "shipping", "isFinal": false },
+        "supply_shortage": { "id": "supply_shortage", "isFinal": false }
       },
-      "initialState": { "value": "idle" },
+      "initialState": "idle",
       "transitions": [
         {
-          "from": { "value": "idle" },
-          "to": { "value": "production_scheduled" },
+          "from": "idle",
+          "to": "production_scheduled",
           "eventName": "schedule_production",
           "guard": {
             "and": [
@@ -79,8 +79,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "production_scheduled" },
-          "to": { "value": "producing" },
+          "from": "production_scheduled",
+          "to": "producing",
           "eventName": "start_production",
           "guard": true,
           "effect": [
@@ -91,8 +91,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "producing" },
-          "to": { "value": "inventory_full" },
+          "from": "producing",
+          "to": "inventory_full",
           "eventName": "complete_batch",
           "guard": { ">=": [{ "+": [{ "var": "state.inventory" }, { "var": "state.batchSize" }] }, { "var": "state.maxInventory" }] },
           "effect": [
@@ -104,8 +104,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "inventory_full" },
-          "to": { "value": "shipping" },
+          "from": "inventory_full",
+          "to": "shipping",
           "eventName": "fulfill_order",
           "guard": { ">=": [{ "var": "state.inventory" }, { "var": "event.orderQuantity" }] },
           "effect": {
@@ -127,8 +127,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "shipping" },
-          "to": { "value": "idle" },
+          "from": "shipping",
+          "to": "idle",
           "eventName": "complete_shipment",
           "guard": true,
           "effect": [
@@ -138,8 +138,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "shipping" },
-          "to": { "value": "production_scheduled" },
+          "from": "shipping",
+          "to": "production_scheduled",
           "eventName": "schedule_production",
           "guard": {
             "and": [
@@ -155,8 +155,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "idle" },
-          "to": { "value": "supply_shortage" },
+          "from": "idle",
+          "to": "supply_shortage",
           "eventName": "check_materials",
           "guard": { "<": [{ "var": "state.rawMaterials" }, { "var": "state.requiredMaterials" }] },
           "effect": {
@@ -176,8 +176,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "idle" },
-          "to": { "value": "idle" },
+          "from": "idle",
+          "to": "idle",
           "eventName": "pay_taxes",
           "guard": true,
           "effect": {
@@ -203,8 +203,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "inventory_full" },
-          "to": { "value": "inventory_full" },
+          "from": "inventory_full",
+          "to": "inventory_full",
           "eventName": "pay_taxes",
           "guard": true,
           "effect": {
@@ -230,8 +230,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "shipping" },
-          "to": { "value": "shipping" },
+          "from": "shipping",
+          "to": "shipping",
           "eventName": "pay_taxes",
           "guard": true,
           "effect": {
@@ -257,8 +257,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "supply_shortage" },
-          "to": { "value": "supply_shortage" },
+          "from": "supply_shortage",
+          "to": "supply_shortage",
           "eventName": "pay_taxes",
           "guard": true,
           "effect": {
@@ -289,18 +289,18 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
   def retailerStateMachineJson(supplierfiberId: String, paymentProcessorfiberId: String): String =
     s"""{
       "states": {
-        "open": { "id": { "value": "open" }, "isFinal": false },
-        "stocking": { "id": { "value": "stocking" }, "isFinal": false },
-        "sale_active": { "id": { "value": "sale_active" }, "isFinal": false },
-        "inventory_low": { "id": { "value": "inventory_low" }, "isFinal": false },
-        "closed": { "id": { "value": "closed" }, "isFinal": false },
-        "holiday_hours": { "id": { "value": "holiday_hours" }, "isFinal": false }
+        "open": { "id": "open", "isFinal": false },
+        "stocking": { "id": "stocking", "isFinal": false },
+        "sale_active": { "id": "sale_active", "isFinal": false },
+        "inventory_low": { "id": "inventory_low", "isFinal": false },
+        "closed": { "id": "closed", "isFinal": false },
+        "holiday_hours": { "id": "holiday_hours", "isFinal": false }
       },
-      "initialState": { "value": "open" },
+      "initialState": "open",
       "transitions": [
         {
-          "from": { "value": "open" },
-          "to": { "value": "inventory_low" },
+          "from": "open",
+          "to": "inventory_low",
           "eventName": "check_inventory",
           "guard": { "<": [{ "var": "state.stock" }, { "var": "state.reorderThreshold" }] },
           "effect": {
@@ -321,8 +321,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "inventory_low" },
-          "to": { "value": "stocking" },
+          "from": "inventory_low",
+          "to": "stocking",
           "eventName": "receive_shipment",
           "guard": { "===": [{ "var": "event.supplier" }, "$supplierfiberId"] },
           "effect": [
@@ -333,8 +333,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "stocking" },
-          "to": { "value": "open" },
+          "from": "stocking",
+          "to": "open",
           "eventName": "reopen",
           "guard": true,
           "effect": [
@@ -344,8 +344,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "open" },
-          "to": { "value": "sale_active" },
+          "from": "open",
+          "to": "sale_active",
           "eventName": "start_sale",
           "guard": {
             "or": [
@@ -361,8 +361,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "open" },
-          "to": { "value": "open" },
+          "from": "open",
+          "to": "open",
           "eventName": "process_sale",
           "guard": {
             "and": [
@@ -381,8 +381,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": ["$paymentProcessorfiberId"]
         },
         {
-          "from": { "value": "stocking" },
-          "to": { "value": "stocking" },
+          "from": "stocking",
+          "to": "stocking",
           "eventName": "process_sale",
           "guard": {
             "and": [
@@ -401,8 +401,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": ["$paymentProcessorfiberId"]
         },
         {
-          "from": { "value": "open" },
-          "to": { "value": "open" },
+          "from": "open",
+          "to": "open",
           "eventName": "pay_taxes",
           "guard": true,
           "effect": {
@@ -428,8 +428,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "stocking" },
-          "to": { "value": "stocking" },
+          "from": "stocking",
+          "to": "stocking",
           "eventName": "pay_taxes",
           "guard": true,
           "effect": {
@@ -455,8 +455,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "sale_active" },
-          "to": { "value": "sale_active" },
+          "from": "sale_active",
+          "to": "sale_active",
           "eventName": "pay_taxes",
           "guard": true,
           "effect": {
@@ -487,20 +487,20 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
   def bankStateMachineJson(federalReservefiberId: String): String =
     s"""{
       "states": {
-        "operating": { "id": { "value": "operating" }, "isFinal": false },
-        "processing_loan": { "id": { "value": "processing_loan" }, "isFinal": false },
-        "loan_approved": { "id": { "value": "loan_approved" }, "isFinal": false },
-        "loan_denied": { "id": { "value": "loan_denied" }, "isFinal": false },
-        "loan_servicing": { "id": { "value": "loan_servicing" }, "isFinal": false },
-        "default_management": { "id": { "value": "default_management" }, "isFinal": false },
-        "stress_test": { "id": { "value": "stress_test" }, "isFinal": false },
-        "liquidity_crisis": { "id": { "value": "liquidity_crisis" }, "isFinal": false }
+        "operating": { "id": "operating", "isFinal": false },
+        "processing_loan": { "id": "processing_loan", "isFinal": false },
+        "loan_approved": { "id": "loan_approved", "isFinal": false },
+        "loan_denied": { "id": "loan_denied", "isFinal": false },
+        "loan_servicing": { "id": "loan_servicing", "isFinal": false },
+        "default_management": { "id": "default_management", "isFinal": false },
+        "stress_test": { "id": "stress_test", "isFinal": false },
+        "liquidity_crisis": { "id": "liquidity_crisis", "isFinal": false }
       },
-      "initialState": { "value": "operating" },
+      "initialState": "operating",
       "transitions": [
         {
-          "from": { "value": "operating" },
-          "to": { "value": "processing_loan" },
+          "from": "operating",
+          "to": "processing_loan",
           "eventName": "apply_loan",
           "guard": {
             "and": [
@@ -521,8 +521,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "processing_loan" },
-          "to": { "value": "loan_servicing" },
+          "from": "processing_loan",
+          "to": "loan_servicing",
           "eventName": "underwrite",
           "guard": {
             "and": [
@@ -555,8 +555,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": ["$federalReservefiberId"]
         },
         {
-          "from": { "value": "loan_servicing" },
-          "to": { "value": "loan_servicing" },
+          "from": "loan_servicing",
+          "to": "loan_servicing",
           "eventName": "payment_missed",
           "guard": { "<": [{ "var": "event.missedPayments" }, 3] },
           "effect": [
@@ -566,8 +566,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "loan_servicing" },
-          "to": { "value": "default_management" },
+          "from": "loan_servicing",
+          "to": "default_management",
           "eventName": "payment_missed",
           "guard": { ">=": [{ "var": "event.missedPayments" }, 3] },
           "effect": {
@@ -588,8 +588,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "operating" },
-          "to": { "value": "stress_test" },
+          "from": "operating",
+          "to": "stress_test",
           "eventName": "fed_directive",
           "guard": { "===": [{ "var": "machines.$federalReservefiberId.state.status" }, "stress_testing"] },
           "effect": [
@@ -604,8 +604,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": ["$federalReservefiberId"]
         },
         {
-          "from": { "value": "loan_servicing" },
-          "to": { "value": "stress_test" },
+          "from": "loan_servicing",
+          "to": "stress_test",
           "eventName": "fed_directive",
           "guard": { "===": [{ "var": "machines.$federalReservefiberId.state.status" }, "stress_testing"] },
           "effect": [
@@ -620,8 +620,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": ["$federalReservefiberId"]
         },
         {
-          "from": { "value": "stress_test" },
-          "to": { "value": "loan_servicing" },
+          "from": "stress_test",
+          "to": "loan_servicing",
           "eventName": "complete_stress_test",
           "guard": {
             "and": [
@@ -638,8 +638,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "stress_test" },
-          "to": { "value": "operating" },
+          "from": "stress_test",
+          "to": "operating",
           "eventName": "complete_stress_test",
           "guard": {
             "and": [
@@ -655,8 +655,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "stress_test" },
-          "to": { "value": "liquidity_crisis" },
+          "from": "stress_test",
+          "to": "liquidity_crisis",
           "eventName": "complete_stress_test",
           "guard": {
             "or": [
@@ -685,8 +685,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": ["$federalReservefiberId"]
         },
         {
-          "from": { "value": "operating" },
-          "to": { "value": "operating" },
+          "from": "operating",
+          "to": "operating",
           "eventName": "rate_adjustment",
           "guard": true,
           "effect": [
@@ -696,8 +696,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "loan_servicing" },
-          "to": { "value": "loan_servicing" },
+          "from": "loan_servicing",
+          "to": "loan_servicing",
           "eventName": "rate_adjustment",
           "guard": true,
           "effect": [
@@ -707,8 +707,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "loan_servicing" },
-          "to": { "value": "loan_servicing" },
+          "from": "loan_servicing",
+          "to": "loan_servicing",
           "eventName": "payment_received",
           "guard": true,
           "effect": [
@@ -723,19 +723,19 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
   def consumerStateMachineJson(): String =
     """{
       "states": {
-        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false },
-        "shopping": { "id": { "value": "shopping" }, "isFinal": false },
-        "service_providing": { "id": { "value": "service_providing" }, "isFinal": false },
-        "marketplace_selling": { "id": { "value": "marketplace_selling" }, "isFinal": false },
-        "loan_active": { "id": { "value": "loan_active" }, "isFinal": false },
-        "debt_current": { "id": { "value": "debt_current" }, "isFinal": false },
-        "debt_delinquent": { "id": { "value": "debt_delinquent" }, "isFinal": false }
+        "ACTIVE": { "id": "ACTIVE", "isFinal": false },
+        "shopping": { "id": "shopping", "isFinal": false },
+        "service_providing": { "id": "service_providing", "isFinal": false },
+        "marketplace_selling": { "id": "marketplace_selling", "isFinal": false },
+        "loan_active": { "id": "loan_active", "isFinal": false },
+        "debt_current": { "id": "debt_current", "isFinal": false },
+        "debt_delinquent": { "id": "debt_delinquent", "isFinal": false }
       },
-      "initialState": { "value": "ACTIVE" },
+      "initialState": "ACTIVE",
       "transitions": [
         {
-          "from": { "value": "ACTIVE" },
-          "to": { "value": "ACTIVE" },
+          "from": "ACTIVE",
+          "to": "ACTIVE",
           "eventName": "browse_products",
           "guard": { ">=": [{ "var": "state.balance" }, { "var": "event.expectedCost" }] },
           "effect": {
@@ -756,8 +756,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "ACTIVE" },
-          "to": { "value": "ACTIVE" },
+          "from": "ACTIVE",
+          "to": "ACTIVE",
           "eventName": "provide_service",
           "guard": { "===": [{ "var": "state.serviceType" }, { "var": "event.requestedService" }] },
           "effect": [
@@ -768,8 +768,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "ACTIVE" },
-          "to": { "value": "debt_current" },
+          "from": "ACTIVE",
+          "to": "debt_current",
           "eventName": "loan_funded",
           "guard": true,
           "effect": [
@@ -783,8 +783,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "debt_current" },
-          "to": { "value": "debt_current" },
+          "from": "debt_current",
+          "to": "debt_current",
           "eventName": "make_payment",
           "guard": { ">=": [{ "var": "state.balance" }, { "var": "state.monthlyPayment" }] },
           "effect": {
@@ -812,8 +812,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "debt_current" },
-          "to": { "value": "debt_current" },
+          "from": "debt_current",
+          "to": "debt_current",
           "eventName": "browse_products",
           "guard": { ">=": [{ "var": "state.balance" }, { "var": "event.expectedCost" }] },
           "effect": {
@@ -834,8 +834,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "debt_current" },
-          "to": { "value": "debt_current" },
+          "from": "debt_current",
+          "to": "debt_current",
           "eventName": "provide_service",
           "guard": { "===": [{ "var": "state.serviceType" }, { "var": "event.requestedService" }] },
           "effect": [
@@ -846,8 +846,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "debt_current" },
-          "to": { "value": "debt_delinquent" },
+          "from": "debt_current",
+          "to": "debt_delinquent",
           "eventName": "check_payment",
           "guard": { ">": [{ "var": "event.timestamp" }, { "var": "state.nextPaymentDue" }] },
           "effect": {
@@ -868,8 +868,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "ACTIVE" },
-          "to": { "value": "marketplace_selling" },
+          "from": "ACTIVE",
+          "to": "marketplace_selling",
           "eventName": "list_item",
           "guard": true,
           "effect": {
@@ -878,16 +878,16 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
                 "childId": { "var": "event.auctionId" },
                 "definition": {
                   "states": {
-                    "listed": { "id": { "value": "listed" }, "isFinal": false },
-                    "bid_received": { "id": { "value": "bid_received" }, "isFinal": false },
-                    "sold": { "id": { "value": "sold" }, "isFinal": true },
-                    "expired": { "id": { "value": "expired" }, "isFinal": true }
+                    "listed": { "id": "listed", "isFinal": false },
+                    "bid_received": { "id": "bid_received", "isFinal": false },
+                    "sold": { "id": "sold", "isFinal": true },
+                    "expired": { "id": "expired", "isFinal": true }
                   },
-                  "initialState": { "value": "listed" },
+                  "initialState": "listed",
                   "transitions": [
                     {
-                      "from": { "value": "listed" },
-                      "to": { "value": "bid_received" },
+                      "from": "listed",
+                      "to": "bid_received",
                       "eventName": "place_bid",
                       "guard": { ">=": [{ "var": "event.bidAmount" }, { "var": "state.reservePrice" }] },
                       "effect": [
@@ -899,8 +899,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
                       "dependencies": []
                     },
                     {
-                      "from": { "value": "bid_received" },
-                      "to": { "value": "sold" },
+                      "from": "bid_received",
+                      "to": "sold",
                       "eventName": "accept_bid",
                       "guard": true,
                       "effect": {
@@ -936,8 +936,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "marketplace_selling" },
-          "to": { "value": "ACTIVE" },
+          "from": "marketplace_selling",
+          "to": "ACTIVE",
           "eventName": "sale_completed",
           "guard": true,
           "effect": [
@@ -949,8 +949,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "debt_delinquent" },
-          "to": { "value": "debt_delinquent" },
+          "from": "debt_delinquent",
+          "to": "debt_delinquent",
           "eventName": "list_item",
           "guard": true,
           "effect": {
@@ -959,16 +959,16 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
                 "childId": { "var": "event.auctionId" },
                 "definition": {
                   "states": {
-                    "listed": { "id": { "value": "listed" }, "isFinal": false },
-                    "bid_received": { "id": { "value": "bid_received" }, "isFinal": false },
-                    "sold": { "id": { "value": "sold" }, "isFinal": true },
-                    "expired": { "id": { "value": "expired" }, "isFinal": true }
+                    "listed": { "id": "listed", "isFinal": false },
+                    "bid_received": { "id": "bid_received", "isFinal": false },
+                    "sold": { "id": "sold", "isFinal": true },
+                    "expired": { "id": "expired", "isFinal": true }
                   },
-                  "initialState": { "value": "listed" },
+                  "initialState": "listed",
                   "transitions": [
                     {
-                      "from": { "value": "listed" },
-                      "to": { "value": "bid_received" },
+                      "from": "listed",
+                      "to": "bid_received",
                       "eventName": "place_bid",
                       "guard": { ">=": [{ "var": "event.bidAmount" }, { "var": "state.reservePrice" }] },
                       "effect": [
@@ -980,8 +980,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
                       "dependencies": []
                     },
                     {
-                      "from": { "value": "bid_received" },
-                      "to": { "value": "sold" },
+                      "from": "bid_received",
+                      "to": "sold",
                       "eventName": "accept_bid",
                       "guard": true,
                       "effect": {
@@ -1016,8 +1016,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "debt_delinquent" },
-          "to": { "value": "debt_delinquent" },
+          "from": "debt_delinquent",
+          "to": "debt_delinquent",
           "eventName": "sale_completed",
           "guard": true,
           "effect": [
@@ -1028,8 +1028,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "ACTIVE" },
-          "to": { "value": "ACTIVE" },
+          "from": "ACTIVE",
+          "to": "ACTIVE",
           "eventName": "pay_taxes",
           "guard": true,
           "effect": {
@@ -1055,8 +1055,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "debt_current" },
-          "to": { "value": "debt_current" },
+          "from": "debt_current",
+          "to": "debt_current",
           "eventName": "pay_taxes",
           "guard": true,
           "effect": {
@@ -1082,8 +1082,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "debt_delinquent" },
-          "to": { "value": "debt_delinquent" },
+          "from": "debt_delinquent",
+          "to": "debt_delinquent",
           "eventName": "pay_taxes",
           "guard": true,
           "effect": {
@@ -1137,18 +1137,18 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
 
     s"""{
       "states": {
-        "stable": { "id": { "value": "stable" }, "isFinal": false },
-        "rate_review": { "id": { "value": "rate_review" }, "isFinal": false },
-        "rate_increased": { "id": { "value": "rate_increased" }, "isFinal": false },
-        "rate_decreased": { "id": { "value": "rate_decreased" }, "isFinal": false },
-        "stress_testing": { "id": { "value": "stress_testing" }, "isFinal": false },
-        "emergency_lending": { "id": { "value": "emergency_lending" }, "isFinal": false }
+        "stable": { "id": "stable", "isFinal": false },
+        "rate_review": { "id": "rate_review", "isFinal": false },
+        "rate_increased": { "id": "rate_increased", "isFinal": false },
+        "rate_decreased": { "id": "rate_decreased", "isFinal": false },
+        "stress_testing": { "id": "stress_testing", "isFinal": false },
+        "emergency_lending": { "id": "emergency_lending", "isFinal": false }
       },
-      "initialState": { "value": "stable" },
+      "initialState": "stable",
       "transitions": [
         {
-          "from": { "value": "stable" },
-          "to": { "value": "rate_review" },
+          "from": "stable",
+          "to": "rate_review",
           "eventName": "quarterly_meeting",
           "guard": true,
           "effect": [
@@ -1161,8 +1161,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "rate_review" },
-          "to": { "value": "stable" },
+          "from": "rate_review",
+          "to": "stable",
           "eventName": "set_rate",
           "guard": { ">": [{ "var": "state.inflationRate" }, 0.025] },
           "effect": {
@@ -1175,8 +1175,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "stable" },
-          "to": { "value": "stress_testing" },
+          "from": "stable",
+          "to": "stress_testing",
           "eventName": "initiate_stress_test",
           "guard": {
             "or": [
@@ -1192,8 +1192,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "stable" },
-          "to": { "value": "emergency_lending" },
+          "from": "stable",
+          "to": "emergency_lending",
           "eventName": "emergency_lending_request",
           "guard": true,
           "effect": {
@@ -1251,16 +1251,16 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
 
     s"""{
       "states": {
-        "monitoring": { "id": { "value": "monitoring" }, "isFinal": false },
-        "tax_collection": { "id": { "value": "tax_collection" }, "isFinal": false },
-        "audit": { "id": { "value": "audit" }, "isFinal": false },
-        "compliant": { "id": { "value": "compliant" }, "isFinal": false }
+        "monitoring": { "id": "monitoring", "isFinal": false },
+        "tax_collection": { "id": "tax_collection", "isFinal": false },
+        "audit": { "id": "audit", "isFinal": false },
+        "compliant": { "id": "compliant", "isFinal": false }
       },
-      "initialState": { "value": "monitoring" },
+      "initialState": "monitoring",
       "transitions": [
         {
-          "from": { "value": "monitoring" },
-          "to": { "value": "tax_collection" },
+          "from": "monitoring",
+          "to": "tax_collection",
           "eventName": "collect_taxes",
           "guard": true,
           "effect": {
@@ -1274,8 +1274,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "tax_collection" },
-          "to": { "value": "tax_collection" },
+          "from": "tax_collection",
+          "to": "tax_collection",
           "eventName": "tax_payment_received",
           "guard": { "<": [{ "+": [{ "var": "state.taxpayersCompliant" }, 1] }, { "var": "state.expectedTaxpayers" }] },
           "effect": [
@@ -1287,8 +1287,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "tax_collection" },
-          "to": { "value": "monitoring" },
+          "from": "tax_collection",
+          "to": "monitoring",
           "eventName": "tax_payment_received",
           "guard": { "===": [{ "+": [{ "var": "state.taxpayersCompliant" }, 1] }, { "var": "state.expectedTaxpayers" }] },
           "effect": [
@@ -1300,8 +1300,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "monitoring" },
-          "to": { "value": "monitoring" },
+          "from": "monitoring",
+          "to": "monitoring",
           "eventName": "tax_payment_received",
           "guard": true,
           "effect": [
@@ -1313,8 +1313,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "monitoring" },
-          "to": { "value": "audit" },
+          "from": "monitoring",
+          "to": "audit",
           "eventName": "initiate_audit",
           "guard": true,
           "effect": {
@@ -1325,8 +1325,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "audit" },
-          "to": { "value": "compliant" },
+          "from": "audit",
+          "to": "compliant",
           "eventName": "audit_complete",
           "guard": { "===": [{ "var": "event.finding" }, "compliant"] },
           "effect": {
@@ -1346,8 +1346,8 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
           "dependencies": []
         },
         {
-          "from": { "value": "compliant" },
-          "to": { "value": "monitoring" },
+          "from": "compliant",
+          "to": "monitoring",
           "eventName": "return_to_monitoring",
           "guard": true,
           "effect": [],

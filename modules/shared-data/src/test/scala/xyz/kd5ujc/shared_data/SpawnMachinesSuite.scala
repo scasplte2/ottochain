@@ -39,14 +39,14 @@ object SpawnMachinesSuite extends SimpleIOSuite {
         parentJson = s"""
         {
           "states": {
-            "init": { "id": { "value": "init" }, "isFinal": false },
-            "spawned": { "id": { "value": "spawned" }, "isFinal": false }
+            "init": { "id": "init", "isFinal": false },
+            "spawned": { "id": "spawned", "isFinal": false }
           },
-          "initialState": { "value": "init" },
+          "initialState": "init",
           "transitions": [
             {
-              "from": { "value": "init" },
-              "to": { "value": "spawned" },
+              "from": "init",
+              "to": "spawned",
               "eventName": "spawn_child",
               "guard": true,
               "effect": {
@@ -55,9 +55,9 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$childfiberId",
                     "definition": {
                       "states": {
-                        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
+                        "ACTIVE": { "id": "ACTIVE", "isFinal": false }
                       },
-                      "initialState": { "value": "ACTIVE" },
+                      "initialState": "ACTIVE",
                       "transitions": []
                     },
                     "initialData": {
@@ -138,14 +138,14 @@ object SpawnMachinesSuite extends SimpleIOSuite {
         parentJson = s"""
         {
           "states": {
-            "init": { "id": { "value": "init" }, "isFinal": false },
-            "spawned": { "id": { "value": "spawned" }, "isFinal": false }
+            "init": { "id": "init", "isFinal": false },
+            "spawned": { "id": "spawned", "isFinal": false }
           },
-          "initialState": { "value": "init" },
+          "initialState": "init",
           "transitions": [
             {
-              "from": { "value": "init" },
-              "to": { "value": "spawned" },
+              "from": "init",
+              "to": "spawned",
               "eventName": "spawn_multiple",
               "guard": true,
               "effect": {
@@ -154,9 +154,9 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$child1fiberId",
                     "definition": {
                       "states": {
-                        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
+                        "ACTIVE": { "id": "ACTIVE", "isFinal": false }
                       },
-                      "initialState": { "value": "ACTIVE" },
+                      "initialState": "ACTIVE",
                       "transitions": []
                     },
                     "initialData": { "index": 0 }
@@ -165,9 +165,9 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$child2fiberId",
                     "definition": {
                       "states": {
-                        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
+                        "ACTIVE": { "id": "ACTIVE", "isFinal": false }
                       },
-                      "initialState": { "value": "ACTIVE" },
+                      "initialState": "ACTIVE",
                       "transitions": []
                     },
                     "initialData": { "index": 1 }
@@ -176,9 +176,9 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$child3fiberId",
                     "definition": {
                       "states": {
-                        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
+                        "ACTIVE": { "id": "ACTIVE", "isFinal": false }
                       },
-                      "initialState": { "value": "ACTIVE" },
+                      "initialState": "ACTIVE",
                       "transitions": []
                     },
                     "initialData": { "index": 2 }
@@ -272,14 +272,14 @@ object SpawnMachinesSuite extends SimpleIOSuite {
         parentJson = s"""
         {
           "states": {
-            "init": { "id": { "value": "init" }, "isFinal": false },
-            "spawned": { "id": { "value": "spawned" }, "isFinal": false }
+            "init": { "id": "init", "isFinal": false },
+            "spawned": { "id": "spawned", "isFinal": false }
           },
-          "initialState": { "value": "init" },
+          "initialState": "init",
           "transitions": [
             {
-              "from": { "value": "init" },
-              "to": { "value": "spawned" },
+              "from": "init",
+              "to": "spawned",
               "eventName": "spawn_and_trigger",
               "guard": true,
               "effect": {
@@ -288,14 +288,14 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$childfiberId",
                     "definition": {
                       "states": {
-                        "idle": { "id": { "value": "idle" }, "isFinal": false },
-                        "activated": { "id": { "value": "activated" }, "isFinal": false }
+                        "idle": { "id": "idle", "isFinal": false },
+                        "activated": { "id": "activated", "isFinal": false }
                       },
-                      "initialState": { "value": "idle" },
+                      "initialState": "idle",
                       "transitions": [
                         {
-                          "from": { "value": "idle" },
-                          "to": { "value": "activated" },
+                          "from": "idle",
+                          "to": "activated",
                           "eventName": "activate",
                           "guard": true,
                           "effect": {
@@ -385,14 +385,14 @@ object SpawnMachinesSuite extends SimpleIOSuite {
         parentJson = s"""
         {
           "states": {
-            "init": { "id": { "value": "init" }, "isFinal": false },
-            "spawned": { "id": { "value": "spawned" }, "isFinal": false }
+            "init": { "id": "init", "isFinal": false },
+            "spawned": { "id": "spawned", "isFinal": false }
           },
-          "initialState": { "value": "init" },
+          "initialState": "init",
           "transitions": [
             {
-              "from": { "value": "init" },
-              "to": { "value": "spawned" },
+              "from": "init",
+              "to": "spawned",
               "eventName": "spawn_child",
               "guard": true,
               "effect": {
@@ -401,9 +401,9 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$childfiberId",
                     "definition": {
                       "states": {
-                        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
+                        "ACTIVE": { "id": "ACTIVE", "isFinal": false }
                       },
-                      "initialState": { "value": "ACTIVE" },
+                      "initialState": "ACTIVE",
                       "transitions": []
                     },
                     "initialData": { "status": "ACTIVE" }
@@ -464,14 +464,14 @@ object SpawnMachinesSuite extends SimpleIOSuite {
         parentJson = s"""
         {
           "states": {
-            "init": { "id": { "value": "init" }, "isFinal": false },
-            "spawned": { "id": { "value": "spawned" }, "isFinal": false }
+            "init": { "id": "init", "isFinal": false },
+            "spawned": { "id": "spawned", "isFinal": false }
           },
-          "initialState": { "value": "init" },
+          "initialState": "init",
           "transitions": [
             {
-              "from": { "value": "init" },
-              "to": { "value": "spawned" },
+              "from": "init",
+              "to": "spawned",
               "eventName": "create_child",
               "guard": true,
               "effect": {
@@ -480,15 +480,15 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$childfiberId",
                     "definition": {
                       "states": {
-                        "idle": { "id": { "value": "idle" }, "isFinal": false },
-                        "working": { "id": { "value": "working" }, "isFinal": false },
-                        "done": { "id": { "value": "done" }, "isFinal": true }
+                        "idle": { "id": "idle", "isFinal": false },
+                        "working": { "id": "working", "isFinal": false },
+                        "done": { "id": "done", "isFinal": true }
                       },
-                      "initialState": { "value": "idle" },
+                      "initialState": "idle",
                       "transitions": [
                         {
-                          "from": { "value": "idle" },
-                          "to": { "value": "working" },
+                          "from": "idle",
+                          "to": "working",
                           "eventName": "start_work",
                           "guard": true,
                           "effect": {
@@ -498,8 +498,8 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                           "dependencies": []
                         },
                         {
-                          "from": { "value": "working" },
-                          "to": { "value": "done" },
+                          "from": "working",
+                          "to": "done",
                           "eventName": "finish_work",
                           "guard": true,
                           "effect": {
@@ -607,14 +607,14 @@ object SpawnMachinesSuite extends SimpleIOSuite {
         parentJson = s"""
         {
           "states": {
-            "init": { "id": { "value": "init" }, "isFinal": false },
-            "spawned": { "id": { "value": "spawned" }, "isFinal": false }
+            "init": { "id": "init", "isFinal": false },
+            "spawned": { "id": "spawned", "isFinal": false }
           },
-          "initialState": { "value": "init" },
+          "initialState": "init",
           "transitions": [
             {
-              "from": { "value": "init" },
-              "to": { "value": "spawned" },
+              "from": "init",
+              "to": "spawned",
               "eventName": "spawn_and_trigger",
               "guard": true,
               "effect": {
@@ -623,14 +623,14 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$childfiberId",
                     "definition": {
                       "states": {
-                        "idle": { "id": { "value": "idle" }, "isFinal": false },
-                        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
+                        "idle": { "id": "idle", "isFinal": false },
+                        "ACTIVE": { "id": "ACTIVE", "isFinal": false }
                       },
-                      "initialState": { "value": "idle" },
+                      "initialState": "idle",
                       "transitions": [
                         {
-                          "from": { "value": "idle" },
-                          "to": { "value": "ACTIVE" },
+                          "from": "idle",
+                          "to": "ACTIVE",
                           "eventName": "activate",
                           "guard": true,
                           "effect": {
@@ -735,14 +735,14 @@ object SpawnMachinesSuite extends SimpleIOSuite {
         grandparentJson = s"""
         {
           "states": {
-            "init": { "id": { "value": "init" }, "isFinal": false },
-            "spawned": { "id": { "value": "spawned" }, "isFinal": false }
+            "init": { "id": "init", "isFinal": false },
+            "spawned": { "id": "spawned", "isFinal": false }
           },
-          "initialState": { "value": "init" },
+          "initialState": "init",
           "transitions": [
             {
-              "from": { "value": "init" },
-              "to": { "value": "spawned" },
+              "from": "init",
+              "to": "spawned",
               "eventName": "spawn_parent",
               "guard": true,
               "effect": {
@@ -751,14 +751,14 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$parentfiberId",
                     "definition": {
                       "states": {
-                        "idle": { "id": { "value": "idle" }, "isFinal": false },
-                        "spawned_child": { "id": { "value": "spawned_child" }, "isFinal": false }
+                        "idle": { "id": "idle", "isFinal": false },
+                        "spawned_child": { "id": "spawned_child", "isFinal": false }
                       },
-                      "initialState": { "value": "idle" },
+                      "initialState": "idle",
                       "transitions": [
                         {
-                          "from": { "value": "idle" },
-                          "to": { "value": "spawned_child" },
+                          "from": "idle",
+                          "to": "spawned_child",
                           "eventName": "spawn_grandchild",
                           "guard": true,
                           "effect": {
@@ -767,13 +767,13 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                                 "childId": "$childfiberId",
                                 "definition": {
                                   "states": {
-                                    "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
+                                    "ACTIVE": { "id": "ACTIVE", "isFinal": false }
                                   },
-                                  "initialState": { "value": "ACTIVE" },
+                                  "initialState": "ACTIVE",
                                   "transitions": [
                                     {
-                                      "from": { "value": "ACTIVE" },
-                                      "to": { "value": "ACTIVE" },
+                                      "from": "ACTIVE",
+                                      "to": "ACTIVE",
                                       "eventName": "activate",
                                       "guard": true,
                                       "effect": {
@@ -803,8 +803,8 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                           "dependencies": []
                         },
                         {
-                          "from": { "value": "spawned_child" },
-                          "to": { "value": "spawned_child" },
+                          "from": "spawned_child",
+                          "to": "spawned_child",
                           "eventName": "activate",
                           "guard": true,
                           "effect": {
@@ -903,14 +903,14 @@ object SpawnMachinesSuite extends SimpleIOSuite {
         parentJson = s"""
         {
           "states": {
-            "init": { "id": { "value": "init" }, "isFinal": false },
-            "spawned": { "id": { "value": "spawned" }, "isFinal": false }
+            "init": { "id": "init", "isFinal": false },
+            "spawned": { "id": "spawned", "isFinal": false }
           },
-          "initialState": { "value": "init" },
+          "initialState": "init",
           "transitions": [
             {
-              "from": { "value": "init" },
-              "to": { "value": "spawned" },
+              "from": "init",
+              "to": "spawned",
               "eventName": "spawn_with_failing_trigger",
               "guard": true,
               "effect": {
@@ -919,9 +919,9 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$child1fiberId",
                     "definition": {
                       "states": {
-                        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
+                        "ACTIVE": { "id": "ACTIVE", "isFinal": false }
                       },
-                      "initialState": { "value": "ACTIVE" },
+                      "initialState": "ACTIVE",
                       "transitions": []
                     },
                     "initialData": { "index": 0 }
@@ -930,14 +930,14 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$child2fiberId",
                     "definition": {
                       "states": {
-                        "idle": { "id": { "value": "idle" }, "isFinal": false },
-                        "activated": { "id": { "value": "activated" }, "isFinal": false }
+                        "idle": { "id": "idle", "isFinal": false },
+                        "activated": { "id": "activated", "isFinal": false }
                       },
-                      "initialState": { "value": "idle" },
+                      "initialState": "idle",
                       "transitions": [
                         {
-                          "from": { "value": "idle" },
-                          "to": { "value": "activated" },
+                          "from": "idle",
+                          "to": "activated",
                           "eventName": "activate",
                           "guard": { "===": [{ "var": "event.shouldFail" }, false] },
                           "effect": {
@@ -953,9 +953,9 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$child3fiberId",
                     "definition": {
                       "states": {
-                        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
+                        "ACTIVE": { "id": "ACTIVE", "isFinal": false }
                       },
-                      "initialState": { "value": "ACTIVE" },
+                      "initialState": "ACTIVE",
                       "transitions": []
                     },
                     "initialData": { "index": 2 }
@@ -1035,9 +1035,9 @@ object SpawnMachinesSuite extends SimpleIOSuite {
             "childId": "$fiberId",
             "definition": {
               "states": {
-                "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
+                "ACTIVE": { "id": "ACTIVE", "isFinal": false }
               },
-              "initialState": { "value": "ACTIVE" },
+              "initialState": "ACTIVE",
               "transitions": []
             },
             "initialData": { "status": "ACTIVE" }
@@ -1049,14 +1049,14 @@ object SpawnMachinesSuite extends SimpleIOSuite {
         parentJson = s"""
         {
           "states": {
-            "init": { "id": { "value": "init" }, "isFinal": false },
-            "spawned": { "id": { "value": "spawned" }, "isFinal": false }
+            "init": { "id": "init", "isFinal": false },
+            "spawned": { "id": "spawned", "isFinal": false }
           },
-          "initialState": { "value": "init" },
+          "initialState": "init",
           "transitions": [
             {
-              "from": { "value": "init" },
-              "to": { "value": "spawned" },
+              "from": "init",
+              "to": "spawned",
               "eventName": "spawn_many",
               "guard": true,
               "effect": {
@@ -1123,14 +1123,14 @@ object SpawnMachinesSuite extends SimpleIOSuite {
         parentJson = s"""
         {
           "states": {
-            "init": { "id": { "value": "init" }, "isFinal": false },
-            "spawned": { "id": { "value": "spawned" }, "isFinal": false }
+            "init": { "id": "init", "isFinal": false },
+            "spawned": { "id": "spawned", "isFinal": false }
           },
-          "initialState": { "value": "init" },
+          "initialState": "init",
           "transitions": [
             {
-              "from": { "value": "init" },
-              "to": { "value": "spawned" },
+              "from": "init",
+              "to": "spawned",
               "eventName": "spawn_duplicate",
               "guard": true,
               "effect": {
@@ -1139,9 +1139,9 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$childfiberId",
                     "definition": {
                       "states": {
-                        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
+                        "ACTIVE": { "id": "ACTIVE", "isFinal": false }
                       },
-                      "initialState": { "value": "ACTIVE" },
+                      "initialState": "ACTIVE",
                       "transitions": []
                     },
                     "initialData": { "index": 1 }
@@ -1150,9 +1150,9 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$childfiberId",
                     "definition": {
                       "states": {
-                        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
+                        "ACTIVE": { "id": "ACTIVE", "isFinal": false }
                       },
-                      "initialState": { "value": "ACTIVE" },
+                      "initialState": "ACTIVE",
                       "transitions": []
                     },
                     "initialData": { "index": 2 }
@@ -1224,14 +1224,14 @@ object SpawnMachinesSuite extends SimpleIOSuite {
         parentJson = s"""
         {
           "states": {
-            "init": { "id": { "value": "init" }, "isFinal": false },
-            "spawned": { "id": { "value": "spawned" }, "isFinal": false }
+            "init": { "id": "init", "isFinal": false },
+            "spawned": { "id": "spawned", "isFinal": false }
           },
-          "initialState": { "value": "init" },
+          "initialState": "init",
           "transitions": [
             {
-              "from": { "value": "init" },
-              "to": { "value": "spawned" },
+              "from": "init",
+              "to": "spawned",
               "eventName": "spawn_colliding",
               "guard": true,
               "effect": {
@@ -1240,9 +1240,9 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$existingfiberId",
                     "definition": {
                       "states": {
-                        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
+                        "ACTIVE": { "id": "ACTIVE", "isFinal": false }
                       },
-                      "initialState": { "value": "ACTIVE" },
+                      "initialState": "ACTIVE",
                       "transitions": []
                     },
                     "initialData": { "value": 1 }
@@ -1277,8 +1277,8 @@ object SpawnMachinesSuite extends SimpleIOSuite {
         // Existing fiber that occupies existingfiberId
         existingDef <- IO.fromEither(decode[StateMachineDefinition]("""
         {
-          "states": { "idle": { "id": { "value": "idle" }, "isFinal": false } },
-          "initialState": { "value": "idle" },
+          "states": { "idle": { "id": "idle", "isFinal": false } },
+          "initialState": "idle",
           "transitions": []
         }
         """))
@@ -1344,14 +1344,14 @@ object SpawnMachinesSuite extends SimpleIOSuite {
         parentJson = s"""
         {
           "states": {
-            "init": { "id": { "value": "init" }, "isFinal": false },
-            "spawned": { "id": { "value": "spawned" }, "isFinal": false }
+            "init": { "id": "init", "isFinal": false },
+            "spawned": { "id": "spawned", "isFinal": false }
           },
-          "initialState": { "value": "init" },
+          "initialState": "init",
           "transitions": [
             {
-              "from": { "value": "init" },
-              "to": { "value": "spawned" },
+              "from": "init",
+              "to": "spawned",
               "eventName": "spawn_large",
               "guard": true,
               "effect": {
@@ -1360,9 +1360,9 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$childfiberId",
                     "definition": {
                       "states": {
-                        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
+                        "ACTIVE": { "id": "ACTIVE", "isFinal": false }
                       },
-                      "initialState": { "value": "ACTIVE" },
+                      "initialState": "ACTIVE",
                       "transitions": []
                     },
                     "initialData": { "testData": "$testData" }
@@ -1432,14 +1432,14 @@ object SpawnMachinesSuite extends SimpleIOSuite {
         parentJson = s"""
         {
           "states": {
-            "init": { "id": { "value": "init" }, "isFinal": false },
-            "spawned": { "id": { "value": "spawned" }, "isFinal": false }
+            "init": { "id": "init", "isFinal": false },
+            "spawned": { "id": "spawned", "isFinal": false }
           },
-          "initialState": { "value": "init" },
+          "initialState": "init",
           "transitions": [
             {
-              "from": { "value": "init" },
-              "to": { "value": "spawned" },
+              "from": "init",
+              "to": "spawned",
               "eventName": "spawn_child",
               "guard": true,
               "effect": {
@@ -1448,9 +1448,9 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$childfiberId",
                     "definition": {
                       "states": {
-                        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
+                        "ACTIVE": { "id": "ACTIVE", "isFinal": false }
                       },
-                      "initialState": { "value": "ACTIVE" },
+                      "initialState": "ACTIVE",
                       "transitions": []
                     },
                     "initialData": { "status": "ACTIVE" }
@@ -1520,14 +1520,14 @@ object SpawnMachinesSuite extends SimpleIOSuite {
         parentJson = s"""
         {
           "states": {
-            "init": { "id": { "value": "init" }, "isFinal": false },
-            "spawned": { "id": { "value": "spawned" }, "isFinal": false }
+            "init": { "id": "init", "isFinal": false },
+            "spawned": { "id": "spawned", "isFinal": false }
           },
-          "initialState": { "value": "init" },
+          "initialState": "init",
           "transitions": [
             {
-              "from": { "value": "init" },
-              "to": { "value": "spawned" },
+              "from": "init",
+              "to": "spawned",
               "eventName": "spawn_child",
               "guard": true,
               "effect": {
@@ -1536,9 +1536,9 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     "childId": "$childfiberId",
                     "definition": {
                       "states": {
-                        "ACTIVE": { "id": { "value": "ACTIVE" }, "isFinal": false }
+                        "ACTIVE": { "id": "ACTIVE", "isFinal": false }
                       },
-                      "initialState": { "value": "ACTIVE" },
+                      "initialState": "ACTIVE",
                       "transitions": []
                     },
                     "initialData": { "status": "ACTIVE" },

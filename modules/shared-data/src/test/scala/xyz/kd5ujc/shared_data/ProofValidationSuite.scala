@@ -37,14 +37,14 @@ object ProofValidationSuite extends SimpleIOSuite {
         machineJson = """
         {
           "states": {
-            "idle": { "id": { "value": "idle" }, "isFinal": false },
-            "approved": { "id": { "value": "approved" }, "isFinal": false }
+            "idle": { "id": "idle", "isFinal": false },
+            "approved": { "id": "approved", "isFinal": false }
           },
-          "initialState": { "value": "idle" },
+          "initialState": "idle",
           "transitions": [
             {
-              "from": { "value": "idle" },
-              "to": { "value": "approved" },
+              "from": "idle",
+              "to": "approved",
               "eventName": "approve",
               "guard": true,
               "effect": [
@@ -135,14 +135,14 @@ object ProofValidationSuite extends SimpleIOSuite {
         machineJson = s"""
         {
           "states": {
-            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false },
-            "approved": { "id": { "value": "approved" }, "isFinal": false }
+            "PENDING": { "id": "PENDING", "isFinal": false },
+            "approved": { "id": "approved", "isFinal": false }
           },
-          "initialState": { "value": "PENDING" },
+          "initialState": "PENDING",
           "transitions": [
             {
-              "from": { "value": "PENDING" },
-              "to": { "value": "approved" },
+              "from": "PENDING",
+              "to": "approved",
               "eventName": "approve",
               "guard": {
                 "in": [
@@ -227,14 +227,14 @@ object ProofValidationSuite extends SimpleIOSuite {
         machineJson = """
         {
           "states": {
-            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false },
-            "approved": { "id": { "value": "approved" }, "isFinal": false }
+            "PENDING": { "id": "PENDING", "isFinal": false },
+            "approved": { "id": "approved", "isFinal": false }
           },
-          "initialState": { "value": "PENDING" },
+          "initialState": "PENDING",
           "transitions": [
             {
-              "from": { "value": "PENDING" },
-              "to": { "value": "approved" },
+              "from": "PENDING",
+              "to": "approved",
               "eventName": "approve",
               "guard": {
                 "and": [
@@ -323,14 +323,14 @@ object ProofValidationSuite extends SimpleIOSuite {
         machineJson = s"""
         {
           "states": {
-            "PENDING": { "id": { "value": "PENDING" }, "isFinal": false },
-            "approved": { "id": { "value": "approved" }, "isFinal": false }
+            "PENDING": { "id": "PENDING", "isFinal": false },
+            "approved": { "id": "approved", "isFinal": false }
           },
-          "initialState": { "value": "PENDING" },
+          "initialState": "PENDING",
           "transitions": [
             {
-              "from": { "value": "PENDING" },
-              "to": { "value": "approved" },
+              "from": "PENDING",
+              "to": "approved",
               "eventName": "approve",
               "guard": {
                 "and": [
@@ -415,14 +415,14 @@ object ProofValidationSuite extends SimpleIOSuite {
         machineJson = """
         {
           "states": {
-            "idle": { "id": { "value": "idle" }, "isFinal": false },
-            "logged": { "id": { "value": "logged" }, "isFinal": false }
+            "idle": { "id": "idle", "isFinal": false },
+            "logged": { "id": "logged", "isFinal": false }
           },
-          "initialState": { "value": "idle" },
+          "initialState": "idle",
           "transitions": [
             {
-              "from": { "value": "idle" },
-              "to": { "value": "logged" },
+              "from": "idle",
+              "to": "logged",
               "eventName": "log",
               "guard": true,
               "effect": [

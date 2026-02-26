@@ -34,13 +34,13 @@ object EventBatchBoundingSuite extends SimpleIOSuite {
   private val counterDefinitionJson =
     """|{
        |  "states": {
-       |    "counting": { "id": { "value": "counting" }, "isFinal": false }
+       |    "counting": { "id": "counting", "isFinal": false }
        |  },
-       |  "initialState": { "value": "counting" },
+       |  "initialState": "counting",
        |  "transitions": [
        |    {
-       |      "from": { "value": "counting" },
-       |      "to": { "value": "counting" },
+       |      "from": "counting",
+       |      "to": "counting",
        |      "eventName": "increment",
        |      "guard": true,
        |      "effect": {

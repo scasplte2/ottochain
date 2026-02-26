@@ -33,16 +33,16 @@ object TicTacToeGameSuite extends SimpleIOSuite {
   private def stateMachineJson(oracleFiberId: UUID): String =
     s"""{
     "states": {
-      "setup": { "id": {"value": "setup"}, "isFinal": false },
-      "playing": { "id": {"value": "playing"}, "isFinal": false },
-      "finished": { "id": {"value": "finished"}, "isFinal": true },
-      "CANCELLED": { "id": {"value": "CANCELLED"}, "isFinal": true }
+      "setup": { "id": "setup", "isFinal": false },
+      "playing": { "id": "playing", "isFinal": false },
+      "finished": { "id": "finished", "isFinal": true },
+      "CANCELLED": { "id": "CANCELLED", "isFinal": true }
     },
-    "initialState": {"value": "setup"},
+    "initialState": "setup",
     "transitions": [
       {
-        "from": {"value": "setup"},
-        "to": {"value": "playing"},
+        "from": "setup",
+        "to": "playing",
         "eventName": "start_game",
         "guard": {
           "and": [
@@ -69,8 +69,8 @@ object TicTacToeGameSuite extends SimpleIOSuite {
         "dependencies": []
       },
       {
-        "from": {"value": "playing"},
-        "to": {"value": "playing"},
+        "from": "playing",
+        "to": "playing",
         "eventName": "make_move",
         "guard": {
           "===": [{"var": "scripts.${oracleFiberId}.state.status"}, "InProgress"]
@@ -92,8 +92,8 @@ object TicTacToeGameSuite extends SimpleIOSuite {
         "dependencies": ["${oracleFiberId}"]
       },
       {
-        "from": {"value": "playing"},
-        "to": {"value": "finished"},
+        "from": "playing",
+        "to": "finished",
         "eventName": "make_move",
         "guard": {
           "or": [
@@ -128,8 +128,8 @@ object TicTacToeGameSuite extends SimpleIOSuite {
         "dependencies": ["${oracleFiberId}"]
       },
       {
-        "from": {"value": "playing"},
-        "to": {"value": "playing"},
+        "from": "playing",
+        "to": "playing",
         "eventName": "reset_board",
         "guard": {
           "or": [
@@ -148,8 +148,8 @@ object TicTacToeGameSuite extends SimpleIOSuite {
         "dependencies": ["${oracleFiberId}"]
       },
       {
-        "from": {"value": "playing"},
-        "to": {"value": "CANCELLED"},
+        "from": "playing",
+        "to": "CANCELLED",
         "eventName": "cancel_game",
         "guard": {"==": [1, 1]},
         "effect": {
@@ -167,8 +167,8 @@ object TicTacToeGameSuite extends SimpleIOSuite {
         "dependencies": []
       },
       {
-        "from": {"value": "setup"},
-        "to": {"value": "CANCELLED"},
+        "from": "setup",
+        "to": "CANCELLED",
         "eventName": "cancel_game",
         "guard": {"==": [1, 1]},
         "effect": {

@@ -33,16 +33,16 @@ object MultipleGuardsSuite extends SimpleIOSuite {
         machineJson = """
         {
           "states": {
-            "idle": { "id": { "value": "idle" }, "isFinal": false },
-            "low_priority": { "id": { "value": "low_priority" }, "isFinal": false },
-            "medium_priority": { "id": { "value": "medium_priority" }, "isFinal": false },
-            "high_priority": { "id": { "value": "high_priority" }, "isFinal": false }
+            "idle": { "id": "idle", "isFinal": false },
+            "low_priority": { "id": "low_priority", "isFinal": false },
+            "medium_priority": { "id": "medium_priority", "isFinal": false },
+            "high_priority": { "id": "high_priority", "isFinal": false }
           },
-          "initialState": { "value": "idle" },
+          "initialState": "idle",
           "transitions": [
             {
-              "from": { "value": "idle" },
-              "to": { "value": "high_priority" },
+              "from": "idle",
+              "to": "high_priority",
               "eventName": "process",
               "guard": {
                 ">=": [{ "var": "event.priority" }, 80]
@@ -53,8 +53,8 @@ object MultipleGuardsSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "idle" },
-              "to": { "value": "medium_priority" },
+              "from": "idle",
+              "to": "medium_priority",
               "eventName": "process",
               "guard": {
                 ">=": [{ "var": "event.priority" }, 50]
@@ -65,8 +65,8 @@ object MultipleGuardsSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "idle" },
-              "to": { "value": "low_priority" },
+              "from": "idle",
+              "to": "low_priority",
               "eventName": "process",
               "guard": true,
               "effect": {
@@ -128,16 +128,16 @@ object MultipleGuardsSuite extends SimpleIOSuite {
         machineJson = """
         {
           "states": {
-            "idle": { "id": { "value": "idle" }, "isFinal": false },
-            "result_a": { "id": { "value": "result_a" }, "isFinal": false },
-            "result_b": { "id": { "value": "result_b" }, "isFinal": false },
-            "result_c": { "id": { "value": "result_c" }, "isFinal": false }
+            "idle": { "id": "idle", "isFinal": false },
+            "result_a": { "id": "result_a", "isFinal": false },
+            "result_b": { "id": "result_b", "isFinal": false },
+            "result_c": { "id": "result_c", "isFinal": false }
           },
-          "initialState": { "value": "idle" },
+          "initialState": "idle",
           "transitions": [
             {
-              "from": { "value": "idle" },
-              "to": { "value": "result_a" },
+              "from": "idle",
+              "to": "result_a",
               "eventName": "check",
               "guard": {
                 ">=": [{ "var": "event.value" }, 10]
@@ -149,8 +149,8 @@ object MultipleGuardsSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "idle" },
-              "to": { "value": "result_b" },
+              "from": "idle",
+              "to": "result_b",
               "eventName": "check",
               "guard": {
                 ">=": [{ "var": "event.value" }, 5]
@@ -162,8 +162,8 @@ object MultipleGuardsSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "idle" },
-              "to": { "value": "result_c" },
+              "from": "idle",
+              "to": "result_c",
               "eventName": "check",
               "guard": true,
               "effect": {
@@ -234,16 +234,16 @@ object MultipleGuardsSuite extends SimpleIOSuite {
         machineJson = """
         {
           "states": {
-            "idle": { "id": { "value": "idle" }, "isFinal": false },
-            "tier1": { "id": { "value": "tier1" }, "isFinal": false },
-            "tier2": { "id": { "value": "tier2" }, "isFinal": false },
-            "tier3": { "id": { "value": "tier3" }, "isFinal": false }
+            "idle": { "id": "idle", "isFinal": false },
+            "tier1": { "id": "tier1", "isFinal": false },
+            "tier2": { "id": "tier2", "isFinal": false },
+            "tier3": { "id": "tier3", "isFinal": false }
           },
-          "initialState": { "value": "idle" },
+          "initialState": "idle",
           "transitions": [
             {
-              "from": { "value": "idle" },
-              "to": { "value": "tier1" },
+              "from": "idle",
+              "to": "tier1",
               "eventName": "upgrade",
               "guard": {
                 ">=": [{ "var": "event.amount" }, 1000]
@@ -254,8 +254,8 @@ object MultipleGuardsSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "idle" },
-              "to": { "value": "tier2" },
+              "from": "idle",
+              "to": "tier2",
               "eventName": "upgrade",
               "guard": {
                 ">=": [{ "var": "event.amount" }, 500]
@@ -266,8 +266,8 @@ object MultipleGuardsSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "idle" },
-              "to": { "value": "tier3" },
+              "from": "idle",
+              "to": "tier3",
               "eventName": "upgrade",
               "guard": {
                 ">=": [{ "var": "event.amount" }, 100]
@@ -333,16 +333,16 @@ object MultipleGuardsSuite extends SimpleIOSuite {
         machineJson = """
         {
           "states": {
-            "idle": { "id": { "value": "idle" }, "isFinal": false },
-            "premium": { "id": { "value": "premium" }, "isFinal": false },
-            "standard": { "id": { "value": "standard" }, "isFinal": false },
-            "basic": { "id": { "value": "basic" }, "isFinal": false }
+            "idle": { "id": "idle", "isFinal": false },
+            "premium": { "id": "premium", "isFinal": false },
+            "standard": { "id": "standard", "isFinal": false },
+            "basic": { "id": "basic", "isFinal": false }
           },
-          "initialState": { "value": "idle" },
+          "initialState": "idle",
           "transitions": [
             {
-              "from": { "value": "idle" },
-              "to": { "value": "premium" },
+              "from": "idle",
+              "to": "premium",
               "eventName": "qualify",
               "guard": {
                 "and": [
@@ -357,8 +357,8 @@ object MultipleGuardsSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "idle" },
-              "to": { "value": "standard" },
+              "from": "idle",
+              "to": "standard",
               "eventName": "qualify",
               "guard": {
                 "and": [
@@ -372,8 +372,8 @@ object MultipleGuardsSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "idle" },
-              "to": { "value": "basic" },
+              "from": "idle",
+              "to": "basic",
               "eventName": "qualify",
               "guard": {
                 ">=": [{ "var": "event.age" }, 18]
@@ -443,15 +443,15 @@ object MultipleGuardsSuite extends SimpleIOSuite {
         machineJson = """
         {
           "states": {
-            "locked": { "id": { "value": "locked" }, "isFinal": false },
-            "unlocked": { "id": { "value": "unlocked" }, "isFinal": false },
-            "admin_unlocked": { "id": { "value": "admin_unlocked" }, "isFinal": false }
+            "locked": { "id": "locked", "isFinal": false },
+            "unlocked": { "id": "unlocked", "isFinal": false },
+            "admin_unlocked": { "id": "admin_unlocked", "isFinal": false }
           },
-          "initialState": { "value": "locked" },
+          "initialState": "locked",
           "transitions": [
             {
-              "from": { "value": "locked" },
-              "to": { "value": "admin_unlocked" },
+              "from": "locked",
+              "to": "admin_unlocked",
               "eventName": "unlock",
               "guard": {
                 "===": [{ "var": "event.role" }, "admin"]
@@ -463,8 +463,8 @@ object MultipleGuardsSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "locked" },
-              "to": { "value": "unlocked" },
+              "from": "locked",
+              "to": "unlocked",
               "eventName": "unlock",
               "guard": {
                 "and": [
