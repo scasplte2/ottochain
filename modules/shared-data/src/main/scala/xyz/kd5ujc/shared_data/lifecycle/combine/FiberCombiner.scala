@@ -6,9 +6,13 @@ import cats.effect.Async
 import cats.syntax.all._
 
 import io.constellationnetwork.currency.dataApplication.{DataState, L0NodeContext}
+import io.constellationnetwork.metagraph_sdk.crypto.mpt.api.MerklePatriciaProducer
+import io.constellationnetwork.metagraph_sdk.json_logic._
 import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
 import io.constellationnetwork.schema.SnapshotOrdinal
 import io.constellationnetwork.security.SecurityProvider
+import io.constellationnetwork.security.hash.Hash
+import io.constellationnetwork.security.hex.Hex
 import io.constellationnetwork.security.signature.Signed
 
 import xyz.kd5ujc.schema.fiber.FiberLogEntry.EventReceipt
@@ -46,6 +50,7 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
     currentOrdinal  <- ctx.getCurrentOrdinal
     owners          <- update.proofs.toList.traverse(_.id.toAddress).map(Set.from)
     initialDataHash <- update.initialData.computeDigest
+    initialRoot     <- computeStateRoot(update.initialData)
 
     record = Records.StateMachineFiberRecord(
       fiberId = update.fiberId,
@@ -59,7 +64,8 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
       sequenceNumber = FiberOrdinal.MinValue,
       owners = owners,
       status = FiberStatus.Active,
-      parentFiberId = update.parentFiberId
+      parentFiberId = update.parentFiberId,
+      stateRoot = initialRoot
     )
 
     result <- current.withRecord[F](update.fiberId, record)
@@ -159,6 +165,31 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
   // ============================================================================
 
   /**
+   * Computes a Merkle Patricia Trie root hash over the top-level fields of a fiber's stateData.
+   *
+   * For each `(fieldName, fieldValue)` pair in a `MapValue`:
+   *   - key   = UTF-8 hex encoding of the field name
+   *   - value = the JSON-encoded field value
+   *
+   * Returns `None` for non-Map stateData or empty maps (nothing to hash).
+   */
+  private def computeStateRoot(stateData: JsonLogicValue): F[Option[Hash]] =
+    stateData match {
+      case MapValue(fields) if fields.nonEmpty =>
+        val entries: Map[Hex, JsonLogicValue] = fields.map { case (k, v) =>
+          Hex(k.getBytes("UTF-8").map("%02x".format(_)).mkString) -> v
+        }
+        MerklePatriciaProducer
+          .stateless[F]
+          .create(entries)
+          .map(trie => Some(trie.rootNode.digest): Option[Hash])
+          .handleError(_ => Option.empty[Hash])
+
+      case _ =>
+        Option.empty[Hash].pure[F]
+    }
+
+  /**
    * Handles a committed transaction outcome.
    *
    * Applies fiber/oracle record updates, then appends log entries to OnChain.latestLogs.
@@ -168,7 +199,16 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
     updatedOracles: Map[UUID, Records.ScriptFiberRecord],
     logEntries:     List[FiberLogEntry]
   ): F[DataState[OnChain, CalculatedState]] =
-    current.withFibersAndOracles[F](updatedFibers, updatedOracles).map(_.appendLogs(logEntries))
+    for {
+      // Recompute stateRoot for each updated fiber
+      fibersWithRoots <- updatedFibers.toList
+        .traverse { case (id, fiber) =>
+          computeStateRoot(fiber.stateData).map(root => id -> fiber.copy(stateRoot = root))
+        }
+        .map(_.toMap)
+
+      result <- current.withFibersAndOracles[F](fibersWithRoots, updatedOracles).map(_.appendLogs(logEntries))
+    } yield result
 
   /**
    * Handles an aborted transaction outcome.

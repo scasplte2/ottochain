@@ -11,12 +11,14 @@ import io.constellationnetwork.currency.dataApplication._
 import io.constellationnetwork.currency.dataApplication.dataApplication.DataApplicationValidationErrorOr
 import io.constellationnetwork.currency.schema.currency.CurrencyIncrementalSnapshot
 import io.constellationnetwork.metagraph_sdk.MetagraphCommonService
+import io.constellationnetwork.metagraph_sdk.crypto.mpt.api.MerklePatriciaProducer
 import io.constellationnetwork.metagraph_sdk.lifecycle.{CheckpointService, CombinerService, ValidationService}
 import io.constellationnetwork.metagraph_sdk.std.Checkpoint
 import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
 import io.constellationnetwork.metagraph_sdk.syntax.all.CurrencyIncrementalSnapshotOps
 import io.constellationnetwork.schema.SnapshotOrdinal
 import io.constellationnetwork.security.hash.Hash
+import io.constellationnetwork.security.hex.Hex
 import io.constellationnetwork.security.signature.Signed
 import io.constellationnetwork.security.{Hashed, SecurityProvider}
 
@@ -144,10 +146,15 @@ object ML0Service {
           // same fiber are processed in sequence number order.
           val sortedUpdates = updates.sorted(OttochainMessage.signedOrdering)
 
-          combiner.foldLeft(
-            state.focus(_.onChain.latestLogs).replace(SortedMap.empty),
-            sortedUpdates
-          )
+          for {
+            combined <- combiner.foldLeft(
+              state.focus(_.onChain.latestLogs).replace(SortedMap.empty),
+              sortedUpdates
+            )
+            // After all updates, compute metagraphStateRoot from all fiber stateRoots
+            metagraphRoot <- computeMetagraphStateRoot(combined.calculated)
+            withRoot = combined.copy(calculated = combined.calculated.copy(metagraphStateRoot = metagraphRoot))
+          } yield withRoot
         }
 
         override def getCalculatedState(implicit
@@ -160,10 +167,38 @@ object ML0Service {
         ): F[Boolean] = checkpointService.set(Checkpoint(ordinal, state))
 
         override def hashCalculatedState(state: CalculatedState)(implicit context: L0NodeContext[F]): F[Hash] =
-          state.computeDigest
+          state.metagraphStateRoot match {
+            case Some(root) => root.pure[F]
+            case None       => state.computeDigest
+          }
 
         override def routes(implicit context: L0NodeContext[F]): HttpRoutes[F] =
           new ML0CustomRoutes[F](checkpointService, subscriberRegistry).public
+
+        /**
+         * Compute the metagraph-level MPT root from all per-fiber stateRoots.
+         *
+         * Key:   hex encoding of fiber UUID (without dashes)
+         * Value: the per-fiber stateRoot Hash
+         *
+         * Returns `None` when no fibers have a stateRoot yet.
+         */
+        private def computeMetagraphStateRoot(state: CalculatedState): F[Option[Hash]] = {
+          val fiberRoots: Map[Hex, Hash] = state.stateMachines.collect {
+            case (id, fiber) if fiber.stateRoot.isDefined =>
+              Hex(id.toString.replace("-", "")) -> fiber.stateRoot.get
+          }
+
+          if (fiberRoots.isEmpty) {
+            Option.empty[Hash].pure[F]
+          } else {
+            MerklePatriciaProducer
+              .stateless[F]
+              .create(fiberRoots)
+              .map(trie => Some(trie.rootNode.digest): Option[Hash])
+              .handleError(_ => Option.empty[Hash])
+          }
+        }
       }
     )
 }
