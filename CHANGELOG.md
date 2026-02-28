@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.9](https://github.com/scasplte2/ottochain/compare/v0.7.8...v0.7.9) (2026-02-28)
+
+
+### Features
+
+* add 26 static test participants with deterministic addresses ([#124](https://github.com/scasplte2/ottochain/issues/124)) ([48b607a](https://github.com/scasplte2/ottochain/commit/48b607ae1c595b82d933098e76dd06456a6b9c69))
+
 ## [0.7.8](https://github.com/scasplte2/ottochain/compare/v0.7.7...v0.7.8) (2026-02-26)
 
 
