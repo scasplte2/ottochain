@@ -33,15 +33,15 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
         contractJson = """
         {
           "states": {
-            "pending": { "id": "pending", "isFinal": false },
-            "accepted": { "id": "accepted", "isFinal": true },
-            "rejected": { "id": "rejected", "isFinal": true }
+            "pending": { "id": { "value": "pending" }, "isFinal": false },
+            "accepted": { "id": { "value": "accepted" }, "isFinal": true },
+            "rejected": { "id": { "value": "rejected" }, "isFinal": true }
           },
-          "initialState": "pending",
+          "initialState": { "value": "pending" },
           "transitions": [
             {
-              "from": "pending",
-              "to": "accepted",
+              "from": { "value": "pending" },
+              "to": { "value": "accepted" },
               "eventName": "accept",
               "guard": true,
               "effect": {
@@ -51,8 +51,8 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": "pending",
-              "to": "rejected", 
+              "from": { "value": "pending" },
+              "to": { "value": "rejected" }, 
               "eventName": "reject",
               "guard": true,
               "effect": {
@@ -85,7 +85,7 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
         )
         // This should work in the multi-party system - Bob can sign accept
         acceptProof <- fixture.registry.generateProofs(acceptEvent, Set(Bob))
-        finalState  <- combiner.insert(stateAfterCreate, Signed(acceptEvent, acceptProof))
+        finalState <- combiner.insert(stateAfterCreate, Signed(acceptEvent, acceptProof))
 
         contract = finalState.calculated.stateMachines
           .get(contractFiberId)
@@ -94,7 +94,7 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
         status = contract.flatMap { f =>
           f.stateData match {
             case MapValue(m) => m.get("status").collect { case StrValue(s) => s }
-            case _           => None
+            case _ => None
           }
         }
 
@@ -116,15 +116,15 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
         contractJson = """
         {
           "states": {
-            "pending": { "id": "pending", "isFinal": false },
-            "accepted": { "id": "accepted", "isFinal": true },
-            "rejected": { "id": "rejected", "isFinal": true }
+            "pending": { "id": { "value": "pending" }, "isFinal": false },
+            "accepted": { "id": { "value": "accepted" }, "isFinal": true },
+            "rejected": { "id": { "value": "rejected" }, "isFinal": true }
           },
-          "initialState": "pending",
+          "initialState": { "value": "pending" },
           "transitions": [
             {
-              "from": "pending",
-              "to": "accepted",
+              "from": { "value": "pending" },
+              "to": { "value": "accepted" },
               "eventName": "accept",
               "guard": true,
               "effect": {
@@ -133,8 +133,8 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": "pending",
-              "to": "rejected", 
+              "from": { "value": "pending" },
+              "to": { "value": "rejected" }, 
               "eventName": "reject",
               "guard": true,
               "effect": {
@@ -167,7 +167,7 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
         )
         // This should work in the multi-party system - Bob can sign reject
         rejectProof <- fixture.registry.generateProofs(rejectEvent, Set(Bob))
-        finalState  <- combiner.insert(stateAfterCreate, Signed(rejectEvent, rejectProof))
+        finalState <- combiner.insert(stateAfterCreate, Signed(rejectEvent, rejectProof))
 
         contract = finalState.calculated.stateMachines
           .get(contractFiberId)
@@ -176,14 +176,14 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
         status = contract.flatMap { f =>
           f.stateData match {
             case MapValue(m) => m.get("status").collect { case StrValue(s) => s }
-            case _           => None
+            case _ => None
           }
         }
 
         reason = contract.flatMap { f =>
           f.stateData match {
             case MapValue(m) => m.get("reason").collect { case StrValue(r) => r }
-            case _           => None
+            case _ => None
           }
         }
 
@@ -206,14 +206,14 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
         contractJson = """
         {
           "states": {
-            "pending": { "id": "pending", "isFinal": false },
-            "accepted": { "id": "accepted", "isFinal": true }
+            "pending": { "id": { "value": "pending" }, "isFinal": false },
+            "accepted": { "id": { "value": "accepted" }, "isFinal": true }
           },
-          "initialState": "pending",
+          "initialState": { "value": "pending" },
           "transitions": [
             {
-              "from": "pending",
-              "to": "accepted",
+              "from": { "value": "pending" },
+              "to": { "value": "accepted" },
               "eventName": "accept",
               "guard": true,
               "effect": {
@@ -243,10 +243,10 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
           MapValue(Map("timestamp" -> IntValue(System.currentTimeMillis()))),
           FiberOrdinal.MinValue
         )
-
+        
         // This should fail - Charlie is not owner (Alice) or counterparty (Bob)
         charlieProof <- fixture.registry.generateProofs(acceptEvent, Set(Charlie))
-        result       <- combiner.insert(stateAfterCreate, Signed(acceptEvent, charlieProof)).attempt
+        result <- combiner.insert(stateAfterCreate, Signed(acceptEvent, charlieProof)).attempt
 
         // The system should reject this transaction
         // In the current system this would pass, but in multi-party system it should fail
@@ -267,14 +267,14 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
         contractJson = """
         {
           "states": {
-            "pending": { "id": "pending", "isFinal": false },
-            "cancelled": { "id": "cancelled", "isFinal": true }
+            "pending": { "id": { "value": "pending" }, "isFinal": false },
+            "cancelled": { "id": { "value": "cancelled" }, "isFinal": true }
           },
-          "initialState": "pending",
+          "initialState": { "value": "pending" },
           "transitions": [
             {
-              "from": "pending",
-              "to": "cancelled",
+              "from": { "value": "pending" },
+              "to": { "value": "cancelled" },
               "eventName": "cancel",
               "guard": true,
               "effect": {
@@ -306,7 +306,7 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
           FiberOrdinal.MinValue
         )
         cancelProof <- fixture.registry.generateProofs(cancelEvent, Set(Alice))
-        finalState  <- combiner.insert(stateAfterCreate, Signed(cancelEvent, cancelProof))
+        finalState <- combiner.insert(stateAfterCreate, Signed(cancelEvent, cancelProof))
 
         contract = finalState.calculated.stateMachines
           .get(contractFiberId)
@@ -315,7 +315,7 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
         status = contract.flatMap { f =>
           f.stateData match {
             case MapValue(m) => m.get("status").collect { case StrValue(s) => s }
-            case _           => None
+            case _ => None
           }
         }
 
@@ -338,15 +338,15 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
         contractJson = """
         {
           "states": {
-            "pending": { "id": "pending", "isFinal": false },
-            "approved": { "id": "approved", "isFinal": true },
-            "denied": { "id": "denied", "isFinal": true }
+            "pending": { "id": { "value": "pending" }, "isFinal": false },
+            "approved": { "id": { "value": "approved" }, "isFinal": true },
+            "denied": { "id": { "value": "denied" }, "isFinal": true }
           },
-          "initialState": "pending",
+          "initialState": { "value": "pending" },
           "transitions": [
             {
-              "from": "pending",
-              "to": "approved",
+              "from": { "value": "pending" },
+              "to": { "value": "approved" },
               "eventName": "approve",
               "guard": {
                 ">=": [{ "var": "event.amount" }, { "var": "state.minimumAmount" }]
@@ -358,8 +358,8 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": "pending",
-              "to": "denied",
+              "from": { "value": "pending" },
+              "to": { "value": "denied" },
               "eventName": "approve",
               "guard": {
                 "<": [{ "var": "event.amount" }, { "var": "state.minimumAmount" }]
@@ -375,12 +375,10 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
         """
 
         contractDef <- IO.fromEither(decode[StateMachineDefinition](contractJson))
-        initialData = MapValue(
-          Map(
-            "counterparty"  -> StrValue("Bob"),
-            "minimumAmount" -> IntValue(1000)
-          )
-        )
+        initialData = MapValue(Map(
+          "counterparty" -> StrValue("Bob"),
+          "minimumAmount" -> IntValue(1000)
+        ))
 
         // Alice creates the contract
         createContract = Updates.CreateStateMachine(contractFiberId, contractDef, initialData)
@@ -399,7 +397,7 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
         )
         // Guard should evaluate correctly even when Bob signs instead of Alice
         approveProof <- fixture.registry.generateProofs(approveEvent, Set(Bob))
-        finalState   <- combiner.insert(stateAfterCreate, Signed(approveEvent, approveProof))
+        finalState <- combiner.insert(stateAfterCreate, Signed(approveEvent, approveProof))
 
         contract = finalState.calculated.stateMachines
           .get(contractFiberId)
@@ -408,14 +406,14 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
         status = contract.flatMap { f =>
           f.stateData match {
             case MapValue(m) => m.get("status").collect { case StrValue(s) => s }
-            case _           => None
+            case _ => None
           }
         }
 
         finalAmount = contract.flatMap { f =>
           f.stateData match {
             case MapValue(m) => m.get("finalAmount").collect { case IntValue(a) => a }
-            case _           => None
+            case _ => None
           }
         }
 
@@ -439,15 +437,15 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
         contractJson = """
         {
           "states": {
-            "pending": { "id": "pending", "isFinal": false },
-            "approved": { "id": "approved", "isFinal": true },
-            "denied": { "id": "denied", "isFinal": true }
+            "pending": { "id": { "value": "pending" }, "isFinal": false },
+            "approved": { "id": { "value": "approved" }, "isFinal": true },
+            "denied": { "id": { "value": "denied" }, "isFinal": true }
           },
-          "initialState": "pending",
+          "initialState": { "value": "pending" },
           "transitions": [
             {
-              "from": "pending",
-              "to": "approved",
+              "from": { "value": "pending" },
+              "to": { "value": "approved" },
               "eventName": "approve",
               "guard": {
                 ">=": [{ "var": "event.amount" }, { "var": "state.minimumAmount" }]
@@ -459,8 +457,8 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": "pending",
-              "to": "denied",
+              "from": { "value": "pending" },
+              "to": { "value": "denied" },
               "eventName": "approve",
               "guard": {
                 "<": [{ "var": "event.amount" }, { "var": "state.minimumAmount" }]
@@ -476,12 +474,10 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
         """
 
         contractDef <- IO.fromEither(decode[StateMachineDefinition](contractJson))
-        initialData = MapValue(
-          Map(
-            "counterparty"  -> StrValue("Bob"),
-            "minimumAmount" -> IntValue(1000)
-          )
-        )
+        initialData = MapValue(Map(
+          "counterparty" -> StrValue("Bob"),
+          "minimumAmount" -> IntValue(1000)
+        ))
 
         // Alice creates the contract
         createContract = Updates.CreateStateMachine(contractFiberId, contractDef, initialData)
@@ -499,7 +495,7 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
           FiberOrdinal.MinValue
         )
         approveProof <- fixture.registry.generateProofs(approveEvent, Set(Bob))
-        finalState   <- combiner.insert(stateAfterCreate, Signed(approveEvent, approveProof))
+        finalState <- combiner.insert(stateAfterCreate, Signed(approveEvent, approveProof))
 
         contract = finalState.calculated.stateMachines
           .get(contractFiberId)
@@ -508,14 +504,14 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
         status = contract.flatMap { f =>
           f.stateData match {
             case MapValue(m) => m.get("status").collect { case StrValue(s) => s }
-            case _           => None
+            case _ => None
           }
         }
 
         reason = contract.flatMap { f =>
           f.stateData match {
             case MapValue(m) => m.get("reason").collect { case StrValue(r) => r }
-            case _           => None
+            case _ => None
           }
         }
 
