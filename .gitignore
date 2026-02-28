@@ -137,3 +137,5 @@ poetry.lock
 # Local development
 .local/
 .env
+# Allow test participant keystores
+!modules/shared-test/src/main/resources/participants/*.p12

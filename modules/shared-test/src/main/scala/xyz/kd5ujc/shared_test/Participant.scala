@@ -1,6 +1,7 @@
 package xyz.kd5ujc.shared_test
 
-import java.security.KeyPair
+import java.io.InputStream
+import java.security.{KeyPair, KeyStore, PrivateKey}
 
 import cats.data.NonEmptySet
 import cats.effect.Async
@@ -72,6 +73,51 @@ object Participant {
 
   object ParticipantRegistry {
 
+    /** All 26 participants in alphabetical order, matching p12 index 1-26 */
+    val all: List[Participant] = List(
+      Alice,
+      Bob,
+      Charlie,
+      Dave,
+      Eve,
+      Faythe,
+      Grace,
+      Heidi,
+      Ivan,
+      Judy,
+      Karl,
+      Lance,
+      Mallory,
+      Niaj,
+      Oscar,
+      Peggy,
+      Quentin,
+      Ruth,
+      Sybil,
+      Trent,
+      Ursula,
+      Victor,
+      Walter,
+      Xavier,
+      Yolanda,
+      Zoe
+    )
+
+    private val password: Array[Char] = "testpassword".toCharArray
+
+    /** Load a KeyPair from a PKCS12 keystore input stream */
+    private def loadKeyPairFromP12(is: InputStream, alias: String): KeyPair = {
+      val ks = KeyStore.getInstance("PKCS12")
+      ks.load(is, password)
+      val privateKey = ks.getKey(alias, password).asInstanceOf[PrivateKey]
+      val cert = ks.getCertificate(alias)
+      new KeyPair(cert.getPublicKey, privateKey)
+    }
+
+    /**
+     * Create a registry with randomly generated keys.
+     * Use for tests that don't need deterministic addresses or token balances.
+     */
     def create[F[_]: Async](
       participants: Set[Participant]
     )(implicit s: SecurityProvider[F]): F[ParticipantRegistry[F]] = {
@@ -90,5 +136,35 @@ object Participant {
           new ParticipantRegistry(sortedParticipants.zip(list).toMap)
         }
     }
+
+    /**
+     * Load all 26 participants from static p12 keystores in test resources.
+     * Provides deterministic addresses suitable for genesis.csv token allocation.
+     *
+     * Keystores are at: participants/participant_N.p12 (N=1..26)
+     * All use password "testpassword" and alias "participant_N".
+     */
+    def fromResources[F[_]: Async]()(implicit s: SecurityProvider[F]): F[ParticipantRegistry[F]] =
+      all.zipWithIndex
+        .traverse[F, (Participant, ParticipantData[F])] { case (participant, idx) =>
+          Async[F]
+            .delay {
+              val index = idx + 1
+              val alias = s"participant_$index"
+              val resourcePath = s"participants/participant_$index.p12"
+              val is = getClass.getClassLoader.getResourceAsStream(resourcePath)
+              if (is == null) throw new RuntimeException(s"Missing test resource: $resourcePath")
+              try loadKeyPairFromP12(is, alias)
+              finally is.close()
+            }
+            .map { kp =>
+              participant -> ParticipantData[F](
+                kp,
+                kp.getPublic.toAddress,
+                (msg: OttochainMessage) => msg.computeDigest.flatMap(SignatureProof.fromHash(kp, _))
+              )
+            }
+        }
+        .map(pairs => new ParticipantRegistry(pairs.toMap))
   }
 }
