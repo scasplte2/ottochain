@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.7.10](https://github.com/scasplte2/ottochain/compare/v0.7.9...v0.7.10) (2026-03-01)
+
+
+### Features
+
+* add 26 static test participants with deterministic addresses ([#124](https://github.com/scasplte2/ottochain/issues/124)) ([48b607a](https://github.com/scasplte2/ottochain/commit/48b607ae1c595b82d933098e76dd06456a6b9c69))
+
+
+### Bug Fixes
+
+* **docker:** currency L0 run-rollback no longer requires hash arg ([#126](https://github.com/scasplte2/ottochain/issues/126)) ([a27d7f9](https://github.com/scasplte2/ottochain/commit/a27d7f9b1495bb469e2adc04f9dce481f5b7a33c))
+
 ## [0.7.9](https://github.com/scasplte2/ottochain/compare/v0.7.8...v0.7.9) (2026-02-28)
 
 
