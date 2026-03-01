@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.11](https://github.com/scasplte2/ottochain/compare/v0.7.10...v0.7.11) (2026-03-01)
+
+
+### Bug Fixes
+
+* **docker:** prevent stale tessellation JAR cache ([#128](https://github.com/scasplte2/ottochain/issues/128)) ([fd0e737](https://github.com/scasplte2/ottochain/commit/fd0e7372ca6515438a370fd8af548e8a1693941c))
+
 ## [0.7.10](https://github.com/scasplte2/ottochain/compare/v0.7.9...v0.7.10) (2026-03-01)
 
 
