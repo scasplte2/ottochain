@@ -75,11 +75,8 @@ if [ ! -f "$JAR" ]; then
   exit 1
 fi
 
-# ============================================================
 # Smart Run Mode Detection
-# ============================================================
 # Check for existing ordinal data (indicates restart vs fresh start)
-# ============================================================
 # Tessellation stores ordinals in incremental_snapshot/ordinal (current).
 # Legacy: snapshot/ordinal (deprecated but may exist in older data).
 # Check incremental_snapshot first, fall back to snapshot for compatibility.
@@ -323,7 +320,6 @@ elif [ "${RUN_MODE}" = "run-rollback" ]; then
   # ML0/CL0/DL1: run-rollback auto-detects from storage, no hash needed
   echo "Currency/Data L0 run-rollback: using auto-detection (no hash arg)"
 fi
-
 # Add any extra args passed to container
 ARGS="${ARGS} $@"
 
