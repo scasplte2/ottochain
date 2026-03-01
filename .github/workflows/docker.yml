@@ -115,6 +115,8 @@ jobs:
             OTTOCHAIN_VERSION=${{ steps.version-input.outputs.clean_version || '0.0.0-docker' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # Always fetch fresh tessellation JARs - prevents stale cached versions
+          no-cache-filters: tess-jars
 
       - name: Extract version from tag
         id: version
