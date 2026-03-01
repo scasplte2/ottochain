@@ -250,8 +250,12 @@ if [ "${RUN_MODE}" = "run-genesis" ]; then
   fi
 fi
 
-# Rollback hash handling for run-rollback mode (L0 layers only)
-# run-rollback requires the hash of the snapshot to roll back to
+# Rollback hash handling for run-rollback mode
+# 
+# IMPORTANT: As of tessellation 4.0.0-rc.10:
+#   - DAG L0 (GL0): REQUIRES rollback hash as positional argument
+#   - Currency L0 (ML0/CL0): Does NOT require hash (auto-detects from storage)
+#   - Data L1: Does NOT require hash
 #
 # Tessellation storage structure (incremental_snapshot/):
 #   ordinal/<bucket>/<ordinal_number>  - snapshot data, filename is ordinal
@@ -259,7 +263,8 @@ fi
 #
 # Strategy: Find highest ordinal, then lookup its hash via hardlink inode.
 ROLLBACK_ARG=""
-if [ "${RUN_MODE}" = "run-rollback" ]; then
+if [ "${RUN_MODE}" = "run-rollback" ] && [ "${LAYER,,}" = "gl0" ]; then
+  # Only GL0 needs the rollback hash argument
   # Allow explicit override via ROLLBACK_HASH env var
   if [ -n "${ROLLBACK_HASH}" ]; then
     ROLLBACK_ARG="${ROLLBACK_HASH}"
@@ -303,11 +308,14 @@ if [ "${RUN_MODE}" = "run-rollback" ]; then
   fi
   
   if [ -z "${ROLLBACK_ARG}" ]; then
-    echo "Error: run-rollback requires a snapshot hash but none found"
+    echo "Error: GL0 run-rollback requires a snapshot hash but none found"
     echo "Expected: ordinals in \${DATA_DIR}/incremental_snapshot/ordinal/"
     echo "Or set ROLLBACK_HASH env var explicitly"
     exit 1
   fi
+elif [ "${RUN_MODE}" = "run-rollback" ]; then
+  # ML0/CL0/DL1: run-rollback auto-detects from storage, no hash needed
+  echo "Currency/Data L0 run-rollback: using auto-detection (no hash arg)"
 fi
 
 # Add any extra args passed to container
