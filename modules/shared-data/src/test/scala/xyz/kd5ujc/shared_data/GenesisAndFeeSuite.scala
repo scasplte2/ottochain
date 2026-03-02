@@ -5,7 +5,11 @@ import cats.syntax.all._
 
 import scala.collection.immutable.SortedSet
 
-import io.constellationnetwork.currency.dataApplication.{DataApplicationValidationErrorOr, FeeTransaction, L1NodeContext}
+import io.constellationnetwork.currency.dataApplication.{
+  DataApplicationValidationErrorOr,
+  FeeTransaction,
+  L1NodeContext
+}
 import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
 import io.constellationnetwork.schema._
 import io.constellationnetwork.schema.address.Address
@@ -35,21 +39,23 @@ object GenesisAndFeeSuite extends SimpleIOSuite {
     TestFixture.resource(Set(Alice, Bob, Charlie)).use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
-      
+
       for {
         // Create a simple OttochainMessage
-        update = OttochainMessage(
-          parentReference = UpdateReference.empty,
-          operation = "test",
-          data = Map("message" -> "hello world")
+        update <- IO.pure(
+          OttochainMessage(
+            parentReference = UpdateReference.empty,
+            operation = "test",
+            data = Map("message" -> "hello world")
+          )
         )
-        
+
         // FeeConfig with disabled fees - THIS WILL FAIL because FeeConfig doesn't exist yet
-        feeConfig = ??? // FeeConfig.Disabled
-        
+        feeConfig <- IO.pure(???) // FeeConfig.Disabled
+
         // Validate with disabled fees - should pass regardless of presence/absence of fee
-        result <- ??? // FeeValidator.validateFee(update, feeConfig)
-        
+        result <- IO.pure(???) // FeeValidator.validateFee(update, feeConfig)
+
       } yield expect(result.isValid)
     }
   }
@@ -58,21 +64,23 @@ object GenesisAndFeeSuite extends SimpleIOSuite {
     TestFixture.resource(Set(Alice, Bob)).use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
-      
+
       for {
-        update = OttochainMessage(
-          parentReference = UpdateReference.empty,
-          operation = "test",
-          data = Map("message" -> "requires fee")
+        update <- IO.pure(
+          OttochainMessage(
+            parentReference = UpdateReference.empty,
+            operation = "test",
+            data = Map("message" -> "requires fee")
+          )
         )
-        
+
         // FeeConfig with required fees - THIS WILL FAIL because FeeConfig doesn't exist yet
-        treasuryAddress = fixture.registry(Charlie).address
-        feeConfig = ??? // FeeConfig(enabled = true, required = true, minimumAmount = 1000L, treasuryAddress)
-        
+        treasuryAddress <- IO.pure(fixture.registry(Charlie).address)
+        feeConfig <- IO.pure(???) // FeeConfig(enabled = true, required = true, minimumAmount = 1000L, treasuryAddress)
+
         // Mock L1 context returns empty fee transactions map (no fee provided)
-        result <- ??? // FeeValidator.validateFee(update, feeConfig)
-        
+        result <- IO.pure(???) // FeeValidator.validateFee(update, feeConfig)
+
       } yield expect(result.isInvalid) and
       expect(result.fold(_.toList.head, _ => "").contains("FeeRequired"))
     }
@@ -84,37 +92,41 @@ object GenesisAndFeeSuite extends SimpleIOSuite {
     TestFixture.resource(Set(Alice, Bob, Charlie)).use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
-      
+
       for {
-        update = OttochainMessage(
-          parentReference = UpdateReference.empty,
-          operation = "test",
-          data = Map("message" -> "with valid fee")
+        update <- IO.pure(
+          OttochainMessage(
+            parentReference = UpdateReference.empty,
+            operation = "test",
+            data = Map("message" -> "with valid fee")
+          )
         )
-        
-        updateHash <- (update: OttochainMessage).computeDigest
-        treasuryAddress = fixture.registry(Charlie).address
-        payerAddress = fixture.registry(Alice).address
-        
+
+        updateHash      <- (update: OttochainMessage).computeDigest
+        treasuryAddress <- IO.pure(fixture.registry(Charlie).address)
+        payerAddress    <- IO.pure(fixture.registry(Alice).address)
+
         // Valid fee transaction
-        feeTransaction = FeeTransaction(
-          source = payerAddress,
-          destination = treasuryAddress,
-          amount = Amount(2000L), // Above minimum
-          dataUpdateRef = updateHash
+        feeTransaction <- IO.pure(
+          FeeTransaction(
+            source = payerAddress,
+            destination = treasuryAddress,
+            amount = Amount(2000L), // Above minimum
+            dataUpdateRef = updateHash
+          )
         )
-        
+
         // Sign the fee transaction - THIS WILL FAIL because signing method doesn't exist yet
-        signedFeeTx <- ??? // fixture.registry(Alice).signFeeTransaction(feeTransaction)
-        
-        feeConfig = ??? // FeeConfig(enabled = true, required = false, minimumAmount = 1000L, treasuryAddress)
-        
+        signedFeeTx <- IO.pure(???) // fixture.registry(Alice).signFeeTransaction(feeTransaction)
+
+        feeConfig <- IO.pure(???) // FeeConfig(enabled = true, required = false, minimumAmount = 1000L, treasuryAddress)
+
         // Mock L1 context to return this fee transaction
         // THIS WILL FAIL because the mocking setup doesn't exist yet
-        _ <- ??? // fixture.l1Context.setSnapshotFeeTransactions(Map(updateHash -> signedFeeTx))
-        
-        result <- ??? // FeeValidator.validateFee(update, feeConfig)
-        
+        _ <- IO.pure(???) // fixture.l1Context.setSnapshotFeeTransactions(Map(updateHash -> signedFeeTx))
+
+        result <- IO.pure(???) // FeeValidator.validateFee(update, feeConfig)
+
       } yield expect(result.isValid)
     }
   }
@@ -123,31 +135,35 @@ object GenesisAndFeeSuite extends SimpleIOSuite {
     TestFixture.resource(Set(Alice, Bob, Charlie)).use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
-      
+
       for {
-        update = OttochainMessage(
-          parentReference = UpdateReference.empty,
-          operation = "test",
-          data = Map("message" -> "bad destination fee")
+        update <- IO.pure(
+          OttochainMessage(
+            parentReference = UpdateReference.empty,
+            operation = "test",
+            data = Map("message" -> "bad destination fee")
+          )
         )
-        
-        updateHash <- (update: OttochainMessage).computeDigest
-        treasuryAddress = fixture.registry(Charlie).address
-        wrongDestination = fixture.registry(Bob).address // Wrong destination!
-        
-        feeTransaction = FeeTransaction(
-          source = fixture.registry(Alice).address,
-          destination = wrongDestination,
-          amount = Amount(2000L),
-          dataUpdateRef = updateHash
+
+        updateHash       <- (update: OttochainMessage).computeDigest
+        treasuryAddress  <- IO.pure(fixture.registry(Charlie).address)
+        wrongDestination <- IO.pure(fixture.registry(Bob).address) // Wrong destination!
+
+        feeTransaction <- IO.pure(
+          FeeTransaction(
+            source = fixture.registry(Alice).address,
+            destination = wrongDestination,
+            amount = Amount(2000L),
+            dataUpdateRef = updateHash
+          )
         )
-        
-        signedFeeTx <- ??? // fixture.registry(Alice).signFeeTransaction(feeTransaction)
-        feeConfig = ??? // FeeConfig(enabled = true, required = false, minimumAmount = 1000L, treasuryAddress)
-        
-        _ <- ??? // fixture.l1Context.setSnapshotFeeTransactions(Map(updateHash -> signedFeeTx))
-        result <- ??? // FeeValidator.validateFee(update, feeConfig)
-        
+
+        signedFeeTx <- IO.pure(???) // fixture.registry(Alice).signFeeTransaction(feeTransaction)
+        feeConfig <- IO.pure(???) // FeeConfig(enabled = true, required = false, minimumAmount = 1000L, treasuryAddress)
+
+        _      <- IO.pure(???) // fixture.l1Context.setSnapshotFeeTransactions(Map(updateHash -> signedFeeTx))
+        result <- IO.pure(???) // FeeValidator.validateFee(update, feeConfig)
+
       } yield expect(result.isInvalid) and
       expect(result.fold(_.toList.head, _ => "").contains("FeeBadDestination"))
     }
@@ -157,30 +173,34 @@ object GenesisAndFeeSuite extends SimpleIOSuite {
     TestFixture.resource(Set(Alice, Bob, Charlie)).use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
-      
+
       for {
-        update = OttochainMessage(
-          parentReference = UpdateReference.empty,
-          operation = "test",
-          data = Map("message" -> "low fee")
+        update <- IO.pure(
+          OttochainMessage(
+            parentReference = UpdateReference.empty,
+            operation = "test",
+            data = Map("message" -> "low fee")
+          )
         )
-        
-        updateHash <- (update: OttochainMessage).computeDigest
-        treasuryAddress = fixture.registry(Charlie).address
-        
-        feeTransaction = FeeTransaction(
-          source = fixture.registry(Alice).address,
-          destination = treasuryAddress,
-          amount = Amount(500L), // Below minimum of 1000L
-          dataUpdateRef = updateHash
+
+        updateHash      <- (update: OttochainMessage).computeDigest
+        treasuryAddress <- IO.pure(fixture.registry(Charlie).address)
+
+        feeTransaction <- IO.pure(
+          FeeTransaction(
+            source = fixture.registry(Alice).address,
+            destination = treasuryAddress,
+            amount = Amount(500L), // Below minimum of 1000L
+            dataUpdateRef = updateHash
+          )
         )
-        
-        signedFeeTx <- ??? // fixture.registry(Alice).signFeeTransaction(feeTransaction)
-        feeConfig = ??? // FeeConfig(enabled = true, required = false, minimumAmount = 1000L, treasuryAddress)
-        
-        _ <- ??? // fixture.l1Context.setSnapshotFeeTransactions(Map(updateHash -> signedFeeTx))
-        result <- ??? // FeeValidator.validateFee(update, feeConfig)
-        
+
+        signedFeeTx <- IO.pure(???) // fixture.registry(Alice).signFeeTransaction(feeTransaction)
+        feeConfig <- IO.pure(???) // FeeConfig(enabled = true, required = false, minimumAmount = 1000L, treasuryAddress)
+
+        _      <- IO.pure(???) // fixture.l1Context.setSnapshotFeeTransactions(Map(updateHash -> signedFeeTx))
+        result <- IO.pure(???) // FeeValidator.validateFee(update, feeConfig)
+
       } yield expect(result.isInvalid) and
       expect(result.fold(_.toList.head, _ => "").contains("FeeTooLow"))
     }
@@ -190,38 +210,44 @@ object GenesisAndFeeSuite extends SimpleIOSuite {
     TestFixture.resource(Set(Alice, Bob, Charlie)).use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
-      
+
       for {
-        update = OttochainMessage(
-          parentReference = UpdateReference.empty,
-          operation = "test",
-          data = Map("message" -> "ref mismatch")
+        update <- IO.pure(
+          OttochainMessage(
+            parentReference = UpdateReference.empty,
+            operation = "test",
+            data = Map("message" -> "ref mismatch")
+          )
         )
-        
-        updateHash <- (update: OttochainMessage).computeDigest
-        treasuryAddress = fixture.registry(Charlie).address
-        
+
+        updateHash      <- (update: OttochainMessage).computeDigest
+        treasuryAddress <- IO.pure(fixture.registry(Charlie).address)
+
         // Create different update to get wrong hash
-        wrongUpdate = OttochainMessage(
-          parentReference = UpdateReference.empty,
-          operation = "different",
-          data = Map("message" -> "different data")
+        wrongUpdate <- IO.pure(
+          OttochainMessage(
+            parentReference = UpdateReference.empty,
+            operation = "different",
+            data = Map("message" -> "different data")
+          )
         )
         wrongHash <- (wrongUpdate: OttochainMessage).computeDigest
-        
-        feeTransaction = FeeTransaction(
-          source = fixture.registry(Alice).address,
-          destination = treasuryAddress,
-          amount = Amount(2000L),
-          dataUpdateRef = wrongHash // Wrong reference!
+
+        feeTransaction <- IO.pure(
+          FeeTransaction(
+            source = fixture.registry(Alice).address,
+            destination = treasuryAddress,
+            amount = Amount(2000L),
+            dataUpdateRef = wrongHash // Wrong reference!
+          )
         )
-        
-        signedFeeTx <- ??? // fixture.registry(Alice).signFeeTransaction(feeTransaction)
-        feeConfig = ??? // FeeConfig(enabled = true, required = false, minimumAmount = 1000L, treasuryAddress)
-        
-        _ <- ??? // fixture.l1Context.setSnapshotFeeTransactions(Map(updateHash -> signedFeeTx))
-        result <- ??? // FeeValidator.validateFee(update, feeConfig)
-        
+
+        signedFeeTx <- IO.pure(???) // fixture.registry(Alice).signFeeTransaction(feeTransaction)
+        feeConfig <- IO.pure(???) // FeeConfig(enabled = true, required = false, minimumAmount = 1000L, treasuryAddress)
+
+        _      <- IO.pure(???) // fixture.l1Context.setSnapshotFeeTransactions(Map(updateHash -> signedFeeTx))
+        result <- IO.pure(???) // FeeValidator.validateFee(update, feeConfig)
+
       } yield expect(result.isInvalid) and
       expect(result.fold(_.toList.head, _ => "").contains("FeeRefMismatch"))
     }
@@ -233,32 +259,36 @@ object GenesisAndFeeSuite extends SimpleIOSuite {
     TestFixture.resource(Set(Alice, Bob, Charlie)).use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
-      
+
       for {
-        update = OttochainMessage(
-          parentReference = UpdateReference.empty,
-          operation = "test",
-          data = Map("message" -> "optional fee present")
+        update <- IO.pure(
+          OttochainMessage(
+            parentReference = UpdateReference.empty,
+            operation = "test",
+            data = Map("message" -> "optional fee present")
+          )
         )
-        
-        updateHash <- (update: OttochainMessage).computeDigest
-        treasuryAddress = fixture.registry(Charlie).address
-        
-        feeTransaction = FeeTransaction(
-          source = fixture.registry(Alice).address,
-          destination = treasuryAddress,
-          amount = Amount(1500L),
-          dataUpdateRef = updateHash
+
+        updateHash      <- (update: OttochainMessage).computeDigest
+        treasuryAddress <- IO.pure(fixture.registry(Charlie).address)
+
+        feeTransaction <- IO.pure(
+          FeeTransaction(
+            source = fixture.registry(Alice).address,
+            destination = treasuryAddress,
+            amount = Amount(1500L),
+            dataUpdateRef = updateHash
+          )
         )
-        
-        signedFeeTx <- ??? // fixture.registry(Alice).signFeeTransaction(feeTransaction)
-        
+
+        signedFeeTx <- IO.pure(???) // fixture.registry(Alice).signFeeTransaction(feeTransaction)
+
         // Fee config with required = false (optional)
-        feeConfig = ??? // FeeConfig(enabled = true, required = false, minimumAmount = 1000L, treasuryAddress)
-        
-        _ <- ??? // fixture.l1Context.setSnapshotFeeTransactions(Map(updateHash -> signedFeeTx))
-        result <- ??? // FeeValidator.validateFee(update, feeConfig)
-        
+        feeConfig <- IO.pure(???) // FeeConfig(enabled = true, required = false, minimumAmount = 1000L, treasuryAddress)
+
+        _      <- IO.pure(???) // fixture.l1Context.setSnapshotFeeTransactions(Map(updateHash -> signedFeeTx))
+        result <- IO.pure(???) // FeeValidator.validateFee(update, feeConfig)
+
       } yield expect(result.isValid)
     }
   }
@@ -268,20 +298,22 @@ object GenesisAndFeeSuite extends SimpleIOSuite {
   test("SDK: createFeeTransaction() produces valid signed transaction") {
     TestFixture.resource(Set(Alice, Bob, Charlie)).use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
-      
+
       for {
-        update = OttochainMessage(
-          parentReference = UpdateReference.empty,
-          operation = "test",
-          data = Map("message" -> "sdk test")
+        update <- IO.pure(
+          OttochainMessage(
+            parentReference = UpdateReference.empty,
+            operation = "test",
+            data = Map("message" -> "sdk test")
+          )
         )
-        
-        updateHash <- (update: OttochainMessage).computeDigest
-        treasuryAddress = fixture.registry(Charlie).address
-        payerAddress = fixture.registry(Alice).address
-        
+
+        updateHash      <- (update: OttochainMessage).computeDigest
+        treasuryAddress <- IO.pure(fixture.registry(Charlie).address)
+        payerAddress    <- IO.pure(fixture.registry(Alice).address)
+
         // THIS WILL FAIL because SDK method doesn't exist yet
-        signedFeeTx <- ??? /*
+        signedFeeTx <- IO.pure(???) /*
         SDKFeeTransaction.create(
           source = payerAddress,
           destination = treasuryAddress,
@@ -289,14 +321,14 @@ object GenesisAndFeeSuite extends SimpleIOSuite {
           dataUpdateRef = updateHash,
           privateKey = fixture.registry(Alice).keyPair.getPrivate
         )
-        */
-        
+         */
+
         // Verify signature is valid
-        isValidSig <- ??? // signedFeeTx.proofs.head.verify(signedFeeTx.value)
-        
+        isValidSig <- IO.pure(???) // signedFeeTx.proofs.head.verify(signedFeeTx.value)
+
         // Verify structure is correct
-        feeTx = signedFeeTx.value
-        
+        feeTx <- IO.pure(???) // signedFeeTx.value
+
       } yield expect(isValidSig) and
       expect(feeTx.source == payerAddress) and
       expect(feeTx.destination == treasuryAddress) and
@@ -308,40 +340,46 @@ object GenesisAndFeeSuite extends SimpleIOSuite {
   test("SDK: postDataWithFee() sends correct JSON shape") {
     TestFixture.resource(Set(Alice, Bob, Charlie)).use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
-      
+
       for {
-        update = OttochainMessage(
-          parentReference = UpdateReference.empty,
-          operation = "test",
-          data = Map("message" -> "sdk post test")
+        update <- IO.pure(
+          OttochainMessage(
+            parentReference = UpdateReference.empty,
+            operation = "test",
+            data = Map("message" -> "sdk post test")
+          )
         )
-        
+
         // Sign the update
         signedUpdate <- fixture.registry(Alice).proof(update).map { proof =>
           Signed(update, SortedSet(proof))
         }
-        
-        updateHash <- (update: OttochainMessage).computeDigest
-        treasuryAddress = fixture.registry(Charlie).address
-        
-        feeTransaction = FeeTransaction(
-          source = fixture.registry(Alice).address,
-          destination = treasuryAddress,
-          amount = Amount(1500L),
-          dataUpdateRef = updateHash
+
+        updateHash      <- (update: OttochainMessage).computeDigest
+        treasuryAddress <- IO.pure(fixture.registry(Charlie).address)
+
+        feeTransaction <- IO.pure(
+          FeeTransaction(
+            source = fixture.registry(Alice).address,
+            destination = treasuryAddress,
+            amount = Amount(1500L),
+            dataUpdateRef = updateHash
+          )
         )
-        
-        signedFeeTx <- fixture.registry(Alice).proof(feeTransaction.asInstanceOf[OttochainMessage])
+
+        signedFeeTx <- fixture
+          .registry(Alice)
+          .proof(feeTransaction.asInstanceOf[OttochainMessage])
           .map(proof => Signed(feeTransaction, SortedSet(proof)))
-        
+
         // THIS WILL FAIL because SDK client and method don't exist yet
-        response <- ??? /*
+        response <- IO.pure(???) /*
         DataL1Client.postDataWithFee(
           signedData = signedUpdate,
           feeTransaction = signedFeeTx
         )
-        */
-        
+         */
+
       } yield expect(response.status == 200) // Should be HTTP 200 when posted successfully
     }
   }
