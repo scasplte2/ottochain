@@ -223,6 +223,20 @@ jobs:
             echo '```' >> $GITHUB_STEP_SUMMARY
           done
 
+          # Save full logs as files for artifact upload
+          mkdir -p /tmp/ci-logs
+          for container in gl0-0 ml0-0 dl1-0 dl1-1 dl1-2; do
+            docker logs "$container" 2>&1 > /tmp/ci-logs/${container}.log || true
+          done
+
+      - name: Upload node logs
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-logs-${{ github.run_number }}
+          path: /tmp/ci-logs/
+          retention-days: 14
+
       - name: Cleanup
         if: always()
         working-directory: tessellation
