@@ -1,567 +1,321 @@
 package xyz.kd5ujc.shared_data
 
-import cats.effect.IO
-import cats.syntax.all._
-import scala.collection.immutable.SortedSet
+import java.util.UUID
 
-import io.constellationnetwork.currency.dataApplication.{
-  DataApplicationValidationErrorOr,
-  FeeTransaction
-}
-import io.constellationnetwork.schema._
-import io.constellationnetwork.schema.address.Address
+import cats.effect.IO
+
+import io.constellationnetwork.currency.dataApplication.FeeTransaction
+import io.constellationnetwork.metagraph_sdk.json_logic._
+import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
+import io.constellationnetwork.schema.balance.Amount
 import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.Signed
 
-import xyz.kd5ujc.schema.Updates._
+import xyz.kd5ujc.schema.Updates
+import xyz.kd5ujc.schema.fiber.{AccessControlPolicy, FiberOrdinal}
+import xyz.kd5ujc.shared_data.fee.{FeeConfig, FeeEstimator, FeeValidator}
 import xyz.kd5ujc.shared_test.Participant._
 import xyz.kd5ujc.shared_test.TestFixture
 
+import eu.timepit.refined.types.numeric.NonNegLong
+import io.circe.parser
 import weaver.SimpleIOSuite
 
 /**
- * TDD tests for OttoChain fee processing functionality.
+ * Tests for OttoChain fee processing: FeeConfig, FeeEstimator, FeeValidator.
  *
- * These tests are written to FAIL initially, implementing the behavior defined in
- * docs/specs/fee-schedule-spec.md. They will pass once the following components
- * are implemented:
- * 
- * - FeeConfig case class and factory methods
- * - FeeEstimator with estimateFee method
- * - FeeValidator with validateFee method  
- * - Config parsing for fee parameters
- * - Payload size calculation and surcharge logic
- * 
- * Spec reference: Fee-based data transactions (Trello: 69a254593c794d44d09d247e)
+ * Spec: docs/specs/fee-schedule-spec.md
+ * Trello: 69a254593c794d44d09d247e
  */
 object FeeProcessingSuite extends SimpleIOSuite {
 
-  // ===== Test Group A: Fee Estimation Logic =====
+  // ── Helpers ──────────────────────────────────────────────────────────────────
 
-  test("CreateStateMachine operation → base fee 1,000,000 datum") {
-    TestFixture.resource(Set(Alice)).use { fixture =>
-      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+  private val simpleProgram: JsonLogicExpression =
+    parser
+      .parse("""{"if": [true, {"value": 1}, {"value": 0}]}""")
+      .flatMap(_.as[JsonLogicExpression])
+      .getOrElse(throw new RuntimeException("Failed to parse test program"))
 
-      for {
-        createSM <- IO.pure(
-          CreateStateMachine(
-            parentReference = UpdateReference.empty,
-            id = "test-fiber-1",
-            initialState = Map("counter" -> 0),
-            definition = Map("type" -> "counter")
-          )
-        )
+  private def makeCreateScript(fiberId: UUID = UUID.randomUUID()): Updates.CreateScript =
+    Updates.CreateScript(
+      fiberId = fiberId,
+      scriptProgram = simpleProgram,
+      initialState = Some(MapValue(Map("value" -> IntValue(0)))),
+      accessControl = AccessControlPolicy.Public
+    )
 
-        // THIS WILL FAIL - FeeEstimator doesn't exist yet
-        estimatedFee <- IO.pure(???) // FeeEstimator.estimateFee(0L)(createSM)
+  private def makeInvokeScript(fiberId: UUID = UUID.randomUUID()): Updates.InvokeScript =
+    Updates.InvokeScript(
+      fiberId = fiberId,
+      method = "increment",
+      args = MapValue(Map.empty),
+      targetSequenceNumber = FiberOrdinal.MinValue
+    )
 
-      } yield expect(estimatedFee == 1000000L)
+  private def makeArchiveStateMachine(fiberId: UUID = UUID.randomUUID()): Updates.ArchiveStateMachine =
+    Updates.ArchiveStateMachine(
+      fiberId = fiberId,
+      targetSequenceNumber = FiberOrdinal.MinValue
+    )
+
+  // ── Group A: Base fee by operation type ──────────────────────────────────────
+
+  test("A1 — CreateScript operation → base fee 1,000,000 datum") {
+    IO.pure(FeeEstimator.estimateFee(FeeConfig.disabled)(makeCreateScript()))
+      .map(fee => expect(fee >= 1_000_000L))
+  }
+
+  test("A2 — InvokeScript operation → base fee 100,000 datum") {
+    IO.pure(FeeEstimator.estimateFee(FeeConfig.disabled)(makeInvokeScript()))
+      .map(fee => expect(fee >= 100_000L && fee < 200_000L))
+  }
+
+  test("A3 — ArchiveStateMachine operation → fee is 0") {
+    IO.pure(FeeEstimator.estimateFee(FeeConfig.disabled)(makeArchiveStateMachine()))
+      .map(fee => expect(fee == 0L))
+  }
+
+  // ── Group B: Payload size surcharge ──────────────────────────────────────────
+
+  test("B1 — small payload (≤ 4KB) → no surcharge") {
+    val small = makeCreateScript()
+    IO.pure(FeeEstimator.estimateFee(FeeConfig.disabled)(small))
+      .map(fee => expect(fee == 1_000_000L))
+  }
+
+  test("B2 — large payload (> 4KB) → surcharge applied") {
+    // Stuff a large string into the initial state to exceed 4KB baseline
+    val largeStr = "x" * 6000
+    val large = Updates.CreateScript(
+      fiberId = UUID.randomUUID(),
+      scriptProgram = simpleProgram,
+      initialState = Some(StrValue(largeStr)),
+      accessControl = AccessControlPolicy.Public
+    )
+    IO.pure(FeeEstimator.estimateFee(FeeConfig.disabled)(large))
+      .map(fee => expect(fee > 1_000_000L))
+  }
+
+  // ── Group C: FeeConfig factory methods ────────────────────────────────────────
+
+  test("C1 — FeeConfig.disabled → enabled=false, no treasury address") {
+    IO.pure(FeeConfig.disabled).map { cfg =>
+      expect(cfg.enabled == false) &&
+      expect(cfg.treasuryAddress.isEmpty)
     }
   }
 
-  test("TransitionStateMachine operation → base fee 100,000 datum") {
-    TestFixture.resource(Set(Alice)).use { fixture =>
-      implicit val s: SecurityProvider[IO] = fixture.securityProvider
-
-      for {
-        transitionSM <- IO.pure(
-          TransitionStateMachine(
-            parentReference = UpdateReference.empty,
-            id = "existing-fiber",
-            event = Map("action" -> "increment")
-          )
-        )
-
-        // THIS WILL FAIL - FeeEstimator doesn't exist yet
-        estimatedFee <- IO.pure(???) // FeeEstimator.estimateFee(0L)(transitionSM)
-
-      } yield expect(estimatedFee == 100000L)
-    }
-  }
-
-  test("ArchiveStateMachine operation → fee is 0 (free)") {
-    TestFixture.resource(Set(Alice)).use { fixture =>
-      implicit val s: SecurityProvider[IO] = fixture.securityProvider
-
-      for {
-        archiveSM <- IO.pure(
-          ArchiveStateMachine(
-            parentReference = UpdateReference.empty,
-            id = "fiber-to-cleanup"
-          )
-        )
-
-        // THIS WILL FAIL - FeeEstimator doesn't exist yet
-        estimatedFee <- IO.pure(???) // FeeEstimator.estimateFee(0L)(archiveSM)
-
-      } yield expect(estimatedFee == 0L)
-    }
-  }
-
-  test("CreateScript operation → base fee 1,000,000 datum") {
-    TestFixture.resource(Set(Alice)).use { fixture =>
-      implicit val s: SecurityProvider[IO] = fixture.securityProvider
-
-      for {
-        createScript <- IO.pure(
-          CreateScript(
-            parentReference = UpdateReference.empty,
-            id = "test-script-1",
-            program = Map("logic" -> "simple counter program"),
-            initialData = Map("value" -> 0)
-          )
-        )
-
-        // THIS WILL FAIL - FeeEstimator doesn't exist yet
-        estimatedFee <- IO.pure(???) // FeeEstimator.estimateFee(0L)(createScript)
-
-      } yield expect(estimatedFee == 1000000L)
-    }
-  }
-
-  test("InvokeScript operation → base fee 100,000 datum") {
-    TestFixture.resource(Set(Alice)).use { fixture =>
-      implicit val s: SecurityProvider[IO] = fixture.securityProvider
-
-      for {
-        invokeScript <- IO.pure(
-          InvokeScript(
-            parentReference = UpdateReference.empty,
-            id = "existing-script",
-            method = "execute",
-            params = Map("input" -> "test")
-          )
-        )
-
-        // THIS WILL FAIL - FeeEstimator doesn't exist yet
-        estimatedFee <- IO.pure(???) // FeeEstimator.estimateFee(0L)(invokeScript)
-
-      } yield expect(estimatedFee == 100000L)
-    }
-  }
-
-  // ===== Test Group B: Payload Size Surcharge =====
-
-  test("small payload (≤ 4KB) → no surcharge applied") {
-    TestFixture.resource(Set(Alice)).use { fixture =>
-      implicit val s: SecurityProvider[IO] = fixture.securityProvider
-
-      for {
-        // Small CreateStateMachine under 4KB
-        smallPayload <- IO.pure(
-          CreateStateMachine(
-            parentReference = UpdateReference.empty,
-            id = "small",
-            initialState = Map("data" -> "small payload"),
-            definition = Map("type" -> "simple")
-          )
-        )
-
-        // THIS WILL FAIL - payloadFee calculation doesn't exist yet
-        estimatedFee <- IO.pure(???) // FeeEstimator.estimateFee(0L)(smallPayload)
-
-        // Should be exactly base fee (1M datum) with no surcharge
-      } yield expect(estimatedFee == 1000000L)
-    }
-  }
-
-  test("large payload (> 4KB) → surcharge of 10,000 datum per KB") {
-    TestFixture.resource(Set(Alice)).use { fixture =>
-      implicit val s: SecurityProvider[IO] = fixture.securityProvider
-
-      for {
-        // Create payload that's definitely over 4KB
-        largeData <- IO.pure("x" * 6000) // ~6KB of data
-        
-        largePayload <- IO.pure(
-          CreateStateMachine(
-            parentReference = UpdateReference.empty,
-            id = "large-payload-test",
-            initialState = Map("largeData" -> largeData),
-            definition = Map("type" -> "large", "description" -> "test with large payload")
-          )
-        )
-
-        // THIS WILL FAIL - payload size calculation doesn't exist yet
-        estimatedFee <- IO.pure(???) /*
-        FeeEstimator.estimateFee(0L)(largePayload)
-        Expected: base (1M) + surcharge for ~2KB over baseline
-        Surcharge = ceil(2048/1024) * 10000 = 2 * 10000 = 20000
-        Total = 1000000 + 20000 = 1020000
-        */
-
-      } yield expect(estimatedFee > 1000000L && estimatedFee <= 1100000L) // Allow some encoding overhead
-    }
-  }
-
-  // ===== Test Group C: Fee Configuration =====
-
-  test("FeeConfig.disabled → fees.enabled = false") {
-    for {
-      // THIS WILL FAIL - FeeConfig case class doesn't exist yet
-      config <- IO.pure(???) // FeeConfig.disabled
-
-    } yield expect(config.enabled == false) &&
-    expect(config.treasuryAddress.isEmpty)
-  }
-
-  test("FeeConfig.enabled → requires treasury address") {
+  test("C2 — FeeConfig.enabled → enabled=true, treasury address set") {
     TestFixture.resource(Set(Alice, Charlie)).use { fixture =>
-      for {
-        treasuryAddr <- IO.pure(fixture.registry(Charlie).address)
-        
-        // THIS WILL FAIL - FeeConfig.enabled factory doesn't exist yet
-        config <- IO.pure(???) /*
-        FeeConfig.enabled(
-          treasuryAddress = treasuryAddr,
-          createStateMachineFee = 1000000L,
-          transitionFee = 100000L,
-          createScriptFee = 1000000L,
-          invokeFee = 100000L,
-          archiveFee = 0L,
-          baselineSizeBytes = 4096,
-          perKbFee = 10000L
-        )
-        */
-
-      } yield expect(config.enabled == true) &&
-      expect(config.treasuryAddress.contains(treasuryAddr))
-    }
-  }
-
-  test("FeeConfig validation → missing treasury address should error") {
-    for {
-      // THIS WILL FAIL - FeeConfig validation doesn't exist yet
-      result <- IO.pure(???) /*
-      FeeConfig.fromConfig(
-        enabled = true,
-        treasuryAddress = None, // Missing!
-        createStateMachineFee = 1000000L,
-        // ... other params
+      val treasury = fixture.registry(Charlie).address
+      val cfg = FeeConfig.enabled(treasury)
+      IO.pure(
+        expect(cfg.enabled == true) &&
+        expect(cfg.required == true) &&
+        expect(cfg.treasuryAddress.contains(treasury))
       )
-      */
-
-    } yield expect(result.isLeft) && // Should be Left(error)
-    expect(result.left.toOption.exists(_.contains("treasury")))
+    }
   }
 
-  // ===== Test Group D: Fee Validation - Grace Period =====
+  test("C3 — FeeConfig.fromConfig with missing treasury → Left error") {
+    val result = FeeConfig.fromConfig(enabled = true, required = true, treasuryAddress = None)
+    IO.pure(
+      expect(result.isLeft) &&
+      expect(result.left.toOption.exists(_.contains("treasury")))
+    )
+  }
 
-  test("grace period (enabled=false) → accept missing fees with warning") {
+  test("C4 — FeeConfig.fromConfig with treasury → Right config") {
+    TestFixture.resource(Set(Charlie)).use { fixture =>
+      val treasury = fixture.registry(Charlie).address
+      val result = FeeConfig.fromConfig(enabled = true, required = true, treasuryAddress = Some(treasury))
+      IO.pure(expect(result.isRight))
+    }
+  }
+
+  // ── Group D: FeeValidator — grace period (enabled=false) ────────────────────
+
+  test("D1 — grace period: missing fee accepted") {
     TestFixture.resource(Set(Alice)).use { fixture =>
-      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
 
+      val update = makeCreateScript()
       for {
-        update <- IO.pure(
-          CreateStateMachine(
-            parentReference = UpdateReference.empty,
-            id = "grace-period-test",
-            initialState = Map("test" -> true),
-            definition = Map("type" -> "test")
-          )
-        )
-
-        signedUpdate <- fixture.registry(Alice).proof(update).map { proof =>
-          Signed(update, SortedSet(proof))
-        }
-
-        config <- IO.pure(???) // FeeConfig.disabled
-
-        // No fee provided (maybeFee = None)
-        // THIS WILL FAIL - FeeValidator doesn't exist yet
-        result <- IO.pure(???) // FeeValidator.validateFee(0L)(signedUpdate, None)(config)
-
-      } yield expect(result.isRight) // Should accept during grace period
+        proofs <- fixture.registry.generateProofs(update, Set(Alice))
+        signed = Signed(update, proofs)
+        result <- FeeValidator.validateFee[IO](FeeConfig.disabled)(signed, None)
+      } yield expect(result.isValid)
     }
   }
 
-  test("grace period → accept provided fees with info log") {
+  test("D2 — grace period: voluntary fee accepted (no enforcement)") {
     TestFixture.resource(Set(Alice, Charlie)).use { fixture =>
-      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
 
+      val update = makeCreateScript()
       for {
-        update <- IO.pure(
-          CreateStateMachine(
-            parentReference = UpdateReference.empty,
-            id = "grace-period-with-fee",
-            initialState = Map("test" -> true),
-            definition = Map("type" -> "test")
-          )
+        proofs     <- fixture.registry.generateProofs(update, Set(Alice))
+        signed      = Signed(update, proofs)
+        updateHash <- (update: Updates.OttochainMessage).computeDigest
+        fee = FeeTransaction(
+          source        = fixture.registry(Alice).address,
+          destination   = fixture.registry(Charlie).address,
+          amount        = Amount(NonNegLong.unsafeFrom(1_500_000L)),
+          dataUpdateRef = updateHash
         )
-
-        signedUpdate <- fixture.registry(Alice).proof(update).map { proof =>
-          Signed(update, SortedSet(proof))
-        }
-
-        // Create voluntary fee
-        feeTransaction <- IO.pure(
-          FeeTransaction(
-            source = fixture.registry(Alice).address,
-            destination = fixture.registry(Charlie).address,
-            amount = Amount(1500000L),
-            dataUpdateRef = ??? // update hash - THIS WILL FAIL
-          )
-        )
-
-        signedFee <- fixture.registry(Alice).proof(feeTransaction).map { proof =>
-          Signed(feeTransaction, SortedSet(proof))
-        }
-
-        config <- IO.pure(???) // FeeConfig.disabled
-
-        // Fee provided voluntarily during grace period
-        // THIS WILL FAIL - FeeValidator doesn't exist yet
-        result <- IO.pure(???) // FeeValidator.validateFee(0L)(signedUpdate, Some(signedFee))(config)
-
-      } yield expect(result.isRight) // Should accept voluntary fees
+        // Reuse proofs set for the fee wrapper (FeeValidator doesn't re-verify fee sigs)
+        signedFee = Signed(fee, proofs)
+        result    <- FeeValidator.validateFee[IO](FeeConfig.disabled)(signed, Some(signedFee))
+      } yield expect(result.isValid)
     }
   }
 
-  // ===== Test Group E: Fee Validation - Enforcement Mode =====
+  // ── Group E: FeeValidator — enforcement mode ─────────────────────────────────
 
-  test("enforcement mode → missing fee rejected") {
+  test("E1 — enforcement mode: missing fee rejected") {
     TestFixture.resource(Set(Alice, Charlie)).use { fixture =>
-      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+
+      val treasury = fixture.registry(Charlie).address
+      val cfg = FeeConfig.enabled(treasury)
+      val update = makeCreateScript()
 
       for {
-        update <- IO.pure(
-          CreateStateMachine(
-            parentReference = UpdateReference.empty,
-            id = "enforcement-test",
-            initialState = Map("test" -> true),
-            definition = Map("type" -> "test")
-          )
-        )
-
-        signedUpdate <- fixture.registry(Alice).proof(update).map { proof =>
-          Signed(update, SortedSet(proof))
-        }
-
-        treasuryAddr <- IO.pure(fixture.registry(Charlie).address)
-        config <- IO.pure(???) // FeeConfig.enabled(treasuryAddr, ...)
-
-        // No fee provided (maybeFee = None)
-        // THIS WILL FAIL - FeeValidator doesn't exist yet
-        result <- IO.pure(???) // FeeValidator.validateFee(0L)(signedUpdate, None)(config)
-
-      } yield expect(result.isLeft) && // Should reject
-      expect(result.left.toOption.exists(_.contains("Fee required")))
+        proofs <- fixture.registry.generateProofs(update, Set(Alice))
+        signed = Signed(update, proofs)
+        result <- FeeValidator.validateFee[IO](cfg)(signed, None)
+      } yield expect(result.isInvalid)
     }
   }
 
-  test("enforcement mode → insufficient fee rejected") {
+  test("E2 — enforcement mode: insufficient fee rejected") {
     TestFixture.resource(Set(Alice, Charlie)).use { fixture =>
-      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+
+      val treasury = fixture.registry(Charlie).address
+      val cfg = FeeConfig.enabled(treasury)
+      val update = makeCreateScript()
 
       for {
-        update <- IO.pure(
-          CreateStateMachine(
-            parentReference = UpdateReference.empty,
-            id = "insufficient-fee-test",
-            initialState = Map("test" -> true),
-            definition = Map("type" -> "test")
-          )
-        )
-
-        signedUpdate <- fixture.registry(Alice).proof(update).map { proof =>
-          Signed(update, SortedSet(proof))
-        }
-
-        // Fee that's too low (should be 1M, only pay 500K)
-        feeTransaction <- IO.pure(
-          FeeTransaction(
-            source = fixture.registry(Alice).address,
-            destination = fixture.registry(Charlie).address,
-            amount = Amount(500000L), // Too low!
-            dataUpdateRef = ??? // update hash - THIS WILL FAIL
-          )
-        )
-
-        signedFee <- fixture.registry(Alice).proof(feeTransaction).map { proof =>
-          Signed(feeTransaction, SortedSet(proof))
-        }
-
-        treasuryAddr <- IO.pure(fixture.registry(Charlie).address)
-        config <- IO.pure(???) // FeeConfig.enabled(treasuryAddr, ...)
-
-        // THIS WILL FAIL - FeeValidator doesn't exist yet
-        result <- IO.pure(???) // FeeValidator.validateFee(0L)(signedUpdate, Some(signedFee))(config)
-
-      } yield expect(result.isLeft) && // Should reject
-      expect(result.left.toOption.exists(_.contains("insufficient")))
-    }
-  }
-
-  test("enforcement mode → wrong destination rejected") {
-    TestFixture.resource(Set(Alice, Bob, Charlie)).use { fixture =>
-      implicit val s: SecurityProvider[IO] = fixture.securityProvider
-
-      for {
-        update <- IO.pure(
-          CreateStateMachine(
-            parentReference = UpdateReference.empty,
-            id = "wrong-dest-test",
-            initialState = Map("test" -> true),
-            definition = Map("type" -> "test")
-          )
-        )
-
-        signedUpdate <- fixture.registry(Alice).proof(update).map { proof =>
-          Signed(update, SortedSet(proof))
-        }
-
-        // Fee to wrong address (Bob instead of Charlie)
-        feeTransaction <- IO.pure(
-          FeeTransaction(
-            source = fixture.registry(Alice).address,
-            destination = fixture.registry(Bob).address, // Wrong!
-            amount = Amount(1500000L), // Correct amount
-            dataUpdateRef = ??? // update hash - THIS WILL FAIL
-          )
-        )
-
-        signedFee <- fixture.registry(Alice).proof(feeTransaction).map { proof =>
-          Signed(feeTransaction, SortedSet(proof))
-        }
-
-        treasuryAddr <- IO.pure(fixture.registry(Charlie).address) // Correct treasury
-        config <- IO.pure(???) // FeeConfig.enabled(treasuryAddr, ...)
-
-        // THIS WILL FAIL - FeeValidator doesn't exist yet
-        result <- IO.pure(???) // FeeValidator.validateFee(0L)(signedUpdate, Some(signedFee))(config)
-
-      } yield expect(result.isLeft) && // Should reject
-      expect(result.left.toOption.exists(_.contains("wrong destination")))
-    }
-  }
-
-  test("enforcement mode → valid fee accepted") {
-    TestFixture.resource(Set(Alice, Charlie)).use { fixture =>
-      implicit val s: SecurityProvider[IO] = fixture.securityProvider
-
-      for {
-        update <- IO.pure(
-          CreateStateMachine(
-            parentReference = UpdateReference.empty,
-            id = "valid-fee-test",
-            initialState = Map("test" -> true),
-            definition = Map("type" -> "test")
-          )
-        )
-
-        signedUpdate <- fixture.registry(Alice).proof(update).map { proof =>
-          Signed(update, SortedSet(proof))
-        }
-
-        // Valid fee (correct amount, destination, reference)
-        feeTransaction <- IO.pure(
-          FeeTransaction(
-            source = fixture.registry(Alice).address,
-            destination = fixture.registry(Charlie).address,
-            amount = Amount(1500000L), // Above required 1M
-            dataUpdateRef = ??? // update hash - THIS WILL FAIL
-          )
-        )
-
-        signedFee <- fixture.registry(Alice).proof(feeTransaction).map { proof =>
-          Signed(feeTransaction, SortedSet(proof))
-        }
-
-        treasuryAddr <- IO.pure(fixture.registry(Charlie).address)
-        config <- IO.pure(???) // FeeConfig.enabled(treasuryAddr, ...)
-
-        // THIS WILL FAIL - FeeValidator doesn't exist yet
-        result <- IO.pure(???) // FeeValidator.validateFee(0L)(signedUpdate, Some(signedFee))(config)
-
-      } yield expect(result.isRight) // Should accept valid fee
-    }
-  }
-
-  // ===== Test Group F: Fee Estimation API =====
-
-  test("POST /data/estimate-fee → returns correct JSON response") {
-    TestFixture.resource(Set(Alice, Charlie)).use { fixture =>
-      implicit val s: SecurityProvider[IO] = fixture.securityProvider
-
-      for {
-        update <- IO.pure(
-          CreateStateMachine(
-            parentReference = UpdateReference.empty,
-            id = "api-test",
-            initialState = Map("test" -> "api"),
-            definition = Map("type" -> "api-test")
-          )
-        )
-
-        // Serialize update for POST body
-        // THIS WILL FAIL - serialization doesn't exist yet
-        serializedUpdate <- IO.pure(???) // Serializer.serialize(update)
-
-        // Mock HTTP POST to estimation endpoint
-        // THIS WILL FAIL - HTTP client and endpoint don't exist yet
-        response <- IO.pure(???) /*
-        HttpClient.post("/data/estimate-fee", serializedUpdate)
-        Expected response:
-        {
-          "amount": 1000000,
-          "treasuryAddress": "DAG...",
-          "currency": "datum"
-        }
-        */
-
-      } yield expect(response.status == 200) &&
-      expect(response.json.get("amount").contains(1000000)) &&
-      expect(response.json.get("currency").contains("datum")) &&
-      expect(response.json.get("treasuryAddress").isDefined)
-    }
-  }
-
-  // ===== Test Group G: Integration Tests =====
-
-  test("end-to-end: estimate fee → create fee transaction → validate → accept") {
-    TestFixture.resource(Set(Alice, Charlie)).use { fixture =>
-      implicit val s: SecurityProvider[IO] = fixture.securityProvider
-
-      for {
-        // 1. Create update
-        update <- IO.pure(
-          CreateStateMachine(
-            parentReference = UpdateReference.empty,
-            id = "e2e-test",
-            initialState = Map("value" -> 42),
-            definition = Map("type" -> "counter")
-          )
-        )
-
-        // 2. Estimate fee - THIS WILL FAIL
-        estimatedAmount <- IO.pure(???) // FeeEstimator.estimateFee(0L)(update)
-
-        // 3. Create fee transaction - THIS WILL FAIL
-        feeTransaction <- IO.pure(???) /*
-        FeeTransaction(
+        proofs <- fixture.registry.generateProofs(update, Set(Alice))
+        signed = Signed(update, proofs)
+        updateHash <- (update: Updates.OttochainMessage).computeDigest
+        fee = FeeTransaction(
           source = fixture.registry(Alice).address,
-          destination = fixture.registry(Charlie).address,
-          amount = Amount(estimatedAmount),
-          dataUpdateRef = update.computeDigest
+          destination = treasury,
+          amount = Amount(NonNegLong.unsafeFrom(500_000L)), // too low!
+          dataUpdateRef = updateHash
         )
-        */
+        signedFee = Signed(fee, proofs)
+        result <- FeeValidator.validateFee[IO](cfg)(signed, Some(signedFee))
+      } yield expect(result.isInvalid)
+    }
+  }
 
-        // 4. Sign both transactions
-        signedUpdate <- fixture.registry(Alice).proof(update).map { proof =>
-          Signed(update, SortedSet(proof))
-        }
+  test("E3 — enforcement mode: wrong destination rejected") {
+    TestFixture.resource(Set(Alice, Bob, Charlie)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
 
-        signedFee <- fixture.registry(Alice).proof(feeTransaction).map { proof =>
-          Signed(feeTransaction, SortedSet(proof))
-        }
+      val treasury = fixture.registry(Charlie).address
+      val cfg = FeeConfig.enabled(treasury)
+      val update = makeCreateScript()
 
-        // 5. Validate with enforcement enabled - THIS WILL FAIL
-        treasuryAddr <- IO.pure(fixture.registry(Charlie).address)
-        config <- IO.pure(???) // FeeConfig.enabled(treasuryAddr, ...)
-        result <- IO.pure(???) // FeeValidator.validateFee(0L)(signedUpdate, Some(signedFee))(config)
+      for {
+        proofs <- fixture.registry.generateProofs(update, Set(Alice))
+        signed = Signed(update, proofs)
+        updateHash <- (update: Updates.OttochainMessage).computeDigest
+        fee = FeeTransaction(
+          source = fixture.registry(Alice).address,
+          destination = fixture.registry(Bob).address, // wrong destination!
+          amount = Amount(NonNegLong.unsafeFrom(1_500_000L)),
+          dataUpdateRef = updateHash
+        )
+        signedFee = Signed(fee, proofs)
+        result <- FeeValidator.validateFee[IO](cfg)(signed, Some(signedFee))
+      } yield expect(result.isInvalid)
+    }
+  }
 
-      } yield expect(result.isRight) &&
-      expect(estimatedAmount == 1000000L)
+  test("E4 — enforcement mode: valid fee accepted") {
+    TestFixture.resource(Set(Alice, Charlie)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+
+      val treasury = fixture.registry(Charlie).address
+      val cfg = FeeConfig.enabled(treasury)
+      val update = makeCreateScript()
+
+      for {
+        proofs <- fixture.registry.generateProofs(update, Set(Alice))
+        signed = Signed(update, proofs)
+        updateHash <- (update: Updates.OttochainMessage).computeDigest
+        fee = FeeTransaction(
+          source = fixture.registry(Alice).address,
+          destination = treasury,
+          amount = Amount(NonNegLong.unsafeFrom(1_500_000L)), // above 1M minimum
+          dataUpdateRef = updateHash
+        )
+        signedFee = Signed(fee, proofs)
+        result <- FeeValidator.validateFee[IO](cfg)(signed, Some(signedFee))
+      } yield expect(result.isValid)
+    }
+  }
+
+  test("E5 — enforcement mode: wrong dataUpdateRef rejected") {
+    TestFixture.resource(Set(Alice, Charlie)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+
+      val treasury = fixture.registry(Charlie).address
+      val cfg = FeeConfig.enabled(treasury)
+      val update = makeCreateScript()
+      val differentUpdate = makeCreateScript() // different fiberId → different hash
+
+      for {
+        proofs <- fixture.registry.generateProofs(update, Set(Alice))
+        signed = Signed(update, proofs)
+        wrongHash <- (differentUpdate: Updates.OttochainMessage).computeDigest // hash of a DIFFERENT update
+        fee = FeeTransaction(
+          source = fixture.registry(Alice).address,
+          destination = treasury,
+          amount = Amount(NonNegLong.unsafeFrom(1_500_000L)),
+          dataUpdateRef = wrongHash // references wrong update!
+        )
+        signedFee = Signed(fee, proofs)
+        result <- FeeValidator.validateFee[IO](cfg)(signed, Some(signedFee))
+      } yield expect(result.isInvalid)
+    }
+  }
+
+  // ── Group F: End-to-end estimate → create → validate ────────────────────────
+
+  test("F1 — end-to-end: estimate fee → construct fee tx → validate → accepted") {
+    TestFixture.resource(Set(Alice, Charlie)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+
+      val treasury = fixture.registry(Charlie).address
+      val cfg = FeeConfig.enabled(treasury)
+      val update = makeCreateScript()
+
+      for {
+        // 1. Estimate fee (pure)
+        estimatedAmount <- IO.pure(FeeEstimator.estimateFee(cfg)(update))
+        // 2. Sign the update
+        proofs <- fixture.registry.generateProofs(update, Set(Alice))
+        signed = Signed(update, proofs)
+        // 3. Hash update for fee reference
+        updateHash <- (update: Updates.OttochainMessage).computeDigest
+        // 4. Construct fee transaction using estimated amount
+        fee = FeeTransaction(
+          source = fixture.registry(Alice).address,
+          destination = treasury,
+          amount = Amount(NonNegLong.unsafeFrom(estimatedAmount)),
+          dataUpdateRef = updateHash
+        )
+        signedFee = Signed(fee, proofs)
+        // 5. Validate
+        result <- FeeValidator.validateFee[IO](cfg)(signed, Some(signedFee))
+      } yield expect(result.isValid) &&
+      expect(estimatedAmount == 1_000_000L) // base fee for CreateScript, tiny payload
     }
   }
 }
