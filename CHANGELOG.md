@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.12](https://github.com/scasplte2/ottochain/compare/v0.7.11...v0.7.12) (2026-03-11)
+
+
+### Bug Fixes
+
+* don't pass --l0-token-identifier to ML0 ([#136](https://github.com/scasplte2/ottochain/issues/136)) ([7217607](https://github.com/scasplte2/ottochain/commit/721760702016d445a567d4052f23ffb4b0c301b7))
+
 ## [0.7.11](https://github.com/scasplte2/ottochain/compare/v0.7.10...v0.7.11) (2026-03-01)
 
 
