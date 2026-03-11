@@ -214,8 +214,8 @@ case "${LAYER,,}" in
       fi
     fi
     
-    # Token ID for metagraph layers
-    if [ -n "${CL_TOKEN_ID}" ]; then
+    # Token ID for L1 layers only (CL1, DL1) — ML0 doesn't accept --l0-token-identifier
+    if [ "${LAYER,,}" != "ml0" ] && [ -n "${CL_TOKEN_ID}" ]; then
       ARGS="${ARGS} --l0-token-identifier ${CL_TOKEN_ID}"
     fi
     ;;
