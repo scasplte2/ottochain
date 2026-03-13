@@ -36,9 +36,7 @@ import weaver.SimpleIOSuite
  *     {"CreateStateMachine": { ...fields... }}
  * - UUIDs serialize as plain strings: "550e8400-e29b-41d4-a716-446655440000"
  * - FiberOrdinal serializes as a plain Long number: 0, 1, 42
- * - StateId (single-field case class) serializes as: {"value": "idle"}
- *   NOTE: SDK types.ts incorrectly documents this as a plain string.
- *   The actual wire format from Scala is always the wrapped form.
+ * - StateId (single-field case class) serializes as plain string: "idle"
  * - AccessControlPolicy serializes with Scala class name as discriminator key:
  *     {"Public": {}}  |  {"Whitelist": {"addresses": [...]}}  |  {"FiberOwned": {"fiberId": "..."}}
  * - JsonLogicValue: NullValue → null, MapValue → {}, IntValue → 0, StrValue → ""
@@ -59,20 +57,21 @@ object SdkCompatibilitySuite extends SimpleIOSuite {
   private val minimalDefinitionJson: String =
     """{
       |  "states": {
-      |    "idle": { "id": { "value": "idle" }, "isFinal": false },
-      |    "active": { "id": { "value": "active" }, "isFinal": true }
+      |    "idle": { "id": "idle", "isFinal": false, "metadata": null },
+      |    "active": { "id": "active", "isFinal": true, "metadata": null }
       |  },
-      |  "initialState": { "value": "idle" },
+      |  "initialState": "idle",
       |  "transitions": [
       |    {
-      |      "from": { "value": "idle" },
-      |      "to": { "value": "active" },
+      |      "from": "idle",
+      |      "to": "active",
       |      "eventName": "start",
       |      "guard": true,
       |      "effect": null,
       |      "dependencies": []
       |    }
-      |  ]
+      |  ],
+      |  "metadata": null
       |}""".stripMargin
 
   private val sampleFiberId: UUID = UUID.fromString("550e8400-e29b-41d4-a716-446655440000")
@@ -143,7 +142,7 @@ object SdkCompatibilitySuite extends SimpleIOSuite {
     }
   }
 
-  test("CreateStateMachine: StateId initialState encodes as {value: string}, not plain string") {
+  test("CreateStateMachine: StateId initialState encodes as plain string") {
     IO {
       val msg: Updates.OttochainMessage = CreateStateMachine(
         fiberId = sampleFiberId,
@@ -159,10 +158,9 @@ object SdkCompatibilitySuite extends SimpleIOSuite {
           .downField("initialState")
           .focus
 
-      // StateId is a single-field case class — circe-magnolia encodes as {"value": "idle"}, NOT "idle"
-      // SDK types.ts comment "Plain string, not { value: string }" is INCORRECT.
-      // The actual wire format is always the wrapped object form.
-      expect(initialStateJson.contains(io.circe.Json.obj("value" -> io.circe.Json.fromString("idle"))))
+      // StateId encodes as a plain string "idle", not {"value": "idle"}
+      // This matches the SDK types.ts expectation.
+      expect(initialStateJson.contains(io.circe.Json.fromString("idle")))
     }
   }
 
