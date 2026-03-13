@@ -214,9 +214,15 @@ case "${LAYER,,}" in
       fi
     fi
     
-    # Token ID for L1 layers only (CL1, DL1) — ML0 doesn't accept --l0-token-identifier
-    if [ "${LAYER,,}" != "ml0" ] && [ -n "${CL_TOKEN_ID}" ]; then
-      ARGS="${ARGS} --l0-token-identifier ${CL_TOKEN_ID}"
+    # Token ID for metagraph layers
+    # ML0 run-genesis does NOT accept --l0-token-identifier, but run-validator REQUIRES it.
+    # CL1/DL1 always need it.
+    if [ -n "${CL_TOKEN_ID}" ]; then
+      if [ "${LAYER,,}" = "ml0" ] && [ "${RUN_MODE}" = "run-genesis" ]; then
+        echo "Skipping --l0-token-identifier for ML0 genesis mode"
+      else
+        ARGS="${ARGS} --l0-token-identifier ${CL_TOKEN_ID}"
+      fi
     fi
     ;;
 esac
