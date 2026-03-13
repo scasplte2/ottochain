@@ -4,10 +4,7 @@ import cats.effect.IO
 import cats.syntax.all._
 import scala.collection.immutable.SortedSet
 
-import io.constellationnetwork.currency.dataApplication.{
-  DataApplicationValidationErrorOr,
-  FeeTransaction
-}
+import io.constellationnetwork.currency.dataApplication.{DataApplicationValidationErrorOr, FeeTransaction}
 import io.constellationnetwork.schema._
 import io.constellationnetwork.schema.address.Address
 import io.constellationnetwork.security.SecurityProvider
@@ -25,13 +22,13 @@ import weaver.SimpleIOSuite
  * These tests are written to FAIL initially, implementing the behavior defined in
  * docs/specs/fee-schedule-spec.md. They will pass once the following components
  * are implemented:
- * 
+ *
  * - FeeConfig case class and factory methods
  * - FeeEstimator with estimateFee method
- * - FeeValidator with validateFee method  
+ * - FeeValidator with validateFee method
  * - Config parsing for fee parameters
  * - Payload size calculation and surcharge logic
- * 
+ *
  * Spec reference: Fee-based data transactions (Trello: 69a254593c794d44d09d247e)
  */
 object FeeProcessingSuite extends SimpleIOSuite {
@@ -172,7 +169,7 @@ object FeeProcessingSuite extends SimpleIOSuite {
       for {
         // Create payload that's definitely over 4KB
         largeData <- IO.pure("x" * 6000) // ~6KB of data
-        
+
         largePayload <- IO.pure(
           CreateStateMachine(
             parentReference = UpdateReference.empty,
@@ -188,7 +185,7 @@ object FeeProcessingSuite extends SimpleIOSuite {
         Expected: base (1M) + surcharge for ~2KB over baseline
         Surcharge = ceil(2048/1024) * 10000 = 2 * 10000 = 20000
         Total = 1000000 + 20000 = 1020000
-        */
+         */
 
       } yield expect(estimatedFee > 1000000L && estimatedFee <= 1100000L) // Allow some encoding overhead
     }
@@ -209,7 +206,7 @@ object FeeProcessingSuite extends SimpleIOSuite {
     TestFixture.resource(Set(Alice, Charlie)).use { fixture =>
       for {
         treasuryAddr <- IO.pure(fixture.registry(Charlie).address)
-        
+
         // THIS WILL FAIL - FeeConfig.enabled factory doesn't exist yet
         config <- IO.pure(???) /*
         FeeConfig.enabled(
@@ -222,7 +219,7 @@ object FeeProcessingSuite extends SimpleIOSuite {
           baselineSizeBytes = 4096,
           perKbFee = 10000L
         )
-        */
+         */
 
       } yield expect(config.enabled == true) &&
       expect(config.treasuryAddress.contains(treasuryAddr))
@@ -239,7 +236,7 @@ object FeeProcessingSuite extends SimpleIOSuite {
         createStateMachineFee = 1000000L,
         // ... other params
       )
-      */
+       */
 
     } yield expect(result.isLeft) && // Should be Left(error)
     expect(result.left.toOption.exists(_.contains("treasury")))
@@ -338,7 +335,7 @@ object FeeProcessingSuite extends SimpleIOSuite {
         }
 
         treasuryAddr <- IO.pure(fixture.registry(Charlie).address)
-        config <- IO.pure(???) // FeeConfig.enabled(treasuryAddr, ...)
+        config       <- IO.pure(???) // FeeConfig.enabled(treasuryAddr, ...)
 
         // No fee provided (maybeFee = None)
         // THIS WILL FAIL - FeeValidator doesn't exist yet
@@ -382,7 +379,7 @@ object FeeProcessingSuite extends SimpleIOSuite {
         }
 
         treasuryAddr <- IO.pure(fixture.registry(Charlie).address)
-        config <- IO.pure(???) // FeeConfig.enabled(treasuryAddr, ...)
+        config       <- IO.pure(???) // FeeConfig.enabled(treasuryAddr, ...)
 
         // THIS WILL FAIL - FeeValidator doesn't exist yet
         result <- IO.pure(???) // FeeValidator.validateFee(0L)(signedUpdate, Some(signedFee))(config)
@@ -425,7 +422,7 @@ object FeeProcessingSuite extends SimpleIOSuite {
         }
 
         treasuryAddr <- IO.pure(fixture.registry(Charlie).address) // Correct treasury
-        config <- IO.pure(???) // FeeConfig.enabled(treasuryAddr, ...)
+        config       <- IO.pure(???) // FeeConfig.enabled(treasuryAddr, ...)
 
         // THIS WILL FAIL - FeeValidator doesn't exist yet
         result <- IO.pure(???) // FeeValidator.validateFee(0L)(signedUpdate, Some(signedFee))(config)
@@ -468,7 +465,7 @@ object FeeProcessingSuite extends SimpleIOSuite {
         }
 
         treasuryAddr <- IO.pure(fixture.registry(Charlie).address)
-        config <- IO.pure(???) // FeeConfig.enabled(treasuryAddr, ...)
+        config       <- IO.pure(???) // FeeConfig.enabled(treasuryAddr, ...)
 
         // THIS WILL FAIL - FeeValidator doesn't exist yet
         result <- IO.pure(???) // FeeValidator.validateFee(0L)(signedUpdate, Some(signedFee))(config)
@@ -507,7 +504,7 @@ object FeeProcessingSuite extends SimpleIOSuite {
           "treasuryAddress": "DAG...",
           "currency": "datum"
         }
-        */
+         */
 
       } yield expect(response.status == 200) &&
       expect(response.json.get("amount").contains(1000000)) &&
@@ -544,7 +541,7 @@ object FeeProcessingSuite extends SimpleIOSuite {
           amount = Amount(estimatedAmount),
           dataUpdateRef = update.computeDigest
         )
-        */
+         */
 
         // 4. Sign both transactions
         signedUpdate <- fixture.registry(Alice).proof(update).map { proof =>
@@ -557,8 +554,8 @@ object FeeProcessingSuite extends SimpleIOSuite {
 
         // 5. Validate with enforcement enabled - THIS WILL FAIL
         treasuryAddr <- IO.pure(fixture.registry(Charlie).address)
-        config <- IO.pure(???) // FeeConfig.enabled(treasuryAddr, ...)
-        result <- IO.pure(???) // FeeValidator.validateFee(0L)(signedUpdate, Some(signedFee))(config)
+        config       <- IO.pure(???) // FeeConfig.enabled(treasuryAddr, ...)
+        result       <- IO.pure(???) // FeeValidator.validateFee(0L)(signedUpdate, Some(signedFee))(config)
 
       } yield expect(result.isRight) &&
       expect(estimatedAmount == 1000000L)
