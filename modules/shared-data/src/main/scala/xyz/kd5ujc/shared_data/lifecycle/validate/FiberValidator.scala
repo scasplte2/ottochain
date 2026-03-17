@@ -115,10 +115,11 @@ object FiberValidator {
     /** Validates a ProcessFiberEvent update (L0 specific checks) */
     def processEvent(update: TransitionStateMachine): F[ValidationResult] =
       for {
-        fiberActive   <- FiberRules.L0.fiberIsActive(update.fiberId, state.calculated)
-        signedByOwner <- FiberRules.L0.updateSignedByOwners(update.fiberId, proofs, state.calculated)
-        transitionOk  <- FiberRules.L0.transitionExists(update.fiberId, update.eventName, state.calculated)
-      } yield List(fiberActive, signedByOwner, transitionOk).combineAll
+        fiberActive <- FiberRules.L0.fiberIsActive(update.fiberId, state.calculated)
+        // Relaxed: owners OR authorized participants (declared in CreateStateMachine.participants)
+        signedOk     <- FiberRules.L0.updateSignedByOwnerOrParticipant(update.fiberId, proofs, state.calculated)
+        transitionOk <- FiberRules.L0.transitionExists(update.fiberId, update.eventName, state.calculated)
+      } yield List(fiberActive, signedOk, transitionOk).combineAll
 
     /** Validates an ArchiveFiber update (L0 specific checks) */
     def archiveFiber(update: ArchiveStateMachine): F[ValidationResult] =

@@ -7,6 +7,7 @@ import scala.collection.immutable.SortedMap
 
 import io.constellationnetwork.currency.dataApplication.DataUpdate
 import io.constellationnetwork.metagraph_sdk.json_logic.{JsonLogicExpression, JsonLogicValue}
+import io.constellationnetwork.schema.address.Address
 import io.constellationnetwork.security.signature.Signed
 
 import xyz.kd5ujc.schema.CodecConfiguration._
@@ -46,7 +47,8 @@ object Updates {
     definition:    StateMachineDefinition,
     initialData:   JsonLogicValue,
     parentFiberId: Option[UUID] = None,
-    schemaRef:     Option[SchemaRef] = None
+    schemaRef:     Option[SchemaRef] = None,
+    participants:  Option[Set[Address]] = None
   ) extends StateMachineFiberOp
       with OttochainMessage
 

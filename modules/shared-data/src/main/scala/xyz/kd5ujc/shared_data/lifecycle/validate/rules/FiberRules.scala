@@ -15,7 +15,7 @@ import io.constellationnetwork.security.signature.signature.SignatureProof
 
 import xyz.kd5ujc.schema.fiber.{FiberOrdinal, FiberStatus, StateId, StateMachineDefinition}
 import xyz.kd5ujc.schema.registry.RegistryName
-import xyz.kd5ujc.schema.{CalculatedState, OnChain}
+import xyz.kd5ujc.schema.{CalculatedState, OnChain, Records}
 import xyz.kd5ujc.shared_data.lifecycle.validate.{Limits, ValidationResult}
 import xyz.kd5ujc.shared_data.syntax.calculatedState._
 
@@ -287,6 +287,37 @@ object FiberRules {
       _.validNec[DataApplicationValidationError]
     )
 
+    /**
+     * Validates that the update is signed by an owner OR an authorized participant.
+     *
+     * Used for TransitionStateMachine operations where counterparties are allowed.
+     * Owners: derived from CreateStateMachine signers (can do anything)
+     * AuthorizedSigners: declared in CreateStateMachine.participants (transitions only)
+     *
+     * Note: ArchiveStateMachine still uses updateSignedByOwners (strict — owners only).
+     */
+    def updateSignedByOwnerOrParticipant[F[_]: Async: SecurityProvider](
+      cid:    UUID,
+      proofs: NonEmptySet[SignatureProof],
+      state:  CalculatedState
+    ): F[ValidationResult] = (for {
+      record          <- state.getFiberRecord(cid)
+      signerAddresses <- EitherT.liftF(proofs.toList.traverse(_.id.toAddress))
+      signerSet = signerAddresses.toSet
+      authorizedSet = record match {
+        case sm: Records.StateMachineFiberRecord => sm.owners ++ sm.authorizedSigners
+        case other                               => other.owners
+      }
+      result <- EitherT.cond[F](
+        signerSet.intersect(authorizedSet).nonEmpty,
+        (),
+        Errors.NotSignedByAuthorizedParty: DataApplicationValidationError
+      )
+    } yield result).fold(
+      _.invalidNec[Unit],
+      _.validNec[DataApplicationValidationError]
+    )
+
     /** Validates that a transition exists for the given state+event combination */
     def transitionExists[F[_]: Monad](
       cid:       UUID,
@@ -450,6 +481,10 @@ object FiberRules {
 
     final case object NotSignedByOwner extends DataApplicationValidationError {
       override val message: String = "Update not signed by any fiber owner"
+    }
+
+    final case object NotSignedByAuthorizedParty extends DataApplicationValidationError {
+      override val message: String = "Update not signed by any fiber owner or authorized participant"
     }
 
     // --- Sequence number errors ---
