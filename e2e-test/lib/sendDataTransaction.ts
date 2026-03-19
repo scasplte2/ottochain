@@ -1,4 +1,4 @@
-import { HttpClient, batchSign } from '@ottochain/sdk';
+import { HttpClient, batchSign, normalizeMessage } from '@ottochain/sdk';
 import type { KeyPair } from '@ottochain/sdk';
 
 /**
@@ -7,6 +7,11 @@ import type { KeyPair } from '@ottochain/sdk';
  * Uses the SDK's batchSign (RFC 8785 canonicalize → DataUpdate sign)
  * to produce a Signed<T> with one proof per wallet, then submits to all
  * DL1 nodes.
+ *
+ * normalizeMessage is called before signing to ensure all Option fields
+ * (participants, parentFiberId, metadata, etc.) are serialized as explicit
+ * null values, matching the Scala server's derevo/circe encoder output.
+ * Without normalization, the canonical bytes differ → invalid signature.
  */
 export default async function sendSignedUpdate(
   message: unknown,
@@ -15,7 +20,11 @@ export default async function sendSignedUpdate(
 ): Promise<{ hash: string }[]> {
   const privateKeys = Object.values(wallets).map((w) => w.privateKey);
 
-  const signed = await batchSign(message, privateKeys, { isDataUpdate: true });
+  // Normalize OttoChain messages to match Scala's wire encoding
+  // (explicit null for Option fields, correct field names, etc.)
+  const normalized = normalizeMessage(message as Record<string, unknown>);
+
+  const signed = await batchSign(normalized, privateKeys, { isDataUpdate: true });
 
   console.log(
     `\x1b[33m[sendDataTransaction]\x1b[36m Sending to DL1:\x1b[0m ${JSON.stringify(signed).substring(0, 200)}...`
