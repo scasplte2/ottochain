@@ -117,6 +117,8 @@ jobs:
       # --hypergraph-release sets TESSELLATION_VERSION for the Docker image tag.
       - name: Start cluster
         working-directory: tessellation
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           just up --hypergraph-release="v${{ steps.versions.outputs.tessellation }}" \
             --skip-assembly --metagraph="${GITHUB_WORKSPACE}" --dl1 --data
