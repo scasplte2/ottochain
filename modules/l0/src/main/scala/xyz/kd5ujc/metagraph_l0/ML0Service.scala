@@ -167,11 +167,15 @@ object ML0Service {
         ): F[Boolean] = checkpointService.set(Checkpoint(ordinal, state))
 
         override def hashCalculatedState(state: CalculatedState)(implicit context: L0NodeContext[F]): F[Hash] =
-          // Always use the canonical state digest for Tessellation snapshot validation.
-          // metagraphStateRoot is an MPT proof field exposed via the /state-proof API; it
-          // must NOT replace the consensus hash or snapshot validation will fail and all
-          // transactions will time out at ordinal confirmation.
-          state.computeDigest
+          // Always hash the state WITHOUT metagraphStateRoot so the canonical state digest
+          // is stable across all validation paths (consensus, sync, acceptance manager).
+          // metagraphStateRoot is an MPT proof field for the /state-proof API — it must NOT
+          // be included in the consensus hash or snapshot validation breaks:
+          //   - combineData sets metagraphStateRoot after transactions are applied
+          //   - acceptance manager may recompute the hash from a state where the field
+          //     is None (e.g. deserialized from an earlier snapshot without this field)
+          //   - hashing with the field present vs absent gives different hashes → mismatch
+          state.copy(metagraphStateRoot = None).computeDigest
 
         override def routes(implicit context: L0NodeContext[F]): HttpRoutes[F] =
           new ML0CustomRoutes[F](checkpointService, subscriberRegistry).public
