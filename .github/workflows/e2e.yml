@@ -64,12 +64,13 @@ jobs:
             echo "Dependency chain: ottochain → metakit ${METAKIT_VER} → tessellation ${TESS_VER}"
           fi
 
-      # Clone tessellation develop for Docker infrastructure (compose-runner, Dockerfiles, scripts).
-      # Develop has the latest compose-runner with SKIP_ASSEMBLY support for pre-staged JARs.
+      # Clone tessellation at the resolved version tag for Docker infrastructure (compose-runner, Dockerfiles, scripts).
+      # Using the pinned release tag ensures stable Configuration.scala and compose-runner compatibility.
       # We do NOT build tessellation — all deps resolve from Maven Central.
       - name: Clone tessellation infrastructure
         run: |
-          git clone --depth 1 --branch develop \
+          TESS_TAG="v${{ steps.versions.outputs.tessellation }}"
+          git clone --depth 1 --branch "${TESS_TAG}" \
             https://github.com/Constellation-Labs/tessellation.git tessellation
 
       # Download pre-built GL0/GL1/keytool/wallet JARs from tessellation GitHub release.
