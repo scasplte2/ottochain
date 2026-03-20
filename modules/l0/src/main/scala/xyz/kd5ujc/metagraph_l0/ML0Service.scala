@@ -167,15 +167,22 @@ object ML0Service {
         ): F[Boolean] = checkpointService.set(Checkpoint(ordinal, state))
 
         override def hashCalculatedState(state: CalculatedState)(implicit context: L0NodeContext[F]): F[Hash] =
-          // Always hash the state WITHOUT metagraphStateRoot so the canonical state digest
+          // Hash the state with ALL MPT proof fields stripped so the canonical state digest
           // is stable across all validation paths (consensus, sync, acceptance manager).
-          // metagraphStateRoot is an MPT proof field for the /state-proof API — it must NOT
-          // be included in the consensus hash or snapshot validation breaks:
-          //   - combineData sets metagraphStateRoot after transactions are applied
-          //   - acceptance manager may recompute the hash from a state where the field
-          //     is None (e.g. deserialized from an earlier snapshot without this field)
-          //   - hashing with the field present vs absent gives different hashes → mismatch
-          state.copy(metagraphStateRoot = None).computeDigest
+          //
+          // These fields are DERIVED from stateData — they are proof artifacts, not primary state:
+          //   - metagraphStateRoot: metagraph-level MPT root (set by combineData)
+          //   - stateRoot on each fiber: per-fiber MPT root (set by FiberCombiner)
+          //
+          // Stripping them here ensures that even if Tessellation's acceptance manager
+          // deserializes the CalculatedState via a path that drops these fields
+          // (e.g. proto round-trip, snapshot sync), the hash is still consistent.
+          state
+            .copy(
+              metagraphStateRoot = None,
+              stateMachines = state.stateMachines.transform((_, fiber) => fiber.copy(stateRoot = None))
+            )
+            .computeDigest
 
         override def routes(implicit context: L0NodeContext[F]): HttpRoutes[F] =
           new ML0CustomRoutes[F](checkpointService, subscriberRegistry).public
