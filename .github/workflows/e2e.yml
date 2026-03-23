@@ -113,13 +113,23 @@ jobs:
           done
           ls -la tessellation/docker/jars/
 
+      # Pre-stage snapshot-streaming JAR from GitHub Releases to avoid building from source.
+      # The snapshot-streaming develop branch targets an older tessellation SDK version and
+      # will fail to compile when overridden to match the running cluster's tessellation version.
+      # By pre-staging the JAR, build-snapshot-streaming.sh skips the sbt assembly entirely.
+      - name: Download snapshot-streaming JAR
+        run: |
+          SS_JAR_URL=$(curl -sf https://api.github.com/repos/Constellation-Labs/snapshot-streaming/releases/latest \
+            | jq -r '.assets[] | select(.name | endswith(".jar")) | .browser_download_url')
+          SS_JAR_DEST="tessellation/docker/snapshot-streaming/snapshot-streaming.jar"
+          echo "Downloading snapshot-streaming JAR: $SS_JAR_URL"
+          curl -fL "$SS_JAR_URL" -o "$SS_JAR_DEST"
+          echo "✓ snapshot-streaming.jar ($(stat -c%s "$SS_JAR_DEST") bytes)"
+
       # Start cluster with SKIP_ASSEMBLY since all JARs are pre-staged in docker/jars/.
       # --hypergraph-release sets TESSELLATION_VERSION for the Docker image tag.
-      # GITHUB_TOKEN is required by the snapshot-streaming sbt build (sbt-github-packages auth).
       - name: Start cluster
         working-directory: tessellation
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           just up --hypergraph-release="v${{ steps.versions.outputs.tessellation }}" \
             --skip-assembly --metagraph="${GITHUB_WORKSPACE}" --dl1 --data
