@@ -1,0 +1,845 @@
+[
+  {
+    "category": "Node Management",
+    "endpoints": [
+      {
+        "endpoint": "/node/info",
+        "method": "GET",
+        "layer": "ALL",
+        "description": "Get comprehensive node information including state, version, host, ports, peer ID, and session",
+        "request_format": null,
+        "response_format": "NodeInfo { state, session, clusterSession, version, host, publicPort, p2pPort, id }"
+      },
+      {
+        "endpoint": "/node/state",
+        "method": "GET",
+        "layer": "ALL",
+        "description": "Get current node state (Initial, ReadyToJoin, LoadingGenesis, GenesisReady, RollbackInProgress, RollbackDone, StartingSession, SessionStarted, WaitingForDownload, DownloadInProgress, Observing, WaitingForObserving, WaitingForReady, Ready, Leaving, Offline)",
+        "request_format": null,
+        "response_format": "NodeState (string enum)"
+      },
+      {
+        "endpoint": "/node/health",
+        "method": "GET",
+        "layer": "ALL",
+        "description": "Health check endpoint - returns 200 OK if node is healthy, 503 if unhealthy",
+        "request_format": null,
+        "response_format": "200 OK or 503 Service Unavailable"
+      },
+      {
+        "endpoint": "/node/session",
+        "method": "GET",
+        "layer": "ALL",
+        "description": "Get current session ID token",
+        "request_format": null,
+        "response_format": "{ session: string }"
+      },
+      {
+        "endpoint": "/metrics",
+        "method": "GET",
+        "layer": "ALL",
+        "description": "Prometheus metrics endpoint in OpenMetrics format",
+        "request_format": null,
+        "response_format": "text/plain (OpenMetrics 1.0.0)"
+      },
+      {
+        "endpoint": "/metagraph/info",
+        "method": "GET",
+        "layer": "ML0, CL1, DL1",
+        "description": "Get metagraph-specific node information including tessellation and metagraph versions",
+        "request_format": null,
+        "response_format": "MetagraphNodeInfo { state, session, clusterSession, externalIp, publicPort, p2pPort, selfId, tessellationVersion, metagraphVersion }"
+      },
+      {
+        "endpoint": "/targets",
+        "method": "GET",
+        "layer": "ALL",
+        "description": "Get Prometheus service discovery targets for all cluster peers",
+        "request_format": null,
+        "response_format": "[{ targets: [string], labels: { ip, peer_id, peer_id_short } }]"
+      }
+    ]
+  },
+  {
+    "category": "Cluster Management",
+    "endpoints": [
+      {
+        "endpoint": "/cluster/info",
+        "method": "GET",
+        "layer": "ALL",
+        "description": "Get list of all peers in the cluster with their status",
+        "request_format": null,
+        "response_format": "[PeerInfo { id, ip, publicPort, p2pPort, session, state }]"
+      },
+      {
+        "endpoint": "/cluster/session",
+        "method": "GET",
+        "layer": "ALL",
+        "description": "Get current cluster session token",
+        "request_format": null,
+        "response_format": "{ token: string } or 404 if no session"
+      },
+      {
+        "endpoint": "/cluster/peers",
+        "method": "GET",
+        "layer": "ALL (P2P)",
+        "description": "Get detailed peer information (P2P endpoint)",
+        "request_format": null,
+        "response_format": "[ClusterPeer { id, ip, publicPort, p2pPort, session, state }]"
+      },
+      {
+        "endpoint": "/cluster/discovery",
+        "method": "GET",
+        "layer": "ALL (P2P)",
+        "description": "Get combined known and discovered peers for peer discovery protocol",
+        "request_format": null,
+        "response_format": "[ClusterPeer]"
+      },
+      {
+        "endpoint": "/cluster/join",
+        "method": "POST",
+        "layer": "ALL (CLI)",
+        "description": "Join the cluster by connecting to a known peer (CLI endpoint)",
+        "request_format": "PeerToJoin { id, ip, p2pPort }",
+        "response_format": "200 OK or error (Conflict for various join failures)"
+      },
+      {
+        "endpoint": "/cluster/join",
+        "method": "POST",
+        "layer": "ALL (P2P Public)",
+        "description": "Handle incoming join request from another peer",
+        "request_format": "JoinRequest { id, ip, p2pPort, registrationRequest }",
+        "response_format": "200 OK or Conflict with reason"
+      },
+      {
+        "endpoint": "/cluster/leave",
+        "method": "POST",
+        "layer": "ALL (CLI)",
+        "description": "Leave the cluster gracefully",
+        "request_format": null,
+        "response_format": "200 OK"
+      },
+      {
+        "endpoint": "/registration/request",
+        "method": "GET",
+        "layer": "ALL (P2P Public)",
+        "description": "Get registration request for peer handshake",
+        "request_format": null,
+        "response_format": "RegistrationRequest"
+      },
+      {
+        "endpoint": "/registration/sign",
+        "method": "POST",
+        "layer": "ALL (P2P Public)",
+        "description": "Sign a registration request during peer handshake",
+        "request_format": "SignRequest",
+        "response_format": "SignedRegistration"
+      }
+    ]
+  },
+  {
+    "category": "Snapshot Operations",
+    "endpoints": [
+      {
+        "endpoint": "/global-snapshots/latest",
+        "method": "GET",
+        "layer": "GL0",
+        "description": "Get the latest global snapshot",
+        "request_format": null,
+        "response_format": "Signed[GlobalIncrementalSnapshot]"
+      },
+      {
+        "endpoint": "/global-snapshots/latest/ordinal",
+        "method": "GET",
+        "layer": "GL0",
+        "description": "Get the ordinal number of the latest snapshot",
+        "request_format": null,
+        "response_format": "{ value: number }"
+      },
+      {
+        "endpoint": "/global-snapshots/latest/metadata",
+        "method": "GET",
+        "layer": "GL0",
+        "description": "Get metadata for the latest snapshot (ordinal, hash, lastSnapshotHash)",
+        "request_format": null,
+        "response_format": "SnapshotMetadata { ordinal, hash, lastSnapshotHash }"
+      },
+      {
+        "endpoint": "/global-snapshots/latest/combined",
+        "method": "GET",
+        "layer": "GL0",
+        "description": "Get latest snapshot with full calculated state",
+        "request_format": null,
+        "response_format": "[Signed[Snapshot], SnapshotInfo]"
+      },
+      {
+        "endpoint": "/global-snapshots/latest/combined/stream",
+        "method": "GET",
+        "layer": "GL0",
+        "description": "Stream the latest combined snapshot from checkpoint storage",
+        "request_format": null,
+        "response_format": "application/json stream"
+      },
+      {
+        "endpoint": "/global-snapshots/latest/combined/checkpoint/info",
+        "method": "GET",
+        "layer": "GL0",
+        "description": "Get info about the latest checkpoint",
+        "request_format": null,
+        "response_format": "CheckpointInfo"
+      },
+      {
+        "endpoint": "/global-snapshots/latest/combined/checkpoint/{ordinal}",
+        "method": "GET",
+        "layer": "GL0",
+        "description": "Get combined checkpoint at specific ordinal",
+        "request_format": null,
+        "response_format": "application/json stream"
+      },
+      {
+        "endpoint": "/global-snapshots/{ordinal}",
+        "method": "GET",
+        "layer": "GL0",
+        "description": "Get snapshot at specific ordinal. Use ?full=true for full global snapshot",
+        "request_format": "Query param: full (boolean, optional)",
+        "response_format": "Signed[Snapshot]"
+      },
+      {
+        "endpoint": "/global-snapshots/{ordinal}/hash",
+        "method": "GET",
+        "layer": "GL0",
+        "description": "Get hash of snapshot at specific ordinal",
+        "request_format": null,
+        "response_format": "Hash"
+      },
+      {
+        "endpoint": "/global-snapshots/{hash}",
+        "method": "GET",
+        "layer": "GL0",
+        "description": "Get snapshot by hash",
+        "request_format": null,
+        "response_format": "Signed[Snapshot]"
+      },
+      {
+        "endpoint": "/snapshots/latest",
+        "method": "GET",
+        "layer": "ML0",
+        "description": "Get the latest metagraph snapshot",
+        "request_format": null,
+        "response_format": "Signed[CurrencyIncrementalSnapshot]"
+      },
+      {
+        "endpoint": "/snapshots/latest/ordinal",
+        "method": "GET",
+        "layer": "ML0",
+        "description": "Get the ordinal number of the latest metagraph snapshot",
+        "request_format": null,
+        "response_format": "{ value: number }"
+      },
+      {
+        "endpoint": "/snapshots/latest/metadata",
+        "method": "GET",
+        "layer": "ML0",
+        "description": "Get metadata for the latest metagraph snapshot",
+        "request_format": null,
+        "response_format": "SnapshotMetadata"
+      },
+      {
+        "endpoint": "/snapshots/latest/combined",
+        "method": "GET",
+        "layer": "ML0",
+        "description": "Get latest metagraph snapshot with full calculated state",
+        "request_format": null,
+        "response_format": "[Signed[Snapshot], SnapshotInfo]"
+      },
+      {
+        "endpoint": "/snapshots/{ordinal}",
+        "method": "GET",
+        "layer": "ML0",
+        "description": "Get metagraph snapshot at specific ordinal",
+        "request_format": null,
+        "response_format": "Signed[CurrencyIncrementalSnapshot]"
+      },
+      {
+        "endpoint": "/snapshots/{hash}",
+        "method": "GET",
+        "layer": "ML0",
+        "description": "Get metagraph snapshot by hash",
+        "request_format": null,
+        "response_format": "Signed[CurrencyIncrementalSnapshot]"
+      }
+    ]
+  },
+  {
+    "category": "Currency/Token Operations",
+    "endpoints": [
+      {
+        "endpoint": "/dag/{address}/balance",
+        "method": "GET",
+        "layer": "GL0",
+        "description": "Get DAG token balance for an address",
+        "request_format": null,
+        "response_format": "{ balance: number, ordinal: number }"
+      },
+      {
+        "endpoint": "/dag/total-supply",
+        "method": "GET",
+        "layer": "GL0",
+        "description": "Get total DAG token supply",
+        "request_format": null,
+        "response_format": "{ total: number, ordinal: number }"
+      },
+      {
+        "endpoint": "/dag/circulated-supply",
+        "method": "GET",
+        "layer": "GL0",
+        "description": "Get circulated (filtered) DAG token supply",
+        "request_format": null,
+        "response_format": "{ circulated: number, ordinal: number }"
+      },
+      {
+        "endpoint": "/dag/wallet-count",
+        "method": "GET",
+        "layer": "GL0",
+        "description": "Get total number of wallets with balance",
+        "request_format": null,
+        "response_format": "{ count: number, ordinal: number }"
+      },
+      {
+        "endpoint": "/currency/{address}/balance",
+        "method": "GET",
+        "layer": "ML0",
+        "description": "Get metagraph token balance for an address",
+        "request_format": null,
+        "response_format": "{ balance: number, ordinal: number }"
+      },
+      {
+        "endpoint": "/currency/total-supply",
+        "method": "GET",
+        "layer": "ML0",
+        "description": "Get total metagraph token supply",
+        "request_format": null,
+        "response_format": "{ total: number, ordinal: number }"
+      },
+      {
+        "endpoint": "/transactions",
+        "method": "POST",
+        "layer": "GL1, CL1",
+        "description": "Submit a signed currency transaction",
+        "request_format": "Signed[Transaction] { value: { source, destination, amount, fee, parent, salt }, proofs: [{ id, signature }] }",
+        "response_format": "{ hash: string } or 400 with errors"
+      },
+      {
+        "endpoint": "/transactions/{hash}",
+        "method": "GET",
+        "layer": "GL1, CL1",
+        "description": "Get pending transaction by hash",
+        "request_format": null,
+        "response_format": "TransactionView { transaction, hash, status: Waiting } or 404"
+      },
+      {
+        "endpoint": "/transactions/last-reference/{address}",
+        "method": "GET",
+        "layer": "GL1, CL1",
+        "description": "Get last processed transaction reference for an address (needed for building new transactions)",
+        "request_format": null,
+        "response_format": "TransactionReference { ordinal, hash }"
+      },
+      {
+        "endpoint": "/transactions/estimate-fee",
+        "method": "POST",
+        "layer": "CL1",
+        "description": "Estimate fee for a transaction",
+        "request_format": "Signed[Transaction]",
+        "response_format": "{ fee: number }"
+      }
+    ]
+  },
+  {
+    "category": "Data Application (OttoChain Custom)",
+    "endpoints": [
+      {
+        "endpoint": "/data",
+        "method": "POST",
+        "layer": "DL1",
+        "description": "Submit a signed data transaction (state machine operation)",
+        "request_format": "Signed[DataTransaction] or DataTransactionsRequest with multiple transactions",
+        "response_format": "{ hash: string } or error response"
+      },
+      {
+        "endpoint": "/data",
+        "method": "GET",
+        "layer": "DL1",
+        "description": "View pending data transactions queue",
+        "request_format": null,
+        "response_format": "[DataTransaction]"
+      },
+      {
+        "endpoint": "/data/estimate-fee",
+        "method": "POST",
+        "layer": "DL1",
+        "description": "Estimate fee for a data update",
+        "request_format": "DataUpdate (application-specific)",
+        "response_format": "EstimatedFeeResponse { fee, updateHash }"
+      },
+      {
+        "endpoint": "/currency/l1-output",
+        "method": "POST",
+        "layer": "ML0",
+        "description": "Receive L1 currency block output (internal from CL1)",
+        "request_format": "Signed[Block]",
+        "response_format": "200 OK"
+      },
+      {
+        "endpoint": "/currency/l1-data-output",
+        "method": "POST",
+        "layer": "ML0",
+        "description": "Receive L1 data application block output (internal from DL1)",
+        "request_format": "Signed[DataApplicationBlock]",
+        "response_format": "200 OK or 400"
+      },
+      {
+        "endpoint": "/currency/state/calculated",
+        "method": "GET",
+        "layer": "ML0 (P2P)",
+        "description": "Get calculated state for data application (P2P sync)",
+        "request_format": null,
+        "response_format": "DataCalculatedState (application-specific)"
+      },
+      {
+        "endpoint": "/currency/message",
+        "method": "POST",
+        "layer": "ML0",
+        "description": "Submit a currency message (metagraph-specific messaging)",
+        "request_format": "Signed[CurrencyMessage]",
+        "response_format": "204 No Content or error"
+      },
+      {
+        "endpoint": "/l0/peers",
+        "method": "GET",
+        "layer": "CL1, DL1",
+        "description": "Get L0 cluster peers that this L1 is connected to",
+        "request_format": null,
+        "response_format": "[PeerInfo]"
+      },
+      {
+        "endpoint": "/v1/state-machines",
+        "method": "GET",
+        "layer": "ML0",
+        "description": "List all state machine fibers (OttoChain specific)",
+        "request_format": null,
+        "response_format": "[StateMachineFiberRecord]"
+      },
+      {
+        "endpoint": "/v1/state-machines/{fiberId}",
+        "method": "GET",
+        "layer": "ML0",
+        "description": "Get state machine by fiber ID (OttoChain specific)",
+        "request_format": null,
+        "response_format": "StateMachineFiberRecord"
+      },
+      {
+        "endpoint": "/v1/checkpoint",
+        "method": "GET",
+        "layer": "ML0",
+        "description": "Get latest on-chain state checkpoint (OttoChain specific)",
+        "request_format": null,
+        "response_format": "OnChainState { fiberCommits, latestLogs }"
+      }
+    ]
+  },
+  {
+    "category": "Trust Management",
+    "endpoints": [
+      {
+        "endpoint": "/trust",
+        "method": "GET",
+        "layer": "GL0 (P2P)",
+        "description": "Get public trust scores (P2P endpoint for trust propagation)",
+        "request_format": null,
+        "response_format": "PublicTrust"
+      },
+      {
+        "endpoint": "/trust",
+        "method": "POST",
+        "layer": "GL0 (CLI)",
+        "description": "Update trust scores for peers (CLI endpoint)",
+        "request_format": "PeerObservationAdjustmentUpdateBatch",
+        "response_format": "200 OK or Conflict"
+      },
+      {
+        "endpoint": "/trust/current",
+        "method": "GET",
+        "layer": "GL0",
+        "description": "Get current biased trust scores",
+        "request_format": null,
+        "response_format": "BiasedTrustScores"
+      },
+      {
+        "endpoint": "/trust/previous",
+        "method": "GET",
+        "layer": "GL0",
+        "description": "Get trust scores from current ordinal",
+        "request_format": null,
+        "response_format": "OrdinalTrust"
+      },
+      {
+        "endpoint": "/trust/latest",
+        "method": "GET",
+        "layer": "GL0",
+        "description": "Get comprehensive trust store (trust, current ordinal, next ordinal)",
+        "request_format": null,
+        "response_format": "TrustStore { trust, current, next }"
+      }
+    ]
+  },
+  {
+    "category": "Staking & Collateral",
+    "endpoints": [
+      {
+        "endpoint": "/delegated-stakes",
+        "method": "POST",
+        "layer": "GL0",
+        "description": "Create a delegated stake to a node",
+        "request_format": "Signed[UpdateDelegatedStake.Create]",
+        "response_format": "{ hash: string } or error"
+      },
+      {
+        "endpoint": "/delegated-stakes",
+        "method": "PUT",
+        "layer": "GL0",
+        "description": "Withdraw a delegated stake from a node",
+        "request_format": "Signed[UpdateDelegatedStake.Withdraw]",
+        "response_format": "{ hash: string } or error"
+      },
+      {
+        "endpoint": "/delegated-stakes/{address}/info",
+        "method": "GET",
+        "layer": "GL0",
+        "description": "Get delegated stakes info for an address (active stakes and pending withdrawals)",
+        "request_format": null,
+        "response_format": "DelegatedStakesInfo { address, activeDelegatedStakes, pendingWithdrawals }"
+      },
+      {
+        "endpoint": "/delegated-stakes/last-reference/{address}",
+        "method": "GET",
+        "layer": "GL0",
+        "description": "Get last delegated stake reference for an address",
+        "request_format": null,
+        "response_format": "DelegatedStakeReference"
+      },
+      {
+        "endpoint": "/delegated-stakes/rewards-info",
+        "method": "GET",
+        "layer": "GL0",
+        "description": "Get global rewards distribution info",
+        "request_format": null,
+        "response_format": "RewardsInfo"
+      },
+      {
+        "endpoint": "/node-collateral",
+        "method": "POST",
+        "layer": "GL0",
+        "description": "Create node collateral stake",
+        "request_format": "Signed[UpdateNodeCollateral.Create]",
+        "response_format": "{ hash: string } or error"
+      },
+      {
+        "endpoint": "/node-collateral",
+        "method": "PUT",
+        "layer": "GL0",
+        "description": "Withdraw node collateral stake",
+        "request_format": "Signed[UpdateNodeCollateral.Withdraw]",
+        "response_format": "{ hash: string } or error"
+      },
+      {
+        "endpoint": "/node-collateral/{address}/info",
+        "method": "GET",
+        "layer": "GL0",
+        "description": "Get node collateral info for an address",
+        "request_format": null,
+        "response_format": "NodeCollateralsInfo { address, activeNodeCollaterals, pendingWithdrawals }"
+      },
+      {
+        "endpoint": "/node-collateral/last-reference/{address}",
+        "method": "GET",
+        "layer": "GL0",
+        "description": "Get last node collateral reference for an address",
+        "request_format": null,
+        "response_format": "NodeCollateralReference"
+      }
+    ]
+  },
+  {
+    "category": "Token Locks",
+    "endpoints": [
+      {
+        "endpoint": "/token-locks",
+        "method": "POST",
+        "layer": "GL1, CL1",
+        "description": "Create a token lock (time-locked tokens)",
+        "request_format": "Signed[TokenLock]",
+        "response_format": "{ hash: string } or error"
+      },
+      {
+        "endpoint": "/token-locks/{hash}",
+        "method": "GET",
+        "layer": "GL1, CL1",
+        "description": "Get pending token lock by hash",
+        "request_format": null,
+        "response_format": "TokenLockView { tokenLock, hash, status: Waiting }"
+      },
+      {
+        "endpoint": "/token-locks/last-reference/{address}",
+        "method": "GET",
+        "layer": "GL1, CL1",
+        "description": "Get last processed token lock reference for an address",
+        "request_format": null,
+        "response_format": "TokenLockReference"
+      },
+      {
+        "endpoint": "/token-locks/{address}",
+        "method": "GET",
+        "layer": "GL0",
+        "description": "Get active token locks for an address",
+        "request_format": null,
+        "response_format": "[TokenLock]"
+      }
+    ]
+  },
+  {
+    "category": "Allow Spends (Swaps)",
+    "endpoints": [
+      {
+        "endpoint": "/allow-spends",
+        "method": "POST",
+        "layer": "GL1, CL1",
+        "description": "Create an allow spend authorization",
+        "request_format": "Signed[AllowSpend]",
+        "response_format": "{ hash: string } or error"
+      },
+      {
+        "endpoint": "/allow-spends/{hash}",
+        "method": "GET",
+        "layer": "GL1, CL1",
+        "description": "Get pending allow spend by hash",
+        "request_format": null,
+        "response_format": "AllowSpendView { allowSpend, hash, status: Waiting }"
+      },
+      {
+        "endpoint": "/allow-spends/last-reference/{address}",
+        "method": "GET",
+        "layer": "GL1, CL1",
+        "description": "Get last processed allow spend reference for an address",
+        "request_format": null,
+        "response_format": "AllowSpendReference"
+      }
+    ]
+  },
+  {
+    "category": "Node Parameters",
+    "endpoints": [
+      {
+        "endpoint": "/node-params",
+        "method": "POST",
+        "layer": "GL0",
+        "description": "Update node parameters (reward sharing, metadata)",
+        "request_format": "Signed[UpdateNodeParameters]",
+        "response_format": "{ hash: string } or error"
+      },
+      {
+        "endpoint": "/node-params",
+        "method": "GET",
+        "layer": "GL0",
+        "description": "List all node parameters with optional search/sort. Query params: search, sort (Address|Name|PeerId), sortOrder (Asc|Desc)",
+        "request_format": "Query params: search, sort, sortOrder",
+        "response_format": "[NodeParametersInfo]"
+      },
+      {
+        "endpoint": "/node-params/{peerId}",
+        "method": "GET",
+        "layer": "GL0",
+        "description": "Get node parameters for a specific peer",
+        "request_format": null,
+        "response_format": "NodeParamsInfo { latest, lastRef, acceptedOrdinal }"
+      }
+    ]
+  },
+  {
+    "category": "State Channels",
+    "endpoints": [
+      {
+        "endpoint": "/state-channels/{address}/snapshot",
+        "method": "POST",
+        "layer": "GL0",
+        "description": "Submit a metagraph snapshot binary from a state channel",
+        "request_format": "Signed[StateChannelSnapshotBinary]",
+        "response_format": "200 OK or error"
+      }
+    ]
+  },
+  {
+    "category": "DAG Blocks",
+    "endpoints": [
+      {
+        "endpoint": "/dag/l1-output",
+        "method": "POST",
+        "layer": "GL0",
+        "description": "Receive DAG L1 block output (internal from GL1)",
+        "request_format": "Signed[Block]",
+        "response_format": "200 OK"
+      }
+    ]
+  },
+  {
+    "category": "Consensus",
+    "endpoints": [
+      {
+        "endpoint": "/consensus/latest/peers",
+        "method": "GET",
+        "layer": "ALL",
+        "description": "Get peers from the latest consensus round",
+        "request_format": null,
+        "response_format": "ConsensusInfo { key, peers: [PeerInfo] }"
+      },
+      {
+        "endpoint": "/consensus/data-application",
+        "method": "POST",
+        "layer": "DL1 (P2P)",
+        "description": "P2P consensus input for data application (Proposal, SignatureProposal, CancelledCreationRound)",
+        "request_format": "Signed[ConsensusInput.PeerConsensusInput]",
+        "response_format": "200 OK"
+      },
+      {
+        "endpoint": "/consensus/token-locks",
+        "method": "POST",
+        "layer": "GL1, CL1 (P2P)",
+        "description": "P2P consensus input for token locks",
+        "request_format": "Signed[ConsensusInput.PeerConsensusInput]",
+        "response_format": "200 OK"
+      },
+      {
+        "endpoint": "/consensus/allow-spends",
+        "method": "POST",
+        "layer": "GL1, CL1 (P2P)",
+        "description": "P2P consensus input for allow spends",
+        "request_format": "Signed[ConsensusInput.PeerConsensusInput]",
+        "response_format": "200 OK"
+      },
+      {
+        "endpoint": "/consensus/data",
+        "method": "POST",
+        "layer": "GL1 (P2P)",
+        "description": "P2P block consensus input for DAG L1",
+        "request_format": "Signed[PeerBlockConsensusInput]",
+        "response_format": "200 OK"
+      }
+    ]
+  },
+  {
+    "category": "Gossip Protocol",
+    "endpoints": [
+      {
+        "endpoint": "/rumors/peer/query",
+        "method": "POST",
+        "layer": "ALL (P2P)",
+        "description": "Query peer rumors from specific ordinals",
+        "request_format": "PeerRumorInquiryRequest { ordinals: Map[PeerId, Ordinal], skipAdditionalPeers?: boolean }",
+        "response_format": "Stream[Signed[PeerRumorRaw]]"
+      },
+      {
+        "endpoint": "/rumors/peer/init",
+        "method": "POST",
+        "layer": "ALL (P2P)",
+        "description": "Initialize peer rumor sync - get last rumors from all peers",
+        "request_format": null,
+        "response_format": "Stream[Signed[PeerRumorRaw]]"
+      },
+      {
+        "endpoint": "/rumors/common/offer",
+        "method": "GET",
+        "layer": "ALL (P2P)",
+        "description": "Get offer of active common rumor hashes",
+        "request_format": null,
+        "response_format": "CommonRumorOfferResponse { hashes }"
+      },
+      {
+        "endpoint": "/rumors/common/query",
+        "method": "POST",
+        "layer": "ALL (P2P)",
+        "description": "Query specific common rumors by hash",
+        "request_format": "QueryCommonRumorsRequest { query: [Hash] }",
+        "response_format": "Stream[CommonRumor]"
+      },
+      {
+        "endpoint": "/rumors/common/init",
+        "method": "GET",
+        "layer": "ALL (P2P)",
+        "description": "Initialize common rumor sync - get seen hashes",
+        "request_format": null,
+        "response_format": "CommonRumorInitResponse { seen: [Hash] }"
+      }
+    ]
+  },
+  {
+    "category": "Debug (Dev/Testnet only)",
+    "endpoints": [
+      {
+        "endpoint": "/debug",
+        "method": "GET",
+        "layer": "ALL",
+        "description": "Debug health check",
+        "request_format": null,
+        "response_format": "200 OK"
+      },
+      {
+        "endpoint": "/debug/peers",
+        "method": "GET",
+        "layer": "ALL",
+        "description": "Get all peers (debug)",
+        "request_format": null,
+        "response_format": "[Peer]"
+      },
+      {
+        "endpoint": "/debug/create-session",
+        "method": "POST",
+        "layer": "ALL",
+        "description": "Create a new session (debug)",
+        "request_format": null,
+        "response_format": "Session or Conflict"
+      },
+      {
+        "endpoint": "/debug/gossip/spread/{content}",
+        "method": "POST",
+        "layer": "ALL",
+        "description": "Spread test gossip content",
+        "request_format": "Path param: content (string or int)",
+        "response_format": "200 OK"
+      },
+      {
+        "endpoint": "/debug/consensus/{ordinal}/resources",
+        "method": "GET",
+        "layer": "ALL",
+        "description": "Get consensus resources at specific ordinal",
+        "request_format": null,
+        "response_format": "ConsensusResourcesView { facilities, proposals, signatures }"
+      },
+      {
+        "endpoint": "/debug/consensus/{ordinal}/facilitators",
+        "method": "GET",
+        "layer": "ALL",
+        "description": "Get consensus facilitators at specific ordinal",
+        "request_format": null,
+        "response_format": "[PeerId]"
+      },
+      {
+        "endpoint": "/debug/consensus/{ordinal}/candidates",
+        "method": "GET",
+        "layer": "ALL",
+        "description": "Get consensus candidates at specific ordinal",
+        "request_format": null,
+        "response_format": "Candidates"
+      }
+    ]
+  }
+]

@@ -155,18 +155,18 @@ object FeeProcessingSuite extends SimpleIOSuite {
 
       val update = makeCreateScript()
       for {
-        proofs     <- fixture.registry.generateProofs(update, Set(Alice))
-        signed      = Signed(update, proofs)
+        proofs <- fixture.registry.generateProofs(update, Set(Alice))
+        signed = Signed(update, proofs)
         updateHash <- (update: Updates.OttochainMessage).computeDigest
         fee = FeeTransaction(
-          source        = fixture.registry(Alice).address,
-          destination   = fixture.registry(Charlie).address,
-          amount        = Amount(NonNegLong.unsafeFrom(1_500_000L)),
+          source = fixture.registry(Alice).address,
+          destination = fixture.registry(Charlie).address,
+          amount = Amount(NonNegLong.unsafeFrom(1_500_000L)),
           dataUpdateRef = updateHash
         )
         // Reuse proofs set for the fee wrapper (FeeValidator doesn't re-verify fee sigs)
         signedFee = Signed(fee, proofs)
-        result    <- FeeValidator.validateFee[IO](FeeConfig.disabled)(signed, Some(signedFee))
+        result <- FeeValidator.validateFee[IO](FeeConfig.disabled)(signed, Some(signedFee))
       } yield expect(result.isValid)
     }
   }
