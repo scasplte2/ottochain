@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.14](https://github.com/scasplte2/ottochain/compare/v0.7.13...v0.7.14) (2026-03-24)
+
+
+### Bug Fixes
+
+* **ci:** pass GITHUB_TOKEN to Start cluster step for snapshot-streaming sbt auth ([#147](https://github.com/scasplte2/ottochain/issues/147)) ([afb7a25](https://github.com/scasplte2/ottochain/commit/afb7a252f0832283f0aae65cab63a78b302fc4af))
+
 ## [0.7.13](https://github.com/scasplte2/ottochain/compare/v0.7.12...v0.7.13) (2026-03-13)
 
 
