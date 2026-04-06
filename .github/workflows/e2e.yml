@@ -39,7 +39,7 @@ jobs:
           node-version: '20'
 
       - name: Install just
-        uses: extractions/setup-just@v3
+        uses: extractions/setup-just@v4
 
       # Resolve tessellation version from the dependency chain:
       #   ottochain → metakit (version in Dependencies.scala)
