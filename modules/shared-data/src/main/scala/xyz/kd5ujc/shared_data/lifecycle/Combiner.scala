@@ -10,7 +10,7 @@ import io.constellationnetwork.security.signature.Signed
 import xyz.kd5ujc.schema.Updates.OttochainMessage
 import xyz.kd5ujc.schema.fiber.ExecutionLimits
 import xyz.kd5ujc.schema.{CalculatedState, OnChain, Updates}
-import xyz.kd5ujc.shared_data.lifecycle.combine.{FiberCombiner, ScriptCombiner}
+import xyz.kd5ujc.shared_data.lifecycle.combine.{FiberCombiner, RegistryCombiner, ScriptCombiner}
 
 /**
  * Entry point for creating a CombinerService.
@@ -50,6 +50,7 @@ object Combiner {
       )(implicit ctx: L0NodeContext[F]): F[DataState[OnChain, CalculatedState]] = {
         val fiberCombiner = FiberCombiner[F](previous, ctx, executionLimits)
         val oracleCombiner = ScriptCombiner[F](previous, ctx, executionLimits)
+        val registryCombiner = RegistryCombiner[F](previous, ctx, executionLimits.maxStateSizeBytes.toLong)
 
         update.value match {
           case u: Updates.CreateStateMachine     => fiberCombiner.createStateMachineFiber(Signed(u, update.proofs))
@@ -57,6 +58,8 @@ object Combiner {
           case u: Updates.ArchiveStateMachine    => fiberCombiner.archiveFiber(Signed(u, update.proofs))
           case u: Updates.CreateScript           => oracleCombiner.createScript(Signed(u, update.proofs))
           case u: Updates.InvokeScript           => oracleCombiner.invokeScript(Signed(u, update.proofs))
+          case u: Updates.PublishVersion         => registryCombiner.publishVersion(Signed(u, update.proofs))
+          case u: Updates.SetVersionStatus       => registryCombiner.setVersionStatus(Signed(u, update.proofs))
         }
       }
     }

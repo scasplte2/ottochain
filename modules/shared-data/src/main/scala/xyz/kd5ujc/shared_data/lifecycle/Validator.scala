@@ -77,6 +77,8 @@ object Validator {
               case u: ArchiveStateMachine    => u.fiberId.toString
               case u: CreateScript           => u.fiberId.toString
               case u: InvokeScript           => u.fiberId.toString
+              case u: PublishVersion         => u.fiberId.toString
+              case u: SetVersionStatus       => u.fiberId.toString
             }
             val cids = checkpoint.state.fiberCommits.keys.map(_.toString.take(8)).mkString(", ")
 
@@ -92,6 +94,10 @@ object Validator {
                 case u: ArchiveStateMachine    => fiberL1.archiveFiber(u)
                 case u: CreateScript           => oracleL1.createOracle(u)
                 case u: InvokeScript           => oracleL1.invokeOracle(u)
+                // TODO(#23c): structural registry validation (size bound, base64, monotonic preview).
+                // The RegistryCombiner enforces append-only/immutable/monotonic/ownership authoritatively.
+                case _: PublishVersion   => ().validNec[DataApplicationValidationError].pure[F]
+                case _: SetVersionStatus => ().validNec[DataApplicationValidationError].pure[F]
               }
               _ <- logger.info(
                 s"[DL1-validate] $updateName fiberId=${fiberId.take(8)}... " +
@@ -122,6 +128,9 @@ object Validator {
             case u: ArchiveStateMachine    => fiberCombined.archiveFiber(u)
             case u: CreateScript           => oracleCombined.createOracle(u)
             case u: InvokeScript           => oracleCombined.invokeOracle(u)
+            // TODO(#23c): ownership + invariant validation (RegistryCombiner enforces authoritatively for now).
+            case _: PublishVersion   => ().validNec[DataApplicationValidationError].pure[F]
+            case _: SetVersionStatus => ().validNec[DataApplicationValidationError].pure[F]
           }
         }
 

@@ -9,6 +9,7 @@ import io.constellationnetwork.currency.dataApplication.DataState
 import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
 
 import xyz.kd5ujc.schema.fiber.FiberLogEntry
+import xyz.kd5ujc.schema.registry.{RegistryEntry, RegistryName}
 import xyz.kd5ujc.schema.{CalculatedState, FiberCommit, OnChain, Records}
 
 import monocle.Monocle.toAppliedFocusOps
@@ -102,6 +103,23 @@ trait DataStateOps {
       oracles: Map[UUID, Records.ScriptFiberRecord]
     ): F[DataState[OnChain, CalculatedState]] =
       withRecords(fibers ++ oracles)
+
+    /**
+     * Commit a registry entry atomically: store the entry in CalculatedState.registry and its hash in
+     * OnChain.registryCommits. The chain commits only the entry's hash + metadata, never schema/definition
+     * bytes.
+     */
+    def withRegistryEntry[F[_]: Async](
+      name:  RegistryName,
+      entry: RegistryEntry
+    ): F[DataState[OnChain, CalculatedState]] =
+      entry.computeDigest.map { entryHash =>
+        state
+          .focus(_.onChain.registryCommits)
+          .modify(_.updated(name, entryHash))
+          .focus(_.calculated.registry)
+          .modify(_.updated(name, entry))
+      }
 
     /**
      * Append log entries to OnChain.latestLogs, grouping by fiberId.

@@ -1,6 +1,9 @@
 package xyz.kd5ujc.schema
 
+import java.nio.charset.StandardCharsets
 import java.util.UUID
+
+import scala.collection.immutable.SortedMap
 
 import io.constellationnetwork.currency.dataApplication.DataUpdate
 import io.constellationnetwork.metagraph_sdk.json_logic.{JsonLogicExpression, JsonLogicValue}
@@ -8,6 +11,7 @@ import io.constellationnetwork.security.signature.Signed
 
 import xyz.kd5ujc.schema.CodecConfiguration._
 import xyz.kd5ujc.schema.fiber.{AccessControlPolicy, FiberOrdinal, StateMachineDefinition}
+import xyz.kd5ujc.schema.registry.{RegistryName, RegistryStatus, SemVer}
 
 import derevo.circe.magnolia.{customizableDecoder, customizableEncoder}
 import derevo.derive
@@ -91,6 +95,48 @@ object Updates {
       with OttochainMessage
       with Sequenced
 
+  sealed trait RegistryOp {
+    def name: RegistryName
+  }
+
+  object RegistryOp {
+
+    /** Deterministic routing/ordering key derived from the registry name — a routing key, NOT a fiber. */
+    def routingId(name: RegistryName): UUID =
+      UUID.nameUUIDFromBytes(s"registry:${name.render}".getBytes(StandardCharsets.UTF_8))
+  }
+
+  /**
+   * Create-or-append a registry version (npm-publish semantics): the first publish for a name claims it and
+   * makes the signer the owner; later publishes require an existing owner. Carries the protobuf descriptor +
+   * JSON-Logic definition as base64 blobs — the chain is content-agnostic: it hashes them into
+   * schemaHash/logicHash, commits the hashes, and drops the bytes (see schema-architecture.md §4a). The
+   * owner is derived from the signing proofs at combine time.
+   */
+  @derive(customizableDecoder, customizableEncoder)
+  final case class PublishVersion(
+    name:          RegistryName,
+    version:       SemVer,
+    schemaB64:     String,
+    definitionB64: String,
+    stateMessage:  String,
+    commands:      SortedMap[String, String]
+  ) extends RegistryOp
+      with OttochainMessage {
+    val fiberId: UUID = RegistryOp.routingId(name)
+  }
+
+  /** Change a registered version's lifecycle status (Active <-> Deprecated -> Yanked). Owner-gated. */
+  @derive(customizableDecoder, customizableEncoder)
+  final case class SetVersionStatus(
+    name:    RegistryName,
+    version: SemVer,
+    status:  RegistryStatus
+  ) extends RegistryOp
+      with OttochainMessage {
+    val fiberId: UUID = RegistryOp.routingId(name)
+  }
+
   object OttochainMessage {
 
     /**
@@ -122,6 +168,8 @@ object Updates {
       case u: Updates.ArchiveStateMachine    => Json.obj(u.messageName -> u.asJson)
       case u: Updates.CreateScript           => Json.obj(u.messageName -> u.asJson)
       case u: Updates.InvokeScript           => Json.obj(u.messageName -> u.asJson)
+      case u: Updates.PublishVersion         => Json.obj(u.messageName -> u.asJson)
+      case u: Updates.SetVersionStatus       => Json.obj(u.messageName -> u.asJson)
     }
 
     implicit val messageDecoder: Decoder[OttochainMessage] =
@@ -131,7 +179,9 @@ object Updates {
           Decoder[Updates.TransitionStateMachine],
           Decoder[Updates.ArchiveStateMachine],
           Decoder[Updates.CreateScript],
-          Decoder[Updates.InvokeScript]
+          Decoder[Updates.InvokeScript],
+          Decoder[Updates.PublishVersion],
+          Decoder[Updates.SetVersionStatus]
         )
 
         c.keys
