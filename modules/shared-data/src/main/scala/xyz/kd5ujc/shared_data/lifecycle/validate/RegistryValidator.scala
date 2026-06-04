@@ -1,0 +1,80 @@
+package xyz.kd5ujc.shared_data.lifecycle.validate
+
+import cats.Monad
+import cats.data.NonEmptySet
+import cats.effect.Async
+import cats.syntax.all._
+
+import io.constellationnetwork.currency.dataApplication.{DataApplicationValidationError, DataState}
+import io.constellationnetwork.security.SecurityProvider
+import io.constellationnetwork.security.signature.signature.SignatureProof
+
+import xyz.kd5ujc.schema.Updates.{PublishVersion, SetVersionStatus}
+import xyz.kd5ujc.schema.{CalculatedState, OnChain}
+import xyz.kd5ujc.shared_data.lifecycle.validate.rules.RegistryRules
+
+/**
+ * Validators for registry operations, composing [[RegistryRules]] (mirrors `FiberValidator`).
+ *
+ * L1 is structural (base64, non-empty, size); L0 adds ownership + an invariant preview against
+ * CalculatedState.registry. The RegistryCombiner still enforces the invariants authoritatively at combine.
+ */
+object RegistryValidator {
+
+  /** L1 structural checks (no state needed). */
+  class L1Validator[F[_]: Monad] {
+
+    def publish(update: PublishVersion): F[ValidationResult] =
+      for {
+        schemaOk     <- RegistryRules.L1.validBase64("schemaB64", update.schemaB64)
+        definitionOk <- RegistryRules.L1.validBase64("definitionB64", update.definitionB64)
+        stateMsgOk   <- RegistryRules.L1.nonEmpty("stateMessage", update.stateMessage)
+        bundleOk     <- RegistryRules.L1.bundleWithinLimit(update)
+      } yield List(schemaOk, definitionOk, stateMsgOk, bundleOk).combineAll
+
+    def setStatus(update: SetVersionStatus): F[ValidationResult] = {
+      val _ = update
+      ().validNec[DataApplicationValidationError].pure[F]
+    }
+  }
+
+  /** L0 contextual checks (ownership + invariant preview). */
+  class L0Validator[F[_]: Async: SecurityProvider](
+    state:  DataState[OnChain, CalculatedState],
+    proofs: NonEmptySet[SignatureProof]
+  ) {
+
+    def publish(update: PublishVersion): F[ValidationResult] =
+      for {
+        authd      <- RegistryRules.L0.authorizedPublisher(update.name, proofs, state.calculated)
+        appendable <- RegistryRules.L0.versionAppendable(update.name, update.version, state.calculated)
+      } yield authd |+| appendable
+
+    def setStatus(update: SetVersionStatus): F[ValidationResult] =
+      for {
+        authd <- RegistryRules.L0.authorizedForExisting(update.name, proofs, state.calculated)
+        legal <- RegistryRules.L0.statusTransitionLegal(update.name, update.version, update.status, state.calculated)
+      } yield authd |+| legal
+  }
+
+  /** Combined L1 + L0, used at the L0 layer. */
+  class CombinedValidator[F[_]: Async: SecurityProvider](
+    state:  DataState[OnChain, CalculatedState],
+    proofs: NonEmptySet[SignatureProof]
+  ) {
+    private val l1 = new L1Validator[F]
+    private val l0 = new L0Validator[F](state, proofs)
+
+    def publish(update: PublishVersion): F[ValidationResult] =
+      for {
+        l1Result <- l1.publish(update)
+        l0Result <- l0.publish(update)
+      } yield l1Result |+| l0Result
+
+    def setStatus(update: SetVersionStatus): F[ValidationResult] =
+      for {
+        l1Result <- l1.setStatus(update)
+        l0Result <- l0.setStatus(update)
+      } yield l1Result |+| l0Result
+  }
+}

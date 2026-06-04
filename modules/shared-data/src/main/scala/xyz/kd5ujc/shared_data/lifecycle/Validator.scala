@@ -14,7 +14,7 @@ import io.constellationnetwork.security.signature.Signed
 
 import xyz.kd5ujc.schema.Updates._
 import xyz.kd5ujc.schema.{CalculatedState, OnChain}
-import xyz.kd5ujc.shared_data.lifecycle.validate.{FiberValidator, ScriptValidator}
+import xyz.kd5ujc.shared_data.lifecycle.validate.{FiberValidator, RegistryValidator, ScriptValidator}
 
 import org.typelevel.log4cats.SelfAwareStructuredLogger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
@@ -69,6 +69,7 @@ object Validator {
           withOnChainCache(ctx) { checkpoint =>
             val fiberL1 = new FiberValidator.L1Validator[F](checkpoint.state)
             val oracleL1 = new ScriptValidator.L1Validator[F](checkpoint.state)
+            val registryL1 = new RegistryValidator.L1Validator[F]
 
             val updateName = update.getClass.getSimpleName
             val fiberId = update match {
@@ -94,10 +95,8 @@ object Validator {
                 case u: ArchiveStateMachine    => fiberL1.archiveFiber(u)
                 case u: CreateScript           => oracleL1.createOracle(u)
                 case u: InvokeScript           => oracleL1.invokeOracle(u)
-                // TODO(#23c): structural registry validation (size bound, base64, monotonic preview).
-                // The RegistryCombiner enforces append-only/immutable/monotonic/ownership authoritatively.
-                case _: PublishVersion   => ().validNec[DataApplicationValidationError].pure[F]
-                case _: SetVersionStatus => ().validNec[DataApplicationValidationError].pure[F]
+                case u: PublishVersion         => registryL1.publish(u)
+                case u: SetVersionStatus       => registryL1.setStatus(u)
               }
               _ <- logger.info(
                 s"[DL1-validate] $updateName fiberId=${fiberId.take(8)}... " +
@@ -121,6 +120,7 @@ object Validator {
         )(implicit context: L0NodeContext[F]): F[DataApplicationValidationErrorOr[Unit]] = {
           val fiberCombined = new FiberValidator.CombinedValidator[F](current, signedUpdate.proofs)
           val oracleCombined = new ScriptValidator.CombinedValidator[F](current, signedUpdate.proofs)
+          val registryCombined = new RegistryValidator.CombinedValidator[F](current, signedUpdate.proofs)
 
           signedUpdate.value match {
             case u: CreateStateMachine     => fiberCombined.createFiber(u)
@@ -128,9 +128,8 @@ object Validator {
             case u: ArchiveStateMachine    => fiberCombined.archiveFiber(u)
             case u: CreateScript           => oracleCombined.createOracle(u)
             case u: InvokeScript           => oracleCombined.invokeOracle(u)
-            // TODO(#23c): ownership + invariant validation (RegistryCombiner enforces authoritatively for now).
-            case _: PublishVersion   => ().validNec[DataApplicationValidationError].pure[F]
-            case _: SetVersionStatus => ().validNec[DataApplicationValidationError].pure[F]
+            case u: PublishVersion         => registryCombined.publish(u)
+            case u: SetVersionStatus       => registryCombined.setStatus(u)
           }
         }
 

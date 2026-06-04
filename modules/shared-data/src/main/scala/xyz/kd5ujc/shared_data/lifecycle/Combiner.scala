@@ -11,6 +11,7 @@ import xyz.kd5ujc.schema.Updates.OttochainMessage
 import xyz.kd5ujc.schema.fiber.ExecutionLimits
 import xyz.kd5ujc.schema.{CalculatedState, OnChain, Updates}
 import xyz.kd5ujc.shared_data.lifecycle.combine.{FiberCombiner, RegistryCombiner, ScriptCombiner}
+import xyz.kd5ujc.shared_data.lifecycle.validate.Limits
 
 /**
  * Entry point for creating a CombinerService.
@@ -50,7 +51,7 @@ object Combiner {
       )(implicit ctx: L0NodeContext[F]): F[DataState[OnChain, CalculatedState]] = {
         val fiberCombiner = FiberCombiner[F](previous, ctx, executionLimits)
         val oracleCombiner = ScriptCombiner[F](previous, ctx, executionLimits)
-        val registryCombiner = RegistryCombiner[F](previous, ctx, executionLimits.maxStateSizeBytes.toLong)
+        val registryCombiner = RegistryCombiner[F](previous, ctx, Limits.MaxRegistryBundleBytes)
 
         update.value match {
           case u: Updates.CreateStateMachine     => fiberCombiner.createStateMachineFiber(Signed(u, update.proofs))
