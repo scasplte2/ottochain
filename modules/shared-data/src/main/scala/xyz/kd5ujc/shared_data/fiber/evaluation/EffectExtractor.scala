@@ -55,6 +55,31 @@ object EffectExtractor {
     extractByKey(effectResult, key).collect { case ArrayValue(items) => items }.getOrElse(List.empty)
 
   /**
+   * Extract ALL side effects from a transition's effect result + expression as a single ordered list
+   * of typed [[FiberEffect]]s. `_triggers` and `_oracleCall` become `Triggered`; `_spawn` directives
+   * become `Spawned`; `_emit` events become `Emitted`.
+   *
+   * Order matches the prior per-key extraction (triggers, then oracle call, then spawns, then emitted),
+   * and gas for payload/args evaluation is charged in that order via [[MeteredEvaluator]].
+   */
+  def extractEffects[F[_]: Async, G[_]: Monad](
+    effectResult:  JsonLogicValue,
+    effectExpr:    JsonLogicExpression,
+    contextData:   JsonLogicValue,
+    sourceFiberId: UUID
+  )(implicit S: Stateful[G, ExecutionState], A: Ask[G, FiberContext], lift: F ~> G): G[List[FiberEffect]] =
+    for {
+      triggers   <- extractTriggerEvents[F, G](effectResult, contextData, sourceFiberId)
+      oracleCall <- extractOracleCall[F, G](effectResult, contextData, sourceFiberId)
+    } yield {
+      val spawns = extractSpawnDirectivesFromExpression(effectExpr)
+      val emitted = extractEmittedEvents(effectResult)
+      (triggers ++ oracleCall.toList).map(FiberEffect.Triggered) ++
+      spawns.map(FiberEffect.Spawned) ++
+      emitted.map(FiberEffect.Emitted)
+    }
+
+  /**
    * Extract trigger events with gas metering via StateT.
    *
    * Gas is charged to the execution state automatically via Stateful.

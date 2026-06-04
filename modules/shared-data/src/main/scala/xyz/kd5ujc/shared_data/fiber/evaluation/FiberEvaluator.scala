@@ -240,19 +240,10 @@ object FiberEvaluator {
           fiberGasConfig <- A.reader(_.fiberGasConfig)
           limits         <- ExecutionOps.askLimits[G]
 
-          spawnMachines = EffectExtractor.extractSpawnDirectivesFromExpression(transition.effect)
-          triggers <- EffectExtractor.extractTriggerEvents[F, G](
-            effectResult,
-            contextData,
-            fiberId
-          )
-          oracleCall <- EffectExtractor.extractOracleCall[F, G](
-            effectResult,
-            contextData,
-            fiberId
-          )
-          emittedEvents = EffectExtractor.extractEmittedEvents(effectResult)
-          allTriggers = triggers ++ oracleCall.toList
+          effects <- EffectExtractor.extractEffects[F, G](effectResult, transition.effect, contextData, fiberId)
+          allTriggers = effects.collect { case FiberEffect.Triggered(t) => t }
+          spawnMachines = effects.collect { case FiberEffect.Spawned(d) => d }
+          emittedEvents = effects.collect { case FiberEffect.Emitted(ev) => ev }
 
           // Charge orchestration overhead
           _ <- ExecutionOps.chargeGas[G](fiberGasConfig.contextBuild.amount)
