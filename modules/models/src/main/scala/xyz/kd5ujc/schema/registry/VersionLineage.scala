@@ -2,6 +2,11 @@ package xyz.kd5ujc.schema.registry
 
 import scala.collection.immutable.SortedMap
 
+import xyz.kd5ujc.schema.CodecConfiguration._
+
+import derevo.circe.magnolia.{customizableDecoder, customizableEncoder}
+import derevo.derive
+
 /**
  * The append-only, immutable, monotonic version lineage of a single registry entry — the
  * content-agnostic core the chain enforces (no protobuf/JSON-Logic parsing here).
@@ -10,6 +15,7 @@ import scala.collection.immutable.SortedMap
  *  - `setStatus` changes only `status`, by a legal transition; the rest of a version is immutable.
  *  - `resolve` deterministically picks a version for a [[VersionReq]], excluding Yanked.
  */
+@derive(customizableEncoder, customizableDecoder)
 final case class VersionLineage(versions: SortedMap[SemVer, RegisteredVersion]) {
 
   def get(v: SemVer): Option[RegisteredVersion] = versions.get(v)

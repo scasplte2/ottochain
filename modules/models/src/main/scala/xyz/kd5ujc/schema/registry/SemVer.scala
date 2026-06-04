@@ -1,5 +1,7 @@
 package xyz.kd5ujc.schema.registry
 
+import io.circe.{Decoder, Encoder, KeyDecoder, KeyEncoder}
+
 /**
  * Semantic version `MAJOR.MINOR.PATCH` for registry entries.
  *
@@ -27,4 +29,10 @@ object SemVer {
         }
       case _ => Left(s"invalid semver '$s': expected MAJOR.MINOR.PATCH")
     }
+
+  // Wire form is the string "1.2.3" (also usable as a JSON map key).
+  implicit val encoder: Encoder[SemVer] = Encoder.encodeString.contramap(_.render)
+  implicit val decoder: Decoder[SemVer] = Decoder.decodeString.emap(parse)
+  implicit val keyEncoder: KeyEncoder[SemVer] = KeyEncoder.encodeKeyString.contramap(_.render)
+  implicit val keyDecoder: KeyDecoder[SemVer] = KeyDecoder.instance(parse(_).toOption)
 }

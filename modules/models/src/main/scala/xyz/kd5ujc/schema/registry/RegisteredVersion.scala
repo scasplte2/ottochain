@@ -5,6 +5,11 @@ import scala.collection.immutable.SortedMap
 import io.constellationnetwork.schema.SnapshotOrdinal
 import io.constellationnetwork.security.hash.Hash
 
+import xyz.kd5ujc.schema.CodecConfiguration._
+
+import derevo.circe.magnolia.{customizableDecoder, customizableEncoder}
+import derevo.derive
+
 /**
  * One immutable version of a registry entry. The chain commits only these hashes (never the schema
  * or definition bytes — those live in the Bridge + the registration update's history; see §4a).
@@ -14,6 +19,7 @@ import io.constellationnetwork.security.hash.Hash
  * @param stateMessage fully-qualified name of the State message inside the descriptor
  * @param commands     eventName/method -> Command message FQN
  */
+@derive(customizableEncoder, customizableDecoder)
 final case class RegisteredVersion(
   version:      SemVer,
   schemaHash:   Hash,

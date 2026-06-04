@@ -3,6 +3,7 @@ package xyz.kd5ujc.schema.registry
 import cats.{Order, Show}
 
 import eu.timepit.refined.types.string.NonEmptyString
+import io.circe.{Decoder, Encoder, KeyDecoder, KeyEncoder}
 
 /**
  * A registry namespace name: a dotted hierarchy of DNS-like labels (lowercase alphanumeric + hyphen,
@@ -37,4 +38,10 @@ object RegistryName {
   implicit val order: Order[RegistryName] = Order.by(_.value.value)
   implicit val ordering: Ordering[RegistryName] = order.toOrdering
   implicit val show: Show[RegistryName] = Show.show(_.value.value)
+
+  // Wire form is the bare name string (also usable as a JSON map key).
+  implicit val encoder: Encoder[RegistryName] = Encoder.encodeString.contramap(_.render)
+  implicit val decoder: Decoder[RegistryName] = Decoder.decodeString.emap(from)
+  implicit val keyEncoder: KeyEncoder[RegistryName] = KeyEncoder.encodeKeyString.contramap(_.render)
+  implicit val keyDecoder: KeyDecoder[RegistryName] = KeyDecoder.instance(from(_).toOption)
 }
