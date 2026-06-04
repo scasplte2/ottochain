@@ -198,21 +198,7 @@ object FiberEvaluator {
         transition:  Transition,
         contextData: JsonLogicValue
       ): G[Either[FailureReason, JsonLogicValue]] =
-        for {
-          remainingGas <- ExecutionOps.remainingGas[G]
-          gasConfig    <- ExecutionOps.askGasConfig[G]
-          evalResult <- JsonLogicEvaluator
-            .tailRecursive[F]
-            .evaluateWithGas(transition.effect, contextData, None, GasLimit(remainingGas), gasConfig)
-            .liftTo[G]
-          result <- evalResult match {
-            case Right(EvaluationResult(effectResult, effectGasUsed, _, _)) =>
-              ExecutionOps.chargeGas[G](effectGasUsed.amount).as(effectResult.asRight[FailureReason])
-
-            case Left(ex) =>
-              ex.toFailureReason[G](GasExhaustionPhase.Effect).map(_.asLeft[JsonLogicValue])
-          }
-        } yield result
+        MeteredEvaluator.eval[F, G](transition.effect, contextData, GasExhaustionPhase.Effect)
 
       private def processEffectResult(
         fiberId:      UUID,
@@ -323,31 +309,22 @@ object FiberEvaluator {
                   )
                 )
 
-                for {
-                  remainingGas <- ExecutionOps.remainingGas[G]
-                  gasConfig    <- ExecutionOps.askGasConfig[G]
-                  evalResult <- JsonLogicEvaluator
-                    .tailRecursive[F]
-                    .evaluateWithGas(oracle.scriptProgram, inputData, None, GasLimit(remainingGas), gasConfig)
-                    .liftTo[G]
-                  r <- evalResult match {
-                    case Right(EvaluationResult(evaluationResult, gasUsed, _, _)) =>
-                      for {
-                        _              <- ExecutionOps.chargeGas[G](gasUsed.amount)
-                        stateAndResult <- ScriptProcessor.extractStateAndResult[F](evaluationResult).liftTo[G]
-                        (newStateData, returnValue) = stateAndResult
-                      } yield FiberResult.Success(
-                        newStateData = newStateData.getOrElse(oracle.stateData.getOrElse(NullValue)),
-                        newStateId = None,
-                        triggers = List.empty,
-                        spawns = List.empty,
-                        returnValue = Some(returnValue)
-                      ): FiberResult
+                MeteredEvaluator.eval[F, G](oracle.scriptProgram, inputData, GasExhaustionPhase.Oracle).flatMap {
+                  case Right(evaluationResult) =>
+                    for {
+                      stateAndResult <- ScriptProcessor.extractStateAndResult[F](evaluationResult).liftTo[G]
+                      (newStateData, returnValue) = stateAndResult
+                    } yield FiberResult.Success(
+                      newStateData = newStateData.getOrElse(oracle.stateData.getOrElse(NullValue)),
+                      newStateId = None,
+                      triggers = List.empty,
+                      spawns = List.empty,
+                      returnValue = Some(returnValue)
+                    ): FiberResult
 
-                    case Left(ex) =>
-                      ex.toFailureReason[G](GasExhaustionPhase.Oracle).map(_.asOutcome)
-                  }
-                } yield r
+                  case Left(reason) =>
+                    reason.pureOutcome[G]
+                }
             }
         } yield result
     }

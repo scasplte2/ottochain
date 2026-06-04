@@ -10,8 +10,6 @@ import cats.{Monad, ~>}
 
 import io.constellationnetwork.metagraph_sdk.json_logic._
 import io.constellationnetwork.metagraph_sdk.json_logic.core.StrValue
-import io.constellationnetwork.metagraph_sdk.json_logic.gas.GasLimit
-import io.constellationnetwork.metagraph_sdk.json_logic.runtime.JsonLogicEvaluator
 
 import xyz.kd5ujc.schema.fiber._
 import xyz.kd5ujc.shared_data.fiber.core._
@@ -95,19 +93,12 @@ object EffectExtractor {
           )
           payloadValue <- OptionT.fromOption[G](triggerMap.get(ReservedKeys.PAYLOAD))
           payloadExpr = ExpressionParser.valueToExpression(payloadValue)
-          remaining <- OptionT.liftF(ExecutionOps.remainingGas[G])
-          gasConfig <- OptionT.liftF(ExecutionOps.askGasConfig[G])
-          evalResult <- OptionT(
-            JsonLogicEvaluator
-              .tailRecursive[F]
-              .evaluateWithGas(payloadExpr, contextData, None, GasLimit(remaining), gasConfig)
-              .map(_.toOption)
-              .liftTo[G]
+          evaluatedPayload <- OptionT(
+            MeteredEvaluator.evalOpt[F, G](payloadExpr, contextData, GasExhaustionPhase.Trigger)
           )
-          _ <- OptionT.liftF(ExecutionOps.chargeGas[G](evalResult.gasUsed.amount))
         } yield FiberTrigger(
           targetFiberId = targetId,
-          input = FiberInput.Transition(eventType, evalResult.value),
+          input = FiberInput.Transition(eventType, evaluatedPayload),
           sourceFiberId = Some(sourceFiberId)
         )).value
       case _ => none[FiberTrigger].pure[G]
@@ -137,19 +128,10 @@ object EffectExtractor {
           method    <- OptionT.fromOption[G](oracleCallMap.get(ReservedKeys.METHOD).collect { case StrValue(m) => m })
           argsValue <- OptionT.fromOption[G](oracleCallMap.get(ReservedKeys.ARGS))
           argsExpr = ExpressionParser.valueToExpression(argsValue)
-          remaining <- OptionT.liftF(ExecutionOps.remainingGas[G])
-          gasConfig <- OptionT.liftF(ExecutionOps.askGasConfig[G])
-          evalResult <- OptionT(
-            JsonLogicEvaluator
-              .tailRecursive[F]
-              .evaluateWithGas(argsExpr, contextData, None, GasLimit(remaining), gasConfig)
-              .map(_.toOption)
-              .liftTo[G]
-          )
-          _ <- OptionT.liftF(ExecutionOps.chargeGas[G](evalResult.gasUsed.amount))
+          evaluatedArgs <- OptionT(MeteredEvaluator.evalOpt[F, G](argsExpr, contextData, GasExhaustionPhase.Trigger))
         } yield FiberTrigger(
           targetFiberId = targetId,
-          input = FiberInput.Transition(method, evalResult.value),
+          input = FiberInput.Transition(method, evaluatedArgs),
           sourceFiberId = Some(sourceFiberId)
         )).value
 
