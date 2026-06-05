@@ -31,6 +31,9 @@ object RegistryCombinerSuite extends SimpleIOSuite {
 
   private def b64(s: String): String = Base64.getEncoder.encodeToString(s.getBytes(StandardCharsets.UTF_8))
 
+  // Package names now carry the `.package` TLD (Option B): a name is `<labels>.<tld>`.
+  private def pkg(n: String): RegistryName = RegistryName.unsafe(s"$n.package")
+
   private val shape: SchemaShape =
     SchemaShape(
       stateMessage = MessageShape("App.State", List(FieldShape("balance", 1, "int64"))),
@@ -55,7 +58,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
 
   private def publish(name: String, v: SemVer): PublishVersion =
     PublishVersion(
-      name = RegistryName.unsafe(name),
+      name = pkg(name),
       version = v,
       schemaB64 = b64(s"schema-$name-${v.render}"),
       schemaShape = shape,
@@ -75,19 +78,19 @@ object RegistryCombinerSuite extends SimpleIOSuite {
   }
 
   private def publishWith(name: String, v: SemVer, definition: StateMachineDefinition): PublishVersion =
-    PublishVersion(RegistryName.unsafe(name), v, b64(s"schema-$name-${v.render}"), shape, definition)
+    PublishVersion(pkg(name), v, b64(s"schema-$name-${v.render}"), shape, definition)
 
   private val genesis = DataState(OnChain.genesis, CalculatedState.genesis)
 
   private def versionsOf(state: DataState[OnChain, CalculatedState], name: String): Option[Set[SemVer]] =
     state.calculated.registry
-      .get(RegistryName.unsafe(name))
+      .get(pkg(name))
       .map(_.target)
       .collect { case RegistryTarget.SchemaPackage(l) => l.versions.keySet }
 
   private def statusOf(state: DataState[OnChain, CalculatedState], name: String, v: SemVer): Option[RegistryStatus] =
     state.calculated.registry
-      .get(RegistryName.unsafe(name))
+      .get(pkg(name))
       .map(_.target)
       .collect { case RegistryTarget.SchemaPackage(l) => l.versions.get(v).map(_.status) }
       .flatten
@@ -105,7 +108,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         pr2 <- fixture.registry.generateProofs(p2, Set(Alice))
         s2  <- combiner.insert(s1, Signed(p2, pr2))
       } yield expect(versionsOf(s2, "escrow").contains(Set(SemVer(1, 0, 0), SemVer(1, 1, 0)))) and
-      expect(s2.onChain.registryCommits.contains(RegistryName.unsafe("escrow")))
+      expect(s2.onChain.registryCommits.contains(pkg("escrow")))
     }
   }
 
@@ -153,9 +156,9 @@ object RegistryCombinerSuite extends SimpleIOSuite {
       val name = "escrow"
       val v = SemVer(1, 0, 0)
       val p1 = publish(name, v)
-      val deprecate = SetVersionStatus(RegistryName.unsafe(name), v, RegistryStatus.Deprecated)
-      val yank = SetVersionStatus(RegistryName.unsafe(name), v, RegistryStatus.Yanked)
-      val unyank = SetVersionStatus(RegistryName.unsafe(name), v, RegistryStatus.Active)
+      val deprecate = SetVersionStatus(pkg(name), v, RegistryStatus.Deprecated)
+      val yank = SetVersionStatus(pkg(name), v, RegistryStatus.Yanked)
+      val unyank = SetVersionStatus(pkg(name), v, RegistryStatus.Active)
       for {
         pr1          <- fixture.registry.generateProofs(p1, Set(Alice))
         s1           <- combiner.insert(genesis, Signed(p1, pr1))
@@ -181,7 +184,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         fiberA,
         minimalDef,
         emptyData,
-        schemaRef = Some(SchemaRef(RegistryName.unsafe("escrow"), VersionReq.Exact(SemVer(1, 0, 0))))
+        schemaRef = Some(SchemaRef(pkg("escrow"), VersionReq.Exact(SemVer(1, 0, 0))))
       )
       for {
         pr1 <- fixture.registry.generateProofs(p1, Set(Alice))
@@ -192,7 +195,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
           .get(fiberA)
           .collect { case r: Records.StateMachineFiberRecord => r }
           .flatMap(_.schemaBinding)
-      } yield expect(binding.map(_.name).contains(RegistryName.unsafe("escrow"))) and
+      } yield expect(binding.map(_.name).contains(pkg("escrow"))) and
       expect(binding.map(_.version).contains(SemVer(1, 0, 0)))
     }
   }
@@ -207,7 +210,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         fiberA,
         otherDef, // different logic -> different digest than the registered logicHash
         emptyData,
-        schemaRef = Some(SchemaRef(RegistryName.unsafe("escrow"), VersionReq.Exact(SemVer(1, 0, 0))))
+        schemaRef = Some(SchemaRef(pkg("escrow"), VersionReq.Exact(SemVer(1, 0, 0))))
       )
       for {
         validator     <- Validator.make[IO]
@@ -229,7 +232,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         fiberA,
         minimalDef,
         emptyData,
-        schemaRef = Some(SchemaRef(RegistryName.unsafe("ghost"), VersionReq.Latest))
+        schemaRef = Some(SchemaRef(pkg("ghost"), VersionReq.Latest))
       )
       for {
         validator     <- Validator.make[IO]
@@ -250,7 +253,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         fiberA,
         minimalDef,
         emptyData,
-        schemaRef = Some(SchemaRef(RegistryName.unsafe("escrow"), VersionReq.Exact(SemVer(1, 0, 0))))
+        schemaRef = Some(SchemaRef(pkg("escrow"), VersionReq.Exact(SemVer(1, 0, 0))))
       )
       for {
         pr1 <- fixture.registry.generateProofs(p1, Set(Alice))
@@ -261,7 +264,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
           .getOrElse(fiberA, Nil)
           .collectFirst { case r: FiberLogEntry.CreationReceipt => r }
       } yield expect(receipt.isDefined) and
-      expect(receipt.flatMap(_.schemaBinding).map(_.name).contains(RegistryName.unsafe("escrow"))) and
+      expect(receipt.flatMap(_.schemaBinding).map(_.name).contains(pkg("escrow"))) and
       expect(receipt.flatMap(_.schemaBinding).map(_.version).contains(SemVer(1, 0, 0))) and
       expect(receipt.map(_.initialState).contains(minimalDef.initialState))
     }
@@ -278,11 +281,11 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         fiberA,
         minimalDef,
         emptyData,
-        schemaRef = Some(SchemaRef(RegistryName.unsafe("escrow"), VersionReq.Exact(SemVer(1, 0, 0))))
+        schemaRef = Some(SchemaRef(pkg("escrow"), VersionReq.Exact(SemVer(1, 0, 0))))
       )
       val upgrade = UpgradeFiber(
         fiberA,
-        SchemaRef(RegistryName.unsafe("escrow"), VersionReq.Exact(SemVer(2, 0, 0))),
+        SchemaRef(pkg("escrow"), VersionReq.Exact(SemVer(2, 0, 0))),
         v2Def,
         migration = None,
         targetSequenceNumber = FiberOrdinal.MinValue
@@ -317,12 +320,12 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         fiberA,
         minimalDef,
         emptyData,
-        schemaRef = Some(SchemaRef(RegistryName.unsafe("escrow"), VersionReq.Exact(SemVer(1, 0, 0))))
+        schemaRef = Some(SchemaRef(pkg("escrow"), VersionReq.Exact(SemVer(1, 0, 0))))
       )
       // target 1.0.0 (logicHash = minimalDef) but supply v2Def -> hash mismatch
       val badUpgrade = UpgradeFiber(
         fiberA,
-        SchemaRef(RegistryName.unsafe("escrow"), VersionReq.Exact(SemVer(1, 0, 0))),
+        SchemaRef(pkg("escrow"), VersionReq.Exact(SemVer(1, 0, 0))),
         v2Def,
         migration = None,
         targetSequenceNumber = FiberOrdinal.MinValue
@@ -350,14 +353,14 @@ object RegistryCombinerSuite extends SimpleIOSuite {
       // strict v1; `shape` declares state field "balance: int64"
       val pStrict =
         PublishVersion(
-          RegistryName.unsafe("escrow"),
+          pkg("escrow"),
           SemVer(1, 0, 0),
           b64("schema-escrow-1.0.0"),
           shape,
           minimalDef,
           strict = true
         )
-      val ref = Some(SchemaRef(RegistryName.unsafe("escrow"), VersionReq.Exact(SemVer(1, 0, 0))))
+      val ref = Some(SchemaRef(pkg("escrow"), VersionReq.Exact(SemVer(1, 0, 0))))
       val badData: JsonLogicValue = MapValue(Map("balance" -> StrValue("not-an-int"))) // wrong type
       val goodData: JsonLogicValue = MapValue(Map("balance" -> IntValue(0)))
       val createBad = CreateStateMachine(fiberA, minimalDef, badData, schemaRef = ref)
@@ -381,7 +384,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
       val p1 = publish("escrow", SemVer(1, 0, 0)) // NON-strict v1 -> create with an extra field is allowed
       val p2strict =
         PublishVersion(
-          RegistryName.unsafe("escrow"),
+          pkg("escrow"),
           SemVer(2, 0, 0),
           b64("schema-escrow-2.0.0"),
           shape,
@@ -393,11 +396,11 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         fiberA,
         minimalDef,
         initData,
-        schemaRef = Some(SchemaRef(RegistryName.unsafe("escrow"), VersionReq.Exact(SemVer(1, 0, 0))))
+        schemaRef = Some(SchemaRef(pkg("escrow"), VersionReq.Exact(SemVer(1, 0, 0))))
       )
       val upgrade = UpgradeFiber(
         fiberA,
-        SchemaRef(RegistryName.unsafe("escrow"), VersionReq.Exact(SemVer(2, 0, 0))),
+        SchemaRef(pkg("escrow"), VersionReq.Exact(SemVer(2, 0, 0))),
         v2Def,
         migration = None, // identity keeps {balance, extra}; "extra" is undeclared in the strict v2 shape
         targetSequenceNumber = FiberOrdinal.MinValue

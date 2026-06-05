@@ -6,40 +6,56 @@ import eu.timepit.refined.types.string.NonEmptyString
 import io.circe.{Decoder, Encoder, KeyDecoder, KeyEncoder}
 
 /**
- * A registry namespace name: a dotted hierarchy of DNS-like labels (lowercase alphanumeric + hyphen,
- * 1..63 chars each, no leading/trailing hyphen), e.g. `escrow`, `gov.threshold-dao`, `escrow.acme`.
+ * A registry name: a dotted hierarchy of DNS-like labels plus a reserved top-level [[NameTld]] —
+ * `.package` for a versioned schema/program package, `.machine`/`.script` for a fiber alias. E.g.
+ * `escrow.package`, `gov.threshold-dao.package`, `my-escrow.machine`.
  *
- * The wrapped [[NonEmptyString]] gives the compiler the non-empty guarantee; the full label/charset shape
- * is enforced at the construction boundary via [[from]] (the codebase's refined-wrapper + smart-constructor
- * idiom, cf. `FiberOrdinal`). Hierarchy is purely lexical for now; per-label ownership/delegation arrives
- * with the nickname registry (#29).
- *
- * TODO(naming #29): promote the dotted-label shape to a full type-level refinement (MatchesRegex) and add
- * hierarchical delegation semantics.
+ * The TLD is part of the key, so a package and a fiber alias can share label text under different TLDs
+ * (`escrow.package` vs `escrow.machine`). `labels` is the dotted prefix (lowercase alphanumeric + hyphen,
+ * 1..63 chars each, no leading/trailing hyphen); the full shape is enforced at the construction boundary
+ * via [[from]] (the codebase's refined-wrapper + smart-constructor idiom). Hierarchy is lexical for now;
+ * per-label ownership/delegation arrives with the nickname-registry follow-up (#29).
  */
-final case class RegistryName(value: NonEmptyString) {
-  def render: String = value.value
+final case class RegistryName(labels: NonEmptyString, tld: NameTld) {
+  def render: String = s"${labels.value}.${tld.entryName}"
 }
 
 object RegistryName {
 
   final val MaxLength = 253
   private val Label = "[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?"
-  private val Pattern = s"^$Label(\\.$Label)*$$".r
+  private val LabelsPattern = s"^$Label(\\.$Label)*$$".r
 
-  def from(raw: String): Either[String, RegistryName] =
-    if (raw.length > MaxLength) Left(s"registry name too long (> $MaxLength): '$raw'")
-    else if (!Pattern.matches(raw)) Left(s"invalid registry name '$raw' (dotted lowercase labels of [a-z0-9-])")
-    else NonEmptyString.from(raw).map(RegistryName(_))
+  /** Parse a full `"<labels>.<tld>"` string, e.g. `escrow.acme.package` or `my-fiber.machine`. */
+  def from(raw: String): Either[String, RegistryName] = {
+    val idx = raw.lastIndexOf('.')
+    if (idx <= 0)
+      Left(s"registry name '$raw' must be <labels>.<tld> (e.g. escrow.package, my-fiber.machine)")
+    else {
+      val labelsPart = raw.substring(0, idx)
+      val tldPart = raw.substring(idx + 1)
+      NameTld.withNameInsensitiveOption(tldPart) match {
+        case None =>
+          Left(
+            s"invalid registry TLD '.$tldPart' (expected one of ${NameTld.values.map("." + _.entryName).mkString(", ")})"
+          )
+        case Some(tld) =>
+          if (raw.length > MaxLength) Left(s"registry name too long (> $MaxLength): '$raw'")
+          else if (!LabelsPattern.matches(labelsPart))
+            Left(s"invalid registry name labels '$labelsPart' (dotted lowercase labels of [a-z0-9-])")
+          else NonEmptyString.from(labelsPart).map(RegistryName(_, tld))
+      }
+    }
+  }
 
   def unsafe(raw: String): RegistryName =
     from(raw).fold(e => throw new IllegalArgumentException(e), identity)
 
-  implicit val order: Order[RegistryName] = Order.by(_.value.value)
+  implicit val order: Order[RegistryName] = Order.by(_.render)
   implicit val ordering: Ordering[RegistryName] = order.toOrdering
-  implicit val show: Show[RegistryName] = Show.show(_.value.value)
+  implicit val show: Show[RegistryName] = Show.show(_.render)
 
-  // Wire form is the bare name string (also usable as a JSON map key).
+  // Wire form is the full `labels.tld` string (also usable as a JSON map key).
   implicit val encoder: Encoder[RegistryName] = Encoder.encodeString.contramap(_.render)
   implicit val decoder: Decoder[RegistryName] = Decoder.decodeString.emap(from)
   implicit val keyEncoder: KeyEncoder[RegistryName] = KeyEncoder.encodeKeyString.contramap(_.render)

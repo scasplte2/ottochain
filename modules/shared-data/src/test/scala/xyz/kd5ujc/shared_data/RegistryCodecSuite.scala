@@ -25,7 +25,7 @@ object RegistryCodecSuite extends SimpleIOSuite {
 
   private val entry: RegistryEntry =
     RegistryEntry(
-      name = RegistryName.unsafe("escrow.acme"),
+      name = RegistryName.unsafe("escrow.acme.package"),
       owner = Set.empty[Address],
       target = RegistryTarget.SchemaPackage(
         VersionLineage.of(
