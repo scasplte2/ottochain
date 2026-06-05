@@ -145,7 +145,8 @@ object Updates {
     version:     SemVer,
     schemaB64:   String,
     schemaShape: SchemaShape,
-    definition:  StateMachineDefinition
+    definition:  StateMachineDefinition,
+    strict:      Boolean = false
   ) extends RegistryOp
       with OttochainMessage {
     val fiberId: UUID = RegistryOp.routingId(name)

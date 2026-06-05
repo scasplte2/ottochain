@@ -8,7 +8,7 @@ import cats.effect.IO
 import scala.collection.immutable.SortedMap
 
 import io.constellationnetwork.currency.dataApplication.{DataState, L0NodeContext}
-import io.constellationnetwork.metagraph_sdk.json_logic.{JsonLogicValue, MapValue}
+import io.constellationnetwork.metagraph_sdk.json_logic.{IntValue, JsonLogicValue, MapValue, StrValue}
 import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.Signed
 
@@ -337,6 +337,89 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         valid         <- validator.validateSignedUpdate(s2, Signed(badUpgrade, prU))
         combineFailed <- combiner.insert(s2, Signed(badUpgrade, prU)).attempt.map(_.isLeft)
       } yield expect(valid.isInvalid) and expect(combineFailed)
+    }
+  }
+
+  // ── #33 runtime conformance gate (opt-in via the version's `strict` flag) ─────────────────────
+
+  test("a strict version aborts a create whose initial state does not conform, accepts a conforming one") {
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      // strict v1; `shape` declares state field "balance: int64"
+      val pStrict =
+        PublishVersion(
+          RegistryName.unsafe("escrow"),
+          SemVer(1, 0, 0),
+          b64("schema-escrow-1.0.0"),
+          shape,
+          minimalDef,
+          strict = true
+        )
+      val ref = Some(SchemaRef(RegistryName.unsafe("escrow"), VersionReq.Exact(SemVer(1, 0, 0))))
+      val badData: JsonLogicValue = MapValue(Map("balance" -> StrValue("not-an-int"))) // wrong type
+      val goodData: JsonLogicValue = MapValue(Map("balance" -> IntValue(0)))
+      val createBad = CreateStateMachine(fiberA, minimalDef, badData, schemaRef = ref)
+      val createGood = CreateStateMachine(fiberA, minimalDef, goodData, schemaRef = ref)
+      for {
+        pr1           <- fixture.registry.generateProofs(pStrict, Set(Alice))
+        s1            <- combiner.insert(genesis, Signed(pStrict, pr1))
+        prB           <- fixture.registry.generateProofs(createBad, Set(Alice))
+        combineFailed <- combiner.insert(s1, Signed(createBad, prB)).attempt.map(_.isLeft)
+        prG           <- fixture.registry.generateProofs(createGood, Set(Alice))
+        s2            <- combiner.insert(s1, Signed(createGood, prG))
+      } yield expect(combineFailed) and expect(s2.calculated.stateMachines.contains(fiberA))
+    }
+  }
+
+  test("upgrading to a strict version whose conformance fails aborts the migration (fiber stays on the old version)") {
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val p1 = publish("escrow", SemVer(1, 0, 0)) // NON-strict v1 -> create with an extra field is allowed
+      val p2strict =
+        PublishVersion(
+          RegistryName.unsafe("escrow"),
+          SemVer(2, 0, 0),
+          b64("schema-escrow-2.0.0"),
+          shape,
+          v2Def,
+          strict = true
+        )
+      val initData: JsonLogicValue = MapValue(Map("balance" -> IntValue(0), "extra" -> IntValue(9)))
+      val create = CreateStateMachine(
+        fiberA,
+        minimalDef,
+        initData,
+        schemaRef = Some(SchemaRef(RegistryName.unsafe("escrow"), VersionReq.Exact(SemVer(1, 0, 0))))
+      )
+      val upgrade = UpgradeFiber(
+        fiberA,
+        SchemaRef(RegistryName.unsafe("escrow"), VersionReq.Exact(SemVer(2, 0, 0))),
+        v2Def,
+        migration = None, // identity keeps {balance, extra}; "extra" is undeclared in the strict v2 shape
+        targetSequenceNumber = FiberOrdinal.MinValue
+      )
+      for {
+        pr1 <- fixture.registry.generateProofs(p1, Set(Alice))
+        s1  <- combiner.insert(genesis, Signed(p1, pr1))
+        pr2 <- fixture.registry.generateProofs(p2strict, Set(Alice))
+        s2  <- combiner.insert(s1, Signed(p2strict, pr2))
+        prC <- fixture.registry.generateProofs(create, Set(Alice))
+        s3  <- combiner.insert(s2, Signed(create, prC)) // non-strict v1 create with extra field -> ok
+        prU <- fixture.registry.generateProofs(upgrade, Set(Alice))
+        s4 <- combiner.insert(
+          s3,
+          Signed(upgrade, prU)
+        ) // strict v2 conformance fails -> engine aborts (failure receipt, no re-bind)
+        sm = s4.calculated.stateMachines.get(fiberA)
+      } yield expect(s3.calculated.stateMachines.contains(fiberA)) and
+      expect(
+        sm.flatMap(_.schemaBinding).map(_.version).contains(SemVer(1, 0, 0))
+      ) and // still v1; upgrade did not apply
+      expect(sm.flatMap(_.lastReceipt).exists(!_.success)) // failure receipt recorded
     }
   }
 }

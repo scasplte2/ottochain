@@ -15,7 +15,7 @@ import xyz.kd5ujc.schema.fiber.FiberLogEntry.EventReceipt
 import xyz.kd5ujc.schema.fiber.{FiberLogEntry, FiberOrdinal, _}
 import xyz.kd5ujc.schema.registry._
 import xyz.kd5ujc.schema.{CalculatedState, OnChain, Records, Updates}
-import xyz.kd5ujc.shared_data.fiber.FiberEngine
+import xyz.kd5ujc.shared_data.fiber.{ConformanceChecker, FiberEngine}
 import xyz.kd5ujc.shared_data.syntax.all._
 
 /**
@@ -48,6 +48,15 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
     owners          <- update.proofs.toList.traverse(_.id.toAddress).map(Set.from)
     initialDataHash <- update.initialData.computeDigest
     binding         <- resolveBinding(update.schemaRef, update.definition)
+
+    // #33 runtime conformance gate: if bound to a strict version, the initial state must conform.
+    _ <- ConformanceChecker.violationsFor(binding, current.calculated, update.initialData) match {
+      case Nil => Async[F].unit
+      case violations =>
+        Async[F].raiseError[Unit](
+          new RuntimeException(s"initial state does not conform to the strict schema: ${violations.mkString("; ")}")
+        )
+    }
 
     record = Records.StateMachineFiberRecord(
       fiberId = update.fiberId,

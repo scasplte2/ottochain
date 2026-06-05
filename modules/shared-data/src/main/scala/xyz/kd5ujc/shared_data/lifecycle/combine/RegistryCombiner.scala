@@ -51,7 +51,8 @@ class RegistryCombiner[F[_]: Async: SecurityProvider](
         logicHash = logicHash,
         schemaShape = pv.schemaShape,
         status = RegistryStatus.Active,
-        registeredAt = currentOrdinal
+        registeredAt = currentOrdinal,
+        strict = pv.strict
       )
       updatedEntry <- current.calculated.registry.get(pv.name) match {
         case None =>

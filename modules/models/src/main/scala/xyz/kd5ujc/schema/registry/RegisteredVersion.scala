@@ -20,6 +20,10 @@ import derevo.derive
  *                     [[SchemaBinding]]). Two versions MAY share a logicHash (e.g. a schema-only bump).
  * @param schemaShape  the typed, proto-friendly domain projection (publisher-claimed, advisory — the
  *                     "describe" dial; never constrains the logic)
+ * @param strict       opt-in runtime conformance gate (#33): when true, a fiber bound to this version has
+ *                     every PRODUCED state (create/transition/migration) checked against `schemaShape` and
+ *                     the transaction aborts on a non-conforming state. Default false = the loose,
+ *                     experimentation path (the schema stays advisory). Publisher-decided, per version.
  */
 @derive(customizableEncoder, customizableDecoder)
 final case class RegisteredVersion(
@@ -28,5 +32,6 @@ final case class RegisteredVersion(
   logicHash:    Hash,
   schemaShape:  SchemaShape,
   status:       RegistryStatus,
-  registeredAt: SnapshotOrdinal
+  registeredAt: SnapshotOrdinal,
+  strict:       Boolean = false
 )

@@ -147,7 +147,8 @@ object FiberEngine {
 
           case Right(migrated) =>
             (migrated, newDefinition.states.contains(sm.currentState)) match {
-              case (m: MapValue, true) =>
+              case (m: MapValue, true)
+                  if ConformanceChecker.violationsFor(Some(newBinding), calculatedState, m).isEmpty =>
                 for {
                   hash    <- (m: JsonLogicValue).computeDigest.liftFiber
                   gasUsed <- ExecutionOps.getGasUsed[FiberT[F, *]]
@@ -176,6 +177,14 @@ object FiberEngine {
                   logEntries = logs.toList,
                   totalGasUsed = gasUsed
                 ): TransactionResult
+
+              case (m: MapValue, true) =>
+                aborted(
+                  FailureReason.ValidationFailed(
+                    s"conformance violation: ${ConformanceChecker.violationsFor(Some(newBinding), calculatedState, m).mkString("; ")}",
+                    ordinal
+                  )
+                )
 
               case (_: MapValue, false) =>
                 aborted(
@@ -261,6 +270,23 @@ object FiberEngine {
         }
 
       private def processStateMachineSuccess(
+        sm:            Records.StateMachineFiberRecord,
+        input:         FiberInput,
+        newStateData:  JsonLogicValue,
+        newStateId:    Option[StateId],
+        triggers:      List[FiberTrigger],
+        spawns:        List[SpawnDirective],
+        emittedEvents: List[EmittedEvent]
+      ): FiberT[F, TransactionResult] =
+        // #33 runtime conformance gate: a strict-bound fiber's produced state must conform, else abort.
+        ConformanceChecker.violationsFor(sm.schemaBinding, calculatedState, newStateData) match {
+          case violations if violations.nonEmpty =>
+            aborted(FailureReason.ValidationFailed(s"conformance violation: ${violations.mkString("; ")}", ordinal))
+          case _ =>
+            commitStateMachineSuccess(sm, input, newStateData, newStateId, triggers, spawns, emittedEvents)
+        }
+
+      private def commitStateMachineSuccess(
         sm:            Records.StateMachineFiberRecord,
         input:         FiberInput,
         newStateData:  JsonLogicValue,
