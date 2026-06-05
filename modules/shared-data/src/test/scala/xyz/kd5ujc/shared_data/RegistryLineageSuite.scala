@@ -8,6 +8,7 @@ import io.constellationnetwork.schema.SnapshotOrdinal
 import io.constellationnetwork.security.hash.Hash
 
 import xyz.kd5ujc.schema.registry._
+import xyz.kd5ujc.shared_data.lifecycle.validate.rules.RegistryRules
 
 import weaver.SimpleIOSuite
 
@@ -126,5 +127,36 @@ object RegistryLineageSuite extends SimpleIOSuite {
       ) and
       expect(yanked.resolve(VersionReq.Exact(SemVer(2, 0, 0))).isLeft)
     )
+  }
+
+  // ── schemaShapeWellFormed: structural proto validation of the typed domain projection ─────────
+
+  test("schemaShapeWellFormed accepts a valid shape and rejects each malformed kind") {
+    val outOfRange = shape.copy(stateMessage = MessageShape("App.State", List(FieldShape("x", 0, "int64"))))
+    val tooBig = shape.copy(stateMessage = MessageShape("App.State", List(FieldShape("x", 536870912, "int64"))))
+    val reserved = shape.copy(stateMessage = MessageShape("App.State", List(FieldShape("x", 19500, "int64"))))
+    val dup = shape.copy(stateMessage =
+      MessageShape("App.State", List(FieldShape("a", 1, "int64"), FieldShape("b", 1, "int64")))
+    )
+    val emptyFieldName = shape.copy(stateMessage = MessageShape("App.State", List(FieldShape("", 1, "int64"))))
+    val emptyTypeName = shape.copy(stateMessage = MessageShape("  ", List(FieldShape("a", 1, "int64"))))
+    val emptyCmdName = shape.copy(commands = SortedMap(" " -> MessageShape("App.Start", Nil)))
+    for {
+      ok  <- RegistryRules.L1.schemaShapeWellFormed[IO](shape)
+      oor <- RegistryRules.L1.schemaShapeWellFormed[IO](outOfRange)
+      big <- RegistryRules.L1.schemaShapeWellFormed[IO](tooBig)
+      res <- RegistryRules.L1.schemaShapeWellFormed[IO](reserved)
+      dpl <- RegistryRules.L1.schemaShapeWellFormed[IO](dup)
+      efn <- RegistryRules.L1.schemaShapeWellFormed[IO](emptyFieldName)
+      etn <- RegistryRules.L1.schemaShapeWellFormed[IO](emptyTypeName)
+      ecn <- RegistryRules.L1.schemaShapeWellFormed[IO](emptyCmdName)
+    } yield expect(ok.isValid) and
+    expect(oor.isInvalid) and
+    expect(big.isInvalid) and
+    expect(res.isInvalid) and
+    expect(dpl.isInvalid) and
+    expect(efn.isInvalid) and
+    expect(etn.isInvalid) and
+    expect(ecn.isInvalid)
   }
 }
