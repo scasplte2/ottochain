@@ -65,7 +65,15 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
       schemaBinding = binding
     )
 
-    result <- current.withRecord[F](update.fiberId, record)
+    creationReceipt = FiberLogEntry.CreationReceipt(
+      fiberId = update.fiberId,
+      ordinal = currentOrdinal,
+      initialState = update.definition.initialState,
+      owners = owners,
+      schemaBinding = binding,
+      parentFiberId = update.parentFiberId
+    )
+    result <- current.withRecord[F](update.fiberId, record).map(_.appendLogs(List(creationReceipt)))
   } yield result
 
   /**

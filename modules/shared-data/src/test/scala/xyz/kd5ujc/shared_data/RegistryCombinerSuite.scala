@@ -13,7 +13,7 @@ import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.Signed
 
 import xyz.kd5ujc.schema.Updates.{CreateStateMachine, PublishVersion, SetVersionStatus}
-import xyz.kd5ujc.schema.fiber.{State, StateId, StateMachineDefinition}
+import xyz.kd5ujc.schema.fiber.{FiberLogEntry, State, StateId, StateMachineDefinition}
 import xyz.kd5ujc.schema.registry._
 import xyz.kd5ujc.schema.{CalculatedState, OnChain, Records}
 import xyz.kd5ujc.shared_data.lifecycle.{Combiner, Validator}
@@ -222,6 +222,33 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         valid         <- validator.validateSignedUpdate(genesis, Signed(create, prC))
         combineFailed <- combiner.insert(genesis, Signed(create, prC)).attempt.map(_.isLeft)
       } yield expect(valid.isInvalid) and expect(combineFailed)
+    }
+  }
+
+  test("creating a fiber emits a CreationReceipt recording the resolved binding") {
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val p1 = publish("escrow", SemVer(1, 0, 0))
+      val create = CreateStateMachine(
+        fiberA,
+        minimalDef,
+        emptyData,
+        schemaRef = Some(SchemaRef(RegistryName.unsafe("escrow"), VersionReq.Exact(SemVer(1, 0, 0))))
+      )
+      for {
+        pr1 <- fixture.registry.generateProofs(p1, Set(Alice))
+        s1  <- combiner.insert(genesis, Signed(p1, pr1))
+        prC <- fixture.registry.generateProofs(create, Set(Alice))
+        s2  <- combiner.insert(s1, Signed(create, prC))
+        receipt = s2.onChain.latestLogs
+          .getOrElse(fiberA, Nil)
+          .collectFirst { case r: FiberLogEntry.CreationReceipt => r }
+      } yield expect(receipt.isDefined) and
+      expect(receipt.flatMap(_.schemaBinding).map(_.name).contains(RegistryName.unsafe("escrow"))) and
+      expect(receipt.flatMap(_.schemaBinding).map(_.version).contains(SemVer(1, 0, 0))) and
+      expect(receipt.map(_.initialState).contains(minimalDef.initialState))
     }
   }
 }

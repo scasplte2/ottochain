@@ -9,6 +9,7 @@ import io.constellationnetwork.schema.address.Address
 
 import xyz.kd5ujc.schema.CodecConfiguration._
 import xyz.kd5ujc.schema.Records
+import xyz.kd5ujc.schema.registry.SchemaBinding
 
 import derevo.circe.magnolia.{customizableDecoder, customizableEncoder}
 import derevo.derive
@@ -98,5 +99,20 @@ object FiberLogEntry {
     gasUsed:   Long,
     invokedAt: SnapshotOrdinal,
     invokedBy: Address
+  ) extends FiberLogEntry
+
+  /**
+   * Emitted once when a fiber is created — the birth record for the audit trail. Records the resolved
+   * registry binding (name@version + committed hashes) when the fiber was instantiated from a registered
+   * version (#26), or None for an ad-hoc fiber. Seeds the audit-trail rendering (#30).
+   */
+  @derive(customizableEncoder, customizableDecoder)
+  final case class CreationReceipt(
+    fiberId:       UUID,
+    ordinal:       SnapshotOrdinal,
+    initialState:  StateId,
+    owners:        Set[Address],
+    schemaBinding: Option[SchemaBinding] = None,
+    parentFiberId: Option[UUID] = None
   ) extends FiberLogEntry
 }
