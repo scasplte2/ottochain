@@ -8,11 +8,13 @@ import cats.effect.Async
 import cats.syntax.all._
 
 import io.constellationnetwork.currency.dataApplication.DataApplicationValidationError
+import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
 import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.signature.SignatureProof
 
 import xyz.kd5ujc.schema.CalculatedState
 import xyz.kd5ujc.schema.Updates.PublishVersion
+import xyz.kd5ujc.schema.fiber.StateMachineDefinition
 import xyz.kd5ujc.schema.registry._
 import xyz.kd5ujc.shared_data.lifecycle.validate.{Limits, ValidationResult}
 
@@ -37,11 +39,8 @@ object RegistryRules {
           _ => ().validNec[DataApplicationValidationError].pure[F]
         )
 
-    def nonEmpty[F[_]: Applicative](field: String, s: String): F[ValidationResult] =
-      Validated.condNec(s.nonEmpty, (), Errors.EmptyField(field): DataApplicationValidationError).pure[F]
-
     def bundleWithinLimit[F[_]: Applicative](pv: PublishVersion): F[ValidationResult] = {
-      val size = pv.schemaB64.length.toLong + pv.definitionB64.length.toLong
+      val size = pv.schemaB64.length.toLong
       Validated
         .condNec(
           size <= Limits.MaxRegistryBundleBytes,
@@ -49,6 +48,46 @@ object RegistryRules {
           Errors.BundleTooLarge(size, Limits.MaxRegistryBundleBytes): DataApplicationValidationError
         )
         .pure[F]
+    }
+
+    // protobuf field-number constraints (FieldDescriptor): 1..2^29-1, excluding the reserved 19000..19999.
+    private val MinFieldNumber = 1
+    private val MaxFieldNumber = 536870911
+    private val ReservedLo = 19000
+    private val ReservedHi = 19999
+
+    /**
+     * The typed schema projection must be structurally proto-valid: non-empty type/field/command names,
+     * field numbers in the legal proto range and outside the reserved window, and unique within a message.
+     * (This validates the *shape* only — it does not check the logic conforms to it; conformance is the
+     * separate opt-in dial. See strong-typing-and-conformance.md §0.5.)
+     */
+    def schemaShapeWellFormed[F[_]: Applicative](shape: SchemaShape): F[ValidationResult] = {
+      val emptyCmdNames = shape.commands.keys.filter(_.trim.isEmpty).map(_ => "a command name is empty").toList
+      val problems = emptyCmdNames ::: shape.allMessages.flatMap(messageProblems)
+      problems match {
+        case Nil => ().validNec[DataApplicationValidationError]
+        case ps  => (Errors.MalformedSchemaShape(ps.mkString("; ")): DataApplicationValidationError).invalidNec[Unit]
+      }
+    }.pure[F]
+
+    private def messageProblems(m: MessageShape): List[String] = {
+      val tn = if (m.typeName.trim.isEmpty) "<unnamed>" else m.typeName
+      val typeNameProblem = if (m.typeName.trim.isEmpty) List("a message has an empty typeName") else Nil
+      val fieldNameProblems = m.fields.filter(_.name.trim.isEmpty).map(_ => s"$tn has a field with an empty name")
+      val numberProblems = m.fields.flatMap { f =>
+        if (f.number < MinFieldNumber || f.number > MaxFieldNumber)
+          List(s"$tn.${f.name} has out-of-range field number ${f.number}")
+        else if (f.number >= ReservedLo && f.number <= ReservedHi)
+          List(s"$tn.${f.name} uses reserved field number ${f.number}")
+        else Nil
+      }
+      val dupProblems = {
+        val nums = m.fields.map(_.number)
+        val dups = nums.diff(nums.distinct).distinct
+        if (dups.nonEmpty) List(s"$tn has duplicate field numbers ${dups.mkString(",")}") else Nil
+      }
+      typeNameProblem ::: fieldNameProblems ::: numberProblems ::: dupProblems
     }
   }
 
@@ -135,8 +174,16 @@ object RegistryRules {
             .pure[F]
       }
 
-    /** A fiber's optional schemaRef must resolve against the registry (the referenced version must exist). */
-    def refResolves[F[_]: Applicative](ref: Option[SchemaRef], state: CalculatedState): F[ValidationResult] =
+    /**
+     * A fiber's optional schemaRef must resolve against the registry AND the fiber's definition must hash
+     * to the resolved version's `logicHash` (#37 VERIFIED binding) — mirrors FiberCombiner.resolveBinding,
+     * giving an early structured rejection before the combiner's authoritative abort.
+     */
+    def refResolvesAndMatches[F[_]: Async](
+      ref:        Option[SchemaRef],
+      definition: StateMachineDefinition,
+      state:      CalculatedState
+    ): F[ValidationResult] =
       ref match {
         case None => ().validNec[DataApplicationValidationError].pure[F]
         case Some(SchemaRef(name, versionReq)) =>
@@ -144,14 +191,18 @@ object RegistryRules {
             case None =>
               (Errors.SchemaRefUnknownName(name.render): DataApplicationValidationError).invalidNec[Unit].pure[F]
             case Some(lineage) =>
-              lineage
-                .resolve(versionReq)
-                .fold(
-                  _ =>
-                    (Errors
-                      .SchemaRefUnresolvable(name.render): DataApplicationValidationError).invalidNec[Unit].pure[F],
-                  _ => ().validNec[DataApplicationValidationError].pure[F]
-                )
+              lineage.resolve(versionReq) match {
+                case Left(_) =>
+                  (Errors.SchemaRefUnresolvable(name.render): DataApplicationValidationError).invalidNec[Unit].pure[F]
+                case Right(rv) =>
+                  definition.computeDigest.map { digest =>
+                    Validated.condNec(
+                      digest === rv.logicHash,
+                      (),
+                      Errors.SchemaRefLogicMismatch(name.render, rv.version.render): DataApplicationValidationError
+                    )
+                  }
+              }
           }
       }
 
@@ -165,12 +216,12 @@ object RegistryRules {
       override val message: String = s"registry field '$field' is not valid base64"
     }
 
-    final case class EmptyField(field: String) extends DataApplicationValidationError {
-      override val message: String = s"registry field '$field' must not be empty"
+    final case class BundleTooLarge(size: Long, max: Long) extends DataApplicationValidationError {
+      override val message: String = s"registry descriptor of $size bytes exceeds limit $max"
     }
 
-    final case class BundleTooLarge(size: Long, max: Long) extends DataApplicationValidationError {
-      override val message: String = s"registry bundle of $size bytes exceeds limit $max"
+    final case class MalformedSchemaShape(reason: String) extends DataApplicationValidationError {
+      override val message: String = s"registry schemaShape is malformed: $reason"
     }
 
     final case class NotRegistryOwner(name: String) extends DataApplicationValidationError {
@@ -203,6 +254,12 @@ object RegistryRules {
 
     final case class SchemaRefUnresolvable(name: String) extends DataApplicationValidationError {
       override val message: String = s"schemaRef version is unresolvable for registry name '$name'"
+    }
+
+    final case class SchemaRefLogicMismatch(name: String, version: String) extends DataApplicationValidationError {
+
+      override val message: String =
+        s"fiber definition does not match the registered logic for '$name'@$version (verified binding)"
     }
   }
 }

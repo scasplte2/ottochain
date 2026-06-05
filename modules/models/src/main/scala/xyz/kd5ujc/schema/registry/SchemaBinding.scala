@@ -19,11 +19,13 @@ final case class SchemaRef(name: RegistryName, version: VersionReq)
  * the committed hashes. Resolved once at create (against the registry at that ordinal) and then immutable
  * for the fiber's life — re-resolution is an explicit upgrade (#27).
  *
- * Trust model (declaration, #24): this records *which* version the fiber claims to instantiate and that the
- * version exists in the registry. It does NOT verify on-chain that the fiber's `definition` equals the
- * registered logic — that is checked off-chain against `logicHash` (the agnostic / Etherscan-claim model).
- * TODO(#24b): optional on-chain verified binding (requires the registry's logic to be a typed, canonically
- * hashed definition rather than the opaque base64 blob; see schema-architecture.md).
+ * Trust model (verified, #37): a binding is recorded only after the chain checks, on-chain, that the
+ * fiber's own `definition.computeDigest` equals the registered version's `logicHash`. A fiber therefore
+ * cannot falsely claim to instantiate a version — the combiner aborts and the validator rejects a
+ * definition that does not hash to the registered logic. This is the "verify identity" dial (it pins
+ * *which* logic, never *what shape* the logic must take; see strong-typing-and-conformance.md §0.5). The
+ * proto schema stays advisory (`schemaShape`) — conformance of logic to schema is the separate, opt-in
+ * dial and is NOT enforced here.
  */
 @derive(customizableEncoder, customizableDecoder)
 final case class SchemaBinding(

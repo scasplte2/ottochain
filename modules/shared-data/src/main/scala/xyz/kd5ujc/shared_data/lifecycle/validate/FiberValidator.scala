@@ -98,7 +98,7 @@ object FiberValidator {
       for {
         hasProofs    <- FiberRules.L0.hasProofs(proofs)
         parentActive <- FiberRules.L0.parentFiberActive(update.parentFiberId, state.calculated)
-        schemaRefOk  <- RegistryRules.L0.refResolves(update.schemaRef, state.calculated)
+        schemaRefOk  <- RegistryRules.L0.refResolvesAndMatches(update.schemaRef, update.definition, state.calculated)
       } yield List(hasProofs, parentActive, schemaRefOk).combineAll
 
     /** Validates a ProcessFiberEvent update (L0 specific checks) */

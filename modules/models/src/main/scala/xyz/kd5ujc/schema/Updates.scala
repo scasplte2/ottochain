@@ -3,15 +3,13 @@ package xyz.kd5ujc.schema
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 
-import scala.collection.immutable.SortedMap
-
 import io.constellationnetwork.currency.dataApplication.DataUpdate
 import io.constellationnetwork.metagraph_sdk.json_logic.{JsonLogicExpression, JsonLogicValue}
 import io.constellationnetwork.security.signature.Signed
 
 import xyz.kd5ujc.schema.CodecConfiguration._
 import xyz.kd5ujc.schema.fiber.{AccessControlPolicy, FiberOrdinal, StateMachineDefinition}
-import xyz.kd5ujc.schema.registry.{RegistryName, RegistryStatus, SchemaRef, SemVer}
+import xyz.kd5ujc.schema.registry.{RegistryName, RegistryStatus, SchemaRef, SchemaShape, SemVer}
 
 import derevo.circe.magnolia.{customizableDecoder, customizableEncoder}
 import derevo.derive
@@ -109,19 +107,27 @@ object Updates {
 
   /**
    * Create-or-append a registry version (npm-publish semantics): the first publish for a name claims it and
-   * makes the signer the owner; later publishes require an existing owner. Carries the protobuf descriptor +
-   * JSON-Logic definition as base64 blobs — the chain is content-agnostic: it hashes them into
-   * schemaHash/logicHash, commits the hashes, and drops the bytes (see schema-architecture.md §4a). The
-   * owner is derived from the signing proofs at combine time.
+   * makes the signer the owner; later publishes require an existing owner.
+   *
+   *  - `schemaB64`: the full protobuf FileDescriptorSet (≈ deployed bytecode). The chain validates it is
+   *    base64, hashes it into `schemaHash`, and drops the bytes — they live in the registration update's
+   *    history + the Bridge store (Etherscan-style claim; schema-architecture.md §4a).
+   *  - `schemaShape`: the typed, proto-friendly projection the chain stores for discovery (advisory).
+   *  - `definition`: the typed JSON-Logic state machine. The chain hashes it into `logicHash` via
+   *    `computeDigest` — the same canonical digest a fiber computes — enabling VERIFIED binding (#37): a
+   *    fiber referencing this version is admitted only if its definition hashes to `logicHash`. The guards
+   *    and effects inside stay generic `JsonLogicExpression`; typing the container does not constrain the
+   *    computation.
+   *
+   * The owner is derived from the signing proofs at combine time.
    */
   @derive(customizableDecoder, customizableEncoder)
   final case class PublishVersion(
-    name:          RegistryName,
-    version:       SemVer,
-    schemaB64:     String,
-    definitionB64: String,
-    stateMessage:  String,
-    commands:      SortedMap[String, String]
+    name:        RegistryName,
+    version:     SemVer,
+    schemaB64:   String,
+    schemaShape: SchemaShape,
+    definition:  StateMachineDefinition
   ) extends RegistryOp
       with OttochainMessage {
     val fiberId: UUID = RegistryOp.routingId(name)

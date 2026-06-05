@@ -17,6 +17,12 @@ import weaver.SimpleIOSuite
 
 object RegistryCodecSuite extends SimpleIOSuite {
 
+  private val shape: SchemaShape =
+    SchemaShape(
+      stateMessage = MessageShape("App.State", List(FieldShape("balance", 1, "int64"))),
+      commands = SortedMap("start" -> MessageShape("App.Start", List(FieldShape("amount", 1, "int64"))))
+    )
+
   private val entry: RegistryEntry =
     RegistryEntry(
       name = RegistryName.unsafe("escrow.acme"),
@@ -27,8 +33,7 @@ object RegistryCodecSuite extends SimpleIOSuite {
             version = SemVer(1, 0, 0),
             schemaHash = Hash("schema"),
             logicHash = Hash("logic"),
-            stateMessage = "App.State",
-            commands = SortedMap("start" -> "App.Start"),
+            schemaShape = shape,
             status = RegistryStatus.Active,
             registeredAt = SnapshotOrdinal.MinValue
           )

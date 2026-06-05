@@ -31,14 +31,35 @@ object RegistryCombinerSuite extends SimpleIOSuite {
 
   private def b64(s: String): String = Base64.getEncoder.encodeToString(s.getBytes(StandardCharsets.UTF_8))
 
+  private val shape: SchemaShape =
+    SchemaShape(
+      stateMessage = MessageShape("App.State", List(FieldShape("balance", 1, "int64"))),
+      commands = SortedMap("start" -> MessageShape("App.Start", List(FieldShape("amount", 1, "int64"))))
+    )
+
+  // The registered logic. Verified binding admits a fiber only if its definition hashes to the registered
+  // logicHash, so the publish helper and the matching-fiber test share `minimalDef`.
+  private val minimalDef: StateMachineDefinition = {
+    val s = StateId("initial")
+    StateMachineDefinition(states = Map(s -> State(s, isFinal = false)), initialState = s, transitions = Nil)
+  }
+
+  // A DIFFERENT definition (distinct initialState) — hashes to a different logicHash than `minimalDef`.
+  private val otherDef: StateMachineDefinition = {
+    val s = StateId("different")
+    StateMachineDefinition(states = Map(s -> State(s, isFinal = false)), initialState = s, transitions = Nil)
+  }
+
+  private val emptyData: JsonLogicValue = MapValue(Map.empty[String, JsonLogicValue])
+  private val fiberA = UUID.fromString("11111111-1111-4111-8111-111111111111")
+
   private def publish(name: String, v: SemVer): PublishVersion =
     PublishVersion(
       name = RegistryName.unsafe(name),
       version = v,
       schemaB64 = b64(s"schema-$name-${v.render}"),
-      definitionB64 = b64(s"logic-$name-${v.render}"),
-      stateMessage = "App.State",
-      commands = SortedMap("start" -> "App.Start")
+      schemaShape = shape,
+      definition = minimalDef
     )
 
   private val genesis = DataState(OnChain.genesis, CalculatedState.genesis)
@@ -135,13 +156,6 @@ object RegistryCombinerSuite extends SimpleIOSuite {
     }
   }
 
-  private val minimalDef: StateMachineDefinition = {
-    val s = StateId("initial")
-    StateMachineDefinition(states = Map(s -> State(s, isFinal = false)), initialState = s, transitions = Nil)
-  }
-  private val emptyData: JsonLogicValue = MapValue(Map.empty[String, JsonLogicValue])
-  private val fiberA = UUID.fromString("11111111-1111-4111-8111-111111111111")
-
   test("creating a fiber with a resolvable schemaRef pins the SchemaBinding") {
     TestFixture.resource(Set(Alice)).use { fixture =>
       implicit val sp: SecurityProvider[IO] = fixture.securityProvider
@@ -165,6 +179,29 @@ object RegistryCombinerSuite extends SimpleIOSuite {
           .flatMap(_.schemaBinding)
       } yield expect(binding.map(_.name).contains(RegistryName.unsafe("escrow"))) and
       expect(binding.map(_.version).contains(SemVer(1, 0, 0)))
+    }
+  }
+
+  test("creating a fiber whose definition does not match the registered logicHash is rejected (verified binding)") {
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val p1 = publish("escrow", SemVer(1, 0, 0)) // registers minimalDef's logicHash
+      val create = CreateStateMachine(
+        fiberA,
+        otherDef, // different logic -> different digest than the registered logicHash
+        emptyData,
+        schemaRef = Some(SchemaRef(RegistryName.unsafe("escrow"), VersionReq.Exact(SemVer(1, 0, 0))))
+      )
+      for {
+        validator     <- Validator.make[IO]
+        pr1           <- fixture.registry.generateProofs(p1, Set(Alice))
+        s1            <- combiner.insert(genesis, Signed(p1, pr1))
+        prC           <- fixture.registry.generateProofs(create, Set(Alice))
+        valid         <- validator.validateSignedUpdate(s1, Signed(create, prC))
+        combineFailed <- combiner.insert(s1, Signed(create, prC)).attempt.map(_.isLeft)
+      } yield expect(valid.isInvalid) and expect(combineFailed)
     }
   }
 

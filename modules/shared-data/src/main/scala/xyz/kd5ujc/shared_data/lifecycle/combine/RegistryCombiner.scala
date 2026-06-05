@@ -13,13 +13,14 @@ import xyz.kd5ujc.schema.{CalculatedState, OnChain, Updates}
 import xyz.kd5ujc.shared_data.syntax.all._
 
 /**
- * Combiner for the content-agnostic registry. The chain enforces only structural invariants —
- * append-only / immutable / strictly-monotonic via [[VersionLineage]], ownership, and a size bound — and
- * NEVER parses the protobuf descriptor or JSON-Logic definition. It hashes the base64 blobs into
- * schemaHash/logicHash, commits the hashes, and drops the bytes (the bytes live in the registration
- * update's history + the Bridge store; see schema-architecture.md §4a). `VersionLineage`'s `Either` is the
- * authoritative enforcement here; a rejected publish/status aborts the update (the FiberCombiner
- * combine-time-raise pattern). Validation arms in `Validator` are a TODO refinement (#23c).
+ * Combiner for the registry. The chain enforces structural invariants — append-only / immutable /
+ * strictly-monotonic via [[VersionLineage]], ownership, and a descriptor size bound — and never PARSES the
+ * protobuf descriptor (it hashes `schemaB64` into `schemaHash` and drops the bytes; the typed `schemaShape`
+ * projection is stored as advisory domain metadata). The JSON-Logic `definition` IS typed: it is hashed via
+ * `computeDigest` into `logicHash` — the same canonical digest a fiber computes — so a referencing fiber's
+ * definition can be verified on-chain (#37). `VersionLineage`'s `Either` is the authoritative invariant
+ * enforcement; a rejected publish/status aborts the update (the FiberCombiner combine-time-raise pattern),
+ * and `RegistryValidator` previews the same checks for early, structured rejection.
  *
  * TODO(economics): charge registrationGas = bytes * registrationGasPerByte once the fee/balance subsystem
  * exists (economics-and-state-rent.md); for now `maxBundleBytes` is the interim cost control.
@@ -36,16 +37,19 @@ class RegistryCombiner[F[_]: Async: SecurityProvider](
       currentOrdinal <- ctx.getCurrentOrdinal
       signers        <- update.proofs.toList.traverse(_.id.toAddress).map(Set.from)
       _ <- Async[F]
-        .raiseError[Unit](new RuntimeException(s"registry bundle for ${pv.name.render} exceeds $maxBundleBytes bytes"))
-        .whenA(pv.schemaB64.length.toLong + pv.definitionB64.length.toLong > maxBundleBytes)
+        .raiseError[Unit](
+          new RuntimeException(s"registry descriptor for ${pv.name.render} exceeds $maxBundleBytes bytes")
+        )
+        .whenA(pv.schemaB64.length.toLong > maxBundleBytes)
       schemaHash <- pv.schemaB64.computeDigest
-      logicHash  <- pv.definitionB64.computeDigest
+      // logicHash is the canonical digest of the TYPED definition — identical to the digest a fiber computes
+      // on its own definition — so a referencing fiber can be verified on-chain (#37 verified binding).
+      logicHash <- pv.definition.computeDigest
       rv = RegisteredVersion(
         version = pv.version,
         schemaHash = schemaHash,
         logicHash = logicHash,
-        stateMessage = pv.stateMessage,
-        commands = pv.commands,
+        schemaShape = pv.schemaShape,
         status = RegistryStatus.Active,
         registeredAt = currentOrdinal
       )

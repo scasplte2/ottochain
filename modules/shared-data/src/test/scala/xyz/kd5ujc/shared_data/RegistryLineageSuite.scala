@@ -15,6 +15,12 @@ object RegistryLineageSuite extends SimpleIOSuite {
 
   private val ord = SnapshotOrdinal.MinValue
 
+  private val shape: SchemaShape =
+    SchemaShape(
+      stateMessage = MessageShape("App.State", List(FieldShape("balance", 1, "int64"))),
+      commands = SortedMap("start" -> MessageShape("App.Start", List(FieldShape("amount", 1, "int64"))))
+    )
+
   private def rv(
     major:  Int,
     minor:  Int,
@@ -25,8 +31,7 @@ object RegistryLineageSuite extends SimpleIOSuite {
       version = SemVer(major, minor, patch),
       schemaHash = Hash(s"schema-$major.$minor.$patch"),
       logicHash = Hash(s"logic-$major.$minor.$patch"),
-      stateMessage = "App.State",
-      commands = SortedMap("start" -> "App.Start"),
+      schemaShape = shape,
       status = status,
       registeredAt = ord
     )

@@ -11,7 +11,7 @@ import io.constellationnetwork.security.signature.signature.SignatureProof
 
 import xyz.kd5ujc.schema.Updates.{PublishVersion, SetVersionStatus}
 import xyz.kd5ujc.schema.{CalculatedState, OnChain}
-import xyz.kd5ujc.shared_data.lifecycle.validate.rules.RegistryRules
+import xyz.kd5ujc.shared_data.lifecycle.validate.rules.{FiberRules, RegistryRules}
 
 /**
  * Validators for registry operations, composing [[RegistryRules]] (mirrors `FiberValidator`).
@@ -27,10 +27,11 @@ object RegistryValidator {
     def publish(update: PublishVersion): F[ValidationResult] =
       for {
         schemaOk     <- RegistryRules.L1.validBase64("schemaB64", update.schemaB64)
-        definitionOk <- RegistryRules.L1.validBase64("definitionB64", update.definitionB64)
-        stateMsgOk   <- RegistryRules.L1.nonEmpty("stateMessage", update.stateMessage)
+        shapeOk      <- RegistryRules.L1.schemaShapeWellFormed(update.schemaShape)
         bundleOk     <- RegistryRules.L1.bundleWithinLimit(update)
-      } yield List(schemaOk, definitionOk, stateMsgOk, bundleOk).combineAll
+        definitionOk <- FiberRules.L1.validStateMachineDefinition(update.definition)
+        limitsOk     <- FiberRules.L1.definitionWithinLimits(update.definition)
+      } yield List(schemaOk, shapeOk, bundleOk, definitionOk, limitsOk).combineAll
 
     def setStatus(update: SetVersionStatus): F[ValidationResult] = {
       val _ = update

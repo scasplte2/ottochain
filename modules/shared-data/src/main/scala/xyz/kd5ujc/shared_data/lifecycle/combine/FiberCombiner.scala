@@ -47,7 +47,7 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
     currentOrdinal  <- ctx.getCurrentOrdinal
     owners          <- update.proofs.toList.traverse(_.id.toAddress).map(Set.from)
     initialDataHash <- update.initialData.computeDigest
-    binding         <- resolveBinding(update.schemaRef)
+    binding         <- resolveBinding(update.schemaRef, update.definition)
 
     record = Records.StateMachineFiberRecord(
       fiberId = update.fiberId,
@@ -163,10 +163,14 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
 
   /**
    * Resolve an optional schema reference against the current registry, returning the pinned binding.
-   * Aborts (raises) if the referenced name/version cannot be resolved (declaration model, #24; the
-   * RegistryValidator also previews this at L0).
+   * Aborts (raises) if the referenced name/version cannot be resolved OR if the fiber's `definition` does
+   * not hash to the registered `logicHash` (#37 VERIFIED binding). The RegistryRules.L0 preview mirrors
+   * both checks for early, structured rejection at validation.
    */
-  private def resolveBinding(ref: Option[SchemaRef]): F[Option[SchemaBinding]] =
+  private def resolveBinding(
+    ref:        Option[SchemaRef],
+    definition: StateMachineDefinition
+  ): F[Option[SchemaBinding]] =
     ref match {
       case None => none[SchemaBinding].pure[F]
       case Some(SchemaRef(name, versionReq)) =>
@@ -186,7 +190,18 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
                   Async[F].raiseError[Option[SchemaBinding]](
                     new RuntimeException(s"schemaRef unresolvable for ${name.render}: $e")
                   ),
-                rv => SchemaBinding(name, rv.version, rv.schemaHash, rv.logicHash).some.pure[F]
+                rv =>
+                  definition.computeDigest.flatMap { digest =>
+                    if (digest === rv.logicHash)
+                      SchemaBinding(name, rv.version, rv.schemaHash, rv.logicHash).some.pure[F]
+                    else
+                      Async[F].raiseError[Option[SchemaBinding]](
+                        new RuntimeException(
+                          s"schemaRef logic mismatch for ${name.render}@${rv.version.render}: definition hash " +
+                          s"${digest.value} != registered logicHash ${rv.logicHash.value}"
+                        )
+                      )
+                  }
               )
         }
     }
