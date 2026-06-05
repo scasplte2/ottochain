@@ -3,6 +3,8 @@ package xyz.kd5ujc.schema
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 
+import scala.collection.immutable.SortedMap
+
 import io.constellationnetwork.currency.dataApplication.DataUpdate
 import io.constellationnetwork.metagraph_sdk.json_logic.{JsonLogicExpression, JsonLogicValue}
 import io.constellationnetwork.security.signature.Signed
@@ -146,7 +148,9 @@ object Updates {
     schemaB64:   String,
     schemaShape: SchemaShape,
     definition:  StateMachineDefinition,
-    strict:      Boolean = false
+    strict:      Boolean = false,
+    // Optional off-chain links grab-bag, set on the entry at first publish (e.g. "repo"/"homepage" -> URL).
+    metadata: SortedMap[String, String] = SortedMap.empty
   ) extends RegistryOp
       with OttochainMessage {
     val fiberId: UUID = RegistryOp.routingId(name)
@@ -171,7 +175,8 @@ object Updates {
   @derive(customizableDecoder, customizableEncoder)
   final case class RegisterAlias(
     name:          RegistryName,
-    targetFiberId: UUID
+    targetFiberId: UUID,
+    metadata:      SortedMap[String, String] = SortedMap.empty
   ) extends RegistryOp
       with OttochainMessage {
     val fiberId: UUID = RegistryOp.routingId(name)

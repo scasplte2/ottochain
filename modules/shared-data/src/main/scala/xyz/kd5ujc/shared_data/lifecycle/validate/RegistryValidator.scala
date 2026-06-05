@@ -29,9 +29,11 @@ object RegistryValidator {
         schemaOk     <- RegistryRules.L1.validBase64("schemaB64", update.schemaB64)
         shapeOk      <- RegistryRules.L1.schemaShapeWellFormed(update.schemaShape)
         bundleOk     <- RegistryRules.L1.bundleWithinLimit(update)
+        reservedOk   <- RegistryRules.L1.notReserved(update.name)
+        metaOk       <- RegistryRules.L1.metadataConforms(update.metadata)
         definitionOk <- FiberRules.L1.validStateMachineDefinition(update.definition)
         limitsOk     <- FiberRules.L1.definitionWithinLimits(update.definition)
-      } yield List(schemaOk, shapeOk, bundleOk, definitionOk, limitsOk).combineAll
+      } yield List(schemaOk, shapeOk, bundleOk, reservedOk, metaOk, definitionOk, limitsOk).combineAll
 
     def setStatus(update: SetVersionStatus): F[ValidationResult] = {
       val _ = update
@@ -39,7 +41,11 @@ object RegistryValidator {
     }
 
     def registerAlias(update: RegisterAlias): F[ValidationResult] =
-      RegistryRules.L1.aliasTldIsFiber(update.name)
+      for {
+        tldOk      <- RegistryRules.L1.aliasTldIsFiber(update.name)
+        reservedOk <- RegistryRules.L1.notReserved(update.name)
+        metaOk     <- RegistryRules.L1.metadataConforms(update.metadata)
+      } yield List(tldOk, reservedOk, metaOk).combineAll
   }
 
   /** L0 contextual checks (ownership + invariant preview). */

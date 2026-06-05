@@ -60,4 +60,16 @@ object RegistryName {
   implicit val decoder: Decoder[RegistryName] = Decoder.decodeString.emap(from)
   implicit val keyEncoder: KeyEncoder[RegistryName] = KeyEncoder.encodeKeyString.contramap(_.render)
   implicit val keyDecoder: KeyDecoder[RegistryName] = KeyDecoder.instance(from(_).toOption)
+
+  /**
+   * Labels reserved in-protocol (e.g. `std`). A name using any reserved label is rejected at registration
+   * — held pending the curator mechanism (trust-and-verification-handoff.md). Profanity and other
+   * eligibility rules are enforced OFF-CHAIN at the Bridge, not here.
+   */
+  val ReservedLabels: Set[String] =
+    Set("std", "system", "sys", "root", "admin", "registry", "protocol", "ottochain", "dag", "metagraph")
+
+  /** True if any label of `name` is reserved in-protocol. */
+  def isReserved(name: RegistryName): Boolean =
+    name.labels.value.split('.').exists(ReservedLabels.contains)
 }

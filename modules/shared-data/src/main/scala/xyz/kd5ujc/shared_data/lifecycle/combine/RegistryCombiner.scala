@@ -40,10 +40,19 @@ class RegistryCombiner[F[_]: Async: SecurityProvider](
       currentOrdinal <- ctx.getCurrentOrdinal
       signers        <- update.proofs.toList.traverse(_.id.toAddress).map(Set.from)
       _ <- Async[F]
+        .raiseError[Unit](new RuntimeException(s"registry name ${pv.name.render} uses a reserved label"))
+        .whenA(RegistryName.isReserved(pv.name))
+      _ <- Async[F]
         .raiseError[Unit](
           new RuntimeException(s"registry descriptor for ${pv.name.render} exceeds $maxBundleBytes bytes")
         )
         .whenA(pv.schemaB64.length.toLong > maxBundleBytes)
+      _ <- RegistryMetadata
+        .validate(pv.metadata)
+        .fold(
+          e => Async[F].raiseError[Unit](new RuntimeException(s"invalid metadata for ${pv.name.render}: $e")),
+          _ => Async[F].unit
+        )
       schemaHash <- pv.schemaB64.computeDigest
       // logicHash is the canonical digest of the TYPED definition — identical to the digest a fiber computes
       // on its own definition — so a referencing fiber can be verified on-chain (#37 verified binding).
@@ -60,7 +69,12 @@ class RegistryCombiner[F[_]: Async: SecurityProvider](
       updatedEntry <- current.calculated.registry.get(pv.name) match {
         case None =>
           // First publish: the signer(s) claim the name and become owners (npm-publish semantics).
-          (RegistryEntry(pv.name, signers, RegistryTarget.SchemaPackage(VersionLineage.of(rv))): RegistryEntry).pure[F]
+          (RegistryEntry(
+            pv.name,
+            signers,
+            RegistryTarget.SchemaPackage(VersionLineage.of(rv)),
+            pv.metadata
+          ): RegistryEntry).pure[F]
         case Some(entry) =>
           if (!signers.exists(entry.owner.contains))
             Async[F].raiseError[RegistryEntry](new RuntimeException(s"unauthorized publish to ${pv.name.render}"))
@@ -124,7 +138,16 @@ class RegistryCombiner[F[_]: Async: SecurityProvider](
   def registerAlias(update: Signed[Updates.RegisterAlias]): F[DataState[OnChain, CalculatedState]] = {
     val ra = update.value
     for {
-      signers      <- update.proofs.toList.traverse(_.id.toAddress).map(Set.from)
+      signers <- update.proofs.toList.traverse(_.id.toAddress).map(Set.from)
+      _ <- Async[F]
+        .raiseError[Unit](new RuntimeException(s"alias name ${ra.name.render} uses a reserved label"))
+        .whenA(RegistryName.isReserved(ra.name))
+      _ <- RegistryMetadata
+        .validate(ra.metadata)
+        .fold(
+          e => Async[F].raiseError[Unit](new RuntimeException(s"invalid metadata for ${ra.name.render}: $e")),
+          _ => Async[F].unit
+        )
       targetOwners <- aliasTargetOwners(ra.name.tld, ra.targetFiberId)
       _ <- Async[F]
         .raiseError[Unit](

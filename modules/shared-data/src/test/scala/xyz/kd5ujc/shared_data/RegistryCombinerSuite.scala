@@ -500,4 +500,71 @@ object RegistryCombinerSuite extends SimpleIOSuite {
       } yield expect(valid.isInvalid) and expect(combineFailed)
     }
   }
+
+  // ── reserved labels + metadata schema ─────────────────────────────────────────────────────────
+
+  test("RegistryMetadata.validate bounds free-form notes (count, key/value length, no control chars)") {
+    IO.pure(
+      // free-form: any key is allowed within the bounds (semantics are validated off-chain at the Bridge)
+      expect(RegistryMetadata.validate(Map("repo" -> "https://github.com/acme/escrow", "anything" -> "ok")).isRight) and
+      expect(RegistryMetadata.validate(Map("k" -> ("x" * 200))).isLeft) and // value > 128
+      expect(RegistryMetadata.validate((1 to 20).map(i => s"k$i" -> "v").toMap).isLeft) and // > 8 entries
+      expect(RegistryMetadata.validate(Map(("k" * 50) -> "v")).isLeft) and // key > 32
+      expect(RegistryMetadata.validate(Map("k" -> "a\tb")).isLeft) and // control char
+      expect(RegistryMetadata.validate(Map.empty[String, String]).isRight)
+    )
+  }
+
+  test("publishing under a reserved label (std) is rejected (validator invalid + combiner aborts)") {
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val p = publish("std", SemVer(1, 0, 0)) // -> std.package; "std" is reserved
+      for {
+        validator     <- Validator.make[IO]
+        pr            <- fixture.registry.generateProofs(p, Set(Alice))
+        valid         <- validator.validateSignedUpdate(genesis, Signed(p, pr))
+        combineFailed <- combiner.insert(genesis, Signed(p, pr)).attempt.map(_.isLeft)
+      } yield expect(valid.isInvalid) and expect(combineFailed)
+    }
+  }
+
+  test("publish with valid metadata stores it on the entry; over-long metadata is rejected") {
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val meta = SortedMap("repo" -> "https://github.com/acme/escrow", "license" -> "MIT")
+      val good =
+        PublishVersion(
+          pkg("escrow"),
+          SemVer(1, 0, 0),
+          b64("schema"),
+          shape,
+          minimalDef,
+          strict = false,
+          metadata = meta
+        )
+      val bad = PublishVersion(
+        pkg("widget"),
+        SemVer(1, 0, 0),
+        b64("schema"),
+        shape,
+        minimalDef,
+        strict = false,
+        metadata = SortedMap("note" -> ("x" * 200)) // value exceeds 128 chars
+      )
+      for {
+        validator     <- Validator.make[IO]
+        prG           <- fixture.registry.generateProofs(good, Set(Alice))
+        s1            <- combiner.insert(genesis, Signed(good, prG))
+        prB           <- fixture.registry.generateProofs(bad, Set(Alice))
+        validBad      <- validator.validateSignedUpdate(genesis, Signed(bad, prB))
+        combineFailed <- combiner.insert(genesis, Signed(bad, prB)).attempt.map(_.isLeft)
+      } yield expect(s1.calculated.registry.get(pkg("escrow")).map(_.metadata).contains(meta)) and
+      expect(validBad.isInvalid) and
+      expect(combineFailed)
+    }
+  }
 }

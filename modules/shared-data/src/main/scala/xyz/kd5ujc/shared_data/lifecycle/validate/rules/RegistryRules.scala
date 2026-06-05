@@ -57,6 +57,22 @@ object RegistryRules {
         .condNec(name.tld != NameTld.Package, (), Errors.AliasTldNotFiber(name.render): DataApplicationValidationError)
         .pure[F]
 
+    /** A name must not use an in-protocol reserved label (held pending the curator mechanism). */
+    def notReserved[F[_]: Applicative](name: RegistryName): F[ValidationResult] =
+      Validated
+        .condNec(!RegistryName.isReserved(name), (), Errors.ReservedName(name.render): DataApplicationValidationError)
+        .pure[F]
+
+    /** Entry metadata must conform to the fixed [[RegistryMetadata]] schema (known keys, types, lengths). */
+    def metadataConforms[F[_]: Applicative](metadata: Map[String, String]): F[ValidationResult] =
+      RegistryMetadata
+        .validate(metadata)
+        .fold(
+          e => (Errors.InvalidMetadata(e): DataApplicationValidationError).invalidNec[Unit],
+          _ => ().validNec[DataApplicationValidationError]
+        )
+        .pure[F]
+
     // protobuf field-number constraints (FieldDescriptor): 1..2^29-1, excluding the reserved 19000..19999.
     private val MinFieldNumber = 1
     private val MaxFieldNumber = 536870911
@@ -344,6 +360,14 @@ object RegistryRules {
 
     final case class AliasNameTaken(name: String) extends DataApplicationValidationError {
       override val message: String = s"alias name '$name' is owned by another address"
+    }
+
+    final case class ReservedName(name: String) extends DataApplicationValidationError {
+      override val message: String = s"registry name '$name' uses an in-protocol reserved label"
+    }
+
+    final case class InvalidMetadata(reason: String) extends DataApplicationValidationError {
+      override val message: String = s"registry metadata is invalid: $reason"
     }
   }
 }
