@@ -1,4 +1,4 @@
-import { HttpClient, batchSign } from '@ottochain/sdk';
+import { HttpClient, batchSign, dropNulls } from '@ottochain/sdk';
 import type { KeyPair } from '@ottochain/sdk';
 
 /**
@@ -15,7 +15,12 @@ export default async function sendSignedUpdate(
 ): Promise<{ hash: string }[]> {
   const privateKeys = Object.values(wallets).map((w) => w.privateKey);
 
-  const signed = await batchSign(message, privateKeys, { isDataUpdate: true });
+  // Drop null fields before signing. metakit (rc.9) drops nulls when building the canonical
+  // bytes the chain signs/verifies, so the client must sign the same null-free form. Otherwise a
+  // message carrying a null (e.g. a state's `metadata: null` in a state-machine definition) is
+  // signed over a different canonical than the chain re-derives, and verification fails (HTTP 400) —
+  // which is why state-machine creates failed while null-free scripts passed.
+  const signed = await batchSign(dropNulls(message), privateKeys, { isDataUpdate: true });
 
   console.log(
     `\x1b[33m[sendDataTransaction]\x1b[36m Sending to DL1:\x1b[0m ${JSON.stringify(signed).substring(0, 200)}...`
