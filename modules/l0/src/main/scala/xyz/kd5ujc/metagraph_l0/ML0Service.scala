@@ -24,8 +24,10 @@ import xyz.kd5ujc.metagraph_l0.webhooks.{NotificationStats, SubscriberRegistry, 
 import xyz.kd5ujc.schema.Updates.OttochainMessage
 import xyz.kd5ujc.schema.fiber.FiberStatus
 import xyz.kd5ujc.schema.{CalculatedState, OnChain}
+import xyz.kd5ujc.shared_data.genesis.GenesisLoader
 import xyz.kd5ujc.shared_data.lifecycle.{Combiner, Validator}
 
+import fs2.io.file.Files
 import monocle.Monocle.toAppliedFocusOps
 import org.http4s.HttpRoutes
 import org.http4s.client.Client
@@ -40,12 +42,14 @@ object ML0Service {
    * @param httpClient HTTP client for webhook delivery
    * @param metagraphId The metagraph token identifier (for webhook notifications)
    */
-  def make[F[+_]: Async: Parallel: SecurityProvider](
+  def make[F[+_]: Async: Files: Parallel: SecurityProvider](
     httpClient:  Option[Client[F]] = None,
-    metagraphId: String = "DAG3KNyfeKUTuWpMMhormWgWSYMD1pDGB2uaWqxG"
+    metagraphId: String = "DAG3KNyfeKUTuWpMMhormWgWSYMD1pDGB2uaWqxG",
+    genesisPath: Option[String] = None
   ): F[BaseDataApplicationL0Service[F]] = for {
     implicit0(logger: SelfAwareStructuredLogger[F]) <- Slf4jLogger.create[F]
-    checkpointService  <- CheckpointService.make[F, CalculatedState](CalculatedState.genesis)
+    genesisState                                    <- GenesisLoader.load[F](genesisPath)
+    checkpointService  <- CheckpointService.make[F, CalculatedState](genesisState.calculated)
     subscriberRegistry <- SubscriberRegistry.make[F]
     combiner           <- Combiner.make[F]().pure[F]
     validator          <- Validator.make[F]
@@ -56,6 +60,7 @@ object ML0Service {
     }
 
     dataApplicationL0Service <- makeBaseApplicationL0Service(
+      genesisState,
       checkpointService,
       combiner,
       validator,
@@ -65,6 +70,7 @@ object ML0Service {
   } yield dataApplicationL0Service
 
   private def makeBaseApplicationL0Service[F[+_]: Async](
+    genesisState:       DataState[OnChain, CalculatedState],
     checkpointService:  CheckpointService[F, CalculatedState],
     combiner:           CombinerService[F, OttochainMessage, OnChain, CalculatedState],
     validator:          ValidationService[F, OttochainMessage, OnChain, CalculatedState],
@@ -75,8 +81,7 @@ object ML0Service {
       new MetagraphCommonService[F, OttochainMessage, OnChain, CalculatedState, L0NodeContext[F]]
         with DataApplicationL0Service[F, OttochainMessage, OnChain, CalculatedState] {
 
-        override def genesis: DataState[OnChain, CalculatedState] =
-          DataState(OnChain.genesis, CalculatedState.genesis)
+        override def genesis: DataState[OnChain, CalculatedState] = genesisState
 
         override def onSnapshotConsensusResult(snapshot: Hashed[CurrencyIncrementalSnapshot])(implicit
           A: Applicative[F]
