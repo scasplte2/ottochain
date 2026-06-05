@@ -14,9 +14,30 @@ evolvable/maintainable — ideally validating a JSON-Logic definition *against* 
 | **JLVM definition** | the *behavior* (states, guards, effects) | `definitionB64: String` (opaque) | the typed `StateMachineDefinition` / `JsonLogicExpression` the chain already has |
 | **Registry** | the *versioned binding* (which shape + which behavior, at which version) | commits two opaque hashes | commits typed shape + typed logic + a **conformance** assertion |
 
-The missing relation is **conformance**: the JLVM definition must *factor through* the schema — it only
-reads/writes fields the schema declares, with compatible types, and only accepts events the schema names.
-Strong-typing exists to make that relation **checkable**.
+The relation between logic and schema is **conformance**: the JLVM definition *could* be required to factor
+through the schema (only read/write declared fields). But — see §0.5 — **that relation is opt-in, not the
+default.** The default is loose binding: the schema is the typed *domain definition* (the interface), the
+JLVM definition is the free-form *source code*, and the registry binds them at a version.
+
+## 0.5 How much structure? — two independent dials, and where it gets constraining
+
+Keeping the JLVM generic (`JsonLogicExpression`) is preferable for the computation side. So separate two
+dials that are easy to conflate:
+
+- **Dial 1 — binding strength (identity, NOT shape):** *declaration* (the fiber claims a version; #24 today)
+  vs *verified* (the chain checks the fiber runs the registered definition). Verified just hashes the
+  definition's *native container* (`StateMachineDefinition`, whose guards/effects stay generic
+  `JsonLogicExpression`) the same way a fiber does — it verifies **which logic**, never **what shape the
+  logic must have**. Neither option constrains the computation.
+- **Dial 2 — conformance (shape):** does the logic only read/write schema-declared fields? **This is the
+  only dial that constrains the JLVM**, so it is **opt-in, never enforced by default.** An app that wants a
+  strict typed contract runs the conformance check (Bridge-side); everyone else keeps full flexibility.
+
+**The structure principle:** structure that *describes* (the SchemaShape domain-def) or *verifies identity*
+(binding) is pure win — discovery, typed clients, trust — with zero constraint on the logic. Structure that
+*constrains the computation* (conformance) is where it becomes over-constraining, so it stays opt-in.
+**Describe + bind, don't constrain.** The schema is the `.d.ts` (interface for consumers); the JLVM
+definition is the `.js` (impl); the registry binds them by version; conformance is the optional typecheck.
 
 ## 1. Type the LOGIC first — it's already a first-class type (enables verified binding)
 
