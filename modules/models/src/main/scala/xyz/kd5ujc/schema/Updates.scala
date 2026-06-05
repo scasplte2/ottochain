@@ -73,6 +73,24 @@ object Updates {
       with OttochainMessage
       with Sequenced
 
+  /**
+   * Upgrade an existing fiber to a different registered version of the SAME package (#27). The chain
+   * verifies `newDefinition.computeDigest == targetVersion.logicHash` (verified re-bind), applies the
+   * optional `migration` (a JSON-Logic transform of the prior stateData) through the engine's metered
+   * evaluator, preserves the current state id (which must exist in `newDefinition`), and re-pins the
+   * binding. The commute-law is NOT verified on-chain — see trust-and-verification-handoff.md.
+   */
+  @derive(customizableDecoder, customizableEncoder)
+  final case class UpgradeFiber(
+    fiberId:              UUID,
+    targetRef:            SchemaRef,
+    newDefinition:        StateMachineDefinition,
+    migration:            Option[JsonLogicExpression] = None,
+    targetSequenceNumber: FiberOrdinal
+  ) extends StateMachineFiberOp
+      with OttochainMessage
+      with Sequenced
+
   sealed trait ScriptFiberOp
 
   @derive(customizableDecoder, customizableEncoder)
@@ -173,6 +191,7 @@ object Updates {
       case u: Updates.CreateStateMachine     => Json.obj(u.messageName -> u.asJson)
       case u: Updates.TransitionStateMachine => Json.obj(u.messageName -> u.asJson)
       case u: Updates.ArchiveStateMachine    => Json.obj(u.messageName -> u.asJson)
+      case u: Updates.UpgradeFiber           => Json.obj(u.messageName -> u.asJson)
       case u: Updates.CreateScript           => Json.obj(u.messageName -> u.asJson)
       case u: Updates.InvokeScript           => Json.obj(u.messageName -> u.asJson)
       case u: Updates.PublishVersion         => Json.obj(u.messageName -> u.asJson)
@@ -185,6 +204,7 @@ object Updates {
           Decoder[Updates.CreateStateMachine],
           Decoder[Updates.TransitionStateMachine],
           Decoder[Updates.ArchiveStateMachine],
+          Decoder[Updates.UpgradeFiber],
           Decoder[Updates.CreateScript],
           Decoder[Updates.InvokeScript],
           Decoder[Updates.PublishVersion],

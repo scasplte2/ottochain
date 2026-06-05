@@ -57,6 +57,7 @@ object Combiner {
           case u: Updates.CreateStateMachine     => fiberCombiner.createStateMachineFiber(Signed(u, update.proofs))
           case u: Updates.TransitionStateMachine => fiberCombiner.processFiberEvent(Signed(u, update.proofs))
           case u: Updates.ArchiveStateMachine    => fiberCombiner.archiveFiber(Signed(u, update.proofs))
+          case u: Updates.UpgradeFiber           => fiberCombiner.upgradeFiber(Signed(u, update.proofs))
           case u: Updates.CreateScript           => oracleCombiner.createScript(Signed(u, update.proofs))
           case u: Updates.InvokeScript           => oracleCombiner.invokeScript(Signed(u, update.proofs))
           case u: Updates.PublishVersion         => registryCombiner.publishVersion(Signed(u, update.proofs))

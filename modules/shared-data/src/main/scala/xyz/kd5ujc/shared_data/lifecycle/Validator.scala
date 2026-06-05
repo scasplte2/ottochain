@@ -76,6 +76,7 @@ object Validator {
               case u: CreateStateMachine     => u.fiberId.toString
               case u: TransitionStateMachine => u.fiberId.toString
               case u: ArchiveStateMachine    => u.fiberId.toString
+              case u: UpgradeFiber           => u.fiberId.toString
               case u: CreateScript           => u.fiberId.toString
               case u: InvokeScript           => u.fiberId.toString
               case u: PublishVersion         => u.fiberId.toString
@@ -93,6 +94,7 @@ object Validator {
                 case u: CreateStateMachine     => fiberL1.createFiber(u)
                 case u: TransitionStateMachine => fiberL1.processEvent(u)
                 case u: ArchiveStateMachine    => fiberL1.archiveFiber(u)
+                case u: UpgradeFiber           => fiberL1.upgrade(u)
                 case u: CreateScript           => oracleL1.createOracle(u)
                 case u: InvokeScript           => oracleL1.invokeOracle(u)
                 case u: PublishVersion         => registryL1.publish(u)
@@ -126,6 +128,7 @@ object Validator {
             case u: CreateStateMachine     => fiberCombined.createFiber(u)
             case u: TransitionStateMachine => fiberCombined.processEvent(u)
             case u: ArchiveStateMachine    => fiberCombined.archiveFiber(u)
+            case u: UpgradeFiber           => fiberCombined.upgrade(u)
             case u: CreateScript           => oracleCombined.createOracle(u)
             case u: InvokeScript           => oracleCombined.invokeOracle(u)
             case u: PublishVersion         => registryCombined.publish(u)

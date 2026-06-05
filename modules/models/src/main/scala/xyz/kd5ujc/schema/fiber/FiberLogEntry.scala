@@ -115,4 +115,24 @@ object FiberLogEntry {
     schemaBinding: Option[SchemaBinding] = None,
     parentFiberId: Option[UUID] = None
   ) extends FiberLogEntry
+
+  /**
+   * Emitted when a fiber is upgraded to a different registered version (#27). Records the binding change
+   * (from -> to) and whether a state migration ran.
+   *
+   * HAND-OFF NOTE: the chain verified the new definition's hash (verified binding) and applied the
+   * migration deterministically, but it did NOT verify the commute-law `migrate ∘ step = step ∘ migrate`
+   * — that is a handed-off, off-chain authoring-time expectation, backed by the trust layer
+   * (reputation / reserved `std.*` namespace). See docs/proposals/trust-and-verification-handoff.md and
+   * the commute-law test-kit.
+   */
+  @derive(customizableEncoder, customizableDecoder)
+  final case class UpgradeReceipt(
+    fiberId:     UUID,
+    ordinal:     SnapshotOrdinal,
+    fromBinding: Option[SchemaBinding],
+    toBinding:   SchemaBinding,
+    gasUsed:     Long,
+    migrated:    Boolean
+  ) extends FiberLogEntry
 }

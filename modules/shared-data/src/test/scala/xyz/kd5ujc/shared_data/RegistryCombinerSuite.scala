@@ -12,8 +12,8 @@ import io.constellationnetwork.metagraph_sdk.json_logic.{JsonLogicValue, MapValu
 import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.Signed
 
-import xyz.kd5ujc.schema.Updates.{CreateStateMachine, PublishVersion, SetVersionStatus}
-import xyz.kd5ujc.schema.fiber.{FiberLogEntry, State, StateId, StateMachineDefinition}
+import xyz.kd5ujc.schema.Updates.{CreateStateMachine, PublishVersion, SetVersionStatus, UpgradeFiber}
+import xyz.kd5ujc.schema.fiber.{FiberLogEntry, FiberOrdinal, State, StateId, StateMachineDefinition}
 import xyz.kd5ujc.schema.registry._
 import xyz.kd5ujc.schema.{CalculatedState, OnChain, Records}
 import xyz.kd5ujc.shared_data.lifecycle.{Combiner, Validator}
@@ -61,6 +61,21 @@ object RegistryCombinerSuite extends SimpleIOSuite {
       schemaShape = shape,
       definition = minimalDef
     )
+
+  // A v2 definition that RETAINS the "initial" state (so an upgrade preserving currentState is valid) but
+  // adds a state, giving it a distinct logicHash from minimalDef.
+  private val v2Def: StateMachineDefinition = {
+    val s0 = StateId("initial")
+    val s1 = StateId("active")
+    StateMachineDefinition(
+      states = Map(s0 -> State(s0, isFinal = false), s1 -> State(s1, isFinal = false)),
+      initialState = s0,
+      transitions = Nil
+    )
+  }
+
+  private def publishWith(name: String, v: SemVer, definition: StateMachineDefinition): PublishVersion =
+    PublishVersion(RegistryName.unsafe(name), v, b64(s"schema-$name-${v.render}"), shape, definition)
 
   private val genesis = DataState(OnChain.genesis, CalculatedState.genesis)
 
@@ -249,6 +264,79 @@ object RegistryCombinerSuite extends SimpleIOSuite {
       expect(receipt.flatMap(_.schemaBinding).map(_.name).contains(RegistryName.unsafe("escrow"))) and
       expect(receipt.flatMap(_.schemaBinding).map(_.version).contains(SemVer(1, 0, 0))) and
       expect(receipt.map(_.initialState).contains(minimalDef.initialState))
+    }
+  }
+
+  test("upgrading a bound fiber to a new version re-binds, migrates, and emits an UpgradeReceipt") {
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val p1 = publish("escrow", SemVer(1, 0, 0)) // definition = minimalDef
+      val p2 = publishWith("escrow", SemVer(2, 0, 0), v2Def) // new logic, same package
+      val create = CreateStateMachine(
+        fiberA,
+        minimalDef,
+        emptyData,
+        schemaRef = Some(SchemaRef(RegistryName.unsafe("escrow"), VersionReq.Exact(SemVer(1, 0, 0))))
+      )
+      val upgrade = UpgradeFiber(
+        fiberA,
+        SchemaRef(RegistryName.unsafe("escrow"), VersionReq.Exact(SemVer(2, 0, 0))),
+        v2Def,
+        migration = None,
+        targetSequenceNumber = FiberOrdinal.MinValue
+      )
+      for {
+        pr1 <- fixture.registry.generateProofs(p1, Set(Alice))
+        s1  <- combiner.insert(genesis, Signed(p1, pr1))
+        pr2 <- fixture.registry.generateProofs(p2, Set(Alice))
+        s2  <- combiner.insert(s1, Signed(p2, pr2))
+        prC <- fixture.registry.generateProofs(create, Set(Alice))
+        s3  <- combiner.insert(s2, Signed(create, prC))
+        prU <- fixture.registry.generateProofs(upgrade, Set(Alice))
+        s4  <- combiner.insert(s3, Signed(upgrade, prU))
+        sm = s4.calculated.stateMachines.get(fiberA)
+        receipt = s4.onChain.latestLogs
+          .getOrElse(fiberA, Nil)
+          .collectFirst { case r: FiberLogEntry.UpgradeReceipt => r }
+      } yield expect(sm.flatMap(_.schemaBinding).map(_.version).contains(SemVer(2, 0, 0))) and
+      expect(sm.map(_.definition).contains(v2Def)) and
+      expect(receipt.map(_.toBinding.version).contains(SemVer(2, 0, 0))) and
+      expect(receipt.map(_.migrated).contains(false))
+    }
+  }
+
+  test("upgrading with a definition that does not match the target version's logicHash is rejected") {
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val p1 = publish("escrow", SemVer(1, 0, 0)) // logicHash = minimalDef
+      val create = CreateStateMachine(
+        fiberA,
+        minimalDef,
+        emptyData,
+        schemaRef = Some(SchemaRef(RegistryName.unsafe("escrow"), VersionReq.Exact(SemVer(1, 0, 0))))
+      )
+      // target 1.0.0 (logicHash = minimalDef) but supply v2Def -> hash mismatch
+      val badUpgrade = UpgradeFiber(
+        fiberA,
+        SchemaRef(RegistryName.unsafe("escrow"), VersionReq.Exact(SemVer(1, 0, 0))),
+        v2Def,
+        migration = None,
+        targetSequenceNumber = FiberOrdinal.MinValue
+      )
+      for {
+        validator     <- Validator.make[IO]
+        pr1           <- fixture.registry.generateProofs(p1, Set(Alice))
+        s1            <- combiner.insert(genesis, Signed(p1, pr1))
+        prC           <- fixture.registry.generateProofs(create, Set(Alice))
+        s2            <- combiner.insert(s1, Signed(create, prC))
+        prU           <- fixture.registry.generateProofs(badUpgrade, Set(Alice))
+        valid         <- validator.validateSignedUpdate(s2, Signed(badUpgrade, prU))
+        combineFailed <- combiner.insert(s2, Signed(badUpgrade, prU)).attempt.map(_.isLeft)
+      } yield expect(valid.isInvalid) and expect(combineFailed)
     }
   }
 }

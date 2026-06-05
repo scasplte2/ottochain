@@ -8,7 +8,7 @@ import cats.syntax.all._
 
 import io.constellationnetwork.ext.cats.syntax.next._
 import io.constellationnetwork.metagraph_sdk.json_logic.gas.GasConfig
-import io.constellationnetwork.metagraph_sdk.json_logic.{JsonLogicValue, NullValue}
+import io.constellationnetwork.metagraph_sdk.json_logic.{JsonLogicExpression, JsonLogicValue, MapValue, NullValue}
 import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
 import io.constellationnetwork.schema.SnapshotOrdinal
 import io.constellationnetwork.schema.address.Address
@@ -17,8 +17,9 @@ import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.hash.Hash
 import io.constellationnetwork.security.signature.signature.SignatureProof
 
-import xyz.kd5ujc.schema.fiber.FiberLogEntry.{EventReceipt, OracleInvocation}
+import xyz.kd5ujc.schema.fiber.FiberLogEntry.{EventReceipt, OracleInvocation, UpgradeReceipt}
 import xyz.kd5ujc.schema.fiber._
+import xyz.kd5ujc.schema.registry.SchemaBinding
 import xyz.kd5ujc.schema.{CalculatedState, Records}
 import xyz.kd5ujc.shared_data.fiber.core.FiberTInstances._
 import xyz.kd5ujc.shared_data.fiber.core._
@@ -50,6 +51,19 @@ trait FiberEngine[F[_]] {
     input:   FiberInput,
     proofs:  List[SignatureProof]
   ): F[TransactionResult]
+
+  /**
+   * Upgrade a state machine fiber to `newDefinition`/`newBinding`, optionally transforming its state via
+   * `migration`. Runs through the same metered `FiberT` boundary as [[process]] (no direct metakit call):
+   * the migration is evaluated via [[xyz.kd5ujc.shared_data.fiber.core.MeteredEvaluator]] with gas charged
+   * to `ExecutionState`. Preserves the current state id (which must exist in `newDefinition`).
+   */
+  def migrate(
+    fiberId:       UUID,
+    newDefinition: StateMachineDefinition,
+    newBinding:    SchemaBinding,
+    migration:     Option[JsonLogicExpression]
+  ): F[TransactionResult]
 }
 
 object FiberEngine {
@@ -80,6 +94,102 @@ object FiberEngine {
         processInternal(fiberId, input, proofs)
           .run(FiberContext(ordinal, lastSnapshotHash, epochProgress, limits, gasConfig, fiberGasConfig))
           .runA(ExecutionState.initial)
+
+      def migrate(
+        fiberId:       UUID,
+        newDefinition: StateMachineDefinition,
+        newBinding:    SchemaBinding,
+        migration:     Option[JsonLogicExpression]
+      ): F[TransactionResult] =
+        migrateInternal(fiberId, newDefinition, newBinding, migration)
+          .run(FiberContext(ordinal, lastSnapshotHash, epochProgress, limits, gasConfig, fiberGasConfig))
+          .runA(ExecutionState.initial)
+
+      private def migrateInternal(
+        fiberId:       UUID,
+        newDefinition: StateMachineDefinition,
+        newBinding:    SchemaBinding,
+        migration:     Option[JsonLogicExpression]
+      ): FiberT[F, TransactionResult] =
+        calculatedState.getFiber(fiberId) match {
+          case None =>
+            abortWithReason(FailureReason.FiberNotFound(fiberId))
+
+          case Some(fiber) if fiber.status != FiberStatus.Active =>
+            abortWithReason(FailureReason.FiberNotActive(fiberId, fiber.status.toString))
+
+          case Some(sm: Records.StateMachineFiberRecord) =>
+            migrateStateMachine(sm, newDefinition, newBinding, migration)
+
+          case Some(other) =>
+            abortWithReason(FailureReason.FiberInputMismatch(other.fiberId, FiberKind.Script, InputKind.Transition))
+        }
+
+      private def aborted(reason: FailureReason): FiberT[F, TransactionResult] =
+        ExecutionOps.getGasUsed[FiberT[F, *]].map(TransactionResult.Aborted(reason, _): TransactionResult)
+
+      private def migrateStateMachine(
+        sm:            Records.StateMachineFiberRecord,
+        newDefinition: StateMachineDefinition,
+        newBinding:    SchemaBinding,
+        migration:     Option[JsonLogicExpression]
+      ): FiberT[F, TransactionResult] = {
+        // The migration is metered through the same boundary as every other JLVM evaluation (no direct
+        // metakit call); identity (None) leaves the state untouched.
+        val evalMigration: FiberT[F, Either[FailureReason, JsonLogicValue]] =
+          migration match {
+            case None       => sm.stateData.asRight[FailureReason].pure[FiberT[F, *]]
+            case Some(expr) => MeteredEvaluator.eval[F, FiberT[F, *]](expr, sm.stateData, GasExhaustionPhase.Migration)
+          }
+
+        evalMigration.flatMap {
+          case Left(reason) => aborted(reason)
+
+          case Right(migrated) =>
+            (migrated, newDefinition.states.contains(sm.currentState)) match {
+              case (m: MapValue, true) =>
+                for {
+                  hash    <- (m: JsonLogicValue).computeDigest.liftFiber
+                  gasUsed <- ExecutionOps.getGasUsed[FiberT[F, *]]
+                  receipt = UpgradeReceipt(
+                    fiberId = sm.fiberId,
+                    ordinal = ordinal,
+                    fromBinding = sm.schemaBinding,
+                    toBinding = newBinding,
+                    gasUsed = gasUsed,
+                    migrated = migration.isDefined
+                  )
+                  _ <- ExecutionOps.appendLog[FiberT[F, *]](receipt)
+                  updated = sm.copy(
+                    previousUpdateOrdinal = sm.latestUpdateOrdinal,
+                    latestUpdateOrdinal = ordinal,
+                    definition = newDefinition,
+                    stateData = m,
+                    stateDataHash = hash,
+                    sequenceNumber = sm.sequenceNumber.next,
+                    schemaBinding = Some(newBinding)
+                  )
+                  logs <- ExecutionOps.getLogs[FiberT[F, *]]
+                } yield TransactionResult.Committed(
+                  updatedStateMachines = Map(sm.fiberId -> updated),
+                  updatedOracles = Map.empty,
+                  logEntries = logs.toList,
+                  totalGasUsed = gasUsed
+                ): TransactionResult
+
+              case (_: MapValue, false) =>
+                aborted(
+                  FailureReason.ValidationFailed(
+                    s"current state ${sm.currentState.value} is not present in the new definition",
+                    ordinal
+                  )
+                )
+
+              case _ =>
+                aborted(FailureReason.ValidationFailed("migration did not produce a map state", ordinal))
+            }
+        }
+      }
 
       private def processInternal(
         fiberId: UUID,

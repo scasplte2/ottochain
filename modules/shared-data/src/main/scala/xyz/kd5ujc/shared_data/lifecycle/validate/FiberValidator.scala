@@ -9,7 +9,7 @@ import io.constellationnetwork.currency.dataApplication.DataState
 import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.signature.SignatureProof
 
-import xyz.kd5ujc.schema.Updates.{ArchiveStateMachine, CreateStateMachine, TransitionStateMachine}
+import xyz.kd5ujc.schema.Updates.{ArchiveStateMachine, CreateStateMachine, TransitionStateMachine, UpgradeFiber}
 import xyz.kd5ujc.schema.{CalculatedState, OnChain}
 import xyz.kd5ujc.shared_data.lifecycle.validate.rules.{CommonRules, FiberRules, RegistryRules}
 
@@ -77,6 +77,17 @@ object FiberValidator {
         cidExists <- CommonRules.cidIsFound(update.fiberId, state)
         seqNumOk  <- FiberRules.L1.sequenceNumberMatches(update.fiberId, update.targetSequenceNumber, state)
       } yield List(cidExists, seqNumOk).combineAll
+
+    /** Validates an UpgradeFiber update (structural: fiber exists, new definition valid, sequence) */
+    def upgrade(update: UpgradeFiber): F[ValidationResult] =
+      for {
+        cidExists     <- CommonRules.cidIsFound(update.fiberId, state)
+        definitionOk  <- FiberRules.L1.validStateMachineDefinition(update.newDefinition)
+        limitsOk      <- FiberRules.L1.definitionWithinLimits(update.newDefinition)
+        expressionsOk <- FiberRules.L1.definitionExpressionsWithinDepthLimits(update.newDefinition)
+        reservedOk    <- FiberRules.L1.noReservedOperatorFieldNames(update.newDefinition)
+        seqNumOk      <- FiberRules.L1.sequenceNumberMatches(update.fiberId, update.targetSequenceNumber, state)
+      } yield List(cidExists, definitionOk, limitsOk, expressionsOk, reservedOk, seqNumOk).combineAll
   }
 
   /**
@@ -115,6 +126,20 @@ object FiberValidator {
         fiberActive   <- FiberRules.L0.fiberIsActive(update.fiberId, state.calculated)
         signedByOwner <- FiberRules.L0.updateSignedByOwners(update.fiberId, proofs, state.calculated)
       } yield List(fiberActive, signedByOwner).combineAll
+
+    /** Validates an UpgradeFiber update (active, owner, same-package re-bind + verified hash, state preserved) */
+    def upgrade(update: UpgradeFiber): F[ValidationResult] =
+      for {
+        fiberActive   <- FiberRules.L0.fiberIsActive(update.fiberId, state.calculated)
+        signedByOwner <- FiberRules.L0.updateSignedByOwners(update.fiberId, proofs, state.calculated)
+        bindingOk     <- FiberRules.L0.bindingNameMatches(update.fiberId, update.targetRef.name, state.calculated)
+        targetOk <- RegistryRules.L0.refResolvesAndMatches(
+          Some(update.targetRef),
+          update.newDefinition,
+          state.calculated
+        )
+        stateOk <- FiberRules.L0.currentStateInDefinition(update.fiberId, update.newDefinition, state.calculated)
+      } yield List(fiberActive, signedByOwner, bindingOk, targetOk, stateOk).combineAll
   }
 
   /**
@@ -148,6 +173,13 @@ object FiberValidator {
       for {
         l1Result <- l1.archiveFiber(update)
         l0Result <- l0.archiveFiber(update)
+      } yield l1Result |+| l0Result
+
+    /** Validates an UpgradeFiber update (all checks) */
+    def upgrade(update: UpgradeFiber): F[ValidationResult] =
+      for {
+        l1Result <- l1.upgrade(update)
+        l0Result <- l0.upgrade(update)
       } yield l1Result |+| l0Result
   }
 }

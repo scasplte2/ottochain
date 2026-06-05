@@ -165,6 +165,75 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
     result <- current.withRecord[F](update.fiberId, updatedFiber)
   } yield result
 
+  /**
+   * Upgrades a fiber to a new registered version of the same package (#27): re-binds (verifying the new
+   * definition's hash against the target version), migrates state through the engine's metered evaluator,
+   * and emits an UpgradeReceipt. Aborts (raises) if the fiber is unbound, the target is a different
+   * package, the target/hash does not resolve, or the sequence number is stale.
+   */
+  def upgradeFiber(
+    update: Signed[Updates.UpgradeFiber]
+  ): CombineResult[F] = for {
+    currentOrdinal   <- ctx.getCurrentOrdinal
+    lastSnapshotHash <- ctx.getLastSnapshotHash
+    epochProgress    <- ctx.getEpochProgress
+
+    fiberRecord <- current.calculated.stateMachines
+      .get(update.fiberId)
+      .fold(
+        Async[F].raiseError[Records.StateMachineFiberRecord](
+          new RuntimeException(s"Fiber ${update.fiberId} not found")
+        )
+      )(_.pure[F])
+
+    _ <- Async[F]
+      .raiseError(
+        new RuntimeException(
+          s"Sequence number mismatch: target=${update.targetSequenceNumber}, actual=${fiberRecord.sequenceNumber}"
+        )
+      )
+      .whenA(fiberRecord.sequenceNumber =!= update.targetSequenceNumber)
+
+    // Must currently be bound, and the upgrade must target the SAME package (no cross-package switch).
+    _ <- fiberRecord.schemaBinding match {
+      case Some(b) if b.name === update.targetRef.name => Async[F].unit
+      case Some(b) =>
+        Async[F].raiseError[Unit](
+          new RuntimeException(
+            s"cannot upgrade ${b.name.render} fiber to a different package ${update.targetRef.name.render}"
+          )
+        )
+      case None =>
+        Async[F].raiseError[Unit](new RuntimeException(s"fiber ${update.fiberId} has no binding to upgrade"))
+    }
+
+    // Resolve the target version and verify the new definition's hash (verified re-bind, reuses resolveBinding).
+    maybeBinding <- resolveBinding(Some(update.targetRef), update.newDefinition)
+    newBinding <- maybeBinding.fold(
+      Async[F].raiseError[SchemaBinding](
+        new RuntimeException(s"upgrade target ${update.targetRef.name.render} did not resolve")
+      )
+    )(_.pure[F])
+
+    orchestrator = FiberEngine.make[F](
+      calculatedState = current.calculated,
+      ordinal = currentOrdinal,
+      limits = executionLimits,
+      lastSnapshotHash = lastSnapshotHash,
+      epochProgress = epochProgress
+    )
+
+    outcome <- orchestrator.migrate(update.fiberId, update.newDefinition, newBinding, update.migration)
+
+    newState <- outcome match {
+      case TransactionResult.Committed(updatedFibers, updatedOracles, logEntries, _, _, _) =>
+        handleCommittedOutcome(updatedFibers, updatedOracles, logEntries)
+
+      case TransactionResult.Aborted(reason, gasUsed, _) =>
+        handleAbortedOutcome(update.fiberId, "__upgrade__", reason, gasUsed, currentOrdinal)
+    }
+  } yield newState
+
   // ============================================================================
   // Private Helpers
   // ============================================================================
