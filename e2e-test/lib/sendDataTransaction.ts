@@ -68,17 +68,29 @@ export default async function sendSignedUpdate(
     return fulfilled.map((r) => r.value);
   }
 
+  // Surface the dl1's actual rejection: HttpClient throws a NetworkError carrying `statusCode` and
+  // `response` (the raw response body). Log status + body per node (even when empty) and fold them into
+  // the thrown error so the runner's "Failed flows" output shows WHY, not just "HTTP 400: Bad Request".
   const errorMessages = responses
-    .map((r) => {
+    .map((r, i) => {
       if (r.status === 'rejected') {
-        const err = r.reason as Error & { response?: string };
-        if (err.response) {
-          console.log(`\x1b[33m[sendDataTransaction]\x1b[31m Error response body:\x1b[0m ${err.response}`);
-        }
-        return err.message;
+        const err = (r.reason ?? {}) as { message?: string; statusCode?: number; response?: unknown };
+        const url = dl1Urls[i];
+        const status = err.statusCode ?? '?';
+        const body =
+          err.response === undefined || err.response === null || err.response === ''
+            ? '(empty body)'
+            : typeof err.response === 'string'
+              ? err.response
+              : JSON.stringify(err.response);
+        console.log(
+          `\x1b[33m[sendDataTransaction]\x1b[31m ${url} -> HTTP ${status}:\x1b[0m ${body} ${err.message ? `(${err.message})` : ''}`
+        );
+        return `${url} HTTP ${status}: ${body}`;
       }
       return '';
     })
-    .join('; ');
-  throw new Error(`All requests failed. Errors: ${errorMessages}`);
+    .filter(Boolean)
+    .join(' | ');
+  throw new Error(`All requests failed: ${errorMessages}`);
 }
