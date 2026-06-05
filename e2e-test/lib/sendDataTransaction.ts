@@ -1,5 +1,24 @@
-import { HttpClient, batchSign, dropNulls } from '@ottochain/sdk';
+import { HttpClient, batchSign } from '@ottochain/sdk';
 import type { KeyPair } from '@ottochain/sdk';
+
+/**
+ * Recursively drop null-valued object fields (array elements — including nulls — are preserved).
+ * Mirrors the chain's metakit `JsonBinaryCodec.dropNulls`, so the client signs the same null-free
+ * canonical the chain re-derives when verifying a signature. Implemented locally rather than imported
+ * from `@ottochain/sdk` so the e2e does not depend on the published SDK build exporting it.
+ */
+function dropNulls<T>(value: T): T {
+  if (value === null || value === undefined) return value;
+  if (Array.isArray(value)) return value.map(dropNulls) as unknown as T;
+  if (typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (v !== null) out[k] = dropNulls(v);
+    }
+    return out as T;
+  }
+  return value;
+}
 
 /**
  * Sign a message with multiple wallets and POST to the DL1 /data endpoint.
