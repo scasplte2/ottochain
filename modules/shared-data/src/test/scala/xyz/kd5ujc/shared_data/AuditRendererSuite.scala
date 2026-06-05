@@ -100,4 +100,14 @@ object AuditRendererSuite extends SimpleIOSuite {
       expect(AuditRenderer.render(creation).contains(FiberFingerprint.of(fiberA, FiberKind.StateMachine)))
     )
   }
+
+  test("a fiber with a reverse name renders 'nickname (fingerprint)'; without it, the bare fingerprint") {
+    val fp = FiberFingerprint.of(fiberA, FiberKind.StateMachine)
+    val named = Map(fiberA -> RegistryName.unsafe("my-escrow.machine"))
+    IO.pure(
+      expect(AuditRenderer.render(creation, named).contains(s"my-escrow.machine ($fp)")) and
+      expect(AuditRenderer.render(creation).contains(fp)) and
+      expect(!AuditRenderer.render(creation).contains("my-escrow.machine"))
+    )
+  }
 }

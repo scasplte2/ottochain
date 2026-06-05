@@ -110,12 +110,16 @@ class ML0CustomRoutes[F[_]: Async](
         .toResponse
 
     case GET -> Root / "state-machines" / UUIDVar(fiberId) / "audit" =>
-      context
-        .getOnChainState[OnChain]
-        .map(_.map { onChain =>
-          AuditRenderer.renderAll(onChain.latestLogs.getOrElse(fiberId, List.empty))
-        })
-        .toResponse
+      checkpointService.get.flatMap { checkpoint =>
+        context
+          .getOnChainState[OnChain]
+          .map(_.map { onChain =>
+            AuditRenderer.renderAll(
+              onChain.latestLogs.getOrElse(fiberId, List.empty),
+              checkpoint.state.reverseNames.toMap
+            )
+          })
+      }.toResponse
 
     case GET -> Root / "oracles" / UUIDVar(oracleId) / "invocations" =>
       context
