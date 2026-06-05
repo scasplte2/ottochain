@@ -135,6 +135,26 @@ object RegistryRules {
             .pure[F]
       }
 
+    /** A fiber's optional schemaRef must resolve against the registry (the referenced version must exist). */
+    def refResolves[F[_]: Applicative](ref: Option[SchemaRef], state: CalculatedState): F[ValidationResult] =
+      ref match {
+        case None => ().validNec[DataApplicationValidationError].pure[F]
+        case Some(SchemaRef(name, versionReq)) =>
+          lineageOf(name, state) match {
+            case None =>
+              (Errors.SchemaRefUnknownName(name.render): DataApplicationValidationError).invalidNec[Unit].pure[F]
+            case Some(lineage) =>
+              lineage
+                .resolve(versionReq)
+                .fold(
+                  _ =>
+                    (Errors
+                      .SchemaRefUnresolvable(name.render): DataApplicationValidationError).invalidNec[Unit].pure[F],
+                  _ => ().validNec[DataApplicationValidationError].pure[F]
+                )
+          }
+      }
+
     private def lineageOf(name: RegistryName, state: CalculatedState): Option[VersionLineage] =
       state.registry.get(name).map(_.target).collect { case RegistryTarget.SchemaPackage(l) => l }
   }
@@ -175,6 +195,14 @@ object RegistryRules {
 
     final case class IllegalStatusTransition(from: String, to: String) extends DataApplicationValidationError {
       override val message: String = s"illegal registry status transition $from -> $to"
+    }
+
+    final case class SchemaRefUnknownName(name: String) extends DataApplicationValidationError {
+      override val message: String = s"schemaRef refers to unknown registry name '$name'"
+    }
+
+    final case class SchemaRefUnresolvable(name: String) extends DataApplicationValidationError {
+      override val message: String = s"schemaRef version is unresolvable for registry name '$name'"
     }
   }
 }

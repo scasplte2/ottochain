@@ -11,7 +11,7 @@ import io.constellationnetwork.security.signature.signature.SignatureProof
 
 import xyz.kd5ujc.schema.Updates.{ArchiveStateMachine, CreateStateMachine, TransitionStateMachine}
 import xyz.kd5ujc.schema.{CalculatedState, OnChain}
-import xyz.kd5ujc.shared_data.lifecycle.validate.rules.{CommonRules, FiberRules}
+import xyz.kd5ujc.shared_data.lifecycle.validate.rules.{CommonRules, FiberRules, RegistryRules}
 
 /**
  * Validators for state machine fiber operations.
@@ -98,7 +98,8 @@ object FiberValidator {
       for {
         hasProofs    <- FiberRules.L0.hasProofs(proofs)
         parentActive <- FiberRules.L0.parentFiberActive(update.parentFiberId, state.calculated)
-      } yield List(hasProofs, parentActive).combineAll
+        schemaRefOk  <- RegistryRules.L0.refResolves(update.schemaRef, state.calculated)
+      } yield List(hasProofs, parentActive, schemaRefOk).combineAll
 
     /** Validates a ProcessFiberEvent update (L0 specific checks) */
     def processEvent(update: TransitionStateMachine): F[ValidationResult] =

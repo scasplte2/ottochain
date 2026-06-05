@@ -1,19 +1,21 @@
 package xyz.kd5ujc.shared_data
 
 import java.nio.charset.StandardCharsets
-import java.util.Base64
+import java.util.{Base64, UUID}
 
 import cats.effect.IO
 
 import scala.collection.immutable.SortedMap
 
 import io.constellationnetwork.currency.dataApplication.{DataState, L0NodeContext}
+import io.constellationnetwork.metagraph_sdk.json_logic.{JsonLogicValue, MapValue}
 import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.Signed
 
-import xyz.kd5ujc.schema.Updates.{PublishVersion, SetVersionStatus}
+import xyz.kd5ujc.schema.Updates.{CreateStateMachine, PublishVersion, SetVersionStatus}
+import xyz.kd5ujc.schema.fiber.{State, StateId, StateMachineDefinition}
 import xyz.kd5ujc.schema.registry._
-import xyz.kd5ujc.schema.{CalculatedState, OnChain}
+import xyz.kd5ujc.schema.{CalculatedState, OnChain, Records}
 import xyz.kd5ujc.shared_data.lifecycle.{Combiner, Validator}
 import xyz.kd5ujc.shared_test.Participant._
 import xyz.kd5ujc.shared_test.TestFixture
@@ -130,6 +132,59 @@ object RegistryCombinerSuite extends SimpleIOSuite {
       } yield expect(statusOf(s2, name, v).contains(RegistryStatus.Deprecated)) and
       expect(statusOf(s3, name, v).contains(RegistryStatus.Yanked)) and
       expect(unyankFailed)
+    }
+  }
+
+  private val minimalDef: StateMachineDefinition = {
+    val s = StateId("initial")
+    StateMachineDefinition(states = Map(s -> State(s, isFinal = false)), initialState = s, transitions = Nil)
+  }
+  private val emptyData: JsonLogicValue = MapValue(Map.empty[String, JsonLogicValue])
+  private val fiberA = UUID.fromString("11111111-1111-4111-8111-111111111111")
+
+  test("creating a fiber with a resolvable schemaRef pins the SchemaBinding") {
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val p1 = publish("escrow", SemVer(1, 0, 0))
+      val create = CreateStateMachine(
+        fiberA,
+        minimalDef,
+        emptyData,
+        schemaRef = Some(SchemaRef(RegistryName.unsafe("escrow"), VersionReq.Exact(SemVer(1, 0, 0))))
+      )
+      for {
+        pr1 <- fixture.registry.generateProofs(p1, Set(Alice))
+        s1  <- combiner.insert(genesis, Signed(p1, pr1))
+        prC <- fixture.registry.generateProofs(create, Set(Alice))
+        s2  <- combiner.insert(s1, Signed(create, prC))
+        binding = s2.calculated.stateMachines
+          .get(fiberA)
+          .collect { case r: Records.StateMachineFiberRecord => r }
+          .flatMap(_.schemaBinding)
+      } yield expect(binding.map(_.name).contains(RegistryName.unsafe("escrow"))) and
+      expect(binding.map(_.version).contains(SemVer(1, 0, 0)))
+    }
+  }
+
+  test("creating a fiber with a schemaRef to an unknown name is rejected (validator invalid + combiner aborts)") {
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val create = CreateStateMachine(
+        fiberA,
+        minimalDef,
+        emptyData,
+        schemaRef = Some(SchemaRef(RegistryName.unsafe("ghost"), VersionReq.Latest))
+      )
+      for {
+        validator     <- Validator.make[IO]
+        prC           <- fixture.registry.generateProofs(create, Set(Alice))
+        valid         <- validator.validateSignedUpdate(genesis, Signed(create, prC))
+        combineFailed <- combiner.insert(genesis, Signed(create, prC)).attempt.map(_.isLeft)
+      } yield expect(valid.isInvalid) and expect(combineFailed)
     }
   }
 }

@@ -13,6 +13,7 @@ import io.constellationnetwork.security.signature.Signed
 
 import xyz.kd5ujc.schema.fiber.FiberLogEntry.EventReceipt
 import xyz.kd5ujc.schema.fiber.{FiberLogEntry, FiberOrdinal, _}
+import xyz.kd5ujc.schema.registry._
 import xyz.kd5ujc.schema.{CalculatedState, OnChain, Records, Updates}
 import xyz.kd5ujc.shared_data.fiber.FiberEngine
 import xyz.kd5ujc.shared_data.syntax.all._
@@ -46,6 +47,7 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
     currentOrdinal  <- ctx.getCurrentOrdinal
     owners          <- update.proofs.toList.traverse(_.id.toAddress).map(Set.from)
     initialDataHash <- update.initialData.computeDigest
+    binding         <- resolveBinding(update.schemaRef)
 
     record = Records.StateMachineFiberRecord(
       fiberId = update.fiberId,
@@ -59,7 +61,8 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
       sequenceNumber = FiberOrdinal.MinValue,
       owners = owners,
       status = FiberStatus.Active,
-      parentFiberId = update.parentFiberId
+      parentFiberId = update.parentFiberId,
+      schemaBinding = binding
     )
 
     result <- current.withRecord[F](update.fiberId, record)
@@ -157,6 +160,36 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
   // ============================================================================
   // Private Helpers
   // ============================================================================
+
+  /**
+   * Resolve an optional schema reference against the current registry, returning the pinned binding.
+   * Aborts (raises) if the referenced name/version cannot be resolved (declaration model, #24; the
+   * RegistryValidator also previews this at L0).
+   */
+  private def resolveBinding(ref: Option[SchemaRef]): F[Option[SchemaBinding]] =
+    ref match {
+      case None => none[SchemaBinding].pure[F]
+      case Some(SchemaRef(name, versionReq)) =>
+        current.calculated.registry
+          .get(name)
+          .map(_.target)
+          .collect { case RegistryTarget.SchemaPackage(l) => l } match {
+          case None =>
+            Async[F].raiseError[Option[SchemaBinding]](
+              new RuntimeException(s"schemaRef refers to unknown registry name ${name.render}")
+            )
+          case Some(lineage) =>
+            lineage
+              .resolve(versionReq)
+              .fold(
+                e =>
+                  Async[F].raiseError[Option[SchemaBinding]](
+                    new RuntimeException(s"schemaRef unresolvable for ${name.render}: $e")
+                  ),
+                rv => SchemaBinding(name, rv.version, rv.schemaHash, rv.logicHash).some.pure[F]
+              )
+        }
+    }
 
   /**
    * Handles a committed transaction outcome.

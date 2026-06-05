@@ -11,7 +11,7 @@ import io.constellationnetwork.security.signature.Signed
 
 import xyz.kd5ujc.schema.CodecConfiguration._
 import xyz.kd5ujc.schema.fiber.{AccessControlPolicy, FiberOrdinal, StateMachineDefinition}
-import xyz.kd5ujc.schema.registry.{RegistryName, RegistryStatus, SemVer}
+import xyz.kd5ujc.schema.registry.{RegistryName, RegistryStatus, SchemaRef, SemVer}
 
 import derevo.circe.magnolia.{customizableDecoder, customizableEncoder}
 import derevo.derive
@@ -45,7 +45,8 @@ object Updates {
     fiberId:       UUID,
     definition:    StateMachineDefinition,
     initialData:   JsonLogicValue,
-    parentFiberId: Option[UUID] = None
+    parentFiberId: Option[UUID] = None,
+    schemaRef:     Option[SchemaRef] = None
   ) extends StateMachineFiberOp
       with OttochainMessage
 

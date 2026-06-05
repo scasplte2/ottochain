@@ -2,6 +2,11 @@ package xyz.kd5ujc.schema.registry
 
 import io.constellationnetwork.security.hash.Hash
 
+import xyz.kd5ujc.schema.CodecConfiguration._
+
+import derevo.circe.magnolia.{customizableDecoder, customizableEncoder}
+import derevo.derive
+
 /**
  * A caller's version requirement, resolved deterministically against a [[VersionLineage]] (Cargo/npm-style).
  *
@@ -13,6 +18,7 @@ import io.constellationnetwork.security.hash.Hash
  *
  * "Selectable" excludes Yanked; Deprecated is selectable but flagged.
  */
+@derive(customizableEncoder, customizableDecoder)
 sealed trait VersionReq
 
 object VersionReq {
