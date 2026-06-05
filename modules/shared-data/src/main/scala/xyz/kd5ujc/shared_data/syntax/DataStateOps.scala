@@ -122,6 +122,19 @@ trait DataStateOps {
       }
 
     /**
+     * Commit a fiber-alias entry (#29): the forward entry (name -> InstanceAlias) plus the canonical
+     * reverse record (targetFiberId -> name) used to render human-readable audit trails.
+     */
+    def withAlias[F[_]: Async](
+      name:          RegistryName,
+      entry:         RegistryEntry,
+      targetFiberId: UUID
+    ): F[DataState[OnChain, CalculatedState]] =
+      withRegistryEntry[F](name, entry).map(
+        _.focus(_.calculated.reverseNames).modify(_.updated(targetFiberId, name))
+      )
+
+    /**
      * Append log entries to OnChain.latestLogs, grouping by fiberId.
      *
      * Entries are merged into the existing map: new entries for a given fiber ID

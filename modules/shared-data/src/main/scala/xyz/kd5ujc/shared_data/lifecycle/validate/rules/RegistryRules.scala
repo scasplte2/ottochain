@@ -1,6 +1,6 @@
 package xyz.kd5ujc.shared_data.lifecycle.validate.rules
 
-import java.util.Base64
+import java.util.{Base64, UUID}
 
 import cats.Applicative
 import cats.data.{NonEmptySet, Validated}
@@ -9,6 +9,7 @@ import cats.syntax.all._
 
 import io.constellationnetwork.currency.dataApplication.DataApplicationValidationError
 import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
+import io.constellationnetwork.schema.address.Address
 import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.signature.SignatureProof
 
@@ -49,6 +50,12 @@ object RegistryRules {
         )
         .pure[F]
     }
+
+    /** An alias name must use a fiber TLD (`.machine`/`.script`), not `.package` (that is PublishVersion). */
+    def aliasTldIsFiber[F[_]: Applicative](name: RegistryName): F[ValidationResult] =
+      Validated
+        .condNec(name.tld != NameTld.Package, (), Errors.AliasTldNotFiber(name.render): DataApplicationValidationError)
+        .pure[F]
 
     // protobuf field-number constraints (FieldDescriptor): 1..2^29-1, excluding the reserved 19000..19999.
     private val MinFieldNumber = 1
@@ -206,6 +213,65 @@ object RegistryRules {
           }
       }
 
+    /** An alias's target fiber must exist as the kind its TLD requires (.machine -> SM, .script -> oracle). */
+    def aliasTargetIsKind[F[_]: Applicative](
+      name:          RegistryName,
+      targetFiberId: UUID,
+      state:         CalculatedState
+    ): F[ValidationResult] = {
+      val ok = name.tld match {
+        case NameTld.Machine => state.stateMachines.contains(targetFiberId)
+        case NameTld.Script  => state.scripts.contains(targetFiberId)
+        case NameTld.Package => false
+      }
+      Validated
+        .condNec(
+          ok,
+          (),
+          Errors.AliasTargetWrongKind(name.render, targetFiberId.toString): DataApplicationValidationError
+        )
+        .pure[F]
+    }
+
+    /** The signer must own the fiber being aliased (you name your own fiber). */
+    def signerOwnsAliasTarget[F[_]: Async: SecurityProvider](
+      targetFiberId: UUID,
+      proofs:        NonEmptySet[SignatureProof],
+      state:         CalculatedState
+    ): F[ValidationResult] = {
+      val owners: Set[Address] =
+        state.stateMachines
+          .get(targetFiberId)
+          .map(_.owners)
+          .orElse(state.scripts.get(targetFiberId).map(_.owners))
+          .getOrElse(Set.empty)
+      signerAddresses(proofs).map { signers =>
+        Validated.condNec(
+          signers.intersect(owners).nonEmpty,
+          (),
+          Errors.AliasNotFiberOwner(targetFiberId.toString): DataApplicationValidationError
+        )
+      }
+    }
+
+    /** An alias name must be free, or already owned by the signer (a re-point). */
+    def aliasNameAvailable[F[_]: Async: SecurityProvider](
+      name:   RegistryName,
+      proofs: NonEmptySet[SignatureProof],
+      state:  CalculatedState
+    ): F[ValidationResult] =
+      state.registry.get(name) match {
+        case None => ().validNec[DataApplicationValidationError].pure[F]
+        case Some(entry) =>
+          signerAddresses(proofs).map { signers =>
+            Validated.condNec(
+              signers.intersect(entry.owner).nonEmpty,
+              (),
+              Errors.AliasNameTaken(name.render): DataApplicationValidationError
+            )
+          }
+      }
+
     private def lineageOf(name: RegistryName, state: CalculatedState): Option[VersionLineage] =
       state.registry.get(name).map(_.target).collect { case RegistryTarget.SchemaPackage(l) => l }
   }
@@ -260,6 +326,24 @@ object RegistryRules {
 
       override val message: String =
         s"fiber definition does not match the registered logic for '$name'@$version (verified binding)"
+    }
+
+    final case class AliasTldNotFiber(name: String) extends DataApplicationValidationError {
+      override val message: String = s"alias name '$name' must use a fiber TLD (.machine or .script), not .package"
+    }
+
+    final case class AliasTargetWrongKind(name: String, fiberId: String) extends DataApplicationValidationError {
+
+      override val message: String =
+        s"alias '$name' target fiber $fiberId does not exist as the kind its TLD requires"
+    }
+
+    final case class AliasNotFiberOwner(fiberId: String) extends DataApplicationValidationError {
+      override val message: String = s"signer is not an owner of the aliased fiber $fiberId"
+    }
+
+    final case class AliasNameTaken(name: String) extends DataApplicationValidationError {
+      override val message: String = s"alias name '$name' is owned by another address"
     }
   }
 }

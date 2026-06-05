@@ -81,6 +81,7 @@ object Validator {
               case u: InvokeScript           => u.fiberId.toString
               case u: PublishVersion         => u.fiberId.toString
               case u: SetVersionStatus       => u.fiberId.toString
+              case u: RegisterAlias          => u.fiberId.toString
             }
             val cids = checkpoint.state.fiberCommits.keys.map(_.toString.take(8)).mkString(", ")
 
@@ -99,6 +100,7 @@ object Validator {
                 case u: InvokeScript           => oracleL1.invokeOracle(u)
                 case u: PublishVersion         => registryL1.publish(u)
                 case u: SetVersionStatus       => registryL1.setStatus(u)
+                case u: RegisterAlias          => registryL1.registerAlias(u)
               }
               _ <- logger.info(
                 s"[DL1-validate] $updateName fiberId=${fiberId.take(8)}... " +
@@ -133,6 +135,7 @@ object Validator {
             case u: InvokeScript           => oracleCombined.invokeOracle(u)
             case u: PublishVersion         => registryCombined.publish(u)
             case u: SetVersionStatus       => registryCombined.setStatus(u)
+            case u: RegisterAlias          => registryCombined.registerAlias(u)
           }
         }
 

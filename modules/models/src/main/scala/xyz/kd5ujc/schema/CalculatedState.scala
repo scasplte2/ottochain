@@ -16,9 +16,13 @@ import derevo.derive
 case class CalculatedState(
   stateMachines: SortedMap[UUID, Records.StateMachineFiberRecord],
   scripts:       SortedMap[UUID, Records.ScriptFiberRecord],
-  registry:      SortedMap[RegistryName, RegistryEntry] = SortedMap.empty
+  registry:      SortedMap[RegistryName, RegistryEntry] = SortedMap.empty,
+  // Reverse records (#29): fiber UUID -> its canonical registered name, for human-readable audit trails.
+  reverseNames: SortedMap[UUID, RegistryName] = SortedMap.empty
 ) extends DataCalculatedState
 
 object CalculatedState {
-  val genesis: CalculatedState = CalculatedState(SortedMap.empty, SortedMap.empty, SortedMap.empty)
+
+  val genesis: CalculatedState =
+    CalculatedState(SortedMap.empty, SortedMap.empty, SortedMap.empty, SortedMap.empty)
 }

@@ -163,6 +163,20 @@ object Updates {
     val fiberId: UUID = RegistryOp.routingId(name)
   }
 
+  /**
+   * Register a human-readable nickname for an existing fiber (#29). The name's TLD must be `.machine` or
+   * `.script` and must match the target fiber's kind; the signer must own the target fiber. Sets the
+   * forward alias (name -> fiber) and the fiber's canonical reverse record (fiber -> name).
+   */
+  @derive(customizableDecoder, customizableEncoder)
+  final case class RegisterAlias(
+    name:          RegistryName,
+    targetFiberId: UUID
+  ) extends RegistryOp
+      with OttochainMessage {
+    val fiberId: UUID = RegistryOp.routingId(name)
+  }
+
   object OttochainMessage {
 
     /**
@@ -197,6 +211,7 @@ object Updates {
       case u: Updates.InvokeScript           => Json.obj(u.messageName -> u.asJson)
       case u: Updates.PublishVersion         => Json.obj(u.messageName -> u.asJson)
       case u: Updates.SetVersionStatus       => Json.obj(u.messageName -> u.asJson)
+      case u: Updates.RegisterAlias          => Json.obj(u.messageName -> u.asJson)
     }
 
     implicit val messageDecoder: Decoder[OttochainMessage] =
@@ -209,7 +224,8 @@ object Updates {
           Decoder[Updates.CreateScript],
           Decoder[Updates.InvokeScript],
           Decoder[Updates.PublishVersion],
-          Decoder[Updates.SetVersionStatus]
+          Decoder[Updates.SetVersionStatus],
+          Decoder[Updates.RegisterAlias]
         )
 
         c.keys

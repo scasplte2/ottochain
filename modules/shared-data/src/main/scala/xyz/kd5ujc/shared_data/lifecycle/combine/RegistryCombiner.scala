@@ -1,10 +1,13 @@
 package xyz.kd5ujc.shared_data.lifecycle.combine
 
+import java.util.UUID
+
 import cats.effect.Async
 import cats.syntax.all._
 
 import io.constellationnetwork.currency.dataApplication.{DataState, L0NodeContext}
 import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
+import io.constellationnetwork.schema.address.Address
 import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.Signed
 
@@ -72,6 +75,10 @@ class RegistryCombiner[F[_]: Async: SecurityProvider](
                         .raiseError[RegistryEntry](new RuntimeException(s"publish rejected for ${pv.name.render}: $e")),
                     l => entry.copy(target = RegistryTarget.SchemaPackage(l)).pure[F]
                   )
+              case other =>
+                Async[F].raiseError[RegistryEntry](
+                  new RuntimeException(s"${pv.name.render} is not a schema package (${other.getClass.getSimpleName})")
+                )
             }
       }
       result <- current.withRegistryEntry[F](pv.name, updatedEntry)
@@ -100,10 +107,65 @@ class RegistryCombiner[F[_]: Async: SecurityProvider](
                   .raiseError[RegistryEntry](new RuntimeException(s"status change rejected for ${ss.name.render}: $e")),
               l => entry.copy(target = RegistryTarget.SchemaPackage(l)).pure[F]
             )
+        case other =>
+          Async[F].raiseError[RegistryEntry](
+            new RuntimeException(s"${ss.name.render} is not a schema package (${other.getClass.getSimpleName})")
+          )
       }
       result <- current.withRegistryEntry[F](ss.name, updated)
     } yield result
   }
+
+  /**
+   * Register a fiber alias (#29): the name's TLD must be `.machine`/`.script` and match the target fiber's
+   * kind, the signer must own the target fiber, and the name must be free or owned by the signer. Sets the
+   * forward entry + the canonical reverse record. Aborts (raises) on any violation.
+   */
+  def registerAlias(update: Signed[Updates.RegisterAlias]): F[DataState[OnChain, CalculatedState]] = {
+    val ra = update.value
+    for {
+      signers      <- update.proofs.toList.traverse(_.id.toAddress).map(Set.from)
+      targetOwners <- aliasTargetOwners(ra.name.tld, ra.targetFiberId)
+      _ <- Async[F]
+        .raiseError[Unit](
+          new RuntimeException(s"signer does not own fiber ${ra.targetFiberId} for alias ${ra.name.render}")
+        )
+        .whenA(!signers.exists(targetOwners.contains))
+      _ <- current.calculated.registry.get(ra.name) match {
+        case None                                                => Async[F].unit
+        case Some(entry) if signers.exists(entry.owner.contains) => Async[F].unit
+        case Some(_) =>
+          Async[F].raiseError[Unit](new RuntimeException(s"alias name ${ra.name.render} is owned by another address"))
+      }
+      entry = RegistryEntry(ra.name, signers, RegistryTarget.InstanceAlias(ra.targetFiberId))
+      result <- current.withAlias[F](ra.name, entry, ra.targetFiberId)
+    } yield result
+  }
+
+  /** Owners of the fiber an alias targets, after checking the TLD matches the fiber's kind (aborts otherwise). */
+  private def aliasTargetOwners(tld: NameTld, fiberId: UUID): F[Set[Address]] =
+    tld match {
+      case NameTld.Machine =>
+        current.calculated.stateMachines
+          .get(fiberId)
+          .fold(
+            Async[F].raiseError[Set[Address]](
+              new RuntimeException(s".machine alias target $fiberId is not a state-machine fiber")
+            )
+          )(_.owners.pure[F])
+      case NameTld.Script =>
+        current.calculated.scripts
+          .get(fiberId)
+          .fold(
+            Async[F].raiseError[Set[Address]](
+              new RuntimeException(s".script alias target $fiberId is not a script fiber")
+            )
+          )(_.owners.pure[F])
+      case NameTld.Package =>
+        Async[F].raiseError[Set[Address]](
+          new RuntimeException("cannot register a .package name as a fiber alias (use PublishVersion)")
+        )
+    }
 }
 
 object RegistryCombiner {

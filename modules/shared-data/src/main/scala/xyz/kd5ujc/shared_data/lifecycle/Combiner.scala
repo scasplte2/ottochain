@@ -62,6 +62,7 @@ object Combiner {
           case u: Updates.InvokeScript           => oracleCombiner.invokeScript(Signed(u, update.proofs))
           case u: Updates.PublishVersion         => registryCombiner.publishVersion(Signed(u, update.proofs))
           case u: Updates.SetVersionStatus       => registryCombiner.setVersionStatus(Signed(u, update.proofs))
+          case u: Updates.RegisterAlias          => registryCombiner.registerAlias(Signed(u, update.proofs))
         }
       }
     }

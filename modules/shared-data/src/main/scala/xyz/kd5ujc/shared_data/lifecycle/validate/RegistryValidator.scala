@@ -9,7 +9,7 @@ import io.constellationnetwork.currency.dataApplication.{DataApplicationValidati
 import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.signature.SignatureProof
 
-import xyz.kd5ujc.schema.Updates.{PublishVersion, SetVersionStatus}
+import xyz.kd5ujc.schema.Updates.{PublishVersion, RegisterAlias, SetVersionStatus}
 import xyz.kd5ujc.schema.{CalculatedState, OnChain}
 import xyz.kd5ujc.shared_data.lifecycle.validate.rules.{FiberRules, RegistryRules}
 
@@ -37,6 +37,9 @@ object RegistryValidator {
       val _ = update
       ().validNec[DataApplicationValidationError].pure[F]
     }
+
+    def registerAlias(update: RegisterAlias): F[ValidationResult] =
+      RegistryRules.L1.aliasTldIsFiber(update.name)
   }
 
   /** L0 contextual checks (ownership + invariant preview). */
@@ -56,6 +59,13 @@ object RegistryValidator {
         authd <- RegistryRules.L0.authorizedForExisting(update.name, proofs, state.calculated)
         legal <- RegistryRules.L0.statusTransitionLegal(update.name, update.version, update.status, state.calculated)
       } yield authd |+| legal
+
+    def registerAlias(update: RegisterAlias): F[ValidationResult] =
+      for {
+        kindOk  <- RegistryRules.L0.aliasTargetIsKind(update.name, update.targetFiberId, state.calculated)
+        ownerOk <- RegistryRules.L0.signerOwnsAliasTarget(update.targetFiberId, proofs, state.calculated)
+        nameOk  <- RegistryRules.L0.aliasNameAvailable(update.name, proofs, state.calculated)
+      } yield List(kindOk, ownerOk, nameOk).combineAll
   }
 
   /** Combined L1 + L0, used at the L0 layer. */
@@ -76,6 +86,12 @@ object RegistryValidator {
       for {
         l1Result <- l1.setStatus(update)
         l0Result <- l0.setStatus(update)
+      } yield l1Result |+| l0Result
+
+    def registerAlias(update: RegisterAlias): F[ValidationResult] =
+      for {
+        l1Result <- l1.registerAlias(update)
+        l0Result <- l0.registerAlias(update)
       } yield l1Result |+| l0Result
   }
 }

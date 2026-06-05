@@ -12,7 +12,7 @@ import io.constellationnetwork.metagraph_sdk.json_logic.{IntValue, JsonLogicValu
 import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.Signed
 
-import xyz.kd5ujc.schema.Updates.{CreateStateMachine, PublishVersion, SetVersionStatus, UpgradeFiber}
+import xyz.kd5ujc.schema.Updates.{CreateStateMachine, PublishVersion, RegisterAlias, SetVersionStatus, UpgradeFiber}
 import xyz.kd5ujc.schema.fiber.{FiberLogEntry, FiberOrdinal, State, StateId, StateMachineDefinition}
 import xyz.kd5ujc.schema.registry._
 import xyz.kd5ujc.schema.{CalculatedState, OnChain, Records}
@@ -423,6 +423,81 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         sm.flatMap(_.schemaBinding).map(_.version).contains(SemVer(1, 0, 0))
       ) and // still v1; upgrade did not apply
       expect(sm.flatMap(_.lastReceipt).exists(!_.success)) // failure receipt recorded
+    }
+  }
+
+  // ── #29 fiber-name aliases (RegisterAlias) ────────────────────────────────────────────────────
+
+  test("registering a .machine alias for an owned fiber sets the forward entry + reverse record") {
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val create = CreateStateMachine(fiberA, minimalDef, emptyData) // ad-hoc fiber; Alice owns
+      val name = RegistryName.unsafe("my-escrow.machine")
+      val alias = RegisterAlias(name, fiberA)
+      for {
+        prC <- fixture.registry.generateProofs(create, Set(Alice))
+        s1  <- combiner.insert(genesis, Signed(create, prC))
+        prA <- fixture.registry.generateProofs(alias, Set(Alice))
+        s2  <- combiner.insert(s1, Signed(alias, prA))
+        target = s2.calculated.registry.get(name).map(_.target)
+      } yield expect(target.exists { case RegistryTarget.InstanceAlias(f) => f == fiberA; case _ => false }) and
+      expect(s2.calculated.reverseNames.get(fiberA).contains(name))
+    }
+  }
+
+  test("a .package TLD is rejected as a fiber alias (validator invalid + combiner aborts)") {
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val create = CreateStateMachine(fiberA, minimalDef, emptyData)
+      val alias = RegisterAlias(pkg("escrow"), fiberA) // .package TLD is not a fiber alias
+      for {
+        validator     <- Validator.make[IO]
+        prC           <- fixture.registry.generateProofs(create, Set(Alice))
+        s1            <- combiner.insert(genesis, Signed(create, prC))
+        prA           <- fixture.registry.generateProofs(alias, Set(Alice))
+        valid         <- validator.validateSignedUpdate(s1, Signed(alias, prA))
+        combineFailed <- combiner.insert(s1, Signed(alias, prA)).attempt.map(_.isLeft)
+      } yield expect(valid.isInvalid) and expect(combineFailed)
+    }
+  }
+
+  test("a .script alias for a state-machine fiber is rejected (kind mismatch)") {
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val create = CreateStateMachine(fiberA, minimalDef, emptyData) // a state machine
+      val alias = RegisterAlias(RegistryName.unsafe("oracle.script"), fiberA) // .script wants a script fiber
+      for {
+        validator     <- Validator.make[IO]
+        prC           <- fixture.registry.generateProofs(create, Set(Alice))
+        s1            <- combiner.insert(genesis, Signed(create, prC))
+        prA           <- fixture.registry.generateProofs(alias, Set(Alice))
+        valid         <- validator.validateSignedUpdate(s1, Signed(alias, prA))
+        combineFailed <- combiner.insert(s1, Signed(alias, prA)).attempt.map(_.isLeft)
+      } yield expect(valid.isInvalid) and expect(combineFailed)
+    }
+  }
+
+  test("a non-owner cannot register an alias for someone else's fiber") {
+    TestFixture.resource(Set(Alice, Bob)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val create = CreateStateMachine(fiberA, minimalDef, emptyData) // Alice owns
+      val alias = RegisterAlias(RegistryName.unsafe("hostile.machine"), fiberA)
+      for {
+        validator     <- Validator.make[IO]
+        prC           <- fixture.registry.generateProofs(create, Set(Alice))
+        s1            <- combiner.insert(genesis, Signed(create, prC))
+        prB           <- fixture.registry.generateProofs(alias, Set(Bob)) // Bob, not an owner, signs
+        valid         <- validator.validateSignedUpdate(s1, Signed(alias, prB))
+        combineFailed <- combiner.insert(s1, Signed(alias, prB)).attempt.map(_.isLeft)
+      } yield expect(valid.isInvalid) and expect(combineFailed)
     }
   }
 }
