@@ -132,7 +132,7 @@ jobs:
         run: sbt clean coverage sharedData/test coverageReport
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           file: ./target/scala-2.13/scoverage-report/scoverage.xml
           flags: unittests
