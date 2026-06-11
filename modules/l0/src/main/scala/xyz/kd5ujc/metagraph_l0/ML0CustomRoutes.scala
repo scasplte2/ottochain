@@ -3,21 +3,19 @@ package xyz.kd5ujc.metagraph_l0
 import cats.effect.Async
 import cats.syntax.all._
 
-import io.constellationnetwork.currency.dataApplication.{DataApplicationValidationError, L0NodeContext}
+import io.constellationnetwork.currency.dataApplication.DataApplicationValidationError
 import io.constellationnetwork.ext.http4s.error.RefinedRequestApplicationDecoder
 import io.constellationnetwork.metagraph_sdk.MetagraphPublicRoutes
-import io.constellationnetwork.metagraph_sdk.lifecycle.CheckpointService
+import io.constellationnetwork.metagraph_sdk.lifecycle.committed.CommittedReader
 import io.constellationnetwork.metagraph_sdk.std.Checkpoint
 import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
-import io.constellationnetwork.metagraph_sdk.syntax.all.L0ContextOps
 import io.constellationnetwork.security.signature.Signed
 
 import xyz.kd5ujc.buildinfo.BuildInfo
 import xyz.kd5ujc.metagraph_l0.webhooks.{SubscribeRequest, SubscribeResponse, SubscriberRegistry}
+import xyz.kd5ujc.schema.CalculatedState
 import xyz.kd5ujc.schema.Updates.OttochainMessage
-import xyz.kd5ujc.schema.fiber.FiberLogEntry.{EventReceipt, OracleInvocation}
 import xyz.kd5ujc.schema.fiber.FiberStatus
-import xyz.kd5ujc.schema.{CalculatedState, OnChain}
 
 import io.circe.Json
 import io.circe.syntax.EncoderOps
@@ -25,11 +23,18 @@ import org.http4s.circe.CirceEntityCodec.{circeEntityDecoder, circeEntityEncoder
 import org.http4s.server.Router
 import org.http4s.{HttpRoutes, QueryParamDecoder, Response, Status}
 
+/**
+ * Custom L0 routes backed by the committed cell: every calculated-state read goes through the
+ * [[CommittedReader]] handed out by `CommittedApp.makeL0` (one atomic cell read per request), so
+ * responses are always consistent with the served `/committed/...` roots and proofs.
+ *
+ * Routes that need the latest SIGNED snapshot (on-chain state / logs) live in
+ * [[ML0SnapshotStateRoutes]] -- makeL0's `extraRoutes` does not receive the `L0NodeContext`
+ * (flagged as a metakit follow-up in `ML0Service`).
+ */
 class ML0CustomRoutes[F[_]: Async](
-  checkpointService:  CheckpointService[F, CalculatedState],
+  reader:             CommittedReader[F, CalculatedState],
   subscriberRegistry: SubscriberRegistry[F]
-)(implicit
-  context: L0NodeContext[F]
 ) extends MetagraphPublicRoutes[F] {
 
   implicit val fiberStatusDecoder: QueryParamDecoder[FiberStatus] =
@@ -38,6 +43,9 @@ class ML0CustomRoutes[F[_]: Async](
     }
 
   object StatusQueryParam extends OptionalQueryParamDecoderMatcher[FiberStatus]("status")
+
+  private def calculatedState: F[Checkpoint[CalculatedState]] =
+    reader.committed.map(c => Checkpoint(c.ordinal, c.state))
 
   private val v1Routes: HttpRoutes[F] = HttpRoutes.of[F] {
 
@@ -63,16 +71,13 @@ class ML0CustomRoutes[F[_]: Async](
         }
       }
 
-    case GET -> Root / "onchain" =>
-      context.getOnChainState[OnChain].toResponse
-
     case GET -> Root / "checkpoint" =>
-      checkpointService.get
+      calculatedState
         .map(_.asRight[DataApplicationValidationError])
         .toResponse
 
     case GET -> Root / "state-machines" :? StatusQueryParam(statusOpt) =>
-      checkpointService.get.map { case Checkpoint(_, state) =>
+      calculatedState.map { case Checkpoint(_, state) =>
         statusOpt
           .fold(state.stateMachines) { status =>
             state.stateMachines.filter { case (_, fiber) => fiber.status == status }
@@ -81,43 +86,23 @@ class ML0CustomRoutes[F[_]: Async](
       }.toResponse
 
     case GET -> Root / "state-machines" / UUIDVar(fiberId) =>
-      checkpointService.get.map { case Checkpoint(_, state) =>
+      calculatedState.map { case Checkpoint(_, state) =>
         state.stateMachines.get(fiberId).asRight[DataApplicationValidationError]
       }.toResponse
 
     case GET -> Root / "oracles" :? StatusQueryParam(statusOpt) =>
-      checkpointService.get.map { case Checkpoint(_, state) =>
+      calculatedState.map { case Checkpoint(_, state) =>
         statusOpt
           .fold(state.scripts) { status =>
-            state.scripts.filter { case (_, oracle) => oracle.status == status }
+            state.scripts.filter { case (_, script) => script.status == status }
           }
           .asRight[DataApplicationValidationError]
       }.toResponse
 
-    case GET -> Root / "oracles" / UUIDVar(oracleId) =>
-      checkpointService.get.map { case Checkpoint(_, state) =>
-        state.scripts.get(oracleId).asRight[DataApplicationValidationError]
+    case GET -> Root / "oracles" / UUIDVar(scriptId) =>
+      calculatedState.map { case Checkpoint(_, state) =>
+        state.scripts.get(scriptId).asRight[DataApplicationValidationError]
       }.toResponse
-
-    case GET -> Root / "state-machines" / UUIDVar(fiberId) / "events" =>
-      context
-        .getOnChainState[OnChain]
-        .map(_.map { onChain =>
-          onChain.latestLogs
-            .getOrElse(fiberId, List.empty)
-            .collect { case r: EventReceipt => r }
-        })
-        .toResponse
-
-    case GET -> Root / "oracles" / UUIDVar(oracleId) / "invocations" =>
-      context
-        .getOnChainState[OnChain]
-        .map(_.map { onChain =>
-          onChain.latestLogs
-            .getOrElse(oracleId, List.empty)
-            .collect { case i: OracleInvocation => i }
-        })
-        .toResponse
 
     // =========================================================================
     // Webhook Management Endpoints
