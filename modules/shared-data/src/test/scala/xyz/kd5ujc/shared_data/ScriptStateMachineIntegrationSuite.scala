@@ -446,7 +446,7 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
             case MapValue(m) =>
               m.get("totalAmount").collect {
                 case IntValue(a)   => a
-                case FloatValue(a) => BigInt(a.toLong)
+                case FloatValue(a) => a.toBigInt
               }
             case _ => None
           }
