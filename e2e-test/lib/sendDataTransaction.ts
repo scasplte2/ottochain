@@ -1,4 +1,5 @@
-import { HttpClient, batchSign, dropNulls } from '@ottochain/sdk';
+import { HttpClient, batchSign } from '@ottochain/sdk';
+import { dropNulls } from './dropNulls';
 import type { KeyPair } from '@ottochain/sdk';
 
 /**
