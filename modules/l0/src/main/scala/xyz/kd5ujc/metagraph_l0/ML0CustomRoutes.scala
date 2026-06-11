@@ -16,7 +16,7 @@ import xyz.kd5ujc.buildinfo.BuildInfo
 import xyz.kd5ujc.metagraph_l0.webhooks.{SubscribeRequest, SubscribeResponse, SubscriberRegistry}
 import xyz.kd5ujc.schema.Updates.OttochainMessage
 import xyz.kd5ujc.schema.fiber.FiberLogEntry.{EventReceipt, OracleInvocation}
-import xyz.kd5ujc.schema.fiber.FiberStatus
+import xyz.kd5ujc.schema.fiber.{AuditRenderer, FiberStatus}
 import xyz.kd5ujc.schema.{CalculatedState, OnChain}
 
 import io.circe.Json
@@ -108,6 +108,18 @@ class ML0CustomRoutes[F[_]: Async](
             .collect { case r: EventReceipt => r }
         })
         .toResponse
+
+    case GET -> Root / "state-machines" / UUIDVar(fiberId) / "audit" =>
+      checkpointService.get.flatMap { checkpoint =>
+        context
+          .getOnChainState[OnChain]
+          .map(_.map { onChain =>
+            AuditRenderer.renderAll(
+              onChain.latestLogs.getOrElse(fiberId, List.empty),
+              checkpoint.state.reverseNames.toMap
+            )
+          })
+      }.toResponse
 
     case GET -> Root / "oracles" / UUIDVar(oracleId) / "invocations" =>
       context

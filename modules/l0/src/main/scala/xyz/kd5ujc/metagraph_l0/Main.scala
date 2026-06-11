@@ -46,7 +46,8 @@ object Main
     l0Service <- ML0Service
       .make[IO](
         httpClient = httpClient,
-        metagraphId = config.webhook.metagraphId.getOrElse("DAG3KNyfeKUTuWpMMhormWgWSYMD1pDGB2uaWqxG")
+        metagraphId = config.webhook.metagraphId.getOrElse("DAG3KNyfeKUTuWpMMhormWgWSYMD1pDGB2uaWqxG"),
+        genesisPath = config.genesis.path
       )
       .asResource
   } yield l0Service).some

@@ -33,6 +33,7 @@ package object validate {
     // Size limits (prevents memory exhaustion)
     val MaxInitialDataBytes: Long = 1048576L // 1MB
     val MaxEventPayloadBytes: Long = 102400L // 100KB
+    val MaxRegistryBundleBytes: Long = 4194304L // 4MB (the base64 protobuf FileDescriptorSet)
     val MaxStringLength: Int = 10000
     val MaxArraySize: Int = 1000
     val MaxMapSize: Int = 100

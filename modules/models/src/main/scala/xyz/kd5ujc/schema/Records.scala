@@ -10,6 +10,7 @@ import io.constellationnetwork.security.hash.Hash
 import xyz.kd5ujc.schema.CodecConfiguration._
 import xyz.kd5ujc.schema.fiber.FiberLogEntry.{EventReceipt, OracleInvocation}
 import xyz.kd5ujc.schema.fiber._
+import xyz.kd5ujc.schema.registry.SchemaBinding
 
 import derevo.circe.magnolia.{customizableDecoder, customizableEncoder}
 import derevo.derive
@@ -40,7 +41,8 @@ object Records {
     status:                FiberStatus,
     lastReceipt:           Option[EventReceipt] = None,
     parentFiberId:         Option[UUID] = None,
-    childFiberIds:         Set[UUID] = Set.empty
+    childFiberIds:         Set[UUID] = Set.empty,
+    schemaBinding:         Option[SchemaBinding] = None
   ) extends FiberRecord
 
   @derive(customizableEncoder, customizableDecoder)

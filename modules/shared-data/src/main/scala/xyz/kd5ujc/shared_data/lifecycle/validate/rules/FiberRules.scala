@@ -14,6 +14,7 @@ import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.signature.SignatureProof
 
 import xyz.kd5ujc.schema.fiber.{FiberOrdinal, FiberStatus, StateId, StateMachineDefinition}
+import xyz.kd5ujc.schema.registry.RegistryName
 import xyz.kd5ujc.schema.{CalculatedState, OnChain}
 import xyz.kd5ujc.shared_data.lifecycle.validate.{Limits, ValidationResult}
 import xyz.kd5ujc.shared_data.syntax.calculatedState._
@@ -324,6 +325,47 @@ object FiberRules {
               .pure[F]
           }
       }
+
+    /**
+     * An upgrade (#27) target must stay within the SAME package: the fiber must already be bound, and the
+     * target name must equal its current binding's name (no cross-package switch).
+     */
+    def bindingNameMatches[F[_]: Applicative](
+      cid:        UUID,
+      targetName: RegistryName,
+      state:      CalculatedState
+    ): F[ValidationResult] =
+      state.stateMachines.get(cid) match {
+        case None => (Errors.FiberNotFound(cid): DataApplicationValidationError).invalidNec[Unit].pure[F]
+        case Some(sm) =>
+          sm.schemaBinding match {
+            case Some(b) if b.name === targetName => ().validNec[DataApplicationValidationError].pure[F]
+            case Some(b) =>
+              (Errors.UpgradeCrossPackage(cid, b.name.render, targetName.render): DataApplicationValidationError)
+                .invalidNec[Unit]
+                .pure[F]
+            case None =>
+              (Errors.CannotUpgradeUnboundFiber(cid): DataApplicationValidationError).invalidNec[Unit].pure[F]
+          }
+      }
+
+    /** An upgrade's preserved current state id must exist in the new definition. */
+    def currentStateInDefinition[F[_]: Applicative](
+      cid:           UUID,
+      newDefinition: StateMachineDefinition,
+      state:         CalculatedState
+    ): F[ValidationResult] =
+      state.stateMachines.get(cid) match {
+        case None => (Errors.FiberNotFound(cid): DataApplicationValidationError).invalidNec[Unit].pure[F]
+        case Some(sm) =>
+          Validated
+            .condNec(
+              newDefinition.states.contains(sm.currentState),
+              (),
+              Errors.CurrentStateNotInNewDefinition(sm.currentState): DataApplicationValidationError
+            )
+            .pure[F]
+      }
   }
 
   // ============================================================================
@@ -441,6 +483,20 @@ object FiberRules {
       override val message: String =
         s"Field name '$key' in $location conflicts with reserved JSON Logic operator. " +
         s"Using operator names as field keys can cause signature validation failures."
+    }
+
+    // --- Upgrade errors ---
+
+    final case class CannotUpgradeUnboundFiber(cid: UUID) extends DataApplicationValidationError {
+      override val message: String = s"Fiber $cid has no registry binding and cannot be upgraded"
+    }
+
+    final case class UpgradeCrossPackage(cid: UUID, from: String, to: String) extends DataApplicationValidationError {
+      override val message: String = s"Fiber $cid is bound to '$from'; cannot upgrade to a different package '$to'"
+    }
+
+    final case class CurrentStateNotInNewDefinition(state: StateId) extends DataApplicationValidationError {
+      override val message: String = s"Fiber's current state ${state.value} does not exist in the new definition"
     }
   }
 }

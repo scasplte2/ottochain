@@ -14,4 +14,5 @@ object GasExhaustionPhase extends Enum[GasExhaustionPhase] with CirceEnum[GasExh
   case object Oracle extends GasExhaustionPhase
   case object Trigger extends GasExhaustionPhase
   case object Spawn extends GasExhaustionPhase
+  case object Migration extends GasExhaustionPhase
 }
