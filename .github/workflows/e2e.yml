@@ -77,6 +77,11 @@ jobs:
       - name: Download tessellation release JARs
         run: |
           TESS_TAG="v${{ steps.versions.outputs.tessellation }}"
+          # The v4.0.0 git tag has no GitHub release with jar assets (the asset
+          # pipeline only runs on tessellation's release/* branches). v4.0.0-rc.10
+          # carries the full asset set and is version-stamp-only away from final.
+          # Remove this mapping once Constellation publishes v4.0.0 release assets.
+          [ "$TESS_TAG" = "v4.0.0" ] && TESS_TAG="v4.0.0-rc.10"
           REPO="Constellation-Labs/tessellation"
           BASE_URL="https://github.com/${REPO}/releases/download/${TESS_TAG}"
           JARS_DIR="tessellation/docker/jars"
