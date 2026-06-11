@@ -133,8 +133,14 @@ jobs:
 
       # Start cluster with SKIP_ASSEMBLY since all JARs are pre-staged in docker/jars/.
       # --hypergraph-release sets TESSELLATION_VERSION for the Docker image tag.
+      # GITHUB_TOKEN is required: just up builds snapshot-streaming from source (sbt resolves
+      # from GitHub Packages), and sbt needs a valid token to authenticate. Without it,
+      # sbt fails with "unable to locate a valid GitHub token from Or(GitConfig(github.token),
+      # Environment(GITHUB_TOKEN))".
       - name: Start cluster
         working-directory: tessellation
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           just up --hypergraph-release="v${{ steps.versions.outputs.tessellation }}" \
             --skip-assembly --metagraph="${GITHUB_WORKSPACE}" --dl1 --data
