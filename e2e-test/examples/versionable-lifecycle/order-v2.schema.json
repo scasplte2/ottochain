@@ -1,0 +1,21 @@
+{
+  "stateMessage": {
+    "typeName": "Order",
+    "fields": [
+      { "name": "orderId", "number": 1, "typeName": "string" },
+      { "name": "customer", "number": 2, "typeName": "string" },
+      { "name": "total", "number": 3, "typeName": "int64" },
+      { "name": "trackingNumber", "number": 4, "typeName": "string", "optional": true },
+      { "name": "deliveredAt", "number": 5, "typeName": "string", "optional": true },
+      { "name": "cancelReason", "number": 6, "typeName": "string", "optional": true },
+      { "name": "priority", "number": 7, "typeName": "string" }
+    ]
+  },
+  "commands": {
+    "confirm": { "typeName": "Confirm", "fields": [] },
+    "expedite": { "typeName": "Expedite", "fields": [] },
+    "ship": { "typeName": "Ship", "fields": [{ "name": "trackingNumber", "number": 1, "typeName": "string" }] },
+    "deliver": { "typeName": "Deliver", "fields": [{ "name": "timestamp", "number": 1, "typeName": "string" }] },
+    "cancel": { "typeName": "Cancel", "fields": [{ "name": "reason", "number": 1, "typeName": "string" }] }
+  }
+}

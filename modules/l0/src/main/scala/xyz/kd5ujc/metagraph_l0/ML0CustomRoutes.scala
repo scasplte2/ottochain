@@ -17,6 +17,7 @@ import xyz.kd5ujc.metagraph_l0.webhooks.{SubscribeRequest, SubscribeResponse, Su
 import xyz.kd5ujc.schema.Updates.OttochainMessage
 import xyz.kd5ujc.schema.fiber.FiberLogEntry.{EventReceipt, OracleInvocation}
 import xyz.kd5ujc.schema.fiber.{AuditRenderer, FiberStatus}
+import xyz.kd5ujc.schema.registry.RegistryName
 import xyz.kd5ujc.schema.{CalculatedState, OnChain}
 
 import io.circe.Json
@@ -130,6 +131,33 @@ class ML0CustomRoutes[F[_]: Async](
             .collect { case i: OracleInvocation => i }
         })
         .toResponse
+
+    // =========================================================================
+    // Registry Endpoints — schema-package + alias lifecycle (discovery / e2e assertions)
+    // =========================================================================
+
+    // All registry entries: name -> RegistryEntry (target = schema-package version lineage, or alias).
+    case GET -> Root / "registry" =>
+      checkpointService.get.map { case Checkpoint(_, state) =>
+        state.registry.asRight[DataApplicationValidationError]
+      }.toResponse
+
+    // Reverse record (#29): fiber UUID -> its canonical registered name. Declared before the
+    // by-name route; arity differs so there is no ambiguity, but keep the specific path first.
+    case GET -> Root / "registry" / "reverse" / UUIDVar(fiberId) =>
+      checkpointService.get.map { case Checkpoint(_, state) =>
+        state.reverseNames.get(fiberId).asRight[DataApplicationValidationError]
+      }.toResponse
+
+    // A single entry by full `labels.tld` name (e.g. `counter.package`, `my-counter.machine`).
+    case GET -> Root / "registry" / nameStr =>
+      checkpointService.get.map { case Checkpoint(_, state) =>
+        RegistryName
+          .from(nameStr)
+          .toOption
+          .flatMap(state.registry.get)
+          .asRight[DataApplicationValidationError]
+      }.toResponse
 
     // =========================================================================
     // Webhook Management Endpoints
