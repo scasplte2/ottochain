@@ -19,7 +19,7 @@ jobs:
     steps:
       - name: Release Please
         id: release
-        uses: googleapis/release-please-action@v4
+        uses: googleapis/release-please-action@v5
         with:
           # Use PAT to allow triggering other workflows (release.yml, docker.yml)
           # GITHUB_TOKEN cannot trigger other workflows due to GitHub security
