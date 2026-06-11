@@ -25,6 +25,7 @@ case class CalculatedState(
 ) extends DataCalculatedState
 
 object CalculatedState {
+
   val genesis: CalculatedState =
     CalculatedState(SortedMap.empty, SortedMap.empty, SortedMap.empty, SortedMap.empty)
 
