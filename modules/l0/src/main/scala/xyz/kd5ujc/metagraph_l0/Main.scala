@@ -16,6 +16,7 @@ import io.constellationnetwork.security.SecurityProvider
 import xyz.kd5ujc.buildinfo.BuildInfo
 import xyz.kd5ujc.metagraph_l0.app.ML0AppConfig
 import xyz.kd5ujc.metagraph_l0.app.ML0AppConfigOps._
+import xyz.kd5ujc.metagraph_l0.committed.CommittedHydrationClient
 import xyz.kd5ujc.shared_data.app._
 
 import org.http4s.ember.client.EmberClientBuilder
@@ -49,5 +50,19 @@ object Main
         metagraphId = config.webhook.metagraphId.getOrElse("DAG3KNyfeKUTuWpMMhormWgWSYMD1pDGB2uaWqxG")
       )
       .asResource
+
+    // Committed-catalog hydration: a node bootstrapped from snapshot download is breadcrumb-
+    // SEEDED but not hydrated; poll peers for the catalog contents until the own node accepts
+    // them (the /committed/hydrate endpoint is verify-gated against the attested root).
+    _ <- (config.hydration.selfUrl, config.hydration.peers.getOrElse(List.empty)) match {
+      case (Some(selfUrl), peers @ (_ :: _)) =>
+        EmberClientBuilder.default[IO].build.evalMap { hydrationHttpClient =>
+          val hydration = new CommittedHydrationClient[IO](hydrationHttpClient)
+          supervisor
+            .supervise(hydration.awaitHydrated(selfUrl, peers, config.hydration.effectiveInterval))
+            .void
+        }
+      case _ => Resource.unit[IO]
+    }
   } yield l0Service).some
 }
