@@ -30,7 +30,7 @@ object RegistryValidator {
         shapeOk      <- RegistryRules.L1.schemaShapeWellFormed(update.schemaShape)
         bundleOk     <- RegistryRules.L1.bundleWithinLimit(update)
         reservedOk   <- RegistryRules.L1.notReserved(update.name)
-        metaOk       <- RegistryRules.L1.metadataConforms(update.metadata)
+        metaOk       <- RegistryRules.L1.metadataConforms(update.metadata.getOrElse(Map.empty[String, String]))
         definitionOk <- FiberRules.L1.validStateMachineDefinition(update.definition)
         limitsOk     <- FiberRules.L1.definitionWithinLimits(update.definition)
       } yield List(schemaOk, shapeOk, bundleOk, reservedOk, metaOk, definitionOk, limitsOk).combineAll
@@ -44,7 +44,7 @@ object RegistryValidator {
       for {
         tldOk      <- RegistryRules.L1.aliasTldIsFiber(update.name)
         reservedOk <- RegistryRules.L1.notReserved(update.name)
-        metaOk     <- RegistryRules.L1.metadataConforms(update.metadata)
+        metaOk     <- RegistryRules.L1.metadataConforms(update.metadata.getOrElse(Map.empty[String, String]))
       } yield List(tldOk, reservedOk, metaOk).combineAll
   }
 

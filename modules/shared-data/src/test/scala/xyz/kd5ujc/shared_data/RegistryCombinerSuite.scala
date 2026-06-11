@@ -45,8 +45,11 @@ object RegistryCombinerSuite extends SimpleIOSuite {
 
   private val shape: SchemaShape =
     SchemaShape(
-      stateMessage = MessageShape("App.State", List(FieldShape("balance", 1, "int64"))),
-      commands = SortedMap("start" -> MessageShape("App.Start", List(FieldShape("amount", 1, "int64"))))
+      stateMessage =
+        MessageShape("App.State", List(FieldShape("balance", 1, "int64", repeated = false, optional = false))),
+      commands = SortedMap(
+        "start" -> MessageShape("App.Start", List(FieldShape("amount", 1, "int64", repeated = false, optional = false)))
+      )
     )
 
   // The registered logic. Verified binding admits a fiber only if its definition hashes to the registered
@@ -71,7 +74,8 @@ object RegistryCombinerSuite extends SimpleIOSuite {
       version = v,
       schemaB64 = b64(s"schema-$name-${v.render}"),
       schemaShape = shape,
-      definition = minimalDef
+      definition = minimalDef,
+      strict = false
     )
 
   // A v2 definition that RETAINS the "initial" state (so an upgrade preserving currentState is valid) but
@@ -87,7 +91,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
   }
 
   private def publishWith(name: String, v: SemVer, definition: StateMachineDefinition): PublishVersion =
-    PublishVersion(pkg(name), v, b64(s"schema-$name-${v.render}"), shape, definition)
+    PublishVersion(pkg(name), v, b64(s"schema-$name-${v.render}"), shape, definition, strict = false)
 
   private val genesis = DataState(OnChain.genesis, CalculatedState.genesis)
 
@@ -612,7 +616,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
           shape,
           minimalDef,
           strict = false,
-          metadata = meta
+          metadata = Some(meta)
         )
       val bad = PublishVersion(
         pkg("widget"),
@@ -621,7 +625,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         shape,
         minimalDef,
         strict = false,
-        metadata = SortedMap("note" -> ("x" * 200)) // value exceeds 128 chars
+        metadata = Some(SortedMap("note" -> ("x" * 200))) // value exceeds 128 chars
       )
       for {
         validator     <- Validator.make[IO]

@@ -19,8 +19,11 @@ object GenesisDataSuite extends SimpleIOSuite {
 
   private val shape: SchemaShape =
     SchemaShape(
-      stateMessage = MessageShape("App.State", List(FieldShape("balance", 1, "int64"))),
-      commands = SortedMap("start" -> MessageShape("App.Start", List(FieldShape("amount", 1, "int64"))))
+      stateMessage =
+        MessageShape("App.State", List(FieldShape("balance", 1, "int64", repeated = false, optional = false))),
+      commands = SortedMap(
+        "start" -> MessageShape("App.Start", List(FieldShape("amount", 1, "int64", repeated = false, optional = false)))
+      )
     )
 
   private val entry: RegistryEntry =

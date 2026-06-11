@@ -1,8 +1,8 @@
 {
   "states": {
-    "pending": { "id": "pending" },
-    "confirmed": { "id": "confirmed" },
-    "shipped": { "id": "shipped" },
+    "pending": { "id": "pending", "isFinal": false },
+    "confirmed": { "id": "confirmed", "isFinal": false },
+    "shipped": { "id": "shipped", "isFinal": false },
     "delivered": { "id": "delivered", "isFinal": true },
     "cancelled": { "id": "cancelled", "isFinal": true }
   },

@@ -46,7 +46,9 @@ export const generator = ({ options }: { cid?: string; wallets?: unknown; option
     schemaB64: options.schemaB64 ?? Buffer.from(`descriptor:${options.name}:${options.version}`).toString('base64'),
     schemaShape: loadMaybe<SchemaShape>(options.schemaShape),
     definition: loadMaybe<StateMachineDefinition>(options.definition),
-    ...(options.strict !== undefined ? { strict: options.strict } : {}),
+    // `strict` is required on the chain (no default) — always send it so the signed canonical matches
+    // what the chain re-derives. `metadata` is Option (omit-safe), so it stays conditional.
+    strict: options.strict ?? false,
     ...(options.metadata ? { metadata: options.metadata } : {}),
   };
   return { PublishVersion: msg };

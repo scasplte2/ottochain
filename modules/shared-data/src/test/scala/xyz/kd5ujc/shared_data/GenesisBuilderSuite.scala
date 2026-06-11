@@ -25,7 +25,8 @@ object GenesisBuilderSuite extends SimpleIOSuite {
 
   private val shape: SchemaShape =
     SchemaShape(
-      stateMessage = MessageShape("App.State", List(FieldShape("balance", 1, "int64"))),
+      stateMessage =
+        MessageShape("App.State", List(FieldShape("balance", 1, "int64", repeated = false, optional = false))),
       commands = SortedMap.empty
     )
 

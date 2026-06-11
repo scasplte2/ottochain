@@ -18,8 +18,11 @@ object RegistryLineageSuite extends SimpleIOSuite {
 
   private val shape: SchemaShape =
     SchemaShape(
-      stateMessage = MessageShape("App.State", List(FieldShape("balance", 1, "int64"))),
-      commands = SortedMap("start" -> MessageShape("App.Start", List(FieldShape("amount", 1, "int64"))))
+      stateMessage =
+        MessageShape("App.State", List(FieldShape("balance", 1, "int64", repeated = false, optional = false))),
+      commands = SortedMap(
+        "start" -> MessageShape("App.Start", List(FieldShape("amount", 1, "int64", repeated = false, optional = false)))
+      )
     )
 
   private def rv(
@@ -132,14 +135,30 @@ object RegistryLineageSuite extends SimpleIOSuite {
   // ── schemaShapeWellFormed: structural proto validation of the typed domain projection ─────────
 
   test("schemaShapeWellFormed accepts a valid shape and rejects each malformed kind") {
-    val outOfRange = shape.copy(stateMessage = MessageShape("App.State", List(FieldShape("x", 0, "int64"))))
-    val tooBig = shape.copy(stateMessage = MessageShape("App.State", List(FieldShape("x", 536870912, "int64"))))
-    val reserved = shape.copy(stateMessage = MessageShape("App.State", List(FieldShape("x", 19500, "int64"))))
-    val dup = shape.copy(stateMessage =
-      MessageShape("App.State", List(FieldShape("a", 1, "int64"), FieldShape("b", 1, "int64")))
+    val outOfRange = shape.copy(stateMessage =
+      MessageShape("App.State", List(FieldShape("x", 0, "int64", repeated = false, optional = false)))
     )
-    val emptyFieldName = shape.copy(stateMessage = MessageShape("App.State", List(FieldShape("", 1, "int64"))))
-    val emptyTypeName = shape.copy(stateMessage = MessageShape("  ", List(FieldShape("a", 1, "int64"))))
+    val tooBig = shape.copy(stateMessage =
+      MessageShape("App.State", List(FieldShape("x", 536870912, "int64", repeated = false, optional = false)))
+    )
+    val reserved = shape.copy(stateMessage =
+      MessageShape("App.State", List(FieldShape("x", 19500, "int64", repeated = false, optional = false)))
+    )
+    val dup = shape.copy(stateMessage =
+      MessageShape(
+        "App.State",
+        List(
+          FieldShape("a", 1, "int64", repeated = false, optional = false),
+          FieldShape("b", 1, "int64", repeated = false, optional = false)
+        )
+      )
+    )
+    val emptyFieldName = shape.copy(stateMessage =
+      MessageShape("App.State", List(FieldShape("", 1, "int64", repeated = false, optional = false)))
+    )
+    val emptyTypeName = shape.copy(stateMessage =
+      MessageShape("  ", List(FieldShape("a", 1, "int64", repeated = false, optional = false)))
+    )
     val emptyCmdName = shape.copy(commands = SortedMap(" " -> MessageShape("App.Start", Nil)))
     for {
       ok  <- RegistryRules.L1.schemaShapeWellFormed[IO](shape)

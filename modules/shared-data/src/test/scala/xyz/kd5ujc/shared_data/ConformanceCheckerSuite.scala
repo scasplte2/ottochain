@@ -17,12 +17,18 @@ object ConformanceCheckerSuite extends SimpleIOSuite {
   private val msg = MessageShape(
     "App.State",
     List(
-      FieldShape("balance", 1, "int64"),
-      FieldShape("name", 2, "string"),
-      FieldShape("active", 3, "bool"),
-      FieldShape("ratio", 4, "double"),
-      FieldShape("tags", 5, "string", repeated = true),
-      FieldShape("meta", 6, "App.Meta") // message type -> shallow, accepts any non-null value
+      FieldShape("balance", 1, "int64", repeated = false, optional = false),
+      FieldShape("name", 2, "string", repeated = false, optional = false),
+      FieldShape("active", 3, "bool", repeated = false, optional = false),
+      FieldShape("ratio", 4, "double", repeated = false, optional = false),
+      FieldShape("tags", 5, "string", repeated = true, optional = false),
+      FieldShape(
+        "meta",
+        6,
+        "App.Meta",
+        repeated = false,
+        optional = false
+      ) // message type -> shallow, accepts any non-null value
     )
   )
 

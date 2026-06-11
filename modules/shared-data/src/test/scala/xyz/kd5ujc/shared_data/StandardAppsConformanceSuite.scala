@@ -32,19 +32,19 @@ object StandardAppsConformanceSuite extends SimpleIOSuite {
   val identity: MessageShape = MessageShape(
     "ottochain.apps.identity.v1.Identity",
     List(
-      FieldShape("id", 1, "string"),
-      FieldShape("address", 2, "string"),
-      FieldShape("public_key", 3, "string"),
-      FieldShape("display_name", 4, "string"),
-      FieldShape("identity_type", 5, "ottochain.apps.identity.v1.IdentityType"),
-      FieldShape("state", 6, "ottochain.apps.identity.v1.IdentityState"),
-      FieldShape("reputation", 7, "ottochain.apps.identity.v1.Reputation"),
-      FieldShape("stake", 8, "int64"),
-      FieldShape("domains", 9, "string", repeated = true),
-      FieldShape("platform_links", 10, "ottochain.apps.identity.v1.PlatformLink", repeated = true),
-      FieldShape("penalty_history", 11, "ottochain.apps.identity.v1.PenaltyEvent", repeated = true),
-      FieldShape("created_at", 12, "google.protobuf.Timestamp"),
-      FieldShape("updated_at", 13, "google.protobuf.Timestamp")
+      FieldShape("id", 1, "string", repeated = false, optional = false),
+      FieldShape("address", 2, "string", repeated = false, optional = false),
+      FieldShape("public_key", 3, "string", repeated = false, optional = false),
+      FieldShape("display_name", 4, "string", repeated = false, optional = false),
+      FieldShape("identity_type", 5, "ottochain.apps.identity.v1.IdentityType", repeated = false, optional = false),
+      FieldShape("state", 6, "ottochain.apps.identity.v1.IdentityState", repeated = false, optional = false),
+      FieldShape("reputation", 7, "ottochain.apps.identity.v1.Reputation", repeated = false, optional = false),
+      FieldShape("stake", 8, "int64", repeated = false, optional = false),
+      FieldShape("domains", 9, "string", repeated = true, optional = false),
+      FieldShape("platform_links", 10, "ottochain.apps.identity.v1.PlatformLink", repeated = true, optional = false),
+      FieldShape("penalty_history", 11, "ottochain.apps.identity.v1.PenaltyEvent", repeated = true, optional = false),
+      FieldShape("created_at", 12, "google.protobuf.Timestamp", repeated = false, optional = false),
+      FieldShape("updated_at", 13, "google.protobuf.Timestamp", repeated = false, optional = false)
     )
   )
 
@@ -52,16 +52,16 @@ object StandardAppsConformanceSuite extends SimpleIOSuite {
   val proposal: MessageShape = MessageShape(
     "ottochain.apps.governance.v1.Proposal",
     List(
-      FieldShape("id", 1, "string"),
-      FieldShape("title", 2, "string"),
-      FieldShape("description", 3, "string"),
-      FieldShape("action_type", 4, "string"),
-      FieldShape("payload", 5, "google.protobuf.Struct"),
-      FieldShape("proposer", 6, "string"),
-      FieldShape("proposed_at", 7, "google.protobuf.Timestamp"),
-      FieldShape("deadline", 8, "google.protobuf.Timestamp"),
-      FieldShape("queued_at", 9, "google.protobuf.Timestamp"),
-      FieldShape("executable_at", 10, "google.protobuf.Timestamp")
+      FieldShape("id", 1, "string", repeated = false, optional = false),
+      FieldShape("title", 2, "string", repeated = false, optional = false),
+      FieldShape("description", 3, "string", repeated = false, optional = false),
+      FieldShape("action_type", 4, "string", repeated = false, optional = false),
+      FieldShape("payload", 5, "google.protobuf.Struct", repeated = false, optional = false),
+      FieldShape("proposer", 6, "string", repeated = false, optional = false),
+      FieldShape("proposed_at", 7, "google.protobuf.Timestamp", repeated = false, optional = false),
+      FieldShape("deadline", 8, "google.protobuf.Timestamp", repeated = false, optional = false),
+      FieldShape("queued_at", 9, "google.protobuf.Timestamp", repeated = false, optional = false),
+      FieldShape("executable_at", 10, "google.protobuf.Timestamp", repeated = false, optional = false)
     )
   )
 
@@ -69,20 +69,20 @@ object StandardAppsConformanceSuite extends SimpleIOSuite {
   val market: MessageShape = MessageShape(
     "ottochain.apps.markets.v1.Market",
     List(
-      FieldShape("id", 1, "string"),
-      FieldShape("market_type", 2, "ottochain.apps.markets.v1.MarketType"),
-      FieldShape("creator", 3, "string"),
-      FieldShape("title", 4, "string"),
-      FieldShape("terms", 5, "google.protobuf.Struct"),
-      FieldShape("deadline", 6, "google.protobuf.Timestamp"),
-      FieldShape("threshold", 7, "int64"),
-      FieldShape("commitments", 8, "ottochain.apps.markets.v1.Commitment", repeated = true),
-      FieldShape("oracles", 9, "string", repeated = true),
-      FieldShape("quorum", 10, "int32"),
-      FieldShape("resolutions", 11, "ottochain.apps.markets.v1.Resolution", repeated = true),
-      FieldShape("status", 12, "ottochain.apps.markets.v1.MarketState"),
-      FieldShape("created_at", 13, "google.protobuf.Timestamp"),
-      FieldShape("updated_at", 14, "google.protobuf.Timestamp")
+      FieldShape("id", 1, "string", repeated = false, optional = false),
+      FieldShape("market_type", 2, "ottochain.apps.markets.v1.MarketType", repeated = false, optional = false),
+      FieldShape("creator", 3, "string", repeated = false, optional = false),
+      FieldShape("title", 4, "string", repeated = false, optional = false),
+      FieldShape("terms", 5, "google.protobuf.Struct", repeated = false, optional = false),
+      FieldShape("deadline", 6, "google.protobuf.Timestamp", repeated = false, optional = false),
+      FieldShape("threshold", 7, "int64", repeated = false, optional = false),
+      FieldShape("commitments", 8, "ottochain.apps.markets.v1.Commitment", repeated = true, optional = false),
+      FieldShape("oracles", 9, "string", repeated = true, optional = false),
+      FieldShape("quorum", 10, "int32", repeated = false, optional = false),
+      FieldShape("resolutions", 11, "ottochain.apps.markets.v1.Resolution", repeated = true, optional = false),
+      FieldShape("status", 12, "ottochain.apps.markets.v1.MarketState", repeated = false, optional = false),
+      FieldShape("created_at", 13, "google.protobuf.Timestamp", repeated = false, optional = false),
+      FieldShape("updated_at", 14, "google.protobuf.Timestamp", repeated = false, optional = false)
     )
   )
 
