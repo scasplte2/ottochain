@@ -37,7 +37,9 @@ is the whole RFC.
 - **Schemas:** the 5 app domains in proto (client-side). Reuse verbatim; lift on-chain.
 - **Deterministic bytes:** metakit `JsonCanonicalizer` (RFC 8785) + `JsonBinaryCodec` → canonical bytes for
   any `JsonLogicValue`. This is the hashing/commitment substrate (ties to the sharding/commitment RFC's
-  field-level roots). protobuf↔JSON is a standard mapping, and `scalapb-circe` is already a dependency.
+  field-level roots). protobuf↔JSON is a standard mapping. (Correction 2026-06-11: the chain does **not**
+  currently bundle ScalaPB / `scalapb-circe` and has no `.proto` sources — descriptors stay off-chain by
+  design; ScalaPB would only be added if on-chain descriptor parsing is ever pursued.)
 - **CQRS query side:** the **Indexer** is already a read-model builder (webhook-fed ML0 snapshots → Postgres
   projections + a `FiberTransition` log). It just isn't schema-driven and lacks a full event/fact table.
 - **Auto-rendering precedent:** the Explorer already draws the state machine from `definition` — proof that
