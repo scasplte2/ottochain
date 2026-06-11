@@ -143,17 +143,24 @@ object ML0Service {
         override def combine(
           state:   DataState[OnChain, CalculatedState],
           updates: List[Signed[OttochainMessage]]
-        )(implicit context: L0NodeContext[F]): F[DataState[OnChain, CalculatedState]] = {
-          // Sort updates using canonical ordering from OttochainMessage companion object.
-          // This ensures creates are processed before transitions, and transitions for the
-          // same fiber are processed in sequence number order.
-          val sortedUpdates = updates.sorted(OttochainMessage.signedOrdering)
-
-          combiner.foldLeft(
-            state.focus(_.onChain.latestLogs).replace(SortedMap.empty),
-            sortedUpdates
-          )
-        }
+        )(implicit context: L0NodeContext[F]): F[DataState[OnChain, CalculatedState]] =
+          for {
+            // Order updates with a TOTAL order so every node folds the identical sequence. The message-level
+            // ordering (creates before transitions; per-fiber by sequence number) is only PARTIAL — same-name
+            // registry ops and duplicate (fiber, sequence) ops tie. Break ties by the signed update's content
+            // digest so, on a tie, the surviving op is identical across nodes (no fork) while the loser is
+            // recorded as a RejectionReceipt rather than aborting the batch.
+            keyed <- updates.traverse(u => u.computeDigest.map(h => u -> h.value))
+            // Reuse the models ordering (OttochainMessage.signedOrdering) as the PRIMARY key and only append
+            // the content digest as a tiebreaker — the digest needs the Hasher effect, so it can't live inside
+            // the pure models Ordering. This is the partial models order completed to a total one.
+            totalOrdering = Ordering.Tuple2(OttochainMessage.signedOrdering, Ordering.String)
+            sortedUpdates = keyed.sorted(totalOrdering).map(_._1)
+            result <- combiner.foldLeft(
+              state.focus(_.onChain.latestLogs).replace(SortedMap.empty),
+              sortedUpdates
+            )
+          } yield result
 
         override def getCalculatedState(implicit
           context: L0NodeContext[F]

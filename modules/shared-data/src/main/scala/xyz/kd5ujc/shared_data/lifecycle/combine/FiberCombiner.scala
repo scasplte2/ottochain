@@ -54,7 +54,7 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
       case Nil => Async[F].unit
       case violations =>
         Async[F].raiseError[Unit](
-          new RuntimeException(s"initial state does not conform to the strict schema: ${violations.mkString("; ")}")
+          CombineRejected(s"initial state does not conform to the strict schema: ${violations.mkString("; ")}")
         )
     }
 
@@ -104,12 +104,12 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
       .get(update.fiberId)
       .fold(
         Async[F].raiseError[Records.StateMachineFiberRecord](
-          new RuntimeException(s"Fiber ${update.fiberId} not found")
+          CombineRejected(s"Fiber ${update.fiberId} not found")
         )
       )(_.pure[F])
     _ <- Async[F]
       .raiseError(
-        new RuntimeException(
+        CombineRejected(
           s"Sequence number mismatch: target=${update.targetSequenceNumber}, actual=${fiberRecord.sequenceNumber}"
         )
       )
@@ -152,14 +152,14 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
       .collect { case r: Records.StateMachineFiberRecord => r }
       .fold(
         Async[F].raiseError[Records.StateMachineFiberRecord](
-          new RuntimeException(s"Fiber ${update.fiberId} not found")
+          CombineRejected(s"Fiber ${update.fiberId} not found")
         )
       )(_.pure[F])
 
     // Defense-in-depth: reject stale sequence numbers
     _ <- Async[F]
       .raiseError(
-        new RuntimeException(
+        CombineRejected(
           s"Sequence number mismatch: target=${update.targetSequenceNumber}, actual=${fiberRecord.sequenceNumber}"
         )
       )
@@ -191,13 +191,13 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
       .get(update.fiberId)
       .fold(
         Async[F].raiseError[Records.StateMachineFiberRecord](
-          new RuntimeException(s"Fiber ${update.fiberId} not found")
+          CombineRejected(s"Fiber ${update.fiberId} not found")
         )
       )(_.pure[F])
 
     _ <- Async[F]
       .raiseError(
-        new RuntimeException(
+        CombineRejected(
           s"Sequence number mismatch: target=${update.targetSequenceNumber}, actual=${fiberRecord.sequenceNumber}"
         )
       )
@@ -208,21 +208,36 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
       case Some(b) if b.name === update.targetRef.name => Async[F].unit
       case Some(b) =>
         Async[F].raiseError[Unit](
-          new RuntimeException(
+          CombineRejected(
             s"cannot upgrade ${b.name.render} fiber to a different package ${update.targetRef.name.render}"
           )
         )
       case None =>
-        Async[F].raiseError[Unit](new RuntimeException(s"fiber ${update.fiberId} has no binding to upgrade"))
+        Async[F].raiseError[Unit](CombineRejected(s"fiber ${update.fiberId} has no binding to upgrade"))
     }
 
     // Resolve the target version and verify the new definition's hash (verified re-bind, reuses resolveBinding).
     maybeBinding <- resolveBinding(Some(update.targetRef), update.newDefinition)
     newBinding <- maybeBinding.fold(
       Async[F].raiseError[SchemaBinding](
-        new RuntimeException(s"upgrade target ${update.targetRef.name.render} did not resolve")
+        CombineRejected(s"upgrade target ${update.targetRef.name.render} did not resolve")
       )
     )(_.pure[F])
+
+    // Monotonic upgrade: a fiber's bound version may only ADVANCE — no downgrade. To change a published
+    // interface again, publish a NEW HIGHER version (a "revert" is just a higher version that restores prior
+    // behavior). This keeps every fiber's version history a forward-only chain.
+    _ <- fiberRecord.schemaBinding match {
+      case Some(b) if SemVer.ordering.gt(newBinding.version, b.version) => Async[F].unit
+      case Some(b) =>
+        Async[F].raiseError[Unit](
+          CombineRejected(
+            s"cannot downgrade ${b.name.render} fiber from ${b.version.render} to ${newBinding.version.render}; " +
+            s"publish a higher version to revert"
+          )
+        )
+      case None => Async[F].unit // unreachable: binding presence is checked above
+    }
 
     orchestrator = FiberEngine.make[F](
       calculatedState = current.calculated,
@@ -266,7 +281,7 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
           .collect { case RegistryTarget.SchemaPackage(l) => l } match {
           case None =>
             Async[F].raiseError[Option[SchemaBinding]](
-              new RuntimeException(s"schemaRef refers to unknown registry name ${name.render}")
+              CombineRejected(s"schemaRef refers to unknown registry name ${name.render}")
             )
           case Some(lineage) =>
             lineage
@@ -274,7 +289,7 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
               .fold(
                 e =>
                   Async[F].raiseError[Option[SchemaBinding]](
-                    new RuntimeException(s"schemaRef unresolvable for ${name.render}: $e")
+                    CombineRejected(s"schemaRef unresolvable for ${name.render}: $e")
                   ),
                 rv =>
                   definition.computeDigest.flatMap { digest =>
@@ -282,7 +297,7 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
                       SchemaBinding(name, rv.version, rv.schemaHash, rv.logicHash).some.pure[F]
                     else
                       Async[F].raiseError[Option[SchemaBinding]](
-                        new RuntimeException(
+                        CombineRejected(
                           s"schemaRef logic mismatch for ${name.render}@${rv.version.render}: definition hash " +
                           s"${digest.value} != registered logicHash ${rv.logicHash.value}"
                         )
@@ -335,7 +350,7 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
         current.withRecord[F](fiberId, failedFiber).map(_.appendLogs(List(failureReceipt)))
 
       case None =>
-        Async[F].raiseError(new RuntimeException(s"Fiber $fiberId not found"))
+        Async[F].raiseError(CombineRejected(s"Fiber $fiberId not found"))
     }
 }
 

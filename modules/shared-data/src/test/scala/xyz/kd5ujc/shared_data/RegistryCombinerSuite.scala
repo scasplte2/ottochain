@@ -29,6 +29,15 @@ import weaver.SimpleIOSuite
  */
 object RegistryCombinerSuite extends SimpleIOSuite {
 
+  // A deterministic business rejection no longer raises out of the combiner — it records a RejectionReceipt
+  // and leaves state unmutated (so one bad update can't abort the whole batch). Negative tests assert that a
+  // RejectionReceipt was emitted instead of catching an exception.
+  private def wasRejected(state: DataState[OnChain, CalculatedState]): Boolean =
+    state.onChain.latestLogs.values.flatten.exists {
+      case _: FiberLogEntry.RejectionReceipt => true
+      case _                                 => false
+    }
+
   private def b64(s: String): String = Base64.getEncoder.encodeToString(s.getBytes(StandardCharsets.UTF_8))
 
   // Package names now carry the `.package` TLD (Option B): a name is `<labels>.<tld>`.
@@ -125,7 +134,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         s1            <- combiner.insert(genesis, Signed(p1, pr1))
         pr2           <- fixture.registry.generateProofs(p2, Set(Bob))
         valid         <- validator.validateSignedUpdate(s1, Signed(p2, pr2))
-        combineFailed <- combiner.insert(s1, Signed(p2, pr2)).attempt.map(_.isLeft)
+        combineFailed <- combiner.insert(s1, Signed(p2, pr2)).map(wasRejected)
       } yield expect(valid.isInvalid) and expect(combineFailed)
     }
   }
@@ -143,7 +152,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         s1            <- combiner.insert(genesis, Signed(p1, pr1))
         prLow         <- fixture.registry.generateProofs(pLow, Set(Alice))
         valid         <- validator.validateSignedUpdate(s1, Signed(pLow, prLow))
-        combineFailed <- combiner.insert(s1, Signed(pLow, prLow)).attempt.map(_.isLeft)
+        combineFailed <- combiner.insert(s1, Signed(pLow, prLow)).map(wasRejected)
       } yield expect(valid.isInvalid) and expect(combineFailed)
     }
   }
@@ -167,7 +176,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         prY          <- fixture.registry.generateProofs(yank, Set(Alice))
         s3           <- combiner.insert(s2, Signed(yank, prY))
         prU          <- fixture.registry.generateProofs(unyank, Set(Alice))
-        unyankFailed <- combiner.insert(s3, Signed(unyank, prU)).attempt.map(_.isLeft)
+        unyankFailed <- combiner.insert(s3, Signed(unyank, prU)).map(wasRejected)
       } yield expect(statusOf(s2, name, v).contains(RegistryStatus.Deprecated)) and
       expect(statusOf(s3, name, v).contains(RegistryStatus.Yanked)) and
       expect(unyankFailed)
@@ -218,7 +227,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         s1            <- combiner.insert(genesis, Signed(p1, pr1))
         prC           <- fixture.registry.generateProofs(create, Set(Alice))
         valid         <- validator.validateSignedUpdate(s1, Signed(create, prC))
-        combineFailed <- combiner.insert(s1, Signed(create, prC)).attempt.map(_.isLeft)
+        combineFailed <- combiner.insert(s1, Signed(create, prC)).map(wasRejected)
       } yield expect(valid.isInvalid) and expect(combineFailed)
     }
   }
@@ -238,7 +247,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         validator     <- Validator.make[IO]
         prC           <- fixture.registry.generateProofs(create, Set(Alice))
         valid         <- validator.validateSignedUpdate(genesis, Signed(create, prC))
-        combineFailed <- combiner.insert(genesis, Signed(create, prC)).attempt.map(_.isLeft)
+        combineFailed <- combiner.insert(genesis, Signed(create, prC)).map(wasRejected)
       } yield expect(valid.isInvalid) and expect(combineFailed)
     }
   }
@@ -338,8 +347,67 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         s2            <- combiner.insert(s1, Signed(create, prC))
         prU           <- fixture.registry.generateProofs(badUpgrade, Set(Alice))
         valid         <- validator.validateSignedUpdate(s2, Signed(badUpgrade, prU))
-        combineFailed <- combiner.insert(s2, Signed(badUpgrade, prU)).attempt.map(_.isLeft)
+        combineFailed <- combiner.insert(s2, Signed(badUpgrade, prU)).map(wasRejected)
       } yield expect(valid.isInvalid) and expect(combineFailed)
+    }
+  }
+
+  test("a mid-batch rejection records a receipt and does NOT abort the rest of the batch") {
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val p1 = publish("escrow", SemVer(1, 0, 0)) // ok
+      val pBad = publish("escrow", SemVer(0, 9, 0)) // non-monotonic -> rejected (not applied)
+      val p3 = publish("escrow", SemVer(1, 1, 0)) // ok, monotonic over 1.0.0, AFTER the rejection
+      for {
+        pr1 <- fixture.registry.generateProofs(p1, Set(Alice))
+        prB <- fixture.registry.generateProofs(pBad, Set(Alice))
+        pr3 <- fixture.registry.generateProofs(p3, Set(Alice))
+        batch = List(Signed(p1, pr1), Signed(pBad, prB), Signed(p3, pr3))
+        // foldLeft is the batch combine: a CombineRejected mid-fold must not short-circuit the rest.
+        result <- combiner.foldLeft(genesis, batch)
+      } yield
+      // p3 (after the rejected pBad) still applied -> the batch did not abort; pBad was rejected-logged.
+      expect(versionsOf(result, "escrow").contains(Set(SemVer(1, 0, 0), SemVer(1, 1, 0)))) and
+      expect(wasRejected(result))
+    }
+  }
+
+  test("a downgrade upgrade is rejected (a fiber's bound version is monotonic)") {
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val p1 = publish("escrow", SemVer(1, 0, 0)) // logicHash = minimalDef
+      val p2 = publishWith("escrow", SemVer(2, 0, 0), v2Def) // logicHash = v2Def
+      val create = CreateStateMachine(
+        fiberA,
+        v2Def,
+        emptyData,
+        schemaRef = Some(SchemaRef(pkg("escrow"), VersionReq.Exact(SemVer(2, 0, 0))))
+      )
+      // Attempt 2.0.0 -> 1.0.0. newDefinition=minimalDef hashes to 1.0.0's logicHash, so only the
+      // monotonicity guard (not the verified-binding check) can reject it.
+      val downgrade = UpgradeFiber(
+        fiberA,
+        SchemaRef(pkg("escrow"), VersionReq.Exact(SemVer(1, 0, 0))),
+        minimalDef,
+        migration = None,
+        targetSequenceNumber = FiberOrdinal.MinValue
+      )
+      for {
+        pr1      <- fixture.registry.generateProofs(p1, Set(Alice))
+        s1       <- combiner.insert(genesis, Signed(p1, pr1))
+        pr2      <- fixture.registry.generateProofs(p2, Set(Alice))
+        s2       <- combiner.insert(s1, Signed(p2, pr2))
+        prC      <- fixture.registry.generateProofs(create, Set(Alice))
+        s3       <- combiner.insert(s2, Signed(create, prC))
+        prU      <- fixture.registry.generateProofs(downgrade, Set(Alice))
+        rejected <- combiner.insert(s3, Signed(downgrade, prU)).map(wasRejected)
+        sm = s3.calculated.stateMachines.get(fiberA)
+      } yield expect(rejected) and
+      expect(sm.flatMap(_.schemaBinding).map(_.version).contains(SemVer(2, 0, 0)))
     }
   }
 
@@ -369,7 +437,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         pr1           <- fixture.registry.generateProofs(pStrict, Set(Alice))
         s1            <- combiner.insert(genesis, Signed(pStrict, pr1))
         prB           <- fixture.registry.generateProofs(createBad, Set(Alice))
-        combineFailed <- combiner.insert(s1, Signed(createBad, prB)).attempt.map(_.isLeft)
+        combineFailed <- combiner.insert(s1, Signed(createBad, prB)).map(wasRejected)
         prG           <- fixture.registry.generateProofs(createGood, Set(Alice))
         s2            <- combiner.insert(s1, Signed(createGood, prG))
       } yield expect(combineFailed) and expect(s2.calculated.stateMachines.contains(fiberA))
@@ -460,7 +528,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         s1            <- combiner.insert(genesis, Signed(create, prC))
         prA           <- fixture.registry.generateProofs(alias, Set(Alice))
         valid         <- validator.validateSignedUpdate(s1, Signed(alias, prA))
-        combineFailed <- combiner.insert(s1, Signed(alias, prA)).attempt.map(_.isLeft)
+        combineFailed <- combiner.insert(s1, Signed(alias, prA)).map(wasRejected)
       } yield expect(valid.isInvalid) and expect(combineFailed)
     }
   }
@@ -478,7 +546,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         s1            <- combiner.insert(genesis, Signed(create, prC))
         prA           <- fixture.registry.generateProofs(alias, Set(Alice))
         valid         <- validator.validateSignedUpdate(s1, Signed(alias, prA))
-        combineFailed <- combiner.insert(s1, Signed(alias, prA)).attempt.map(_.isLeft)
+        combineFailed <- combiner.insert(s1, Signed(alias, prA)).map(wasRejected)
       } yield expect(valid.isInvalid) and expect(combineFailed)
     }
   }
@@ -496,7 +564,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         s1            <- combiner.insert(genesis, Signed(create, prC))
         prB           <- fixture.registry.generateProofs(alias, Set(Bob)) // Bob, not an owner, signs
         valid         <- validator.validateSignedUpdate(s1, Signed(alias, prB))
-        combineFailed <- combiner.insert(s1, Signed(alias, prB)).attempt.map(_.isLeft)
+        combineFailed <- combiner.insert(s1, Signed(alias, prB)).map(wasRejected)
       } yield expect(valid.isInvalid) and expect(combineFailed)
     }
   }
@@ -525,7 +593,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         validator     <- Validator.make[IO]
         pr            <- fixture.registry.generateProofs(p, Set(Alice))
         valid         <- validator.validateSignedUpdate(genesis, Signed(p, pr))
-        combineFailed <- combiner.insert(genesis, Signed(p, pr)).attempt.map(_.isLeft)
+        combineFailed <- combiner.insert(genesis, Signed(p, pr)).map(wasRejected)
       } yield expect(valid.isInvalid) and expect(combineFailed)
     }
   }
@@ -561,7 +629,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         s1            <- combiner.insert(genesis, Signed(good, prG))
         prB           <- fixture.registry.generateProofs(bad, Set(Alice))
         validBad      <- validator.validateSignedUpdate(genesis, Signed(bad, prB))
-        combineFailed <- combiner.insert(genesis, Signed(bad, prB)).attempt.map(_.isLeft)
+        combineFailed <- combiner.insert(genesis, Signed(bad, prB)).map(wasRejected)
       } yield expect(s1.calculated.registry.get(pkg("escrow")).map(_.metadata).contains(meta)) and
       expect(validBad.isInvalid) and
       expect(combineFailed)

@@ -44,6 +44,10 @@ object AuditRenderer {
 
     case i: FiberLogEntry.OracleInvocation =>
       s"[ord ${ord(i.invokedAt)}] ${script(i.fiberId, reverseNames)} .${i.method}() by ${i.invokedBy.show} (gas ${i.gasUsed})"
+
+    case r: FiberLogEntry.RejectionReceipt =>
+      // fiberId may be a fiber CID or a registry routingId, so render the raw id rather than assume a kind.
+      s"[ord ${ord(r.ordinal)}] ${r.updateType} for ${r.fiberId} REJECTED: ${r.reason}"
   }
 
   private def machine(id: UUID, names: Map[UUID, RegistryName]): String = labelFor(id, FiberKind.StateMachine, names)

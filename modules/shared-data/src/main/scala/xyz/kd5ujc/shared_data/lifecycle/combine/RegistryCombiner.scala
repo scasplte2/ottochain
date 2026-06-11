@@ -40,17 +40,17 @@ class RegistryCombiner[F[_]: Async: SecurityProvider](
       currentOrdinal <- ctx.getCurrentOrdinal
       signers        <- update.proofs.toList.traverse(_.id.toAddress).map(Set.from)
       _ <- Async[F]
-        .raiseError[Unit](new RuntimeException(s"registry name ${pv.name.render} uses a reserved label"))
+        .raiseError[Unit](CombineRejected(s"registry name ${pv.name.render} uses a reserved label"))
         .whenA(RegistryName.isReserved(pv.name))
       _ <- Async[F]
         .raiseError[Unit](
-          new RuntimeException(s"registry descriptor for ${pv.name.render} exceeds $maxBundleBytes bytes")
+          CombineRejected(s"registry descriptor for ${pv.name.render} exceeds $maxBundleBytes bytes")
         )
         .whenA(pv.schemaB64.length.toLong > maxBundleBytes)
       _ <- RegistryMetadata
         .validate(pv.metadata)
         .fold(
-          e => Async[F].raiseError[Unit](new RuntimeException(s"invalid metadata for ${pv.name.render}: $e")),
+          e => Async[F].raiseError[Unit](CombineRejected(s"invalid metadata for ${pv.name.render}: $e")),
           _ => Async[F].unit
         )
       schemaHash <- pv.schemaB64.computeDigest
@@ -77,7 +77,7 @@ class RegistryCombiner[F[_]: Async: SecurityProvider](
           ): RegistryEntry).pure[F]
         case Some(entry) =>
           if (!signers.exists(entry.owner.contains))
-            Async[F].raiseError[RegistryEntry](new RuntimeException(s"unauthorized publish to ${pv.name.render}"))
+            Async[F].raiseError[RegistryEntry](CombineRejected(s"unauthorized publish to ${pv.name.render}"))
           else
             entry.target match {
               case RegistryTarget.SchemaPackage(lineage) =>
@@ -86,12 +86,12 @@ class RegistryCombiner[F[_]: Async: SecurityProvider](
                   .fold(
                     e =>
                       Async[F]
-                        .raiseError[RegistryEntry](new RuntimeException(s"publish rejected for ${pv.name.render}: $e")),
+                        .raiseError[RegistryEntry](CombineRejected(s"publish rejected for ${pv.name.render}: $e")),
                     l => entry.copy(target = RegistryTarget.SchemaPackage(l)).pure[F]
                   )
               case other =>
                 Async[F].raiseError[RegistryEntry](
-                  new RuntimeException(s"${pv.name.render} is not a schema package (${other.getClass.getSimpleName})")
+                  CombineRejected(s"${pv.name.render} is not a schema package (${other.getClass.getSimpleName})")
                 )
             }
       }
@@ -105,11 +105,11 @@ class RegistryCombiner[F[_]: Async: SecurityProvider](
       signers <- update.proofs.toList.traverse(_.id.toAddress).map(Set.from)
       entry <- current.calculated.registry
         .get(ss.name)
-        .fold(Async[F].raiseError[RegistryEntry](new RuntimeException(s"unknown registry name ${ss.name.render}")))(
+        .fold(Async[F].raiseError[RegistryEntry](CombineRejected(s"unknown registry name ${ss.name.render}")))(
           _.pure[F]
         )
       _ <- Async[F]
-        .raiseError[Unit](new RuntimeException(s"unauthorized status change for ${ss.name.render}"))
+        .raiseError[Unit](CombineRejected(s"unauthorized status change for ${ss.name.render}"))
         .whenA(!signers.exists(entry.owner.contains))
       updated <- entry.target match {
         case RegistryTarget.SchemaPackage(lineage) =>
@@ -118,12 +118,12 @@ class RegistryCombiner[F[_]: Async: SecurityProvider](
             .fold(
               e =>
                 Async[F]
-                  .raiseError[RegistryEntry](new RuntimeException(s"status change rejected for ${ss.name.render}: $e")),
+                  .raiseError[RegistryEntry](CombineRejected(s"status change rejected for ${ss.name.render}: $e")),
               l => entry.copy(target = RegistryTarget.SchemaPackage(l)).pure[F]
             )
         case other =>
           Async[F].raiseError[RegistryEntry](
-            new RuntimeException(s"${ss.name.render} is not a schema package (${other.getClass.getSimpleName})")
+            CombineRejected(s"${ss.name.render} is not a schema package (${other.getClass.getSimpleName})")
           )
       }
       result <- current.withRegistryEntry[F](ss.name, updated)
@@ -140,25 +140,25 @@ class RegistryCombiner[F[_]: Async: SecurityProvider](
     for {
       signers <- update.proofs.toList.traverse(_.id.toAddress).map(Set.from)
       _ <- Async[F]
-        .raiseError[Unit](new RuntimeException(s"alias name ${ra.name.render} uses a reserved label"))
+        .raiseError[Unit](CombineRejected(s"alias name ${ra.name.render} uses a reserved label"))
         .whenA(RegistryName.isReserved(ra.name))
       _ <- RegistryMetadata
         .validate(ra.metadata)
         .fold(
-          e => Async[F].raiseError[Unit](new RuntimeException(s"invalid metadata for ${ra.name.render}: $e")),
+          e => Async[F].raiseError[Unit](CombineRejected(s"invalid metadata for ${ra.name.render}: $e")),
           _ => Async[F].unit
         )
       targetOwners <- aliasTargetOwners(ra.name.tld, ra.targetFiberId)
       _ <- Async[F]
         .raiseError[Unit](
-          new RuntimeException(s"signer does not own fiber ${ra.targetFiberId} for alias ${ra.name.render}")
+          CombineRejected(s"signer does not own fiber ${ra.targetFiberId} for alias ${ra.name.render}")
         )
         .whenA(!signers.exists(targetOwners.contains))
       _ <- current.calculated.registry.get(ra.name) match {
         case None                                                => Async[F].unit
         case Some(entry) if signers.exists(entry.owner.contains) => Async[F].unit
         case Some(_) =>
-          Async[F].raiseError[Unit](new RuntimeException(s"alias name ${ra.name.render} is owned by another address"))
+          Async[F].raiseError[Unit](CombineRejected(s"alias name ${ra.name.render} is owned by another address"))
       }
       entry = RegistryEntry(ra.name, signers, RegistryTarget.InstanceAlias(ra.targetFiberId))
       result <- current.withAlias[F](ra.name, entry, ra.targetFiberId)
@@ -173,7 +173,7 @@ class RegistryCombiner[F[_]: Async: SecurityProvider](
           .get(fiberId)
           .fold(
             Async[F].raiseError[Set[Address]](
-              new RuntimeException(s".machine alias target $fiberId is not a state-machine fiber")
+              CombineRejected(s".machine alias target $fiberId is not a state-machine fiber")
             )
           )(_.owners.pure[F])
       case NameTld.Script =>
@@ -181,12 +181,12 @@ class RegistryCombiner[F[_]: Async: SecurityProvider](
           .get(fiberId)
           .fold(
             Async[F].raiseError[Set[Address]](
-              new RuntimeException(s".script alias target $fiberId is not a script fiber")
+              CombineRejected(s".script alias target $fiberId is not a script fiber")
             )
           )(_.owners.pure[F])
       case NameTld.Package =>
         Async[F].raiseError[Set[Address]](
-          new RuntimeException("cannot register a .package name as a fiber alias (use PublishVersion)")
+          CombineRejected("cannot register a .package name as a fiber alias (use PublishVersion)")
         )
     }
 }

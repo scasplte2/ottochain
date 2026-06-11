@@ -135,4 +135,21 @@ object FiberLogEntry {
     gasUsed:     Long,
     migrated:    Boolean
   ) extends FiberLogEntry
+
+  /**
+   * Emitted when an update that reached `combine` is rejected by a deterministic business rule (unauthorized,
+   * non-monotonic, sequence-number mismatch, conformance violation, reserved label, …). The update does NOT
+   * mutate fiber/registry state; this receipt is the on-chain, auditable record that it was processed and
+   * rejected. Recorded uniformly on every node (the fold catches `CombineRejected` and appends this instead of
+   * aborting the whole batch). Gas accounting for rejected work lands with the fee subsystem (economics TODO).
+   *
+   * `fiberId` is the update's routing id (the target fiber, or `RegistryOp.routingId(name)` for registry ops).
+   */
+  @derive(customizableEncoder, customizableDecoder)
+  final case class RejectionReceipt(
+    fiberId:    UUID,
+    ordinal:    SnapshotOrdinal,
+    updateType: String,
+    reason:     String
+  ) extends FiberLogEntry
 }

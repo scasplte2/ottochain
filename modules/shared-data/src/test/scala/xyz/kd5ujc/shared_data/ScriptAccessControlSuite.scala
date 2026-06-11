@@ -21,6 +21,15 @@ import weaver.SimpleIOSuite
 
 object OracleAccessControlSuite extends SimpleIOSuite {
 
+  // A denied/aborted invocation no longer raises out of the combiner — it records a RejectionReceipt and
+  // leaves the oracle unmutated (so one rejected invocation can't abort the whole batch). Negative tests
+  // assert a RejectionReceipt was emitted rather than catching an exception.
+  private def wasRejected(state: DataState[OnChain, CalculatedState]): Boolean =
+    state.onChain.latestLogs.values.flatten.exists {
+      case _: FiberLogEntry.RejectionReceipt => true
+      case _                                 => false
+    }
+
   test("whitelist allows authorized user to invoke oracle directly") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
@@ -100,11 +109,11 @@ object OracleAccessControlSuite extends SimpleIOSuite {
         )
         invokeProof <- fixture.registry.generateProofs(invokeOracle, Set(Bob))
 
-        result <- combiner.insert(stateAfterOracle, Signed(invokeOracle, invokeProof)).attempt
+        rejected <- combiner.insert(stateAfterOracle, Signed(invokeOracle, invokeProof)).map(wasRejected)
 
         oracle = stateAfterOracle.calculated.scripts.get(oracleFiberId)
 
-      } yield expect(result.isLeft) and
+      } yield expect(rejected) and
       expect(oracle.isDefined) and
       expect(oracle.map(_.sequenceNumber).contains(FiberOrdinal.MinValue))
     }
@@ -164,14 +173,14 @@ object OracleAccessControlSuite extends SimpleIOSuite {
           args = MapValue(Map.empty),
           targetSequenceNumber = oracleSeq2
         )
-        invokeProof3  <- fixture.registry.generateProofs(invokeOracle3, Set(Charlie))
-        charlieResult <- combiner.insert(stateAfterBob, Signed(invokeOracle3, invokeProof3)).attempt
+        invokeProof3    <- fixture.registry.generateProofs(invokeOracle3, Set(Charlie))
+        charlieRejected <- combiner.insert(stateAfterBob, Signed(invokeOracle3, invokeProof3)).map(wasRejected)
 
         oracle = stateAfterBob.calculated.scripts.get(oracleFiberId)
 
       } yield expect(oracle.isDefined) and
       expect(oracle.map(_.sequenceNumber).contains(FiberOrdinal.unsafeApply(2L))) and
-      expect(charlieResult.isLeft)
+      expect(charlieRejected)
     }
   }
 
@@ -512,28 +521,25 @@ object OracleAccessControlSuite extends SimpleIOSuite {
           targetSequenceNumber = FiberOrdinal.MinValue
         )
 
-        invokeProof  <- fixture.registry.generateProofs(invokeOracle, Set(Alice))
-        invokeResult <- combiner.insert(stateAfterOracle, Signed(invokeOracle, invokeProof)).attempt
+        invokeProof <- fixture.registry.generateProofs(invokeOracle, Set(Alice))
+        // The denied invocation no longer raises — it records a RejectionReceipt; assert on its reason.
+        invokeState <- combiner.insert(stateAfterOracle, Signed(invokeOracle, invokeProof))
+        reasons = invokeState.onChain.latestLogs.values.flatten
+          .collect { case r: FiberLogEntry.RejectionReceipt =>
+            r.reason.toLowerCase
+          }
+          .mkString(" | ")
 
-      } yield invokeResult match {
-        case Left(err: RuntimeException) =>
-          // FiberOwned access control denies access when owner fiber doesn't exist
-          expect(
-            err.getMessage.toLowerCase.contains("access denied") ||
-            err.getMessage.toLowerCase.contains("not authorized"),
-            s"Expected access denied message, got: ${err.getMessage}"
-          ) and expect(
-            err.getMessage.toLowerCase.contains("owner fiber") &&
-            err.getMessage.toLowerCase.contains("not found"),
-            s"Expected 'owner fiber not found' in message, got: ${err.getMessage}"
-          )
-        case Left(other) =>
-          failure(
-            s"Expected RuntimeException for access denied, got: ${other.getClass.getSimpleName}: ${other.getMessage}"
-          )
-        case Right(_) =>
-          failure("Expected FiberOwned access control to deny access when owner fiber doesn't exist")
-      }
+      } yield expect(
+        reasons.nonEmpty,
+        "Expected FiberOwned access control to deny access (a RejectionReceipt) when owner fiber doesn't exist"
+      ) and expect(
+        reasons.contains("access denied") || reasons.contains("not authorized"),
+        s"Expected access denied reason, got: $reasons"
+      ) and expect(
+        reasons.contains("owner fiber") && reasons.contains("not found"),
+        s"Expected 'owner fiber not found' in reason, got: $reasons"
+      )
     }
   }
 }
