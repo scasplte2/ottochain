@@ -13,7 +13,7 @@ import io.constellationnetwork.currency.dataApplication.dataApplication.{
   DataApplicationValidationErrorOr
 }
 import io.constellationnetwork.currency.schema.currency.CurrencyIncrementalSnapshot
-import io.constellationnetwork.metagraph_sdk.lifecycle.committed.CommittedApp
+import io.constellationnetwork.metagraph_sdk.lifecycle.committed.{CatalogJournal, CommittedApp}
 import io.constellationnetwork.metagraph_sdk.lifecycle.{CheckpointService, CombinerService, ValidationService}
 import io.constellationnetwork.metagraph_sdk.std.Checkpoint
 import io.constellationnetwork.metagraph_sdk.syntax.all.CurrencyIncrementalSnapshotOps
@@ -50,7 +50,11 @@ object ML0Service {
   def make[F[+_]: Async: Files: Parallel: SecurityProvider](
     httpClient:  Option[Client[F]] = None,
     metagraphId: String = "DAG3KNyfeKUTuWpMMhormWgWSYMD1pDGB2uaWqxG",
-    genesisPath: Option[String] = None
+    genesisPath: Option[String] = None,
+    // Local catalog journal (acquired as a Resource in Main and threaded in): lets a seeded committed
+    // cell re-hydrate from its own persisted catalog so `combine`/`advanceWork` can resolve the parent
+    // breadcrumb. Without it a seeded cell stays unhydrated and the metagraph cannot advance.
+    journal: Option[CatalogJournal[F]] = None
   ): F[BaseDataApplicationL0Service[F]] = for {
     implicit0(logger: SelfAwareStructuredLogger[F]) <- Slf4jLogger.create[F]
     genesisState                                    <- GenesisLoader.load[F](genesisPath)
@@ -73,7 +77,8 @@ object ML0Service {
       genesisState,
       orderedCombiner(combiner),
       rejectionNotifyingValidator(validator, checkpointService, webhookDispatcher),
-      extraRoutes = Some(reader => new ML0CustomRoutes[F](reader, subscriberRegistry).public)
+      extraRoutes = Some(reader => new ML0CustomRoutes[F](reader, subscriberRegistry).public),
+      journal = journal
     )
   } yield withConsensusHooks(committedService, checkpointService, webhookDispatcher)
 

@@ -1,5 +1,6 @@
 package xyz.kd5ujc.metagraph_l0
 
+import java.nio.file.Paths
 import java.util.UUID
 
 import cats.effect.{IO, Resource}
@@ -8,6 +9,7 @@ import cats.syntax.all._
 import io.constellationnetwork.currency.dataApplication._
 import io.constellationnetwork.currency.l0.CurrencyL0App
 import io.constellationnetwork.ext.cats.effect.ResourceIO
+import io.constellationnetwork.metagraph_sdk.lifecycle.committed.CatalogJournal
 import io.constellationnetwork.schema.cluster.ClusterId
 import io.constellationnetwork.schema.semver.{MetagraphVersion, TessellationVersion}
 import io.constellationnetwork.security.SecurityProvider
@@ -41,11 +43,17 @@ object Main
       EmberClientBuilder.default[IO].build.map(Some(_))
     }
 
+    // Node-local, write-through journal of the committed catalog (level-1 sealed roots + hot epoch),
+    // persisted under the working dir. A seeded/restarted committed cell hydrates from this so
+    // `combine`/`advanceWork` can resolve the parent breadcrumb instead of stalling unhydrated.
+    journal <- CatalogJournal.levelDb[IO](Paths.get("committed-catalog"))
+
     l0Service <- ML0Service
       .make[IO](
         httpClient = httpClient,
         metagraphId = config.webhook.metagraphId.getOrElse("DAG3KNyfeKUTuWpMMhormWgWSYMD1pDGB2uaWqxG"),
-        genesisPath = config.genesis.path
+        genesisPath = config.genesis.path,
+        journal = Some(journal)
       )
       .asResource
   } yield l0Service).some
