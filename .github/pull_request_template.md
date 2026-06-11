@@ -1,15 +1,9 @@
-## Changes
-- 
+## Description
+<!-- Brief description of changes -->
 
-## Type
-- [ ] Bug fix
-- [ ] New feature
-- [ ] Infrastructure/config change
-- [ ] Documentation
+## Related Issues
+<!-- Link to related issues: Closes #123 -->
 
-## Testing
-- [ ] Tested locally
+## Checklist
+- [ ] Tests pass locally
 - [ ] CI passes
-
-## Deployment Notes
-<!-- Any special steps needed after merge? -->

@@ -10,11 +10,4 @@ addSbtPlugin("com.timushev.sbt" % "sbt-updates" % "0.6.4")
 addSbtPlugin("org.scoverage" % "sbt-scoverage" % "2.4.4")
 addSbtPlugin("com.github.sbt" % "sbt-dynver" % "5.1.0")
 
-addSbtPlugin("com.thesamet" % "sbt-protoc" % "1.0.7")
-
-libraryDependencies ++= Seq(
-  "com.thesamet.scalapb" %% "compilerplugin" % "0.11.17",
-  "com.thesamet.scalapb" %% "scalapb-validate-codegen" % "0.3.4"
-)
-
 addDependencyTreePlugin

@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.7.14](https://github.com/scasplte2/ottochain/compare/v0.7.13...v0.7.14) (2026-03-24)
+
+
+### Bug Fixes
+
+* **ci:** pass GITHUB_TOKEN to Start cluster step for snapshot-streaming sbt auth ([#147](https://github.com/scasplte2/ottochain/issues/147)) ([afb7a25](https://github.com/scasplte2/ottochain/commit/afb7a252f0832283f0aae65cab63a78b302fc4af))
+
+## [0.7.13](https://github.com/scasplte2/ottochain/compare/v0.7.12...v0.7.13) (2026-03-13)
+
+
+### Bug Fixes
+
+* **docker:** pass --l0-token-identifier to ML0 validators ([#145](https://github.com/scasplte2/ottochain/issues/145)) ([d899c73](https://github.com/scasplte2/ottochain/commit/d899c735284cfe8c14ce913a0e8d3e226ff0c70b))
+
+## [0.7.12](https://github.com/scasplte2/ottochain/compare/v0.7.11...v0.7.12) (2026-03-11)
+
+
+### Bug Fixes
+
+* don't pass --l0-token-identifier to ML0 ([#136](https://github.com/scasplte2/ottochain/issues/136)) ([7217607](https://github.com/scasplte2/ottochain/commit/721760702016d445a567d4052f23ffb4b0c301b7))
+
 ## [0.7.11](https://github.com/scasplte2/ottochain/compare/v0.7.10...v0.7.11) (2026-03-01)
 
 

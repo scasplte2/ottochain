@@ -9,6 +9,7 @@ import cats.syntax.all._
 import io.constellationnetwork.currency.dataApplication.{DataState, L0NodeContext}
 import io.constellationnetwork.ext.cats.syntax.next.catsSyntaxNext
 import io.constellationnetwork.metagraph_sdk.json_logic._
+import io.constellationnetwork.metagraph_sdk.numerics.Ratio
 import io.constellationnetwork.security.SecurityProvider
 
 import xyz.kd5ujc.schema.fiber._
@@ -39,6 +40,10 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
 
   import DataStateTestOps._
   import TestImports.optionFiberRecordOps
+
+  // FloatValue now wraps an exact Ratio (metakit 1.8.x): compare against exact
+  // decimal literals rendered through Ratio, never against Double.
+  private def ratio(s: String): Ratio = Ratio.fromBigDecimal(BigDecimal(s))
 
   // Helper function to decode JSON to StateMachineDefinition
   private def decodeStateMachine(json: String): IO[StateMachineDefinition] =
@@ -2432,7 +2437,7 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
                 case _           => None
               }
             }
-            .exists(_ == 0.0425), // 0.04 + 0.0025 = 0.0425 (after rate increase)
+            .exists(_ == ratio("0.0425")), // 0.04 + 0.0025 = 0.0425 (after rate increase)
 
           finalQuentinFiber
             .map(_.sequenceNumber)
@@ -2444,7 +2449,7 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
                 case _           => None
               }
             }
-            .exists(_ == 0.0425), // 0.04 + 0.0025 = 0.0425 (after rate increase)
+            .exists(_ == ratio("0.0425")), // 0.04 + 0.0025 = 0.0425 (after rate increase)
 
           // Verify Sybil's delinquency
           finalSybilFiber.map(_.currentState).contains(StateId("debt_delinquent")),
@@ -2480,7 +2485,7 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
                 case _           => None
               }
             }
-            .exists(_ == 0.20), // 20% discount rate
+            .exists(_ == ratio("0.20")), // 20% discount rate
 
           // ========================================
           // C2C MARKETPLACE VALIDATIONS
@@ -2605,7 +2610,7 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
                 case _           => None
               }
             }
-            .exists(_ == 178.0),
+            .exists(_ == ratio("178")),
 
           // Verify Alice processed the pay_taxes trigger and paid taxes
           finalAliceFiber
@@ -2615,7 +2620,7 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
                 case _           => None
               }
             }
-            .exists(_ > 0.0),
+            .exists(_.numerator > 0),
 
           // Verify Alice's last tax payment was calculated correctly (180 * 0.05 = 9.0)
           finalAliceFiber
@@ -2625,7 +2630,7 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
                 case _           => None
               }
             }
-            .exists(_ == 9.0),
+            .exists(_ == ratio("9")),
 
           // ========================================
           // VERIFY ALL 10 TAXPAYERS PAID TAXES
@@ -2639,7 +2644,7 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
                 case _           => None
               }
             }
-            .exists(_ == 9.0), // 180 * 0.05 = 9.0
+            .exists(_ == ratio("9")), // 180 * 0.05 = 9.0
 
           finalBobFiber
             .flatMap { f =>
@@ -2648,7 +2653,7 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
                 case _           => None
               }
             }
-            .exists(_ == 4.0), // 80 * 0.05 = 4.0
+            .exists(_ == ratio("4")), // 80 * 0.05 = 4.0
 
           finalCharlieFiber
             .flatMap { f =>
@@ -2657,7 +2662,7 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
                 case _           => None
               }
             }
-            .exists(_ == 0.0), // 0 * 0.05 = 0.0 (Charlie didn't produce due to material shortage)
+            .exists(_ == Ratio.Zero), // 0 * 0.05 = 0.0 (Charlie didn't produce due to material shortage)
 
           // ========================================
           // CHARLIE (MANUFACTURER) COMPREHENSIVE VALIDATIONS
@@ -2690,7 +2695,7 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
                 case _           => None
               }
             }
-            .exists(_ == 7.5), // 150 * 0.05 = 7.5 (now with full decimal precision!)
+            .exists(_ == ratio("7.5")), // 150 * 0.05 = 7.5 (now with full decimal precision!)
 
           // ========================================
           // DAVE (MANUFACTURER) COMPREHENSIVE VALIDATIONS
@@ -2728,7 +2733,7 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
                 case _           => None
               }
             }
-            .exists(_ == 2.5), // 50 * 0.05 = 2.5 (now with full decimal precision!)
+            .exists(_ == ratio("2.5")), // 50 * 0.05 = 2.5 (now with full decimal precision!)
 
           finalGraceFiber
             .flatMap { f =>
@@ -2737,7 +2742,7 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
                 case _           => None
               }
             }
-            .exists(_ == 5.0), // 100 * 0.05 = 5.0
+            .exists(_ == ratio("5")), // 100 * 0.05 = 5.0
 
           // ========================================
           // GRACE (RETAILER) COMPREHENSIVE VALIDATIONS
@@ -2767,7 +2772,7 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
                 case _           => None
               }
             }
-            .exists(_ == 0.0), // 0 * 0.05 = 0.0 (Ivan has no revenue yet)
+            .exists(_ == Ratio.Zero), // 0 * 0.05 = 0.0 (Ivan has no revenue yet)
 
           // ========================================
           // IVAN (RETAILER) COMPREHENSIVE VALIDATIONS
@@ -2802,7 +2807,7 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
                 case _           => None
               }
             }
-            .exists(_ == 150.0), // 3000 * 0.05 = 150.0
+            .exists(_ == ratio("150")), // 3000 * 0.05 = 150.0
 
           finalSybilFiber
             .flatMap { f =>
@@ -2811,7 +2816,7 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
                 case _           => None
               }
             }
-            .exists(_ == 0.0), // 0 * 0.05 = 0.0 (Sybil has no service revenue)
+            .exists(_ == Ratio.Zero), // 0 * 0.05 = 0.0 (Sybil has no service revenue)
 
           finalVictorFiber
             .flatMap { f =>
@@ -2820,7 +2825,7 @@ object RiverdaleEconomyStateMachineSuite extends SimpleIOSuite with Checkers {
                 case _           => None
               }
             }
-            .exists(_ == 0.0), // 0 * 0.05 = 0.0 (Victor has no service revenue)
+            .exists(_ == Ratio.Zero), // 0 * 0.05 = 0.0 (Victor has no service revenue)
 
           // Verify all taxpayers have the lastTaxPeriod field set
           finalAliceFiber.extractString("lastTaxPeriod").contains("Q4-2024"),

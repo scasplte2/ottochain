@@ -29,10 +29,11 @@ export const generator = ({ cid, options }: { cid: string; wallets?: unknown; op
     );
   }
 
-  // Build the CreateScript message
-  // Always include initialState (null if absent) to match server's canonical form.
-  // The server re-encodes Option[JsonLogicValue] = None as "initialState": null,
-  // so omitting the field would cause a signature mismatch.
+  // Build the CreateScript message.
+  // Note: since metakit 1.8.0 the server DROPS null object fields before
+  // canonicalizing (JsonBinaryCodec.dropNulls), and sendDataTransaction
+  // applies the SDK's dropNulls before signing to match. An explicit
+  // "initialState": null here is therefore equivalent to omitting the field.
   const createMsg: Record<string, unknown> = {
     fiberId: cid,
     scriptProgram: oracleDefinition.scriptProgram,
