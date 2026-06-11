@@ -8,6 +8,7 @@ import cats.syntax.all._
 
 import io.constellationnetwork.currency.dataApplication.DataApplicationValidationError
 import io.constellationnetwork.metagraph_sdk.json_logic._
+import io.constellationnetwork.metagraph_sdk.numerics.RatioOps.implicits._
 
 import xyz.kd5ujc.schema.OnChain
 import xyz.kd5ujc.shared_data.lifecycle.validate.{Limits, ValidationResult}
@@ -129,10 +130,13 @@ object CommonRules {
     if (depth > 100) return 100L // Prevent infinite recursion
 
     value match {
-      case NullValue     => 4L
-      case BoolValue(_)  => 5L
-      case IntValue(v)   => 8L + v.toString.length
-      case FloatValue(v) => 8L + v.toString.length
+      case NullValue    => 4L
+      case BoolValue(_) => 5L
+      case IntValue(v)  => 8L + v.toString.length
+      // FloatValue wraps an exact Ratio whose toString prints "n/d" (e.g. "1/3");
+      // size it by the decimal rendering used on the wire (Json.fromBigDecimal)
+      // so estimates stay consistent with the serialized payload.
+      case FloatValue(v) => 8L + v.toBigDecimal.toString.length
       case StrValue(s)   => 4L + s.length.toLong * 2L // UTF-16 encoding estimate
       case ArrayValue(items) =>
         8L + items.map(estimateValueSize(_, depth + 1)).sum

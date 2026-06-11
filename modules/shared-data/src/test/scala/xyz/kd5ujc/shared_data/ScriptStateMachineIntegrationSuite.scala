@@ -7,6 +7,7 @@ import cats.syntax.all._
 import io.constellationnetwork.currency.dataApplication.{DataState, L0NodeContext}
 import io.constellationnetwork.ext.cats.syntax.next._
 import io.constellationnetwork.metagraph_sdk.json_logic._
+import io.constellationnetwork.metagraph_sdk.numerics.RatioOps.implicits._
 import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.Signed
 
@@ -445,7 +446,7 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
             case MapValue(m) =>
               m.get("totalAmount").collect {
                 case IntValue(a)   => a
-                case FloatValue(a) => BigInt(a.toLong)
+                case FloatValue(a) => a.toBigInt
               }
             case _ => None
           }
@@ -456,7 +457,7 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
             case MapValue(m) =>
               m.get("feeCalculated").collect {
                 case IntValue(f)   => f
-                case FloatValue(f) => BigInt(f.toLong)
+                case FloatValue(f) => f.toBigInt
               }
             case _ => None
           }
