@@ -8,6 +8,7 @@ import io.constellationnetwork.currency.dataApplication.DataCalculatedState
 import io.constellationnetwork.metagraph_sdk.lifecycle.committed.{CommitDelta, CommitKey, CommittedView}
 
 import xyz.kd5ujc.schema.CodecConfiguration._
+import xyz.kd5ujc.schema.registry.{RegistryEntry, RegistryName}
 
 import derevo.circe.magnolia.{customizableDecoder, customizableEncoder}
 import derevo.derive
@@ -17,11 +18,15 @@ import io.circe.syntax.EncoderOps
 @derive(customizableEncoder, customizableDecoder)
 case class CalculatedState(
   stateMachines: SortedMap[UUID, Records.StateMachineFiberRecord],
-  scripts:       SortedMap[UUID, Records.ScriptFiberRecord]
+  scripts:       SortedMap[UUID, Records.ScriptFiberRecord],
+  registry:      SortedMap[RegistryName, RegistryEntry] = SortedMap.empty,
+  // Reverse records (#29): fiber UUID -> its canonical registered name, for human-readable audit trails.
+  reverseNames: SortedMap[UUID, RegistryName] = SortedMap.empty
 ) extends DataCalculatedState
 
 object CalculatedState {
-  val genesis: CalculatedState = CalculatedState(SortedMap.empty, SortedMap.empty)
+  val genesis: CalculatedState =
+    CalculatedState(SortedMap.empty, SortedMap.empty, SortedMap.empty, SortedMap.empty)
 
   /**
    * Projection into the committed state dictionary (metakit `lifecycle/committed`).
@@ -30,8 +35,11 @@ object CalculatedState {
    *   - `fiber/<uuid>`    -- state-machine fiber records (`UUID.toString` is lowercase hyphenated,
    *                          which is valid `CommitKey` segment grammar)
    *   - `script/<id>`     -- script records
-   *   - `registry/<name>` -- reserved by ottochain for the registry domain; not yet part of
-   *                          `CalculatedState`, so no entries are emitted under it today
+   *   - `registry/<name>` + `reverse/<uuid>` -- the registry + reverse-name maps ARE now part of
+   *                          `CalculatedState` (versionable-contracts merge) but are NOT YET projected
+   *                          into the committed root. FOLLOW-UP: extend this view to cover them (needs a
+   *                          RegistryName-keyed projection + a check that CommitKey grammar permits the
+   *                          dotted `labels.tld` form) so registry state is included in the commitment.
    *
    * Values are the records' canonical circe projections; the metakit committed layer
    * canonicalizes (RFC 8785) and hashes them when building the MPT, so byte-determinism does not

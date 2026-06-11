@@ -59,21 +59,21 @@ class ScriptCombiner[F[_]: Async: SecurityProvider](
       .get(update.fiberId)
       .fold(
         Async[F].raiseError[Records.ScriptFiberRecord](
-          new RuntimeException(s"Oracle ${update.fiberId} not found")
+          CombineRejected(s"Oracle ${update.fiberId} not found")
         )
       )(_.pure[F])
 
     // Defense-in-depth: reject stale sequence numbers
     _ <- Async[F]
       .raiseError(
-        new RuntimeException(
+        CombineRejected(
           s"Sequence number mismatch: target=${update.targetSequenceNumber}, actual=${oracleRecord.sequenceNumber}"
         )
       )
       .whenA(oracleRecord.sequenceNumber =!= update.targetSequenceNumber)
 
     caller <- update.proofs.toList.headOption
-      .fold(Async[F].raiseError[Address](new RuntimeException("No proof provided")))(
+      .fold(Async[F].raiseError[Address](CombineRejected("No proof provided")))(
         _.id.toAddress
       )
 
@@ -101,11 +101,11 @@ class ScriptCombiner[F[_]: Async: SecurityProvider](
             current.withRecord[F](update.fiberId, updatedOracle).map(_.appendLogs(logEntries))
 
           case None =>
-            Async[F].raiseError(new RuntimeException(s"Oracle ${update.fiberId} not found in orchestrator result"))
+            Async[F].raiseError(CombineRejected(s"Oracle ${update.fiberId} not found in orchestrator result"))
         }
 
       case TransactionResult.Aborted(reason, _, _) =>
-        Async[F].raiseError(new RuntimeException(s"Oracle invocation failed: ${reason.toMessage}"))
+        Async[F].raiseError(CombineRejected(s"Oracle invocation failed: ${reason.toMessage}"))
     }
   } yield newState
 

@@ -9,6 +9,7 @@ import io.constellationnetwork.security.hash.Hash
 
 import xyz.kd5ujc.schema.CodecConfiguration._
 import xyz.kd5ujc.schema.fiber.{FiberLogEntry, FiberOrdinal}
+import xyz.kd5ujc.schema.registry.RegistryName
 
 import derevo.circe.magnolia.{customizableDecoder, customizableEncoder}
 import derevo.derive
@@ -22,10 +23,11 @@ case class FiberCommit(
 
 @derive(customizableDecoder, customizableEncoder)
 case class OnChain(
-  fiberCommits: SortedMap[UUID, FiberCommit],
-  latestLogs:   SortedMap[UUID, List[FiberLogEntry]]
+  fiberCommits:    SortedMap[UUID, FiberCommit],
+  latestLogs:      SortedMap[UUID, List[FiberLogEntry]],
+  registryCommits: SortedMap[RegistryName, Hash] = SortedMap.empty
 ) extends DataOnChainState
 
 object OnChain {
-  val genesis: OnChain = OnChain(SortedMap.empty, SortedMap.empty)
+  val genesis: OnChain = OnChain(SortedMap.empty, SortedMap.empty, SortedMap.empty)
 }

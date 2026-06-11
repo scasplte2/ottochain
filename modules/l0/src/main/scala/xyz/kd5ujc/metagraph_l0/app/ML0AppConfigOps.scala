@@ -22,5 +22,6 @@ object ML0AppConfigOps {
 
   implicit val webhookConfigReader: ConfigReader[ML0AppConfig.WebhookConfig] = deriveReader
   implicit val hydrationConfigReader: ConfigReader[ML0AppConfig.HydrationConfig] = deriveReader
+  implicit val genesisConfigReader: ConfigReader[ML0AppConfig.GenesisConfig] = deriveReader
   implicit val applicationConfigReader: ConfigReader[ML0AppConfig] = deriveReader
 }

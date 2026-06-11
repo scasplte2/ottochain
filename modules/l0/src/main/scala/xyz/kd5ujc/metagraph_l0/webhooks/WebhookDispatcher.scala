@@ -119,6 +119,7 @@ object WebhookDispatcher {
         val targetSeqNum: Option[Long] = update match {
           case u: TransitionStateMachine => Some(u.targetSequenceNumber.value.value)
           case u: ArchiveStateMachine    => Some(u.targetSequenceNumber.value.value)
+          case u: UpgradeFiber           => Some(u.targetSequenceNumber.value.value)
           case u: InvokeScript           => Some(u.targetSequenceNumber.value.value)
           case _                         => None
         }

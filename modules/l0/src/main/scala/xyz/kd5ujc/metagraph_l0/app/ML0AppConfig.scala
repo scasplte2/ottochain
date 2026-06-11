@@ -9,7 +9,8 @@ import org.http4s.Uri
 case class ML0AppConfig(
   node:      SharedAppConfig.NodeConfig,
   webhook:   ML0AppConfig.WebhookConfig,
-  hydration: ML0AppConfig.HydrationConfig
+  hydration: ML0AppConfig.HydrationConfig,
+  genesis:   ML0AppConfig.GenesisConfig
 ) extends SharedAppConfig
 
 object ML0AppConfig {
@@ -30,4 +31,8 @@ object ML0AppConfig {
   ) {
     def effectiveInterval: FiniteDuration = interval.getOrElse(30.seconds)
   }
+
+  case class GenesisConfig(
+    path: Option[String]
+  )
 }

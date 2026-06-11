@@ -27,8 +27,10 @@ import xyz.kd5ujc.metagraph_l0.webhooks.{NotificationStats, SubscriberRegistry, 
 import xyz.kd5ujc.schema.Updates.OttochainMessage
 import xyz.kd5ujc.schema.fiber.FiberStatus
 import xyz.kd5ujc.schema.{CalculatedState, OnChain}
+import xyz.kd5ujc.shared_data.genesis.GenesisLoader
 import xyz.kd5ujc.shared_data.lifecycle.{Combiner, Validator}
 
+import fs2.io.file.Files
 import monocle.Monocle.toAppliedFocusOps
 import org.http4s.HttpRoutes
 import org.http4s.client.Client
@@ -45,17 +47,19 @@ object ML0Service {
    * @param httpClient HTTP client for webhook delivery
    * @param metagraphId The metagraph token identifier (for webhook notifications)
    */
-  def make[F[+_]: Async: Parallel: SecurityProvider](
+  def make[F[+_]: Async: Files: Parallel: SecurityProvider](
     httpClient:  Option[Client[F]] = None,
-    metagraphId: String = "DAG3KNyfeKUTuWpMMhormWgWSYMD1pDGB2uaWqxG"
+    metagraphId: String = "DAG3KNyfeKUTuWpMMhormWgWSYMD1pDGB2uaWqxG",
+    genesisPath: Option[String] = None
   ): F[BaseDataApplicationL0Service[F]] = for {
     implicit0(logger: SelfAwareStructuredLogger[F]) <- Slf4jLogger.create[F]
+    genesisState                                    <- GenesisLoader.load[F](genesisPath)
 
     // The authoritative calculated state lives in the committed cell owned by
     // CommittedApp.makeL0; this checkpoint is only the notification-side cache
-    // (rejection ordinals, consensus stats), refreshed on setCalculatedState
-    // exactly like the pre-committed implementation.
-    checkpointService  <- CheckpointService.make[F, CalculatedState](CalculatedState.genesis)
+    // (rejection ordinals, consensus stats), seeded from the loaded genesis and
+    // refreshed on setCalculatedState exactly like the pre-committed implementation.
+    checkpointService  <- CheckpointService.make[F, CalculatedState](genesisState.calculated)
     subscriberRegistry <- SubscriberRegistry.make[F]
     combiner           <- Combiner.make[F]().pure[F]
     validator          <- Validator.make[F]
@@ -66,7 +70,7 @@ object ML0Service {
     }
 
     committedService <- CommittedApp.makeL0[F, OttochainMessage, OnChain, CalculatedState](
-      DataState(OnChain.genesis, CalculatedState.genesis),
+      genesisState,
       orderedCombiner(combiner),
       rejectionNotifyingValidator(validator, checkpointService, webhookDispatcher),
       extraRoutes = Some(reader => new ML0CustomRoutes[F](reader, subscriberRegistry).public)
@@ -88,6 +92,8 @@ object ML0Service {
         previous: DataState[OnChain, CalculatedState],
         batch:    List[Signed[OttochainMessage]]
       )(implicit ctx: L0NodeContext[F]): F[DataState[OnChain, CalculatedState]] =
+        // OttochainMessage.signedOrdering is a TOTAL order (signature tiebreak in models), so a plain sort
+        // makes every node fold the identical sequence -- no per-combiner digest tiebreak needed.
         inner.foldLeft(
           previous.focus(_.onChain.latestLogs).replace(SortedMap.empty),
           batch.sorted(OttochainMessage.signedOrdering)

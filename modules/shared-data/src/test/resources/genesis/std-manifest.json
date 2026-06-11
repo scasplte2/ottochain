@@ -1,0 +1,740 @@
+{
+  "version": 1,
+  "packages": [
+    {
+      "name": "std.identity.package",
+      "semver": "1.0.0",
+      "strict": false,
+      "metadata": {},
+      "schemaShape": {
+        "stateMessage": {
+          "typeName": "ottochain.apps.identity.v1.Identity",
+          "fields": [
+            {
+              "name": "id",
+              "number": 1,
+              "typeName": "string",
+              "repeated": false,
+              "optional": false
+            },
+            {
+              "name": "address",
+              "number": 2,
+              "typeName": "string",
+              "repeated": false,
+              "optional": false
+            },
+            {
+              "name": "public_key",
+              "number": 3,
+              "typeName": "string",
+              "repeated": false,
+              "optional": false
+            },
+            {
+              "name": "display_name",
+              "number": 4,
+              "typeName": "string",
+              "repeated": false,
+              "optional": false
+            },
+            {
+              "name": "identity_type",
+              "number": 5,
+              "typeName": "ottochain.apps.identity.v1.IdentityType",
+              "repeated": false,
+              "optional": false
+            },
+            {
+              "name": "state",
+              "number": 6,
+              "typeName": "ottochain.apps.identity.v1.IdentityState",
+              "repeated": false,
+              "optional": false
+            },
+            {
+              "name": "reputation",
+              "number": 7,
+              "typeName": "ottochain.apps.identity.v1.Reputation",
+              "repeated": false,
+              "optional": false
+            },
+            {
+              "name": "stake",
+              "number": 8,
+              "typeName": "int64",
+              "repeated": false,
+              "optional": false
+            },
+            {
+              "name": "domains",
+              "number": 9,
+              "typeName": "string",
+              "repeated": true,
+              "optional": false
+            },
+            {
+              "name": "platform_links",
+              "number": 10,
+              "typeName": "ottochain.apps.identity.v1.PlatformLink",
+              "repeated": true,
+              "optional": false
+            },
+            {
+              "name": "penalty_history",
+              "number": 11,
+              "typeName": "ottochain.apps.identity.v1.PenaltyEvent",
+              "repeated": true,
+              "optional": false
+            },
+            {
+              "name": "created_at",
+              "number": 12,
+              "typeName": "google.protobuf.Timestamp",
+              "repeated": false,
+              "optional": false
+            },
+            {
+              "name": "updated_at",
+              "number": 13,
+              "typeName": "google.protobuf.Timestamp",
+              "repeated": false,
+              "optional": false
+            }
+          ]
+        },
+        "commands": {}
+      },
+      "definition": {
+        "states": {
+          "CREATED": {
+            "id": "CREATED",
+            "isFinal": false,
+            "metadata": null
+          },
+          "ACTIVE": {
+            "id": "ACTIVE",
+            "isFinal": false,
+            "metadata": null
+          },
+          "INACTIVE": {
+            "id": "INACTIVE",
+            "isFinal": true,
+            "metadata": null
+          }
+        },
+        "initialState": "CREATED",
+        "transitions": [
+          {
+            "from": "CREATED",
+            "to": "ACTIVE",
+            "eventName": "activate",
+            "guard": {
+              "==": [
+                1,
+                1
+              ]
+            },
+            "effect": {
+              "merge": [
+                {
+                  "var": "state"
+                },
+                {
+                  "status": "ACTIVE",
+                  "activatedAt": {
+                    "var": "$timestamp"
+                  }
+                }
+              ]
+            },
+            "dependencies": []
+          },
+          {
+            "from": "ACTIVE",
+            "to": "ACTIVE",
+            "eventName": "update",
+            "guard": {
+              "==": [
+                1,
+                1
+              ]
+            },
+            "effect": {
+              "merge": [
+                {
+                  "var": "state"
+                },
+                {
+                  "updatedAt": {
+                    "var": "$timestamp"
+                  },
+                  "metadata": {
+                    "var": "event.metadata"
+                  }
+                }
+              ]
+            },
+            "dependencies": []
+          },
+          {
+            "from": "ACTIVE",
+            "to": "INACTIVE",
+            "eventName": "deactivate",
+            "guard": {
+              "==": [
+                1,
+                1
+              ]
+            },
+            "effect": {
+              "merge": [
+                {
+                  "var": "state"
+                },
+                {
+                  "status": "INACTIVE",
+                  "deactivatedAt": {
+                    "var": "$timestamp"
+                  }
+                }
+              ]
+            },
+            "dependencies": []
+          }
+        ],
+        "metadata": null
+      }
+    },
+    {
+      "name": "std.governance.package",
+      "semver": "1.0.0",
+      "strict": false,
+      "metadata": {},
+      "schemaShape": {
+        "stateMessage": {
+          "typeName": "ottochain.apps.governance.v1.Proposal",
+          "fields": [
+            {
+              "name": "id",
+              "number": 1,
+              "typeName": "string",
+              "repeated": false,
+              "optional": false
+            },
+            {
+              "name": "title",
+              "number": 2,
+              "typeName": "string",
+              "repeated": false,
+              "optional": false
+            },
+            {
+              "name": "description",
+              "number": 3,
+              "typeName": "string",
+              "repeated": false,
+              "optional": false
+            },
+            {
+              "name": "action_type",
+              "number": 4,
+              "typeName": "string",
+              "repeated": false,
+              "optional": false
+            },
+            {
+              "name": "payload",
+              "number": 5,
+              "typeName": "google.protobuf.Struct",
+              "repeated": false,
+              "optional": false
+            },
+            {
+              "name": "proposer",
+              "number": 6,
+              "typeName": "string",
+              "repeated": false,
+              "optional": false
+            },
+            {
+              "name": "proposed_at",
+              "number": 7,
+              "typeName": "google.protobuf.Timestamp",
+              "repeated": false,
+              "optional": false
+            },
+            {
+              "name": "deadline",
+              "number": 8,
+              "typeName": "google.protobuf.Timestamp",
+              "repeated": false,
+              "optional": false
+            },
+            {
+              "name": "queued_at",
+              "number": 9,
+              "typeName": "google.protobuf.Timestamp",
+              "repeated": false,
+              "optional": false
+            },
+            {
+              "name": "executable_at",
+              "number": 10,
+              "typeName": "google.protobuf.Timestamp",
+              "repeated": false,
+              "optional": false
+            }
+          ]
+        },
+        "commands": {}
+      },
+      "definition": {
+        "states": {
+          "ACTIVE": {
+            "id": "ACTIVE",
+            "isFinal": false,
+            "metadata": null
+          },
+          "VOTING": {
+            "id": "VOTING",
+            "isFinal": false,
+            "metadata": null
+          },
+          "DISSOLVED": {
+            "id": "DISSOLVED",
+            "isFinal": true,
+            "metadata": null
+          }
+        },
+        "initialState": "ACTIVE",
+        "transitions": [
+          {
+            "from": "ACTIVE",
+            "to": "VOTING",
+            "eventName": "propose",
+            "guard": {
+              "==": [
+                1,
+                1
+              ]
+            },
+            "effect": {
+              "merge": [
+                {
+                  "var": "state"
+                },
+                {
+                  "status": "VOTING",
+                  "proposal": {
+                    "var": "event.proposal"
+                  },
+                  "proposedAt": {
+                    "var": "$timestamp"
+                  },
+                  "votes": {}
+                }
+              ]
+            },
+            "dependencies": []
+          },
+          {
+            "from": "VOTING",
+            "to": "VOTING",
+            "eventName": "vote",
+            "guard": {
+              "==": [
+                1,
+                1
+              ]
+            },
+            "effect": {
+              "merge": [
+                {
+                  "var": "state"
+                },
+                {
+                  "votes": {
+                    "merge": [
+                      {
+                        "var": "state.votes"
+                      },
+                      {
+                        "__key": {
+                          "var": "event.agent"
+                        },
+                        "__value": {
+                          "var": "event.vote"
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            "dependencies": []
+          },
+          {
+            "from": "VOTING",
+            "to": "ACTIVE",
+            "eventName": "finalize",
+            "guard": {
+              "==": [
+                1,
+                1
+              ]
+            },
+            "effect": {
+              "merge": [
+                {
+                  "var": "state"
+                },
+                {
+                  "status": "ACTIVE",
+                  "lastProposal": {
+                    "var": "state.proposal"
+                  },
+                  "lastResult": {
+                    "var": "event.result"
+                  },
+                  "proposal": null,
+                  "votes": null
+                }
+              ]
+            },
+            "dependencies": []
+          },
+          {
+            "from": "ACTIVE",
+            "to": "DISSOLVED",
+            "eventName": "dissolve",
+            "guard": {
+              "==": [
+                1,
+                1
+              ]
+            },
+            "effect": {
+              "merge": [
+                {
+                  "var": "state"
+                },
+                {
+                  "status": "DISSOLVED",
+                  "dissolvedAt": {
+                    "var": "$timestamp"
+                  }
+                }
+              ]
+            },
+            "dependencies": []
+          }
+        ],
+        "metadata": null
+      }
+    },
+    {
+      "name": "std.markets.package",
+      "semver": "1.0.0",
+      "strict": false,
+      "metadata": {},
+      "schemaShape": {
+        "stateMessage": {
+          "typeName": "ottochain.apps.markets.v1.Market",
+          "fields": [
+            {
+              "name": "id",
+              "number": 1,
+              "typeName": "string",
+              "repeated": false,
+              "optional": false
+            },
+            {
+              "name": "market_type",
+              "number": 2,
+              "typeName": "ottochain.apps.markets.v1.MarketType",
+              "repeated": false,
+              "optional": false
+            },
+            {
+              "name": "creator",
+              "number": 3,
+              "typeName": "string",
+              "repeated": false,
+              "optional": false
+            },
+            {
+              "name": "title",
+              "number": 4,
+              "typeName": "string",
+              "repeated": false,
+              "optional": false
+            },
+            {
+              "name": "terms",
+              "number": 5,
+              "typeName": "google.protobuf.Struct",
+              "repeated": false,
+              "optional": false
+            },
+            {
+              "name": "deadline",
+              "number": 6,
+              "typeName": "google.protobuf.Timestamp",
+              "repeated": false,
+              "optional": false
+            },
+            {
+              "name": "threshold",
+              "number": 7,
+              "typeName": "int64",
+              "repeated": false,
+              "optional": false
+            },
+            {
+              "name": "commitments",
+              "number": 8,
+              "typeName": "ottochain.apps.markets.v1.Commitment",
+              "repeated": true,
+              "optional": false
+            },
+            {
+              "name": "oracles",
+              "number": 9,
+              "typeName": "string",
+              "repeated": true,
+              "optional": false
+            },
+            {
+              "name": "quorum",
+              "number": 10,
+              "typeName": "int32",
+              "repeated": false,
+              "optional": false
+            },
+            {
+              "name": "resolutions",
+              "number": 11,
+              "typeName": "ottochain.apps.markets.v1.Resolution",
+              "repeated": true,
+              "optional": false
+            },
+            {
+              "name": "status",
+              "number": 12,
+              "typeName": "ottochain.apps.markets.v1.MarketState",
+              "repeated": false,
+              "optional": false
+            },
+            {
+              "name": "created_at",
+              "number": 13,
+              "typeName": "google.protobuf.Timestamp",
+              "repeated": false,
+              "optional": false
+            },
+            {
+              "name": "updated_at",
+              "number": 14,
+              "typeName": "google.protobuf.Timestamp",
+              "repeated": false,
+              "optional": false
+            }
+          ]
+        },
+        "commands": {}
+      },
+      "definition": {
+        "states": {
+          "PROPOSED": {
+            "id": "PROPOSED",
+            "isFinal": false,
+            "metadata": null
+          },
+          "OPEN": {
+            "id": "OPEN",
+            "isFinal": false,
+            "metadata": null
+          },
+          "CLOSED": {
+            "id": "CLOSED",
+            "isFinal": false,
+            "metadata": null
+          },
+          "SETTLED": {
+            "id": "SETTLED",
+            "isFinal": true,
+            "metadata": null
+          },
+          "CANCELLED": {
+            "id": "CANCELLED",
+            "isFinal": true,
+            "metadata": null
+          }
+        },
+        "initialState": "PROPOSED",
+        "transitions": [
+          {
+            "from": "PROPOSED",
+            "to": "OPEN",
+            "eventName": "open",
+            "guard": {
+              "==": [
+                1,
+                1
+              ]
+            },
+            "effect": {
+              "merge": [
+                {
+                  "var": "state"
+                },
+                {
+                  "status": "OPEN",
+                  "openedAt": {
+                    "var": "$timestamp"
+                  }
+                }
+              ]
+            },
+            "dependencies": []
+          },
+          {
+            "from": "PROPOSED",
+            "to": "CANCELLED",
+            "eventName": "cancel",
+            "guard": {
+              "==": [
+                1,
+                1
+              ]
+            },
+            "effect": {
+              "merge": [
+                {
+                  "var": "state"
+                },
+                {
+                  "status": "CANCELLED",
+                  "cancelledAt": {
+                    "var": "$timestamp"
+                  }
+                }
+              ]
+            },
+            "dependencies": []
+          },
+          {
+            "from": "OPEN",
+            "to": "OPEN",
+            "eventName": "commit",
+            "guard": {
+              ">": [
+                {
+                  "var": "event.amount"
+                },
+                0
+              ]
+            },
+            "effect": {
+              "merge": [
+                {
+                  "var": "state"
+                },
+                {
+                  "totalCommitted": {
+                    "+": [
+                      {
+                        "var": "state.totalCommitted"
+                      },
+                      {
+                        "var": "event.amount"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            "dependencies": []
+          },
+          {
+            "from": "OPEN",
+            "to": "CLOSED",
+            "eventName": "close",
+            "guard": {
+              "==": [
+                1,
+                1
+              ]
+            },
+            "effect": {
+              "merge": [
+                {
+                  "var": "state"
+                },
+                {
+                  "status": "CLOSED",
+                  "closedAt": {
+                    "var": "$timestamp"
+                  }
+                }
+              ]
+            },
+            "dependencies": []
+          },
+          {
+            "from": "CLOSED",
+            "to": "SETTLED",
+            "eventName": "settle",
+            "guard": {
+              "==": [
+                1,
+                1
+              ]
+            },
+            "effect": {
+              "merge": [
+                {
+                  "var": "state"
+                },
+                {
+                  "status": "SETTLED",
+                  "settledAt": {
+                    "var": "$timestamp"
+                  }
+                }
+              ]
+            },
+            "dependencies": []
+          },
+          {
+            "from": "CLOSED",
+            "to": "CANCELLED",
+            "eventName": "cancel",
+            "guard": {
+              "==": [
+                1,
+                1
+              ]
+            },
+            "effect": {
+              "merge": [
+                {
+                  "var": "state"
+                },
+                {
+                  "status": "CANCELLED",
+                  "cancelledAt": {
+                    "var": "$timestamp"
+                  }
+                }
+              ]
+            },
+            "dependencies": []
+          }
+        ],
+        "metadata": null
+      }
+    }
+  ]
+}

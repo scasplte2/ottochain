@@ -14,7 +14,7 @@ import io.constellationnetwork.security.signature.Signed
 
 import xyz.kd5ujc.schema.Updates._
 import xyz.kd5ujc.schema.{CalculatedState, OnChain}
-import xyz.kd5ujc.shared_data.lifecycle.validate.{FiberValidator, ScriptValidator}
+import xyz.kd5ujc.shared_data.lifecycle.validate.{FiberValidator, RegistryValidator, ScriptValidator}
 
 import org.typelevel.log4cats.SelfAwareStructuredLogger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
@@ -69,14 +69,19 @@ object Validator {
           withOnChainCache(ctx) { checkpoint =>
             val fiberL1 = new FiberValidator.L1Validator[F](checkpoint.state)
             val oracleL1 = new ScriptValidator.L1Validator[F](checkpoint.state)
+            val registryL1 = new RegistryValidator.L1Validator[F]
 
             val updateName = update.getClass.getSimpleName
             val fiberId = update match {
               case u: CreateStateMachine     => u.fiberId.toString
               case u: TransitionStateMachine => u.fiberId.toString
               case u: ArchiveStateMachine    => u.fiberId.toString
+              case u: UpgradeFiber           => u.fiberId.toString
               case u: CreateScript           => u.fiberId.toString
               case u: InvokeScript           => u.fiberId.toString
+              case u: PublishVersion         => u.fiberId.toString
+              case u: SetVersionStatus       => u.fiberId.toString
+              case u: RegisterAlias          => u.fiberId.toString
             }
             val cids = checkpoint.state.fiberCommits.keys.map(_.toString.take(8)).mkString(", ")
 
@@ -90,8 +95,12 @@ object Validator {
                 case u: CreateStateMachine     => fiberL1.createFiber(u)
                 case u: TransitionStateMachine => fiberL1.processEvent(u)
                 case u: ArchiveStateMachine    => fiberL1.archiveFiber(u)
+                case u: UpgradeFiber           => fiberL1.upgrade(u)
                 case u: CreateScript           => oracleL1.createOracle(u)
                 case u: InvokeScript           => oracleL1.invokeOracle(u)
+                case u: PublishVersion         => registryL1.publish(u)
+                case u: SetVersionStatus       => registryL1.setStatus(u)
+                case u: RegisterAlias          => registryL1.registerAlias(u)
               }
               _ <- logger.info(
                 s"[DL1-validate] $updateName fiberId=${fiberId.take(8)}... " +
@@ -115,13 +124,18 @@ object Validator {
         )(implicit context: L0NodeContext[F]): F[DataApplicationValidationErrorOr[Unit]] = {
           val fiberCombined = new FiberValidator.CombinedValidator[F](current, signedUpdate.proofs)
           val oracleCombined = new ScriptValidator.CombinedValidator[F](current, signedUpdate.proofs)
+          val registryCombined = new RegistryValidator.CombinedValidator[F](current, signedUpdate.proofs)
 
           signedUpdate.value match {
             case u: CreateStateMachine     => fiberCombined.createFiber(u)
             case u: TransitionStateMachine => fiberCombined.processEvent(u)
             case u: ArchiveStateMachine    => fiberCombined.archiveFiber(u)
+            case u: UpgradeFiber           => fiberCombined.upgrade(u)
             case u: CreateScript           => oracleCombined.createOracle(u)
             case u: InvokeScript           => oracleCombined.invokeOracle(u)
+            case u: PublishVersion         => registryCombined.publish(u)
+            case u: SetVersionStatus       => registryCombined.setStatus(u)
+            case u: RegisterAlias          => registryCombined.registerAlias(u)
           }
         }
 
