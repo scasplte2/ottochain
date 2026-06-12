@@ -30,13 +30,13 @@ object GenesisManifestLoader {
       .traverse { p =>
         for {
           logicHash  <- p.definition.computeDigest
-          schemaHash <- p.schemaShape.computeDigest
+          schemaHash <- p.machineShape.computeDigest
         } yield GenesisBuilder.PackageSpec(
           name = p.name,
           version = p.semver,
           schemaHash = schemaHash,
           logicHash = logicHash,
-          schemaShape = p.schemaShape,
+          machineShape = p.machineShape,
           owner = owner,
           strict = p.strict,
           metadata = p.metadata

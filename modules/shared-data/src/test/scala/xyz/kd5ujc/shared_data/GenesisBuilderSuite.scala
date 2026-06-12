@@ -36,7 +36,7 @@ object GenesisBuilderSuite extends SimpleIOSuite {
       version = SemVer(1, 0, 0),
       schemaHash = Hash(s"schema-$label"),
       logicHash = Hash(s"logic-$label"),
-      schemaShape = shape,
+      machineShape = shape,
       owner = Set.empty[Address]
     )
 

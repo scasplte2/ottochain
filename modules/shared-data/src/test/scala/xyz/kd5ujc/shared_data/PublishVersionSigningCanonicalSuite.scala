@@ -27,11 +27,11 @@ import weaver.SimpleIOSuite
 object PublishVersionSigningCanonicalSuite extends SimpleIOSuite {
 
   private val harnessJson: String =
-    """{"PublishVersion":{
+    """{"PublishMachineVersion":{
       |  "name":"order.package",
       |  "version":"1.0.0",
       |  "schemaB64":"ZGVzY3JpcHRvcjpvcmRlci5wYWNrYWdlOjEuMC4w",
-      |  "schemaShape":{
+      |  "machineShape":{
       |    "stateMessage":{"typeName":"Order","fields":[
       |      {"name":"orderId","number":1,"typeName":"string","repeated":false,"optional":false},
       |      {"name":"customer","number":2,"typeName":"string","repeated":false,"optional":false},
@@ -92,8 +92,8 @@ object PublishVersionSigningCanonicalSuite extends SimpleIOSuite {
 
   test("harness PublishVersion passes DL1 (L1) stateless validation") {
     decode[OttochainMessage](harnessJson) match {
-      case Right(pv: Updates.PublishVersion) =>
-        new RegistryValidator.L1Validator[IO].publish(pv).map {
+      case Right(pv: Updates.PublishMachineVersion) =>
+        new RegistryValidator.L1Validator[IO].publishMachineVersion(pv).map {
           case Valid(_)      => success
           case Invalid(errs) => failure(s"L1 REJECTED: ${errs.toNonEmptyList.toList.map(_.toString).mkString(" | ")}")
         }

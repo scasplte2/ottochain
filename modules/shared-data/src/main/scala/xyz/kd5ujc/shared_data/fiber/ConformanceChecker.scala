@@ -48,7 +48,12 @@ object ConformanceChecker {
    * unbound fiber, version not found, or non-strict version).
    */
   def violationsFor(binding: Option[SchemaBinding], state: CalculatedState, value: JsonLogicValue): List[String] =
-    strictVersion(binding, state).fold(List.empty[String])(rv => check(rv.schemaShape.stateMessage, value))
+    strictVersion(binding, state).fold(List.empty[String]) { rv =>
+      rv.shape match {
+        case RegistryShape.Machine(machineShape) => check(machineShape.stateMessage, value)
+        case _: RegistryShape.Script             => List.empty
+      }
+    }
 
   private def strictVersion(binding: Option[SchemaBinding], state: CalculatedState): Option[RegisteredVersion] =
     binding.flatMap { b =>

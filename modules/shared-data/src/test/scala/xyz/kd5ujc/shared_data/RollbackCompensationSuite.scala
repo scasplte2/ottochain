@@ -44,8 +44,8 @@ object RollbackCompensationSuite extends SimpleIOSuite {
         // Machine A triggers B
         defA = StateMachineDefinition(
           states = Map(
-            StateId("idle")      -> State(StateId("idle")),
-            StateId("triggered") -> State(StateId("triggered"))
+            StateId("idle")      -> State(StateId("idle"), isFinal = false),
+            StateId("triggered") -> State(StateId("triggered"), isFinal = false)
           ),
           initialState = StateId("idle"),
           transitions = List(
@@ -71,7 +71,8 @@ object RollbackCompensationSuite extends SimpleIOSuite {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             )
           )
         )
@@ -79,8 +80,8 @@ object RollbackCompensationSuite extends SimpleIOSuite {
         // Machine B triggers C
         defB = StateMachineDefinition(
           states = Map(
-            StateId("waiting")   -> State(StateId("waiting")),
-            StateId("continued") -> State(StateId("continued"))
+            StateId("waiting")   -> State(StateId("waiting"), isFinal = false),
+            StateId("continued") -> State(StateId("continued"), isFinal = false)
           ),
           initialState = StateId("waiting"),
           transitions = List(
@@ -106,7 +107,8 @@ object RollbackCompensationSuite extends SimpleIOSuite {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             )
           )
         )
@@ -114,8 +116,8 @@ object RollbackCompensationSuite extends SimpleIOSuite {
         // Machine C fails (guard always false, no valid transition)
         defC = StateMachineDefinition(
           states = Map(
-            StateId("PENDING")  -> State(StateId("PENDING")),
-            StateId("finished") -> State(StateId("finished"))
+            StateId("PENDING")  -> State(StateId("PENDING"), isFinal = false),
+            StateId("finished") -> State(StateId("finished"), isFinal = false)
           ),
           initialState = StateId("PENDING"),
           transitions = List(
@@ -125,7 +127,8 @@ object RollbackCompensationSuite extends SimpleIOSuite {
               eventName = "finish",
               // Guard that always fails
               guard = ConstExpression(BoolValue(false)),
-              effect = ConstExpression(MapValue(Map("step" -> IntValue(3))))
+              effect = ConstExpression(MapValue(Map("step" -> IntValue(3)))),
+              dependencies = Set.empty
             )
           )
         )
@@ -229,8 +232,8 @@ object RollbackCompensationSuite extends SimpleIOSuite {
         // by trying to access non-existent nested property in complex way
         definition = StateMachineDefinition(
           states = Map(
-            StateId("start") -> State(StateId("start")),
-            StateId("end")   -> State(StateId("end"))
+            StateId("start") -> State(StateId("start"), isFinal = false),
+            StateId("end")   -> State(StateId("end"), isFinal = false)
           ),
           initialState = StateId("start"),
           transitions = List(
@@ -248,7 +251,8 @@ object RollbackCompensationSuite extends SimpleIOSuite {
                   // Accessing a deeply nested non-existent path
                   VarExpression(Left("event.payload.deeply.nested.missing.path"))
                 )
-              )
+              ),
+              dependencies = Set.empty
             )
           )
         )
@@ -337,8 +341,8 @@ object RollbackCompensationSuite extends SimpleIOSuite {
 
         parentDefinition = StateMachineDefinition(
           states = Map(
-            StateId("ready")   -> State(StateId("ready")),
-            StateId("spawned") -> State(StateId("spawned"))
+            StateId("ready")   -> State(StateId("ready"), isFinal = false),
+            StateId("spawned") -> State(StateId("spawned"), isFinal = false)
           ),
           initialState = StateId("ready"),
           transitions = List(
@@ -376,7 +380,8 @@ object RollbackCompensationSuite extends SimpleIOSuite {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             )
           )
         )
@@ -438,7 +443,7 @@ object RollbackCompensationSuite extends SimpleIOSuite {
         // State machine with no valid transitions for the event
         definition = StateMachineDefinition(
           states = Map(
-            StateId("locked") -> State(StateId("locked"))
+            StateId("locked") -> State(StateId("locked"), isFinal = false)
           ),
           initialState = StateId("locked"),
           transitions = List.empty // No transitions at all

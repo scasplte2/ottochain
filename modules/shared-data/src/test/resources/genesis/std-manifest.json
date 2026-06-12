@@ -6,7 +6,7 @@
       "semver": "1.0.0",
       "strict": false,
       "metadata": {},
-      "schemaShape": {
+      "machineShape": {
         "stateMessage": {
           "typeName": "ottochain.apps.identity.v1.Identity",
           "fields": [
@@ -211,7 +211,7 @@
       "semver": "1.0.0",
       "strict": false,
       "metadata": {},
-      "schemaShape": {
+      "machineShape": {
         "stateMessage": {
           "typeName": "ottochain.apps.governance.v1.Proposal",
           "fields": [
@@ -438,7 +438,7 @@
       "semver": "1.0.0",
       "strict": false,
       "metadata": {},
-      "schemaShape": {
+      "machineShape": {
         "stateMessage": {
           "typeName": "ottochain.apps.markets.v1.Market",
           "fields": [

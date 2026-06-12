@@ -11,7 +11,7 @@ import derevo.derive
 
 /**
  * The off-chain "genesis manifest" produced by ottochain-sdk (#46): the CONTENT needed to pre-register the
- * std package set at genesis. It deliberately ships content (schemaShape + the JSON-Logic definition), NOT
+ * std package set at genesis. It deliberately ships content (machineShape + the JSON-Logic definition), NOT
  * consensus hashes — the chain computes schemaHash/logicHash from this via its own `computeDigest` (see
  * [[xyz.kd5ujc.shared_data.genesis.GenesisManifestLoader]]). A package's registered `logicHash` is therefore
  * identical-by-construction to a fiber's bind-time `definition.computeDigest`: no cross-language hash
@@ -25,10 +25,10 @@ final case class GenesisManifest(
 
 @derive(customizableEncoder, customizableDecoder)
 final case class ManifestPackage(
-  name:        RegistryName,
-  semver:      SemVer,
-  schemaShape: SchemaShape,
-  definition:  StateMachineDefinition,
-  strict:      Boolean = false,
-  metadata:    SortedMap[String, String] = SortedMap.empty
+  name:         RegistryName,
+  semver:       SemVer,
+  machineShape: SchemaShape,
+  definition:   StateMachineDefinition,
+  strict:       Boolean = false,
+  metadata:     SortedMap[String, String] = SortedMap.empty
 )

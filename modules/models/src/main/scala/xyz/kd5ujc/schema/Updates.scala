@@ -12,7 +12,7 @@ import io.constellationnetwork.security.signature.Signed
 
 import xyz.kd5ujc.schema.CodecConfiguration._
 import xyz.kd5ujc.schema.fiber.{AccessControlPolicy, FiberOrdinal, StateMachineDefinition}
-import xyz.kd5ujc.schema.registry.{RegistryName, RegistryStatus, SchemaRef, SchemaShape, SemVer}
+import xyz.kd5ujc.schema.registry.{RegistryName, RegistryStatus, SchemaRef, SchemaShape, ScriptShape, SemVer}
 
 import derevo.circe.magnolia.{customizableDecoder, customizableEncoder}
 import derevo.derive
@@ -102,9 +102,27 @@ object Updates {
     fiberId:       UUID,
     scriptProgram: JsonLogicExpression,
     initialState:  Option[JsonLogicValue],
-    accessControl: AccessControlPolicy
+    accessControl: AccessControlPolicy,
+    schemaRef:     Option[SchemaRef] = None
   ) extends ScriptFiberOp
       with OttochainMessage
+
+  /**
+   * Upgrade an existing script fiber to a different registered version of the SAME package. The chain
+   * verifies `newProgram.computeDigest == targetVersion.logicHash` (verified re-bind), applies the optional
+   * `migration` (a JSON-Logic transform of the prior stateData) through the engine's metered evaluator, and
+   * re-pins the binding. The commute-law is NOT verified on-chain.
+   */
+  @derive(customizableDecoder, customizableEncoder)
+  final case class UpgradeScript(
+    fiberId:              UUID,
+    targetRef:            SchemaRef,
+    newProgram:           JsonLogicExpression,
+    migration:            Option[JsonLogicExpression] = None,
+    targetSequenceNumber: FiberOrdinal
+  ) extends ScriptFiberOp
+      with OttochainMessage
+      with Sequenced
 
   @derive(customizableDecoder, customizableEncoder)
   final case class InvokeScript(
@@ -128,13 +146,13 @@ object Updates {
   }
 
   /**
-   * Create-or-append a registry version (npm-publish semantics): the first publish for a name claims it and
-   * makes the signer the owner; later publishes require an existing owner.
+   * Create-or-append a registry version for a STATE-MACHINE package (npm-publish semantics): the first
+   * publish for a name claims it and makes the signer the owner; later publishes require an existing owner.
    *
    *  - `schemaB64`: the full protobuf FileDescriptorSet (≈ deployed bytecode). The chain validates it is
    *    base64, hashes it into `schemaHash`, and drops the bytes — they live in the registration update's
    *    history + the Bridge store (Etherscan-style claim; schema-architecture.md §4a).
-   *  - `schemaShape`: the typed, proto-friendly projection the chain stores for discovery (advisory).
+   *  - `machineShape`: the typed, proto-friendly projection the chain stores for discovery (advisory).
    *  - `definition`: the typed JSON-Logic state machine. The chain hashes it into `logicHash` via
    *    `computeDigest` — the same canonical digest a fiber computes — enabling VERIFIED binding (#37): a
    *    fiber referencing this version is admitted only if its definition hashes to `logicHash`. The guards
@@ -144,15 +162,39 @@ object Updates {
    * The owner is derived from the signing proofs at combine time.
    */
   @derive(customizableDecoder, customizableEncoder)
-  final case class PublishVersion(
-    name:        RegistryName,
-    version:     SemVer,
-    schemaB64:   String,
-    schemaShape: SchemaShape,
-    definition:  StateMachineDefinition,
-    strict:      Boolean,
+  final case class PublishMachineVersion(
+    name:         RegistryName,
+    version:      SemVer,
+    schemaB64:    String,
+    machineShape: SchemaShape,
+    definition:   StateMachineDefinition,
+    strict:       Boolean,
     // Optional off-chain links grab-bag (None == omitted), set on the entry at first publish.
     metadata: Option[SortedMap[String, String]] = None
+  ) extends RegistryOp
+      with OttochainMessage {
+    val fiberId: UUID = RegistryOp.routingId(name)
+  }
+
+  /**
+   * Create-or-append a registry version for a SCRIPT package. Parallel to [[PublishMachineVersion]] for state
+   * machines, but carries a `scriptProgram` (JsonLogicExpression) instead of a `StateMachineDefinition`.
+   *
+   *  - `schemaB64`: the full protobuf FileDescriptorSet (advisory, same semantics as PublishMachineVersion).
+   *  - `scriptShape`: the typed method-surface projection the chain stores for discovery.
+   *  - `scriptProgram`: the typed JSON-Logic script. The chain hashes it into `logicHash` via `computeDigest`
+   *    — enabling VERIFIED binding (#37): a script fiber referencing this version is admitted only if its
+   *    program hashes to `logicHash`.
+   */
+  @derive(customizableDecoder, customizableEncoder)
+  final case class PublishScriptVersion(
+    name:          RegistryName,
+    version:       SemVer,
+    schemaB64:     String,
+    scriptShape:   ScriptShape,
+    scriptProgram: JsonLogicExpression,
+    strict:        Boolean,
+    metadata:      Option[SortedMap[String, String]] = None
   ) extends RegistryOp
       with OttochainMessage {
     val fiberId: UUID = RegistryOp.routingId(name)
@@ -216,7 +258,9 @@ object Updates {
       case u: Updates.UpgradeFiber           => Json.obj(u.messageName -> u.asJson)
       case u: Updates.CreateScript           => Json.obj(u.messageName -> u.asJson)
       case u: Updates.InvokeScript           => Json.obj(u.messageName -> u.asJson)
-      case u: Updates.PublishVersion         => Json.obj(u.messageName -> u.asJson)
+      case u: Updates.UpgradeScript          => Json.obj(u.messageName -> u.asJson)
+      case u: Updates.PublishMachineVersion  => Json.obj(u.messageName -> u.asJson)
+      case u: Updates.PublishScriptVersion   => Json.obj(u.messageName -> u.asJson)
       case u: Updates.SetVersionStatus       => Json.obj(u.messageName -> u.asJson)
       case u: Updates.RegisterAlias          => Json.obj(u.messageName -> u.asJson)
     }
@@ -230,7 +274,9 @@ object Updates {
           Decoder[Updates.UpgradeFiber],
           Decoder[Updates.CreateScript],
           Decoder[Updates.InvokeScript],
-          Decoder[Updates.PublishVersion],
+          Decoder[Updates.UpgradeScript],
+          Decoder[Updates.PublishMachineVersion],
+          Decoder[Updates.PublishScriptVersion],
           Decoder[Updates.SetVersionStatus],
           Decoder[Updates.RegisterAlias]
         )

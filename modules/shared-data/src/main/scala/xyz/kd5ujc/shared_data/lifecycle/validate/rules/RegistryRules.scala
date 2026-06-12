@@ -8,13 +8,14 @@ import cats.effect.Async
 import cats.syntax.all._
 
 import io.constellationnetwork.currency.dataApplication.DataApplicationValidationError
+import io.constellationnetwork.metagraph_sdk.json_logic.JsonLogicExpression
 import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
 import io.constellationnetwork.schema.address.Address
 import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.signature.SignatureProof
 
 import xyz.kd5ujc.schema.CalculatedState
-import xyz.kd5ujc.schema.Updates.PublishVersion
+import xyz.kd5ujc.schema.Updates.{PublishMachineVersion, PublishScriptVersion}
 import xyz.kd5ujc.schema.fiber.StateMachineDefinition
 import xyz.kd5ujc.schema.registry._
 import xyz.kd5ujc.shared_data.lifecycle.validate.{Limits, ValidationResult}
@@ -40,7 +41,7 @@ object RegistryRules {
           _ => ().validNec[DataApplicationValidationError].pure[F]
         )
 
-    def bundleWithinLimit[F[_]: Applicative](pv: PublishVersion): F[ValidationResult] = {
+    def bundleWithinLimitMachine[F[_]: Applicative](pv: PublishMachineVersion): F[ValidationResult] = {
       val size = pv.schemaB64.length.toLong
       Validated
         .condNec(
@@ -51,7 +52,18 @@ object RegistryRules {
         .pure[F]
     }
 
-    /** An alias name must use a fiber TLD (`.machine`/`.script`), not `.package` (that is PublishVersion). */
+    def bundleWithinLimitScript[F[_]: Applicative](pv: PublishScriptVersion): F[ValidationResult] = {
+      val size = pv.schemaB64.length.toLong
+      Validated
+        .condNec(
+          size <= Limits.MaxRegistryBundleBytes,
+          (),
+          Errors.BundleTooLarge(size, Limits.MaxRegistryBundleBytes): DataApplicationValidationError
+        )
+        .pure[F]
+    }
+
+    /** An alias name must use a fiber TLD (`.machine`/`.script`), not `.package` (that is PublishMachineVersion/PublishScriptVersion). */
     def aliasTldIsFiber[F[_]: Applicative](name: RegistryName): F[ValidationResult] =
       Validated
         .condNec(name.tld != NameTld.Package, (), Errors.AliasTldNotFiber(name.render): DataApplicationValidationError)
@@ -85,12 +97,12 @@ object RegistryRules {
      * (This validates the *shape* only — it does not check the logic conforms to it; conformance is the
      * separate opt-in dial. See strong-typing-and-conformance.md §0.5.)
      */
-    def schemaShapeWellFormed[F[_]: Applicative](shape: SchemaShape): F[ValidationResult] = {
+    def machineShapeWellFormed[F[_]: Applicative](shape: SchemaShape): F[ValidationResult] = {
       val emptyCmdNames = shape.commands.keys.filter(_.trim.isEmpty).map(_ => "a command name is empty").toList
       val problems = emptyCmdNames ::: shape.allMessages.flatMap(messageProblems)
       problems match {
         case Nil => ().validNec[DataApplicationValidationError]
-        case ps  => (Errors.MalformedSchemaShape(ps.mkString("; ")): DataApplicationValidationError).invalidNec[Unit]
+        case ps  => (Errors.MalformedMachineShape(ps.mkString("; ")): DataApplicationValidationError).invalidNec[Unit]
       }
     }.pure[F]
 
@@ -229,6 +241,37 @@ object RegistryRules {
           }
       }
 
+    /**
+     * A script's optional schemaRef must resolve against the registry AND the script program must hash to
+     * the resolved version's `logicHash` — mirrors [[refResolvesAndMatches]] but for `JsonLogicExpression`.
+     */
+    def scriptRefResolvesAndMatches[F[_]: Async](
+      ref:     Option[SchemaRef],
+      program: JsonLogicExpression,
+      state:   CalculatedState
+    ): F[ValidationResult] =
+      ref match {
+        case None => ().validNec[DataApplicationValidationError].pure[F]
+        case Some(SchemaRef(name, versionReq)) =>
+          lineageOf(name, state) match {
+            case None =>
+              (Errors.SchemaRefUnknownName(name.render): DataApplicationValidationError).invalidNec[Unit].pure[F]
+            case Some(lineage) =>
+              lineage.resolve(versionReq) match {
+                case Left(_) =>
+                  (Errors.SchemaRefUnresolvable(name.render): DataApplicationValidationError).invalidNec[Unit].pure[F]
+                case Right(rv) =>
+                  program.computeDigest.map { digest =>
+                    Validated.condNec(
+                      digest === rv.logicHash,
+                      (),
+                      Errors.SchemaRefLogicMismatch(name.render, rv.version.render): DataApplicationValidationError
+                    )
+                  }
+              }
+          }
+      }
+
     /** An alias's target fiber must exist as the kind its TLD requires (.machine -> SM, .script -> oracle). */
     def aliasTargetIsKind[F[_]: Applicative](
       name:          RegistryName,
@@ -302,8 +345,8 @@ object RegistryRules {
       override val message: String = s"registry descriptor of $size bytes exceeds limit $max"
     }
 
-    final case class MalformedSchemaShape(reason: String) extends DataApplicationValidationError {
-      override val message: String = s"registry schemaShape is malformed: $reason"
+    final case class MalformedMachineShape(reason: String) extends DataApplicationValidationError {
+      override val message: String = s"registry machineShape is malformed: $reason"
     }
 
     final case class NotRegistryOwner(name: String) extends DataApplicationValidationError {

@@ -1607,8 +1607,8 @@ object SpawnMachinesSuite extends SimpleIOSuite {
         // Parent that spawns with an invalid UUID
         parentDefinition = StateMachineDefinition(
           states = Map(
-            StateId("init")    -> State(StateId("init")),
-            StateId("spawned") -> State(StateId("spawned"))
+            StateId("init")    -> State(StateId("init"), isFinal = false),
+            StateId("spawned") -> State(StateId("spawned"), isFinal = false)
           ),
           initialState = StateId("init"),
           transitions = List(
@@ -1649,7 +1649,8 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             )
           )
         )
@@ -1713,8 +1714,8 @@ object SpawnMachinesSuite extends SimpleIOSuite {
         // Parent that spawns with childId as an integer instead of string
         parentDefinition = StateMachineDefinition(
           states = Map(
-            StateId("init")    -> State(StateId("init")),
-            StateId("spawned") -> State(StateId("spawned"))
+            StateId("init")    -> State(StateId("init"), isFinal = false),
+            StateId("spawned") -> State(StateId("spawned"), isFinal = false)
           ),
           initialState = StateId("init"),
           transitions = List(
@@ -1755,7 +1756,8 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             )
           )
         )
@@ -1816,8 +1818,8 @@ object SpawnMachinesSuite extends SimpleIOSuite {
         // Parent that spawns with owners as a string instead of array
         parentDefinition = StateMachineDefinition(
           states = Map(
-            StateId("init")    -> State(StateId("init")),
-            StateId("spawned") -> State(StateId("spawned"))
+            StateId("init")    -> State(StateId("init"), isFinal = false),
+            StateId("spawned") -> State(StateId("spawned"), isFinal = false)
           ),
           initialState = StateId("init"),
           transitions = List(
@@ -1859,7 +1861,8 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             )
           )
         )
@@ -1920,8 +1923,8 @@ object SpawnMachinesSuite extends SimpleIOSuite {
         // Parent that spawns with an invalid owner address
         parentDefinition = StateMachineDefinition(
           states = Map(
-            StateId("init")    -> State(StateId("init")),
-            StateId("spawned") -> State(StateId("spawned"))
+            StateId("init")    -> State(StateId("init"), isFinal = false),
+            StateId("spawned") -> State(StateId("spawned"), isFinal = false)
           ),
           initialState = StateId("init"),
           transitions = List(
@@ -1963,7 +1966,8 @@ object SpawnMachinesSuite extends SimpleIOSuite {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             )
           )
         )

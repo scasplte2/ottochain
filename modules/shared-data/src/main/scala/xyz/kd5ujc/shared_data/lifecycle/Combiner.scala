@@ -64,7 +64,9 @@ object Combiner {
           case u: Updates.UpgradeFiber           => fiberCombiner.upgradeFiber(Signed(u, update.proofs))
           case u: Updates.CreateScript           => oracleCombiner.createScript(Signed(u, update.proofs))
           case u: Updates.InvokeScript           => oracleCombiner.invokeScript(Signed(u, update.proofs))
-          case u: Updates.PublishVersion         => registryCombiner.publishVersion(Signed(u, update.proofs))
+          case u: Updates.UpgradeScript          => oracleCombiner.upgradeScript(Signed(u, update.proofs))
+          case u: Updates.PublishMachineVersion  => registryCombiner.publishMachineVersion(Signed(u, update.proofs))
+          case u: Updates.PublishScriptVersion   => registryCombiner.publishScriptVersion(Signed(u, update.proofs))
           case u: Updates.SetVersionStatus       => registryCombiner.setVersionStatus(Signed(u, update.proofs))
           case u: Updates.RegisterAlias          => registryCombiner.registerAlias(Signed(u, update.proofs))
         }

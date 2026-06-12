@@ -11,7 +11,7 @@ import io.constellationnetwork.security.signature.signature.SignatureProof
 
 import xyz.kd5ujc.schema.Updates.{ArchiveStateMachine, CreateStateMachine, TransitionStateMachine, UpgradeFiber}
 import xyz.kd5ujc.schema.{CalculatedState, OnChain}
-import xyz.kd5ujc.shared_data.lifecycle.validate.rules.{CommonRules, FiberRules, RegistryRules}
+import xyz.kd5ujc.shared_data.lifecycle.validate.rules.{CommonRules, FiberRules}
 
 /**
  * Validators for state machine fiber operations.
@@ -109,8 +109,7 @@ object FiberValidator {
       for {
         hasProofs    <- FiberRules.L0.hasProofs(proofs)
         parentActive <- FiberRules.L0.parentFiberActive(update.parentFiberId, state.calculated)
-        schemaRefOk  <- RegistryRules.L0.refResolvesAndMatches(update.schemaRef, update.definition, state.calculated)
-      } yield List(hasProofs, parentActive, schemaRefOk).combineAll
+      } yield List(hasProofs, parentActive).combineAll
 
     /** Validates a ProcessFiberEvent update (L0 specific checks) */
     def processEvent(update: TransitionStateMachine): F[ValidationResult] =
@@ -134,13 +133,8 @@ object FiberValidator {
         fiberActive   <- FiberRules.L0.fiberIsActive(update.fiberId, state.calculated)
         signedByOwner <- FiberRules.L0.updateSignedByOwners(update.fiberId, proofs, state.calculated)
         bindingOk     <- FiberRules.L0.bindingNameMatches(update.fiberId, update.targetRef.name, state.calculated)
-        targetOk <- RegistryRules.L0.refResolvesAndMatches(
-          Some(update.targetRef),
-          update.newDefinition,
-          state.calculated
-        )
-        stateOk <- FiberRules.L0.currentStateInDefinition(update.fiberId, update.newDefinition, state.calculated)
-      } yield List(fiberActive, signedByOwner, bindingOk, targetOk, stateOk).combineAll
+        stateOk       <- FiberRules.L0.currentStateInDefinition(update.fiberId, update.newDefinition, state.calculated)
+      } yield List(fiberActive, signedByOwner, bindingOk, stateOk).combineAll
   }
 
   /**

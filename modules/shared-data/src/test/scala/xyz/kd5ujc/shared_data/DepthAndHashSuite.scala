@@ -55,8 +55,8 @@ object DepthAndHashSuite extends SimpleIOSuite {
         // Parent spawns child
         parentDefinition = StateMachineDefinition(
           states = Map(
-            StateId("ready")   -> State(StateId("ready")),
-            StateId("spawned") -> State(StateId("spawned"))
+            StateId("ready")   -> State(StateId("ready"), isFinal = false),
+            StateId("spawned") -> State(StateId("spawned"), isFinal = false)
           ),
           initialState = StateId("ready"),
           transitions = List(
@@ -82,7 +82,8 @@ object DepthAndHashSuite extends SimpleIOSuite {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             )
           )
         )
@@ -146,7 +147,7 @@ object DepthAndHashSuite extends SimpleIOSuite {
         // State machine with no valid transitions
         definition = StateMachineDefinition(
           states = Map(
-            StateId("locked") -> State(StateId("locked"))
+            StateId("locked") -> State(StateId("locked"), isFinal = false)
           ),
           initialState = StateId("locked"),
           transitions = List.empty
@@ -226,8 +227,8 @@ object DepthAndHashSuite extends SimpleIOSuite {
         // Chain: 1 -> 2 -> 3 with maxDepth=2 should fail at 3
         def1 = StateMachineDefinition(
           states = Map(
-            StateId("a") -> State(StateId("a")),
-            StateId("b") -> State(StateId("b"))
+            StateId("a") -> State(StateId("a"), isFinal = false),
+            StateId("b") -> State(StateId("b"), isFinal = false)
           ),
           initialState = StateId("a"),
           transitions = List(
@@ -253,15 +254,16 @@ object DepthAndHashSuite extends SimpleIOSuite {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             )
           )
         )
 
         def2 = StateMachineDefinition(
           states = Map(
-            StateId("a") -> State(StateId("a")),
-            StateId("b") -> State(StateId("b"))
+            StateId("a") -> State(StateId("a"), isFinal = false),
+            StateId("b") -> State(StateId("b"), isFinal = false)
           ),
           initialState = StateId("a"),
           transitions = List(
@@ -287,15 +289,16 @@ object DepthAndHashSuite extends SimpleIOSuite {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             )
           )
         )
 
         def3 = StateMachineDefinition(
           states = Map(
-            StateId("a") -> State(StateId("a")),
-            StateId("b") -> State(StateId("b"))
+            StateId("a") -> State(StateId("a"), isFinal = false),
+            StateId("b") -> State(StateId("b"), isFinal = false)
           ),
           initialState = StateId("a"),
           transitions = List(
@@ -304,7 +307,8 @@ object DepthAndHashSuite extends SimpleIOSuite {
               to = StateId("b"),
               eventName = "go",
               guard = ConstExpression(BoolValue(true)),
-              effect = ConstExpression(MapValue(Map("step" -> IntValue(3))))
+              effect = ConstExpression(MapValue(Map("step" -> IntValue(3)))),
+              dependencies = Set.empty
             )
           )
         )

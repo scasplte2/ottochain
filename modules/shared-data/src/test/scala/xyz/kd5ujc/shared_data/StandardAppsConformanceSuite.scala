@@ -90,9 +90,9 @@ object StandardAppsConformanceSuite extends SimpleIOSuite {
 
   test("every standard-app SchemaShape is well-formed (valid + unique proto field numbers, named)") {
     for {
-      i <- RegistryRules.L1.schemaShapeWellFormed[IO](shapeOf(identity))
-      g <- RegistryRules.L1.schemaShapeWellFormed[IO](shapeOf(proposal))
-      m <- RegistryRules.L1.schemaShapeWellFormed[IO](shapeOf(market))
+      i <- RegistryRules.L1.machineShapeWellFormed[IO](shapeOf(identity))
+      g <- RegistryRules.L1.machineShapeWellFormed[IO](shapeOf(proposal))
+      m <- RegistryRules.L1.machineShapeWellFormed[IO](shapeOf(market))
     } yield expect(i.isValid) and expect(g.isValid) and expect(m.isValid)
   }
 

@@ -9,29 +9,30 @@ import derevo.circe.magnolia.{customizableDecoder, customizableEncoder}
 import derevo.derive
 
 /**
- * One immutable version of a registry entry. The chain commits only the hashes + the typed [[SchemaShape]]
- * projection (never the full descriptor or definition bytes — those live in the Bridge + the registration
- * update's history; see schema-architecture.md §4a).
+ * One immutable version of a registry entry. The chain commits only the hashes + the typed shape projection
+ * (never the full descriptor or definition bytes — those live in the Bridge + the registration update's
+ * history; see schema-architecture.md §4a).
  *
- * @param schemaHash   commitment to the protobuf FileDescriptorSet (descriptor bytes; off-chain)
- * @param logicHash    the VERIFIED-binding anchor: `StateMachineDefinition.computeDigest` of the registered
- *                     logic, computed exactly as a fiber computes its own definition's digest. A fiber that
- *                     references this version is admitted only if its definition hashes to this value (see
- *                     [[SchemaBinding]]). Two versions MAY share a logicHash (e.g. a schema-only bump).
- * @param schemaShape  the typed, proto-friendly domain projection (publisher-claimed, advisory — the
- *                     "describe" dial; never constrains the logic)
- * @param strict       opt-in runtime conformance gate (#33): when true, a fiber bound to this version has
- *                     every PRODUCED state (create/transition/migration) checked against `schemaShape` and
- *                     the transaction aborts on a non-conforming state. Default false = the loose,
- *                     experimentation path (the schema stays advisory). Publisher-decided, per version.
+ * `shape` is [[RegistryShape.Machine]] for state-machine packages or [[RegistryShape.Script]] for script
+ * packages — an ADT that carries the correct advisory projection for the kind.
+ *
+ * @param schemaHash  commitment to the protobuf FileDescriptorSet (descriptor bytes; off-chain)
+ * @param logicHash   the VERIFIED-binding anchor: `computeDigest` of the registered logic, computed exactly
+ *                    as a fiber computes its own definition/program digest. A fiber that references this
+ *                    version is admitted only if its definition/program hashes to this value (see
+ *                    [[SchemaBinding]]). Two versions MAY share a logicHash (e.g. a schema-only bump).
+ * @param shape       the kind-correct advisory projection (publisher-claimed; the "describe" dial)
+ * @param strict      opt-in runtime conformance gate (#33): for [[RegistryShape.Machine]] versions, every
+ *                    PRODUCED state is checked against the SchemaShape and the transaction aborts on
+ *                    non-conformance. Ignored for [[RegistryShape.Script]] versions.
  */
 @derive(customizableEncoder, customizableDecoder)
 final case class RegisteredVersion(
   version:      SemVer,
   schemaHash:   Hash,
   logicHash:    Hash,
-  schemaShape:  SchemaShape,
+  shape:        RegistryShape,
   status:       RegistryStatus,
   registeredAt: SnapshotOrdinal,
-  strict:       Boolean = false
+  strict:       Boolean
 )

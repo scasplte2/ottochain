@@ -58,6 +58,7 @@ object Records {
     sequenceNumber:      FiberOrdinal,
     owners:              Set[Address],
     status:              FiberStatus,
-    lastInvocation:      Option[OracleInvocation] = None
+    lastInvocation:      Option[OracleInvocation] = None,
+    schemaBinding:       Option[SchemaBinding] = None
   ) extends FiberRecord
 }

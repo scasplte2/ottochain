@@ -35,9 +35,10 @@ object RegistryLineageSuite extends SimpleIOSuite {
       version = SemVer(major, minor, patch),
       schemaHash = Hash(s"schema-$major.$minor.$patch"),
       logicHash = Hash(s"logic-$major.$minor.$patch"),
-      schemaShape = shape,
+      shape = RegistryShape.Machine(shape),
       status = status,
-      registeredAt = ord
+      registeredAt = ord,
+      strict = false
     )
 
   private def lineage(vs: RegisteredVersion*): VersionLineage =
@@ -132,9 +133,9 @@ object RegistryLineageSuite extends SimpleIOSuite {
     )
   }
 
-  // ── schemaShapeWellFormed: structural proto validation of the typed domain projection ─────────
+  // ── machineShapeWellFormed: structural proto validation of the typed domain projection ─────────
 
-  test("schemaShapeWellFormed accepts a valid shape and rejects each malformed kind") {
+  test("machineShapeWellFormed accepts a valid shape and rejects each malformed kind") {
     val outOfRange = shape.copy(stateMessage =
       MessageShape("App.State", List(FieldShape("x", 0, "int64", repeated = false, optional = false)))
     )
@@ -161,14 +162,14 @@ object RegistryLineageSuite extends SimpleIOSuite {
     )
     val emptyCmdName = shape.copy(commands = SortedMap(" " -> MessageShape("App.Start", Nil)))
     for {
-      ok  <- RegistryRules.L1.schemaShapeWellFormed[IO](shape)
-      oor <- RegistryRules.L1.schemaShapeWellFormed[IO](outOfRange)
-      big <- RegistryRules.L1.schemaShapeWellFormed[IO](tooBig)
-      res <- RegistryRules.L1.schemaShapeWellFormed[IO](reserved)
-      dpl <- RegistryRules.L1.schemaShapeWellFormed[IO](dup)
-      efn <- RegistryRules.L1.schemaShapeWellFormed[IO](emptyFieldName)
-      etn <- RegistryRules.L1.schemaShapeWellFormed[IO](emptyTypeName)
-      ecn <- RegistryRules.L1.schemaShapeWellFormed[IO](emptyCmdName)
+      ok  <- RegistryRules.L1.machineShapeWellFormed[IO](shape)
+      oor <- RegistryRules.L1.machineShapeWellFormed[IO](outOfRange)
+      big <- RegistryRules.L1.machineShapeWellFormed[IO](tooBig)
+      res <- RegistryRules.L1.machineShapeWellFormed[IO](reserved)
+      dpl <- RegistryRules.L1.machineShapeWellFormed[IO](dup)
+      efn <- RegistryRules.L1.machineShapeWellFormed[IO](emptyFieldName)
+      etn <- RegistryRules.L1.machineShapeWellFormed[IO](emptyTypeName)
+      ecn <- RegistryRules.L1.machineShapeWellFormed[IO](emptyCmdName)
     } yield expect(ok.isValid) and
     expect(oor.isInvalid) and
     expect(big.isInvalid) and
