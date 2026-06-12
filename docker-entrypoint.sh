@@ -255,7 +255,6 @@ if [ "${RUN_MODE}" = "run-genesis" ]; then
     exit 1
   fi
 fi
-
 # Rollback hash handling for run-rollback mode
 # 
 # IMPORTANT: As of tessellation 4.0.0-rc.10:
@@ -323,7 +322,6 @@ elif [ "${RUN_MODE}" = "run-rollback" ]; then
   # ML0/CL0/DL1: run-rollback auto-detects from storage, no hash needed
   echo "Currency/Data L0 run-rollback: using auto-detection (no hash arg)"
 fi
-
 # Add any extra args passed to container
 ARGS="${ARGS} $@"
 
