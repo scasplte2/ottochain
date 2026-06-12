@@ -45,8 +45,11 @@ object RegistryCombinerSuite extends SimpleIOSuite {
 
   private val shape: SchemaShape =
     SchemaShape(
-      stateMessage = MessageShape("App.State", List(FieldShape("balance", 1, "int64"))),
-      commands = SortedMap("start" -> MessageShape("App.Start", List(FieldShape("amount", 1, "int64"))))
+      stateMessage =
+        MessageShape("App.State", List(FieldShape("balance", 1, "int64", repeated = false, optional = false))),
+      commands = SortedMap(
+        "start" -> MessageShape("App.Start", List(FieldShape("amount", 1, "int64", repeated = false, optional = false)))
+      )
     )
 
   // The registered logic. Verified binding admits a fiber only if its definition hashes to the registered
@@ -71,7 +74,8 @@ object RegistryCombinerSuite extends SimpleIOSuite {
       version = v,
       schemaB64 = b64(s"schema-$name-${v.render}"),
       schemaShape = shape,
-      definition = minimalDef
+      definition = minimalDef,
+      strict = false
     )
 
   // A v2 definition that RETAINS the "initial" state (so an upgrade preserving currentState is valid) but
@@ -87,7 +91,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
   }
 
   private def publishWith(name: String, v: SemVer, definition: StateMachineDefinition): PublishVersion =
-    PublishVersion(pkg(name), v, b64(s"schema-$name-${v.render}"), shape, definition)
+    PublishVersion(pkg(name), v, b64(s"schema-$name-${v.render}"), shape, definition, strict = false)
 
   private val genesis = DataState(OnChain.genesis, CalculatedState.genesis)
 
@@ -121,7 +125,11 @@ object RegistryCombinerSuite extends SimpleIOSuite {
     }
   }
 
-  test("publish by a non-owner to an existing entry is rejected (validator invalid + combiner aborts)") {
+  // Registry stateful rejection is deferred to the combiner (the authoritative gate): validateSignedUpdate
+  // runs L1-structural only, so a non-owner / non-monotonic publish PASSES validation (L1 can't see the
+  // CalculatedState lineage) and is rejected at combine (RejectionReceipt). This avoids poisoning the whole
+  // DL1 block when a now-stale registry update is re-validated at ML0 (see Validator.scala).
+  test("publish by a non-owner to an existing entry is rejected at combine (L1 passes; combiner is the gate)") {
     TestFixture.resource(Set(Alice, Bob)).use { fixture =>
       implicit val sp: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0: L0NodeContext[IO] = fixture.l0Context
@@ -135,11 +143,11 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         pr2           <- fixture.registry.generateProofs(p2, Set(Bob))
         valid         <- validator.validateSignedUpdate(s1, Signed(p2, pr2))
         combineFailed <- combiner.insert(s1, Signed(p2, pr2)).map(wasRejected)
-      } yield expect(valid.isInvalid) and expect(combineFailed)
+      } yield expect(valid.isValid) and expect(combineFailed)
     }
   }
 
-  test("non-monotonic publish is rejected (validator invalid + combiner aborts)") {
+  test("non-monotonic publish is rejected at combine (L1 passes; combiner is the gate)") {
     TestFixture.resource(Set(Alice)).use { fixture =>
       implicit val sp: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0: L0NodeContext[IO] = fixture.l0Context
@@ -153,7 +161,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         prLow         <- fixture.registry.generateProofs(pLow, Set(Alice))
         valid         <- validator.validateSignedUpdate(s1, Signed(pLow, prLow))
         combineFailed <- combiner.insert(s1, Signed(pLow, prLow)).map(wasRejected)
-      } yield expect(valid.isInvalid) and expect(combineFailed)
+      } yield expect(valid.isValid) and expect(combineFailed)
     }
   }
 
@@ -547,7 +555,8 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         prA           <- fixture.registry.generateProofs(alias, Set(Alice))
         valid         <- validator.validateSignedUpdate(s1, Signed(alias, prA))
         combineFailed <- combiner.insert(s1, Signed(alias, prA)).map(wasRejected)
-      } yield expect(valid.isInvalid) and expect(combineFailed)
+        // kind-mismatch is an L0 (CalculatedState) check, deferred to combine — L1 passes structurally
+      } yield expect(valid.isValid) and expect(combineFailed)
     }
   }
 
@@ -565,7 +574,8 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         prB           <- fixture.registry.generateProofs(alias, Set(Bob)) // Bob, not an owner, signs
         valid         <- validator.validateSignedUpdate(s1, Signed(alias, prB))
         combineFailed <- combiner.insert(s1, Signed(alias, prB)).map(wasRejected)
-      } yield expect(valid.isInvalid) and expect(combineFailed)
+        // ownership is an L0 (CalculatedState) check, deferred to combine — L1 passes structurally
+      } yield expect(valid.isValid) and expect(combineFailed)
     }
   }
 
@@ -612,7 +622,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
           shape,
           minimalDef,
           strict = false,
-          metadata = meta
+          metadata = Some(meta)
         )
       val bad = PublishVersion(
         pkg("widget"),
@@ -621,7 +631,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         shape,
         minimalDef,
         strict = false,
-        metadata = SortedMap("note" -> ("x" * 200)) // value exceeds 128 chars
+        metadata = Some(SortedMap("note" -> ("x" * 200))) // value exceeds 128 chars
       )
       for {
         validator     <- Validator.make[IO]

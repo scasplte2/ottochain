@@ -148,9 +148,9 @@ object Updates {
     schemaB64:   String,
     schemaShape: SchemaShape,
     definition:  StateMachineDefinition,
-    strict:      Boolean = false,
-    // Optional off-chain links grab-bag, set on the entry at first publish (e.g. "repo"/"homepage" -> URL).
-    metadata: SortedMap[String, String] = SortedMap.empty
+    strict:      Boolean,
+    // Optional off-chain links grab-bag (None == omitted), set on the entry at first publish.
+    metadata: Option[SortedMap[String, String]] = None
   ) extends RegistryOp
       with OttochainMessage {
     val fiberId: UUID = RegistryOp.routingId(name)
@@ -176,7 +176,7 @@ object Updates {
   final case class RegisterAlias(
     name:          RegistryName,
     targetFiberId: UUID,
-    metadata:      SortedMap[String, String] = SortedMap.empty
+    metadata:      Option[SortedMap[String, String]] = None
   ) extends RegistryOp
       with OttochainMessage {
     val fiberId: UUID = RegistryOp.routingId(name)

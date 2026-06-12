@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import type { TransitionStateMachine, OttochainMessage } from '@ottochain/sdk';
+import type { TransitionStateMachine, OttochainMessage } from '@ottochain/sdk/core';
 import type { StatesMap } from '../types.ts';
 import { validateEventLogs } from '../validateLogs.ts';
 

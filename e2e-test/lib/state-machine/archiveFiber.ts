@@ -1,10 +1,16 @@
-import type { OttochainMessage } from '@ottochain/sdk';
+import type { OttochainMessage } from '@ottochain/sdk/core';
 import type { StatesMap } from '../types.ts';
 
-export const generator = ({ cid }: { cid: string }): OttochainMessage => {
+export interface ArchiveFiberOptions {
+  targetSequenceNumber?: number;
+}
+
+export const generator = ({ cid, options }: { cid: string; wallets?: unknown; options?: ArchiveFiberOptions }): OttochainMessage => {
   return {
     ArchiveStateMachine: {
       fiberId: cid,
+      // ArchiveStateMachine is Sequenced — the chain requires the fiber's current sequence number.
+      targetSequenceNumber: options?.targetSequenceNumber ?? 0,
     },
   };
 };

@@ -1,0 +1,5 @@
+{
+  "orderId": "ORD-1",
+  "customer": "alice@example.com",
+  "total": 100
+}

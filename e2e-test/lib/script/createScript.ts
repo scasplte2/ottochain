@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import type { OttochainMessage } from '@ottochain/sdk';
+import type { OttochainMessage } from '@ottochain/sdk/core';
 import type { StatesMap } from '../types.ts';
 
 export interface CreateOracleOptions {
@@ -30,10 +30,11 @@ export const generator = ({ cid, options }: { cid: string; wallets?: unknown; op
   }
 
   // Build the CreateScript message.
-  // Note: since metakit 1.8.0 the server DROPS null object fields before
-  // canonicalizing (JsonBinaryCodec.dropNulls), and sendDataTransaction
-  // applies the SDK's dropNulls before signing to match. An explicit
-  // "initialState": null here is therefore equivalent to omitting the field.
+  // metakit drops null object fields before canonicalizing (JsonBinaryCodec.dropNulls), and
+  // sendDataTransaction applies the same dropNulls before signing — so an explicit
+  // "initialState": null is equivalent to omitting it (the field is dropped before the signature
+  // is computed either way). The `?? null` below is just an explicit default, not a signing
+  // requirement.
   const createMsg: Record<string, unknown> = {
     fiberId: cid,
     scriptProgram: oracleDefinition.scriptProgram,

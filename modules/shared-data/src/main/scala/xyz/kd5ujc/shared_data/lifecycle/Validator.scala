@@ -124,7 +124,18 @@ object Validator {
         )(implicit context: L0NodeContext[F]): F[DataApplicationValidationErrorOr[Unit]] = {
           val fiberCombined = new FiberValidator.CombinedValidator[F](current, signedUpdate.proofs)
           val oracleCombined = new ScriptValidator.CombinedValidator[F](current, signedUpdate.proofs)
-          val registryCombined = new RegistryValidator.CombinedValidator[F](current, signedUpdate.proofs)
+
+          // Registry ops use L1 (structural) validation ONLY here, NOT the L0 contextual preview.
+          // The L0 checks (ownership, monotonic version) need the CalculatedState version lineage, which the
+          // DL1 cannot see (OnChain.registryCommits is name->hash, no lineage) — so a stale/non-monotonic
+          // publish that is still in flight CANNOT be rejected at L1. If we ran the L0 preview here, a
+          // now-stale registry update (valid when its DL1 block formed, stale by the time ML0 re-validates)
+          // would return Invalid and the framework rejects the ENTIRE block (all-or-nothing), dropping valid
+          // updates batched with it. The RegistryCombiner is the AUTHORITATIVE stateful gate and already
+          // rejects gracefully (CombineRejected -> RejectionReceipt, #154), so deferring stateful rejection
+          // to combine keeps consensus state correct while not poisoning blocks. (TOCTOU-safe; the framework
+          // partial-block-accept fix is the real solution, deferred.)
+          val registryL1 = new RegistryValidator.L1Validator[F]
 
           signedUpdate.value match {
             case u: CreateStateMachine     => fiberCombined.createFiber(u)
@@ -133,9 +144,9 @@ object Validator {
             case u: UpgradeFiber           => fiberCombined.upgrade(u)
             case u: CreateScript           => oracleCombined.createOracle(u)
             case u: InvokeScript           => oracleCombined.invokeOracle(u)
-            case u: PublishVersion         => registryCombined.publish(u)
-            case u: SetVersionStatus       => registryCombined.setStatus(u)
-            case u: RegisterAlias          => registryCombined.registerAlias(u)
+            case u: PublishVersion         => registryL1.publish(u)
+            case u: SetVersionStatus       => registryL1.setStatus(u)
+            case u: RegisterAlias          => registryL1.registerAlias(u)
           }
         }
 

@@ -1,0 +1,52 @@
+{
+  "states": {
+    "pending": { "id": "pending", "isFinal": false },
+    "confirmed": { "id": "confirmed", "isFinal": false },
+    "shipped": { "id": "shipped", "isFinal": false },
+    "delivered": { "id": "delivered", "isFinal": true },
+    "cancelled": { "id": "cancelled", "isFinal": true }
+  },
+  "initialState": "pending",
+  "transitions": [
+    {
+      "from": "pending",
+      "to": "confirmed",
+      "eventName": "confirm",
+      "guard": { "==": [1, 1] },
+      "effect": {},
+      "dependencies": []
+    },
+    {
+      "from": "confirmed",
+      "to": "confirmed",
+      "eventName": "expedite",
+      "guard": { "==": [1, 1] },
+      "effect": { "priority": "express" },
+      "dependencies": []
+    },
+    {
+      "from": "confirmed",
+      "to": "shipped",
+      "eventName": "ship",
+      "guard": { "==": [1, 1] },
+      "effect": { "trackingNumber": { "var": "event.trackingNumber" } },
+      "dependencies": []
+    },
+    {
+      "from": "shipped",
+      "to": "delivered",
+      "eventName": "deliver",
+      "guard": { "==": [1, 1] },
+      "effect": { "deliveredAt": { "var": "event.timestamp" } },
+      "dependencies": []
+    },
+    {
+      "from": "pending",
+      "to": "cancelled",
+      "eventName": "cancel",
+      "guard": { "==": [1, 1] },
+      "effect": { "cancelReason": { "var": "event.reason" } },
+      "dependencies": []
+    }
+  ]
+}

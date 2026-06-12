@@ -1,12 +1,14 @@
 import fs from 'fs';
 import path from 'path';
-import type { CreateStateMachine, OttochainMessage } from '@ottochain/sdk';
+import type { CreateStateMachine, OttochainMessage } from '@ottochain/sdk/core';
 import type { StatesMap } from '../types.ts';
 
 export interface CreateFiberOptions {
   definition: string | object;
   initialData: string | object;
   parentFiberId?: string;
+  /** Verified-binding reference: bind the new fiber to a registered package version (#37). */
+  schemaRef?: { name: string; version: string };
 }
 
 export const generator = ({ cid, options }: { cid: string; wallets?: unknown; options: CreateFiberOptions }): OttochainMessage => {
@@ -38,6 +40,11 @@ export const generator = ({ cid, options }: { cid: string; wallets?: unknown; op
     definition: definition as CreateStateMachine['definition'],
     initialData,
     parentFiberId: options.parentFiberId ?? null,
+    // Bind to a registered version (verified binding): definition.computeDigest must equal the
+    // registered logicHash, else the chain rejects at ML0 combine. version uses VersionReq.Exact.
+    ...(options.schemaRef
+      ? { schemaRef: { name: options.schemaRef.name, version: { Exact: { version: options.schemaRef.version } } } }
+      : {}),
   };
 
   return { CreateStateMachine: msg };

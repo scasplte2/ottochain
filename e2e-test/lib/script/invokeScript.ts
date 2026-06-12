@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import type { OttochainMessage } from '@ottochain/sdk';
+import type { OttochainMessage } from '@ottochain/sdk/core';
 import type { StatesMap } from '../types.ts';
 import { validateOracleLogs } from '../validateLogs.ts';
 

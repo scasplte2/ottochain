@@ -407,6 +407,71 @@ async function runFlow(
       let message: unknown;
       let stepOptions: Record<string, unknown>;
 
+      // ---- Registry ops (publishVersion / setVersionStatus / registerAlias) ----
+      // Non-sequenced: confirm via /registry/{name}; no seq number or DL1-fiberCommit sync.
+      const REGISTRY_LIBS: Record<string, string> = {
+        publishVersion: './lib/registry/publishVersion.ts',
+        setVersionStatus: './lib/registry/setVersionStatus.ts',
+        registerAlias: './lib/registry/registerAlias.ts',
+      };
+      if (REGISTRY_LIBS[step.action]) {
+        const regLib = await import(REGISTRY_LIBS[step.action]);
+        const regName = step.name as string;
+        const regOptions: Record<string, unknown> = {
+          ...step,
+          targetFiberId: (step.targetFiberId as string) ?? session.cid,
+          ...(step.definition ? { definition: path.join(examplesDir, example.dir, step.definition) } : {}),
+          ...(step.schemaShape ? { schemaShape: path.join(examplesDir, example.dir, step.schemaShape as string) } : {}),
+        };
+        const regMessage = regLib.generator({ cid: session.cid, wallets, options: regOptions });
+        const regPath = `registry/${encodeURIComponent(regName)}`;
+        // Did the op land in the registry? (per-action predicate on the /registry/{name} response)
+        const landed = (d: unknown): boolean => {
+          const e = d as { target?: { SchemaPackage?: { versions?: { versions?: Record<string, { status?: string }> } } } } | null;
+          const vs = e?.target?.SchemaPackage?.versions?.versions;
+          if (step.action === 'publishVersion') return !!vs && (step.version as string) in vs;
+          if (step.action === 'setVersionStatus') return vs?.[step.version as string]?.status === step.status;
+          return e != null; // registerAlias
+        };
+
+        if (step.expectRejected === 'dl1') {
+          // Structural reject (e.g. reserved name) -> the /data POST should fail with HTTP 400.
+          let rejected = false;
+          try {
+            await sendSignedUpdate(regMessage, wallets, dl1Urls);
+          } catch (err) {
+            rejected = (err as Error).message.includes('400');
+          }
+          if (!rejected) throw new Error(`expected DL1 to reject ${step.action} ${regName} (HTTP 400), but it was accepted`);
+          l(' \x1b[32mOK (DL1 rejected)\x1b[0m');
+          continue;
+        }
+        if (step.expectRejected === 'ml0') {
+          // Admitted by DL1 (structurally valid) but rejected at ML0 combine -> never lands.
+          await sendSignedUpdate(regMessage, wallets, dl1Urls).catch(() => undefined);
+          const client = new HttpClient(`${ml0Urls[0]}/data-application/v1/${regPath}`);
+          for (let attempt = 0; attempt < 8; attempt++) {
+            await new Promise((r) => setTimeout(r, retryDelayMs));
+            let data: unknown = null;
+            try {
+              data = await client.get<unknown>('');
+            } catch {
+              /* entry may not exist — fine */
+            }
+            if (landed(data)) throw new Error(`expected ML0 to reject ${step.action} ${regName}, but it landed`);
+          }
+          l(' \x1b[32mOK (ML0 rejected, state unchanged)\x1b[0m');
+          continue;
+        }
+
+        const regInitial = await getInitialStates(ml0Env);
+        await sendSignedUpdate(regMessage, wallets, dl1Urls);
+        await waitForMl0Confirmation(ml0Urls[0], regPath, landed, maxRetries, retryDelayMs, `${step.action} ${regName}`, log);
+        await validateWithRetries(regLib.validator, session.cid, regInitial, regOptions, wallets, maxRetries, retryDelayMs, ml0Urls);
+        l(' \x1b[32mOK\x1b[0m');
+        continue;
+      }
+
       const loadContext = {
         wallets,
         session,
@@ -458,7 +523,8 @@ async function runFlow(
             loadContext
           );
 
-          stepOptions = { definition, initialData };
+          // schemaRef (optional) binds the new fiber to a registered package version (verified binding).
+          stepOptions = { definition, initialData, schemaRef: step.schemaRef };
 
           const libModule = await import('./lib/state-machine/createFiber.ts');
           generator = libModule.generator;
@@ -551,6 +617,33 @@ async function runFlow(
           break;
         }
 
+        case 'upgradeFiber': {
+          // Upgrade the session fiber to another registered version of the same package (#27),
+          // optionally migrating prior state. Sequenced: bumps the fiber's sequence number.
+          stepOptions = {
+            targetRef: step.targetRef,
+            newDefinition: path.join(examplesDir, example.dir, step.newDefinition as string),
+            ...(step.migration ? { migration: path.join(examplesDir, example.dir, step.migration as string) } : {}),
+            targetSequenceNumber: preSendSeqNum >= 0 ? preSendSeqNum : 0,
+          };
+          const libModule = await import('./lib/state-machine/upgradeFiber.ts');
+          generator = libModule.generator;
+          validator = libModule.validator;
+          message = generator({ cid: session.cid, wallets, options: stepOptions });
+          break;
+        }
+
+        case 'archiveStateMachine': {
+          // Sequenced, but archive flips status to ARCHIVED without bumping the sequence number
+          // (see the confirmation predicate below, which special-cases this).
+          stepOptions = { targetSequenceNumber: preSendSeqNum >= 0 ? preSendSeqNum : 0 };
+          const libModule = await import('./lib/state-machine/archiveFiber.ts');
+          generator = libModule.generator;
+          validator = libModule.validator;
+          message = generator({ cid: session.cid, wallets, options: stepOptions });
+          break;
+        }
+
         default:
           throw new Error(`Unknown action: ${step.action}`);
       }
@@ -632,7 +725,11 @@ async function runFlow(
           if (isCreateStep) {
             return record.status === 'ACTIVE';
           }
-          // For transitions/invocations: sequenceNumber must have increased
+          // Archive flips status to ARCHIVED without bumping the sequence number.
+          if (step.action === 'archiveStateMachine') {
+            return record.status === 'ARCHIVED';
+          }
+          // For transitions/invocations/upgrades: sequenceNumber must have increased
           return (record.sequenceNumber ?? -1) > preSendSeqNum;
         },
         resubmit: async () => {

@@ -5,6 +5,8 @@ import java.util.UUID
 import cats.effect.Async
 import cats.syntax.all._
 
+import scala.collection.immutable.SortedMap
+
 import io.constellationnetwork.currency.dataApplication.{DataState, L0NodeContext}
 import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
 import io.constellationnetwork.schema.address.Address
@@ -14,6 +16,8 @@ import io.constellationnetwork.security.signature.Signed
 import xyz.kd5ujc.schema.registry._
 import xyz.kd5ujc.schema.{CalculatedState, OnChain, Updates}
 import xyz.kd5ujc.shared_data.syntax.all._
+
+import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 /**
  * Combiner for the registry. The chain enforces structural invariants — append-only / immutable /
@@ -48,7 +52,7 @@ class RegistryCombiner[F[_]: Async: SecurityProvider](
         )
         .whenA(pv.schemaB64.length.toLong > maxBundleBytes)
       _ <- RegistryMetadata
-        .validate(pv.metadata)
+        .validate(pv.metadata.getOrElse(SortedMap.empty[String, String]))
         .fold(
           e => Async[F].raiseError[Unit](CombineRejected(s"invalid metadata for ${pv.name.render}: $e")),
           _ => Async[F].unit
@@ -73,7 +77,7 @@ class RegistryCombiner[F[_]: Async: SecurityProvider](
             pv.name,
             signers,
             RegistryTarget.SchemaPackage(VersionLineage.of(rv)),
-            pv.metadata
+            pv.metadata.getOrElse(SortedMap.empty[String, String])
           ): RegistryEntry).pure[F]
         case Some(entry) =>
           if (!signers.exists(entry.owner.contains))
@@ -96,6 +100,7 @@ class RegistryCombiner[F[_]: Async: SecurityProvider](
             }
       }
       result <- current.withRegistryEntry[F](pv.name, updatedEntry)
+      _      <- Slf4jLogger.getLogger[F].info(s"[registry-publish] applied ${pv.name.render}@${pv.version.render}")
     } yield result
   }
 
@@ -143,7 +148,7 @@ class RegistryCombiner[F[_]: Async: SecurityProvider](
         .raiseError[Unit](CombineRejected(s"alias name ${ra.name.render} uses a reserved label"))
         .whenA(RegistryName.isReserved(ra.name))
       _ <- RegistryMetadata
-        .validate(ra.metadata)
+        .validate(ra.metadata.getOrElse(SortedMap.empty[String, String]))
         .fold(
           e => Async[F].raiseError[Unit](CombineRejected(s"invalid metadata for ${ra.name.render}: $e")),
           _ => Async[F].unit

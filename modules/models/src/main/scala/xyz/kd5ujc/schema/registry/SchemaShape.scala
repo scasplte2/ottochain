@@ -24,8 +24,8 @@ final case class FieldShape(
   name:     String,
   number:   Int,
   typeName: String,
-  repeated: Boolean = false,
-  optional: Boolean = false
+  repeated: Boolean,
+  optional: Boolean
 )
 
 @derive(customizableEncoder, customizableDecoder)

@@ -8,14 +8,6 @@ import type { KeyPair } from '@ottochain/sdk';
  * Uses the SDK's batchSign (RFC 8785 canonicalize → DataUpdate sign)
  * to produce a Signed<T> with one proof per wallet, then submits to all
  * DL1 nodes.
- *
- * IMPORTANT: null object fields are dropped from the message BEFORE signing
- * (and the null-free value is what gets submitted). Since metakit 1.8.0 the
- * node's `serializeUpdate` drops null object fields before canonicalizing
- * (JsonBinaryCodec.dropNulls), so signatures must be computed over the same
- * null-free canonical form or the DL1 rejects every update with HTTP 400
- * (InvalidSignature). Pinned by the Scala-side
- * E2eSignedPayloadCompatSuite (modules/shared-data).
  */
 export default async function sendSignedUpdate(
   message: unknown,
@@ -24,11 +16,12 @@ export default async function sendSignedUpdate(
 ): Promise<{ hash: string }[]> {
   const privateKeys = Object.values(wallets).map((w) => w.privateKey);
 
-  // Match the node's canonical form: metakit drops null object fields
-  // before hashing/verifying, so we must sign (and send) the null-free value.
-  const cleaned = dropNulls(message);
-
-  const signed = await batchSign(cleaned, privateKeys, { isDataUpdate: true });
+  // Drop null fields before signing. metakit (rc.9) drops nulls when building the canonical
+  // bytes the chain signs/verifies, so the client must sign the same null-free form. Otherwise a
+  // message carrying a null (e.g. a state's `metadata: null` in a state-machine definition) is
+  // signed over a different canonical than the chain re-derives, and verification fails (HTTP 400) —
+  // which is why state-machine creates failed while null-free scripts passed.
+  const signed = await batchSign(dropNulls(message), privateKeys, { isDataUpdate: true });
 
   console.log(
     `\x1b[33m[sendDataTransaction]\x1b[36m Sending to DL1:\x1b[0m ${JSON.stringify(signed).substring(0, 200)}...`
@@ -57,17 +50,29 @@ export default async function sendSignedUpdate(
     return fulfilled.map((r) => r.value);
   }
 
+  // Surface the dl1's actual rejection: HttpClient throws a NetworkError carrying `statusCode` and
+  // `response` (the raw response body). Log status + body per node (even when empty) and fold them into
+  // the thrown error so the runner's "Failed flows" output shows WHY, not just "HTTP 400: Bad Request".
   const errorMessages = responses
-    .map((r) => {
+    .map((r, i) => {
       if (r.status === 'rejected') {
-        const err = r.reason as Error & { response?: string };
-        if (err.response) {
-          console.log(`\x1b[33m[sendDataTransaction]\x1b[31m Error response body:\x1b[0m ${err.response}`);
-        }
-        return err.message;
+        const err = (r.reason ?? {}) as { message?: string; statusCode?: number; response?: unknown };
+        const url = dl1Urls[i];
+        const status = err.statusCode ?? '?';
+        const body =
+          err.response === undefined || err.response === null || err.response === ''
+            ? '(empty body)'
+            : typeof err.response === 'string'
+              ? err.response
+              : JSON.stringify(err.response);
+        console.log(
+          `\x1b[33m[sendDataTransaction]\x1b[31m ${url} -> HTTP ${status}:\x1b[0m ${body} ${err.message ? `(${err.message})` : ''}`
+        );
+        return `${url} HTTP ${status}: ${body}`;
       }
       return '';
     })
-    .join('; ');
-  throw new Error(`All requests failed. Errors: ${errorMessages}`);
+    .filter(Boolean)
+    .join(' | ');
+  throw new Error(`All requests failed: ${errorMessages}`);
 }

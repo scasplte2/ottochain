@@ -15,6 +15,8 @@ import xyz.kd5ujc.shared_data.lifecycle.combine.{CombineRejected, FiberCombiner,
 import xyz.kd5ujc.shared_data.lifecycle.validate.Limits
 import xyz.kd5ujc.shared_data.syntax.all._
 
+import org.typelevel.log4cats.slf4j.Slf4jLogger
+
 /**
  * Entry point for creating a CombinerService.
  *
@@ -72,6 +74,11 @@ object Combiner {
         // `previous` state. Any other failure (non-deterministic / infrastructure) propagates and aborts — by
         // design, so a transient local error never becomes divergent committed state across nodes.
         dispatched.recoverWith { case CombineRejected(reason) =>
+          Slf4jLogger
+            .getLogger[F]
+            .warn(
+              s"[combine-reject] ${update.value.getClass.getSimpleName} fiberId=${update.value.fiberId} reason=$reason"
+            ) >>
           ctx.getCurrentOrdinal.map { ordinal =>
             previous.appendLogs(
               List(
