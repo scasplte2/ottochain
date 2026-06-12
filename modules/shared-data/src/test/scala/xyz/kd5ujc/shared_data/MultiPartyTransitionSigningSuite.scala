@@ -33,15 +33,15 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
         contractJson = """
         {
           "states": {
-            "pending": { "id": { "value": "pending" }, "isFinal": false },
-            "accepted": { "id": { "value": "accepted" }, "isFinal": true },
-            "rejected": { "id": { "value": "rejected" }, "isFinal": true }
+            "pending": { "id": "pending", "isFinal": false },
+            "accepted": { "id": "accepted", "isFinal": true },
+            "rejected": { "id": "rejected", "isFinal": true }
           },
-          "initialState": { "value": "pending" },
+          "initialState": "pending",
           "transitions": [
             {
-              "from": { "value": "pending" },
-              "to": { "value": "accepted" },
+              "from": "pending",
+              "to": "accepted",
               "eventName": "accept",
               "guard": true,
               "effect": {
@@ -51,8 +51,8 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "pending" },
-              "to": { "value": "rejected" }, 
+              "from": "pending",
+              "to": "rejected", 
               "eventName": "reject",
               "guard": true,
               "effect": {
@@ -116,15 +116,15 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
         contractJson = """
         {
           "states": {
-            "pending": { "id": { "value": "pending" }, "isFinal": false },
-            "accepted": { "id": { "value": "accepted" }, "isFinal": true },
-            "rejected": { "id": { "value": "rejected" }, "isFinal": true }
+            "pending": { "id": "pending", "isFinal": false },
+            "accepted": { "id": "accepted", "isFinal": true },
+            "rejected": { "id": "rejected", "isFinal": true }
           },
-          "initialState": { "value": "pending" },
+          "initialState": "pending",
           "transitions": [
             {
-              "from": { "value": "pending" },
-              "to": { "value": "accepted" },
+              "from": "pending",
+              "to": "accepted",
               "eventName": "accept",
               "guard": true,
               "effect": {
@@ -133,8 +133,8 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "pending" },
-              "to": { "value": "rejected" }, 
+              "from": "pending",
+              "to": "rejected", 
               "eventName": "reject",
               "guard": true,
               "effect": {
@@ -208,14 +208,14 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
         contractJson = """
         {
           "states": {
-            "pending": { "id": { "value": "pending" }, "isFinal": false },
-            "accepted": { "id": { "value": "accepted" }, "isFinal": true }
+            "pending": { "id": "pending", "isFinal": false },
+            "accepted": { "id": "accepted", "isFinal": true }
           },
-          "initialState": { "value": "pending" },
+          "initialState": "pending",
           "transitions": [
             {
-              "from": { "value": "pending" },
-              "to": { "value": "accepted" },
+              "from": "pending",
+              "to": "accepted",
               "eventName": "accept",
               "guard": true,
               "effect": {
@@ -272,14 +272,14 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
         contractJson = """
         {
           "states": {
-            "pending": { "id": { "value": "pending" }, "isFinal": false },
-            "cancelled": { "id": { "value": "cancelled" }, "isFinal": true }
+            "pending": { "id": "pending", "isFinal": false },
+            "cancelled": { "id": "cancelled", "isFinal": true }
           },
-          "initialState": { "value": "pending" },
+          "initialState": "pending",
           "transitions": [
             {
-              "from": { "value": "pending" },
-              "to": { "value": "cancelled" },
+              "from": "pending",
+              "to": "cancelled",
               "eventName": "cancel",
               "guard": true,
               "effect": {
@@ -343,15 +343,15 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
         contractJson = """
         {
           "states": {
-            "pending": { "id": { "value": "pending" }, "isFinal": false },
-            "approved": { "id": { "value": "approved" }, "isFinal": true },
-            "denied": { "id": { "value": "denied" }, "isFinal": true }
+            "pending": { "id": "pending", "isFinal": false },
+            "approved": { "id": "approved", "isFinal": true },
+            "denied": { "id": "denied", "isFinal": true }
           },
-          "initialState": { "value": "pending" },
+          "initialState": "pending",
           "transitions": [
             {
-              "from": { "value": "pending" },
-              "to": { "value": "approved" },
+              "from": "pending",
+              "to": "approved",
               "eventName": "approve",
               "guard": {
                 ">=": [{ "var": "event.amount" }, { "var": "state.minimumAmount" }]
@@ -363,8 +363,8 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "pending" },
-              "to": { "value": "denied" },
+              "from": "pending",
+              "to": "denied",
               "eventName": "approve",
               "guard": {
                 "<": [{ "var": "event.amount" }, { "var": "state.minimumAmount" }]
@@ -444,15 +444,15 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
         contractJson = """
         {
           "states": {
-            "pending": { "id": { "value": "pending" }, "isFinal": false },
-            "approved": { "id": { "value": "approved" }, "isFinal": true },
-            "denied": { "id": { "value": "denied" }, "isFinal": true }
+            "pending": { "id": "pending", "isFinal": false },
+            "approved": { "id": "approved", "isFinal": true },
+            "denied": { "id": "denied", "isFinal": true }
           },
-          "initialState": { "value": "pending" },
+          "initialState": "pending",
           "transitions": [
             {
-              "from": { "value": "pending" },
-              "to": { "value": "approved" },
+              "from": "pending",
+              "to": "approved",
               "eventName": "approve",
               "guard": {
                 ">=": [{ "var": "event.amount" }, { "var": "state.minimumAmount" }]
@@ -464,8 +464,8 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
               "dependencies": []
             },
             {
-              "from": { "value": "pending" },
-              "to": { "value": "denied" },
+              "from": "pending",
+              "to": "denied",
               "eventName": "approve",
               "guard": {
                 "<": [{ "var": "event.amount" }, { "var": "state.minimumAmount" }]
