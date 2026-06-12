@@ -37,6 +37,8 @@ runs:
         CL_P2P_HTTP_PORT: ${{ inputs.CL_P2P_HTTP_PORT }}
         CL_CLI_HTTP_PORT: ${{ inputs.CL_CLI_HTTP_PORT }}
         CL_APP_ENV: dev
+        # 3 DL1 nodes -> peers-count = N-1 = 2 so every data round includes ALL nodes (no stale lingering copy)
+        DATA_PEERS_COUNT: "2"
         CL_COLLATERAL: 0
         CL_GLOBAL_L0_PEER_HTTP_HOST: 127.0.0.1
         CL_GLOBAL_L0_PEER_HTTP_PORT: ${{ inputs.CL_GLOBAL_L0_PEER_HTTP_PORT }}
