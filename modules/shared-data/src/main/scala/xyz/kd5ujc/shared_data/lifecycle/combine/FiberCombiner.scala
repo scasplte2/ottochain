@@ -58,6 +58,9 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
         )
     }
 
+    // participants declared in CreateStateMachine become authorized signers for transitions
+    authorizedSigners = update.participants.getOrElse(Set.empty)
+
     record = Records.StateMachineFiberRecord(
       fiberId = update.fiberId,
       creationOrdinal = currentOrdinal,
@@ -71,7 +74,8 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
       owners = owners,
       status = FiberStatus.Active,
       parentFiberId = update.parentFiberId,
-      schemaBinding = binding
+      schemaBinding = binding,
+      authorizedSigners = authorizedSigners
     )
 
     creationReceipt = FiberLogEntry.CreationReceipt(

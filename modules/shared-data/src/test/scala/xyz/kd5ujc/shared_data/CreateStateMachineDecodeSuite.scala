@@ -59,4 +59,20 @@ object CreateStateMachineDecodeSuite extends SimpleIOSuite {
         )
       else success
   }
+
+  // #133 multi-party signing adds `participants: Option[Set[Address]] = None` to the signed CreateStateMachine.
+  // Per the signing-canonical invariant (docs/signing-canonical-and-validation.md): an omitted Option must NOT
+  // be re-injected by the chain's encoder, or a client that omits it produces different bytes -> InvalidSignature.
+  test("canonical signing form: participants omitted when None (multi-party #133)") {
+    for {
+      csm   <- IO.fromEither(decode[Updates.CreateStateMachine](inner))
+      bytes <- JsonBinaryCodec[IO, Updates.CreateStateMachine].serialize(csm)
+      canonical = new String(bytes, "UTF-8")
+    } yield
+      if (canonical.contains("\"participants\""))
+        failure(
+          s"canonical INCLUDES participants when None -> a signer that omits it produces different bytes -> InvalidSignature. canonical=$canonical"
+        )
+      else success
+  }
 }

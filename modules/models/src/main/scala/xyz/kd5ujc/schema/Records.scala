@@ -42,7 +42,8 @@ object Records {
     lastReceipt:           Option[EventReceipt] = None,
     parentFiberId:         Option[UUID] = None,
     childFiberIds:         Set[UUID] = Set.empty,
-    schemaBinding:         Option[SchemaBinding] = None
+    schemaBinding:         Option[SchemaBinding] = None,
+    authorizedSigners:     Set[Address] = Set.empty
   ) extends FiberRecord
 
   @derive(customizableEncoder, customizableDecoder)
