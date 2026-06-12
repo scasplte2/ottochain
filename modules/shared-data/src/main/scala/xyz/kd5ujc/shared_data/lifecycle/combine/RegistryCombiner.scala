@@ -17,6 +17,8 @@ import xyz.kd5ujc.schema.registry._
 import xyz.kd5ujc.schema.{CalculatedState, OnChain, Updates}
 import xyz.kd5ujc.shared_data.syntax.all._
 
+import org.typelevel.log4cats.slf4j.Slf4jLogger
+
 /**
  * Combiner for the registry. The chain enforces structural invariants — append-only / immutable /
  * strictly-monotonic via [[VersionLineage]], ownership, and a descriptor size bound — and never PARSES the
@@ -98,6 +100,7 @@ class RegistryCombiner[F[_]: Async: SecurityProvider](
             }
       }
       result <- current.withRegistryEntry[F](pv.name, updatedEntry)
+      _      <- Slf4jLogger.getLogger[F].info(s"[registry-publish] applied ${pv.name.render}@${pv.version.render}")
     } yield result
   }
 

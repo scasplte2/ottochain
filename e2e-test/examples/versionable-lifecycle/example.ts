@@ -53,8 +53,10 @@ export default {
         { action: 'publishVersion', name: 'rejects.package', version: '1.0.0', definition: 'order-v1.definition.json', schemaShape: 'order-v1.schema.json' },
         // reserved label -> DL1 structural reject (HTTP 400)
         { action: 'publishVersion', name: 'std.package', version: '1.0.0', definition: 'order-v1.definition.json', schemaShape: 'order-v1.schema.json', expectRejected: 'dl1' },
-        // non-monotonic: re-publish an existing/older version -> ML0 stateful reject, lineage unchanged
-        { action: 'publishVersion', name: 'rejects.package', version: '1.0.0', definition: 'order-v1.definition.json', schemaShape: 'order-v1.schema.json', expectRejected: 'ml0' },
+        // non-monotonic: publish a LOWER version than the current max -> ML0 stateful reject. Use 0.9.0
+        // (NOT already in the lineage) so "did not land" is observable — re-publishing the existing 1.0.0
+        // is indistinguishable from idempotence since it is already present.
+        { action: 'publishVersion', name: 'rejects.package', version: '0.9.0', definition: 'order-v1.definition.json', schemaShape: 'order-v1.schema.json', expectRejected: 'ml0' },
       ],
     },
   ],
