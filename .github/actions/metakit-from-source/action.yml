@@ -24,7 +24,20 @@ runs:
           echo "::warning::metakit ${METAKIT_VER} is not on Maven Central yet — building from tag v${METAKIT_VER} and publishLocal (TEMPORARY)."
           rm -rf /tmp/metakit-src
           git clone --depth 1 --branch "v${METAKIT_VER}" https://github.com/Constellation-Labs/metakit.git /tmp/metakit-src
-          ( cd /tmp/metakit-src && sbt --batch --error "set ThisBuild / version := \"${METAKIT_VER}\"" publishLocal )
+          # The from-source build occasionally hits a non-deterministic scalac macro-expansion
+          # assertion (java.lang.AssertionError: List(package eu, package eu)) — the same commit
+          # builds fine on retry. Retry with a clean build (serial, to reduce the macro race).
+          ok=
+          for attempt in 1 2 3; do
+            if ( cd /tmp/metakit-src && sbt --batch --error \
+                   "set ThisBuild / version := \"${METAKIT_VER}\"" \
+                   "set ThisBuild / parallelExecution := false" \
+                   clean publishLocal ); then
+              ok=1; echo "metakit publishLocal succeeded (attempt ${attempt})"; break
+            fi
+            echo "::warning::metakit publishLocal failed (attempt ${attempt}/3) — retrying"
+          done
+          [ -n "$ok" ] || { echo "::error::metakit publishLocal failed after 3 attempts"; exit 1; }
           cp "$HOME/.ivy2/local/io.constellationnetwork/metakit_2.13/${METAKIT_VER}/poms/metakit_2.13.pom" /tmp/metakit.pom
         fi
         TESS_VER=$(grep -A1 'tessellation-sdk' /tmp/metakit.pom | grep '<version>' | grep -o '[0-9][^<]*' | head -1)
