@@ -175,12 +175,14 @@ object ML0Service {
           state.computeDigest
 
         override def routes(implicit context: L0NodeContext[F]): HttpRoutes[F] =
-          new ML0MetaRoutes[F](checkpointService).public <+>
-          new ML0StateMachineRoutes[F](checkpointService).public <+>
-          new ML0ScriptRoutes[F](checkpointService).public <+>
-          new ML0RegistryRoutes[F](checkpointService).public <+>
-          new ML0WebhookRoutes[F](subscriberRegistry).public <+>
-          new ML0EstimateRoutes[F](checkpointService).public
+          new ML0Routes[F](
+            new handlers.MetaHandler[F](checkpointService),
+            new handlers.StateMachineHandler[F](checkpointService),
+            new handlers.ScriptHandler[F](checkpointService),
+            new handlers.RegistryHandler[F](checkpointService),
+            new handlers.WebhookHandler[F](subscriberRegistry),
+            new handlers.EstimateHandler[F](checkpointService)
+          ).public
       }
     )
 }
