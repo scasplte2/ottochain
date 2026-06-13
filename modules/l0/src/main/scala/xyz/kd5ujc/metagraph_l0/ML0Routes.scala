@@ -3,7 +3,6 @@ package xyz.kd5ujc.metagraph_l0
 import cats.effect.Async
 import cats.syntax.all._
 
-import io.constellationnetwork.currency.dataApplication.L0NodeContext
 import io.constellationnetwork.ext.http4s.error.RefinedRequestApplicationDecoder
 import io.constellationnetwork.metagraph_sdk.MetagraphPublicRoutes
 import io.constellationnetwork.security.signature.Signed
@@ -28,8 +27,6 @@ class ML0Routes[F[_]: Async](
   registry:     RegistryHandler[F],
   webhook:      WebhookHandler[F],
   estimate:     EstimateHandler[F]
-)(implicit
-  context: L0NodeContext[F]
 ) extends MetagraphPublicRoutes[F] {
 
   implicit private val fiberStatusDecoder: QueryParamDecoder[FiberStatus] =
