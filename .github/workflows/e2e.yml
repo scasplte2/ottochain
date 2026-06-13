@@ -41,6 +41,13 @@ jobs:
       - name: Install just
         uses: extractions/setup-just@v4
 
+      # TEMPORARY: build metakit from its git tag + publishLocal if the pinned version is not yet on
+      # Maven Central (e.g. an RC mid-publish). Self-deactivating once published. Remove with the
+      # action once the metakit RC ships.
+      - name: metakit from source (until published)
+        id: metakit
+        uses: ./.github/actions/metakit-from-source
+
       # Resolve tessellation version from the dependency chain:
       #   ottochain → metakit (version in Dependencies.scala)
       #   metakit POM on Maven Central → tessellation-sdk version
@@ -56,9 +63,9 @@ jobs:
             TESS_VER="${TESS_VER#v}"
             echo "Dependency chain: ottochain → metakit ${METAKIT_VER} → tessellation ${TESS_VER} (override)"
           else
-            # Resolve from metakit POM on Maven Central
-            TESS_VER=$(curl -sf "https://repo1.maven.org/maven2/io/constellationnetwork/metakit_2.13/${METAKIT_VER}/metakit_2.13-${METAKIT_VER}.pom" \
-              | grep -A1 'tessellation-sdk' | grep '<version>' | grep -o '[0-9][^<]*')
+            # tessellation-sdk version from the metakit POM, resolved by the metakit-from-source
+            # step (Central, or the freshly built local POM while the RC is mid-publish).
+            TESS_VER="${{ steps.metakit.outputs.tessellation-version }}"
             echo "Dependency chain: ottochain → metakit ${METAKIT_VER} → tessellation ${TESS_VER}"
           fi
 
@@ -155,8 +162,17 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # DL1 data-consensus peers-count = N-1 so EVERY round includes all 3 DL1
+          # nodes. Default is 1 (dag-l1.conf), which leaves one node out of each
+          # round; its mempool copy lingers and goes stale, producing out-of-order
+          # SequenceNumberMismatch updates that sink the all-or-nothing data block
+          # for every fiber bundled in it — surfaces as flaky DL1-sync timeouts under
+          # parallel load. Inject via the compose-runner's --env passthrough; the
+          # dag-l1.conf ${?DATA_PEERS_COUNT} HOCON override reads it.
+          printf 'DATA_PEERS_COUNT=2\n' > "${RUNNER_TEMP}/dl1-extra.env"
           just up --hypergraph-release="v${{ steps.versions.outputs.tessellation }}" \
-            --skip-assembly --metagraph="${GITHUB_WORKSPACE}" --dl1 --data
+            --skip-assembly --metagraph="${GITHUB_WORKSPACE}" --dl1 --data \
+            --env="${RUNNER_TEMP}/dl1-extra.env"
 
       - name: Wait for cluster health
         run: |
