@@ -49,8 +49,8 @@ object RegistryCombinerSuite extends SimpleIOSuite {
   // Package names now carry the `.package` TLD (Option B): a name is `<labels>.<tld>`.
   private def pkg(n: String): RegistryName = RegistryName.unsafe(s"$n.package")
 
-  private val shape: SchemaShape =
-    SchemaShape(
+  private val shape: MachineShape =
+    MachineShape(
       stateMessage =
         MessageShape("App.State", List(FieldShape("balance", 1, "int64", repeated = false, optional = false))),
       commands = SortedMap(

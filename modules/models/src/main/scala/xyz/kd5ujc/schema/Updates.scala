@@ -12,7 +12,7 @@ import io.constellationnetwork.security.signature.Signed
 
 import xyz.kd5ujc.schema.CodecConfiguration._
 import xyz.kd5ujc.schema.fiber.{AccessControlPolicy, FiberOrdinal, StateMachineDefinition}
-import xyz.kd5ujc.schema.registry.{RegistryName, RegistryStatus, SchemaRef, SchemaShape, ScriptShape, SemVer}
+import xyz.kd5ujc.schema.registry.{MachineShape, RegistryName, RegistryStatus, SchemaRef, ScriptShape, SemVer}
 
 import derevo.circe.magnolia.{customizableDecoder, customizableEncoder}
 import derevo.derive
@@ -166,7 +166,7 @@ object Updates {
     name:         RegistryName,
     version:      SemVer,
     schemaB64:    String,
-    machineShape: SchemaShape,
+    machineShape: MachineShape,
     definition:   StateMachineDefinition,
     strict:       Boolean,
     // Optional off-chain links grab-bag (None == omitted), set on the entry at first publish.

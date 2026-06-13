@@ -23,8 +23,8 @@ import weaver.SimpleIOSuite
 
 object GenesisBuilderSuite extends SimpleIOSuite {
 
-  private val shape: SchemaShape =
-    SchemaShape(
+  private val shape: MachineShape =
+    MachineShape(
       stateMessage =
         MessageShape("App.State", List(FieldShape("balance", 1, "int64", repeated = false, optional = false))),
       commands = SortedMap.empty

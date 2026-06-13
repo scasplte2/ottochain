@@ -40,7 +40,7 @@ final case class MessageShape(
  * SortedMap[String, String]` with the typed, field-numbered shape.
  */
 @derive(customizableEncoder, customizableDecoder)
-final case class SchemaShape(
+final case class MachineShape(
   stateMessage: MessageShape,
   commands:     SortedMap[String, MessageShape]
 ) {
@@ -93,7 +93,7 @@ sealed trait RegistryShape {
 object RegistryShape {
 
   @derive(customizableEncoder, customizableDecoder)
-  final case class Machine(machineShape: SchemaShape) extends RegistryShape {
+  final case class Machine(machineShape: MachineShape) extends RegistryShape {
     def allMessages: List[MessageShape] = machineShape.allMessages
   }
 

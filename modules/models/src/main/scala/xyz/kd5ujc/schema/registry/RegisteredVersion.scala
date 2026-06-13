@@ -23,7 +23,7 @@ import derevo.derive
  *                    [[SchemaBinding]]). Two versions MAY share a logicHash (e.g. a schema-only bump).
  * @param shape       the kind-correct advisory projection (publisher-claimed; the "describe" dial)
  * @param strict      opt-in runtime conformance gate (#33): for [[RegistryShape.Machine]] versions, every
- *                    PRODUCED state is checked against the SchemaShape and the transaction aborts on
+ *                    PRODUCED state is checked against the MachineShape and the transaction aborts on
  *                    non-conformance. Ignored for [[RegistryShape.Script]] versions.
  */
 @derive(customizableEncoder, customizableDecoder)

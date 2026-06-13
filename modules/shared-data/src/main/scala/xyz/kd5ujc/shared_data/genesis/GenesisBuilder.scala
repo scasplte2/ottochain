@@ -35,7 +35,7 @@ object GenesisBuilder {
     version:      SemVer,
     schemaHash:   Hash,
     logicHash:    Hash,
-    machineShape: SchemaShape,
+    machineShape: MachineShape,
     owner:        Set[Address],
     strict:       Boolean = false,
     metadata:     SortedMap[String, String] = SortedMap.empty

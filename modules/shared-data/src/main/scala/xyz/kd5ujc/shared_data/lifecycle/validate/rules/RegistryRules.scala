@@ -97,7 +97,7 @@ object RegistryRules {
      * (This validates the *shape* only — it does not check the logic conforms to it; conformance is the
      * separate opt-in dial. See strong-typing-and-conformance.md §0.5.)
      */
-    def machineShapeWellFormed[F[_]: Applicative](shape: SchemaShape): F[ValidationResult] = {
+    def machineShapeWellFormed[F[_]: Applicative](shape: MachineShape): F[ValidationResult] = {
       val emptyCmdNames = shape.commands.keys.filter(_.trim.isEmpty).map(_ => "a command name is empty").toList
       val problems = emptyCmdNames ::: shape.allMessages.flatMap(messageProblems)
       problems match {

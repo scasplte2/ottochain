@@ -4,7 +4,7 @@ import scala.collection.immutable.SortedMap
 
 import xyz.kd5ujc.schema.CodecConfiguration._
 import xyz.kd5ujc.schema.fiber.StateMachineDefinition
-import xyz.kd5ujc.schema.registry.{RegistryName, SchemaShape, SemVer}
+import xyz.kd5ujc.schema.registry.{MachineShape, RegistryName, SemVer}
 
 import derevo.circe.magnolia.{customizableDecoder, customizableEncoder}
 import derevo.derive
@@ -27,7 +27,7 @@ final case class GenesisManifest(
 final case class ManifestPackage(
   name:         RegistryName,
   semver:       SemVer,
-  machineShape: SchemaShape,
+  machineShape: MachineShape,
   definition:   StateMachineDefinition,
   strict:       Boolean = false,
   metadata:     SortedMap[String, String] = SortedMap.empty
