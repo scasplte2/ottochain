@@ -1,0 +1,32 @@
+name: 'metakit from source (temporary)'
+description: >
+  TEMPORARY stopgap: if the metakit version pinned in project/Dependencies.scala is not yet on
+  Maven Central, clone the matching git tag and `publishLocal` it so sbt resolves it from the ivy
+  local repo. SELF-DEACTIVATING — once that version publishes to Central, the curl check passes and
+  this becomes a no-op. Always outputs the tessellation-sdk version from metakit's POM (Central or
+  the freshly built local one). Remove this action and its callers once the metakit RC is published.
+outputs:
+  tessellation-version:
+    description: 'tessellation-sdk version resolved from the metakit POM'
+    value: ${{ steps.run.outputs.tessellation }}
+runs:
+  using: 'composite'
+  steps:
+    - id: run
+      shell: bash
+      run: |
+        set -euo pipefail
+        METAKIT_VER=$(grep 'val metakit =' project/Dependencies.scala | head -1 | grep -o '"[^"]*"' | tr -d '"')
+        CENTRAL_POM="https://repo1.maven.org/maven2/io/constellationnetwork/metakit_2.13/${METAKIT_VER}/metakit_2.13-${METAKIT_VER}.pom"
+        if curl -sf "$CENTRAL_POM" -o /tmp/metakit.pom; then
+          echo "metakit ${METAKIT_VER} is on Maven Central — no source build needed."
+        else
+          echo "::warning::metakit ${METAKIT_VER} is not on Maven Central yet — building from tag v${METAKIT_VER} and publishLocal (TEMPORARY)."
+          rm -rf /tmp/metakit-src
+          git clone --depth 1 --branch "v${METAKIT_VER}" https://github.com/Constellation-Labs/metakit.git /tmp/metakit-src
+          ( cd /tmp/metakit-src && sbt --batch --error "set ThisBuild / version := \"${METAKIT_VER}\"" publishLocal )
+          cp "$HOME/.ivy2/local/io.constellationnetwork/metakit_2.13/${METAKIT_VER}/poms/metakit_2.13.pom" /tmp/metakit.pom
+        fi
+        TESS_VER=$(grep -A1 'tessellation-sdk' /tmp/metakit.pom | grep '<version>' | grep -o '[0-9][^<]*' | head -1)
+        echo "tessellation=${TESS_VER}" >> "$GITHUB_OUTPUT"
+        echo "metakit ${METAKIT_VER} -> tessellation-sdk ${TESS_VER}"
