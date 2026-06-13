@@ -79,7 +79,9 @@ object Validator {
               case u: UpgradeFiber           => u.fiberId.toString
               case u: CreateScript           => u.fiberId.toString
               case u: InvokeScript           => u.fiberId.toString
-              case u: PublishVersion         => u.fiberId.toString
+              case u: UpgradeScript          => u.fiberId.toString
+              case u: PublishMachineVersion  => u.fiberId.toString
+              case u: PublishScriptVersion   => u.fiberId.toString
               case u: SetVersionStatus       => u.fiberId.toString
               case u: RegisterAlias          => u.fiberId.toString
             }
@@ -98,7 +100,9 @@ object Validator {
                 case u: UpgradeFiber           => fiberL1.upgrade(u)
                 case u: CreateScript           => oracleL1.createOracle(u)
                 case u: InvokeScript           => oracleL1.invokeOracle(u)
-                case u: PublishVersion         => registryL1.publish(u)
+                case u: UpgradeScript          => oracleL1.upgradeScript(u)
+                case u: PublishMachineVersion  => registryL1.publishMachineVersion(u)
+                case u: PublishScriptVersion   => registryL1.publishScriptVersion(u)
                 case u: SetVersionStatus       => registryL1.setStatus(u)
                 case u: RegisterAlias          => registryL1.registerAlias(u)
               }
@@ -144,7 +148,9 @@ object Validator {
             case u: UpgradeFiber           => fiberCombined.upgrade(u)
             case u: CreateScript           => oracleCombined.createOracle(u)
             case u: InvokeScript           => oracleCombined.invokeOracle(u)
-            case u: PublishVersion         => registryL1.publish(u)
+            case u: UpgradeScript          => oracleCombined.upgradeScript(u)
+            case u: PublishMachineVersion  => registryL1.publishMachineVersion(u)
+            case u: PublishScriptVersion   => registryL1.publishScriptVersion(u)
             case u: SetVersionStatus       => registryL1.setStatus(u)
             case u: RegisterAlias          => registryL1.registerAlias(u)
           }

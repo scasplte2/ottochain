@@ -58,7 +58,8 @@ object SequencedOrderingE2ESuite extends SimpleIOSuite {
                 )
               )
             )
-          )
+          ),
+          dependencies = Set.empty
         )
       )
     )

@@ -16,6 +16,7 @@ import io.constellationnetwork.security.signature.Signed
 
 import xyz.kd5ujc.schema._
 import xyz.kd5ujc.schema.fiber.{FiberOrdinal, _}
+import xyz.kd5ujc.schema.registry.SchemaBinding
 import xyz.kd5ujc.shared_data.syntax.all._
 
 object ScriptProcessor {
@@ -43,7 +44,8 @@ object ScriptProcessor {
   def createScript[F[_]: Async: SecurityProvider](
     current:        DataState[OnChain, CalculatedState],
     update:         Signed[Updates.CreateScript],
-    currentOrdinal: SnapshotOrdinal
+    currentOrdinal: SnapshotOrdinal,
+    binding:        Option[SchemaBinding] = None
   ): F[DataState[OnChain, CalculatedState]] = for {
     owners <- update.proofs.toList.traverse(_.id.toAddress).map(Set.from)
 
@@ -59,7 +61,8 @@ object ScriptProcessor {
       accessControl = update.accessControl,
       sequenceNumber = FiberOrdinal.MinValue,
       owners = owners,
-      status = FiberStatus.Active
+      status = FiberStatus.Active,
+      schemaBinding = binding
     )
 
     result <- current.withRecord[F](update.fiberId, oracleRecord)

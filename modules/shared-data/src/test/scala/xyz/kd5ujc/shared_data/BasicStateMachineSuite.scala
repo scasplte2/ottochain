@@ -50,7 +50,8 @@ object BasicStateMachineSuite extends SimpleIOSuite with Checkers {
                 "active"  -> BoolValue(true)
               )
             )
-          )
+          ),
+          dependencies = Set.empty
         ),
         Transition(
           from = countingState,
@@ -84,7 +85,8 @@ object BasicStateMachineSuite extends SimpleIOSuite with Checkers {
                 )
               )
             )
-          )
+          ),
+          dependencies = Set.empty
         ),
         Transition(
           from = countingState,
@@ -108,7 +110,8 @@ object BasicStateMachineSuite extends SimpleIOSuite with Checkers {
                 )
               )
             )
-          )
+          ),
+          dependencies = Set.empty
         )
       )
     )
@@ -552,8 +555,8 @@ object BasicStateMachineSuite extends SimpleIOSuite with Checkers {
 
         definition = StateMachineDefinition(
           states = Map(
-            StateId("open")   -> State(StateId("open")),
-            StateId("locked") -> State(StateId("locked"))
+            StateId("open")   -> State(StateId("open"), isFinal = false),
+            StateId("locked") -> State(StateId("locked"), isFinal = false)
           ),
           initialState = StateId("open"),
           transitions = List(
@@ -574,7 +577,8 @@ object BasicStateMachineSuite extends SimpleIOSuite with Checkers {
                     "locked" -> BoolValue(true)
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             )
           )
         )
@@ -627,8 +631,8 @@ object BasicStateMachineSuite extends SimpleIOSuite with Checkers {
 
         definition = StateMachineDefinition(
           states = Map(
-            StateId("open")   -> State(StateId("open")),
-            StateId("locked") -> State(StateId("locked"))
+            StateId("open")   -> State(StateId("open"), isFinal = false),
+            StateId("locked") -> State(StateId("locked"), isFinal = false)
           ),
           initialState = StateId("open"),
           transitions = List(
@@ -643,7 +647,8 @@ object BasicStateMachineSuite extends SimpleIOSuite with Checkers {
                   ConstExpression(BoolValue(true))
                 )
               ),
-              effect = ConstExpression(MapValue(Map("locked" -> BoolValue(true))))
+              effect = ConstExpression(MapValue(Map("locked" -> BoolValue(true)))),
+              dependencies = Set.empty
             )
           )
         )

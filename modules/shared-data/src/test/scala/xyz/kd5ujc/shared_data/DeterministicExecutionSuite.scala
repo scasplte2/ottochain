@@ -43,8 +43,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
         // Create a simple state machine
         definition = StateMachineDefinition(
           states = Map(
-            StateId("idle")   -> State(StateId("idle")),
-            StateId("ACTIVE") -> State(StateId("ACTIVE"))
+            StateId("idle")   -> State(StateId("idle"), isFinal = false),
+            StateId("ACTIVE") -> State(StateId("ACTIVE"), isFinal = false)
           ),
           initialState = StateId("idle"),
           transitions = List(
@@ -53,7 +53,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
               to = StateId("ACTIVE"),
               eventName = "activate",
               guard = ConstExpression(BoolValue(true)),
-              effect = ConstExpression(MapValue(Map("activated" -> BoolValue(true))))
+              effect = ConstExpression(MapValue(Map("activated" -> BoolValue(true)))),
+              dependencies = Set.empty
             )
           )
         )
@@ -132,7 +133,7 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
 
         definition = StateMachineDefinition(
           states = Map(
-            StateId("idle") -> State(StateId("idle"))
+            StateId("idle") -> State(StateId("idle"), isFinal = false)
           ),
           initialState = StateId("idle"),
           transitions = List(
@@ -141,7 +142,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
               to = StateId("idle"),
               eventName = "process",
               guard = guardExpr,
-              effect = ConstExpression(MapValue(Map("processed" -> BoolValue(true))))
+              effect = ConstExpression(MapValue(Map("processed" -> BoolValue(true)))),
+              dependencies = Set.empty
             )
           )
         )
@@ -237,8 +239,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
         // Create a state machine that triggers itself with the same event type
         definition = StateMachineDefinition(
           states = Map(
-            StateId("loop1") -> State(StateId("loop1")),
-            StateId("loop2") -> State(StateId("loop2"))
+            StateId("loop1") -> State(StateId("loop1"), isFinal = false),
+            StateId("loop2") -> State(StateId("loop2"), isFinal = false)
           ),
           initialState = StateId("loop1"),
           transitions = List(
@@ -265,7 +267,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             ),
             Transition(
               from = StateId("loop2"),
@@ -290,7 +293,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             )
           )
         )
@@ -348,8 +352,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
         makeDef = (targetId: java.util.UUID) =>
           StateMachineDefinition(
             states = Map(
-              StateId("s1") -> State(StateId("s1")),
-              StateId("s2") -> State(StateId("s2"))
+              StateId("s1") -> State(StateId("s1"), isFinal = false),
+              StateId("s2") -> State(StateId("s2"), isFinal = false)
             ),
             initialState = StateId("s1"),
             transitions = List(
@@ -375,7 +379,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
                       )
                     )
                   )
-                )
+                ),
+                dependencies = Set.empty
               ),
               Transition(
                 from = StateId("s2"),
@@ -399,7 +404,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
                       )
                     )
                   )
-                )
+                ),
+                dependencies = Set.empty
               )
             )
           )
@@ -480,8 +486,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
 
         simpleDef = StateMachineDefinition(
           states = Map(
-            StateId("state1") -> State(StateId("state1")),
-            StateId("state2") -> State(StateId("state2"))
+            StateId("state1") -> State(StateId("state1"), isFinal = false),
+            StateId("state2") -> State(StateId("state2"), isFinal = false)
           ),
           initialState = StateId("state1"),
           transitions = List(
@@ -490,7 +496,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
               to = StateId("state2"),
               eventName = "advance",
               guard = ConstExpression(BoolValue(true)),
-              effect = ConstExpression(MapValue(Map("advanced" -> BoolValue(true))))
+              effect = ConstExpression(MapValue(Map("advanced" -> BoolValue(true)))),
+              dependencies = Set.empty
             )
           )
         )
@@ -596,7 +603,7 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
 
         definition = StateMachineDefinition(
           states = Map(
-            StateId("initial") -> State(StateId("initial"))
+            StateId("initial") -> State(StateId("initial"), isFinal = false)
           ),
           initialState = StateId("initial"),
           transitions = List.empty // No valid transitions
@@ -655,8 +662,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
         // First two guards will fail, third will pass
         definition = StateMachineDefinition(
           states = Map(
-            StateId("start") -> State(StateId("start")),
-            StateId("end")   -> State(StateId("end"))
+            StateId("start") -> State(StateId("start"), isFinal = false),
+            StateId("end")   -> State(StateId("end"), isFinal = false)
           ),
           initialState = StateId("start"),
           transitions = List(
@@ -672,7 +679,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
                   ConstExpression(IntValue(999)) // 1+1 != 999, so false
                 )
               ),
-              effect = ConstExpression(MapValue(Map("path" -> StrValue("first"))))
+              effect = ConstExpression(MapValue(Map("path" -> StrValue("first")))),
+              dependencies = Set.empty
             ),
             // Second guard: also returns false
             Transition(
@@ -686,7 +694,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
                   ConstExpression(IntValue(999)) // 2+2 != 999, so false
                 )
               ),
-              effect = ConstExpression(MapValue(Map("path" -> StrValue("second"))))
+              effect = ConstExpression(MapValue(Map("path" -> StrValue("second")))),
+              dependencies = Set.empty
             ),
             // Third guard: returns true
             Transition(
@@ -694,7 +703,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
               to = StateId("end"),
               eventName = "go",
               guard = ConstExpression(BoolValue(true)),
-              effect = ConstExpression(MapValue(Map("path" -> StrValue("third"))))
+              effect = ConstExpression(MapValue(Map("path" -> StrValue("third")))),
+              dependencies = Set.empty
             )
           )
         )
@@ -774,8 +784,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
 
         definition = StateMachineDefinition(
           states = Map(
-            StateId("start") -> State(StateId("start")),
-            StateId("end")   -> State(StateId("end"))
+            StateId("start") -> State(StateId("start"), isFinal = false),
+            StateId("end")   -> State(StateId("end"), isFinal = false)
           ),
           initialState = StateId("start"),
           transitions = List(
@@ -784,7 +794,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
               to = StateId("end"),
               eventName = "go",
               guard = ApplyExpression(EqOp, List(expensiveGuard, ConstExpression(IntValue(50)))),
-              effect = ConstExpression(MapValue(Map("done" -> BoolValue(true))))
+              effect = ConstExpression(MapValue(Map("done" -> BoolValue(true)))),
+              dependencies = Set.empty
             )
           )
         )
@@ -849,8 +860,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
         // A triggers B
         defA = StateMachineDefinition(
           states = Map(
-            StateId("idle")      -> State(StateId("idle")),
-            StateId("triggered") -> State(StateId("triggered"))
+            StateId("idle")      -> State(StateId("idle"), isFinal = false),
+            StateId("triggered") -> State(StateId("triggered"), isFinal = false)
           ),
           initialState = StateId("idle"),
           transitions = List(
@@ -876,7 +887,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             ),
             // Transition to handle incoming loop - triggers B again to create cycle
             Transition(
@@ -901,7 +913,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             ),
             // Also handle loop in idle state to keep cycle going
             Transition(
@@ -926,7 +939,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             )
           )
         )
@@ -934,8 +948,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
         // B triggers C (with self-transition to allow cycle to continue)
         defB = StateMachineDefinition(
           states = Map(
-            StateId("waiting")   -> State(StateId("waiting")),
-            StateId("continued") -> State(StateId("continued"))
+            StateId("waiting")   -> State(StateId("waiting"), isFinal = false),
+            StateId("continued") -> State(StateId("continued"), isFinal = false)
           ),
           initialState = StateId("waiting"),
           transitions = List(
@@ -961,7 +975,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             ),
             // Self-transition to handle continue event in cycle
             Transition(
@@ -986,7 +1001,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             )
           )
         )
@@ -994,8 +1010,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
         // C triggers A (completes the cycle, with self-transition to allow cycle to continue)
         defC = StateMachineDefinition(
           states = Map(
-            StateId("PENDING")  -> State(StateId("PENDING")),
-            StateId("finished") -> State(StateId("finished"))
+            StateId("PENDING")  -> State(StateId("PENDING"), isFinal = false),
+            StateId("finished") -> State(StateId("finished"), isFinal = false)
           ),
           initialState = StateId("PENDING"),
           transitions = List(
@@ -1021,7 +1037,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             ),
             // Self-transition to handle finish event in cycle
             Transition(
@@ -1046,7 +1063,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             )
           )
         )
@@ -1144,8 +1162,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
         // A sends "ping" to B, B sends "pong" to A, A sends "ping" to B...
         defA = StateMachineDefinition(
           states = Map(
-            StateId("s1") -> State(StateId("s1")),
-            StateId("s2") -> State(StateId("s2"))
+            StateId("s1") -> State(StateId("s1"), isFinal = false),
+            StateId("s2") -> State(StateId("s2"), isFinal = false)
           ),
           initialState = StateId("s1"),
           transitions = List(
@@ -1171,7 +1189,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             ),
             Transition(
               from = StateId("s2"),
@@ -1195,15 +1214,16 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             )
           )
         )
 
         defB = StateMachineDefinition(
           states = Map(
-            StateId("idle")     -> State(StateId("idle")),
-            StateId("received") -> State(StateId("received"))
+            StateId("idle")     -> State(StateId("idle"), isFinal = false),
+            StateId("received") -> State(StateId("received"), isFinal = false)
           ),
           initialState = StateId("idle"),
           transitions = List(
@@ -1229,7 +1249,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             ),
             Transition(
               from = StateId("received"),
@@ -1253,7 +1274,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             )
           )
         )
@@ -1337,8 +1359,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
         // Child triggers parent on activate, creating half of the cycle
         childDefinition = StateMachineDefinition(
           states = Map(
-            StateId("init")      -> State(StateId("init")),
-            StateId("triggered") -> State(StateId("triggered"))
+            StateId("init")      -> State(StateId("init"), isFinal = false),
+            StateId("triggered") -> State(StateId("triggered"), isFinal = false)
           ),
           initialState = StateId("init"),
           transitions = List(
@@ -1364,7 +1386,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             ),
             // Self-transition to handle activate when already triggered (for cycle)
             Transition(
@@ -1389,7 +1412,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             )
           )
         )
@@ -1397,9 +1421,9 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
         // Parent triggers child, creating the other half of the cycle
         parentDefinition = StateMachineDefinition(
           states = Map(
-            StateId("ready")    -> State(StateId("ready")),
-            StateId("ACTIVE")   -> State(StateId("ACTIVE")),
-            StateId("callback") -> State(StateId("callback"))
+            StateId("ready")    -> State(StateId("ready"), isFinal = false),
+            StateId("ACTIVE")   -> State(StateId("ACTIVE"), isFinal = false),
+            StateId("callback") -> State(StateId("callback"), isFinal = false)
           ),
           initialState = StateId("ready"),
           transitions = List(
@@ -1426,7 +1450,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             ),
             // Callback from child triggers child again - creates cycle!
             Transition(
@@ -1451,7 +1476,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             ),
             // Handle callback from callback state to continue cycle
             Transition(
@@ -1476,7 +1502,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             )
           )
         )
@@ -1555,8 +1582,8 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
         // State machine with a dependency on a non-existent machine
         definition = StateMachineDefinition(
           states = Map(
-            StateId("start") -> State(StateId("start")),
-            StateId("end")   -> State(StateId("end"))
+            StateId("start") -> State(StateId("start"), isFinal = false),
+            StateId("end")   -> State(StateId("end"), isFinal = false)
           ),
           initialState = StateId("start"),
           transitions = List(

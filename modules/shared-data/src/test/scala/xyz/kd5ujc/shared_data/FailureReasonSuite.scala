@@ -40,8 +40,8 @@ object FailureReasonSuite extends SimpleIOSuite {
         // State machine with only one event type defined
         definition = StateMachineDefinition(
           states = Map(
-            StateId("idle")   -> State(StateId("idle")),
-            StateId("ACTIVE") -> State(StateId("ACTIVE"))
+            StateId("idle")   -> State(StateId("idle"), isFinal = false),
+            StateId("ACTIVE") -> State(StateId("ACTIVE"), isFinal = false)
           ),
           initialState = StateId("idle"),
           transitions = List(
@@ -50,7 +50,8 @@ object FailureReasonSuite extends SimpleIOSuite {
               to = StateId("ACTIVE"),
               eventName = "activate",
               guard = ConstExpression(BoolValue(true)),
-              effect = ConstExpression(MapValue(Map("activated" -> BoolValue(true))))
+              effect = ConstExpression(MapValue(Map("activated" -> BoolValue(true)))),
+              dependencies = Set.empty
             )
           )
         )
@@ -115,8 +116,8 @@ object FailureReasonSuite extends SimpleIOSuite {
         // Multiple transitions for same event, all guards return false
         definition = StateMachineDefinition(
           states = Map(
-            StateId("start") -> State(StateId("start")),
-            StateId("end")   -> State(StateId("end"))
+            StateId("start") -> State(StateId("start"), isFinal = false),
+            StateId("end")   -> State(StateId("end"), isFinal = false)
           ),
           initialState = StateId("start"),
           transitions = List(
@@ -125,14 +126,16 @@ object FailureReasonSuite extends SimpleIOSuite {
               to = StateId("end"),
               eventName = "go",
               guard = ConstExpression(BoolValue(false)), // Always false
-              effect = ConstExpression(MapValue(Map("path" -> StrValue("first"))))
+              effect = ConstExpression(MapValue(Map("path" -> StrValue("first")))),
+              dependencies = Set.empty
             ),
             Transition(
               from = StateId("start"),
               to = StateId("end"),
               eventName = "go",
               guard = ConstExpression(BoolValue(false)), // Always false
-              effect = ConstExpression(MapValue(Map("path" -> StrValue("second"))))
+              effect = ConstExpression(MapValue(Map("path" -> StrValue("second")))),
+              dependencies = Set.empty
             )
           )
         )
@@ -192,8 +195,8 @@ object FailureReasonSuite extends SimpleIOSuite {
         // State machine that triggers a non-existent target
         definition = StateMachineDefinition(
           states = Map(
-            StateId("idle")      -> State(StateId("idle")),
-            StateId("triggered") -> State(StateId("triggered"))
+            StateId("idle")      -> State(StateId("idle"), isFinal = false),
+            StateId("triggered") -> State(StateId("triggered"), isFinal = false)
           ),
           initialState = StateId("idle"),
           transitions = List(
@@ -219,7 +222,8 @@ object FailureReasonSuite extends SimpleIOSuite {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             )
           )
         )
@@ -279,8 +283,8 @@ object FailureReasonSuite extends SimpleIOSuite {
         // State machine triggers itself with same event type
         definition = StateMachineDefinition(
           states = Map(
-            StateId("a") -> State(StateId("a")),
-            StateId("b") -> State(StateId("b"))
+            StateId("a") -> State(StateId("a"), isFinal = false),
+            StateId("b") -> State(StateId("b"), isFinal = false)
           ),
           initialState = StateId("a"),
           transitions = List(
@@ -306,7 +310,8 @@ object FailureReasonSuite extends SimpleIOSuite {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             ),
             Transition(
               from = StateId("b"),
@@ -330,7 +335,8 @@ object FailureReasonSuite extends SimpleIOSuite {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             )
           )
         )
@@ -390,8 +396,8 @@ object FailureReasonSuite extends SimpleIOSuite {
 
         definition = StateMachineDefinition(
           states = Map(
-            StateId("start") -> State(StateId("start")),
-            StateId("end")   -> State(StateId("end"))
+            StateId("start") -> State(StateId("start"), isFinal = false),
+            StateId("end")   -> State(StateId("end"), isFinal = false)
           ),
           initialState = StateId("start"),
           transitions = List(
@@ -400,7 +406,8 @@ object FailureReasonSuite extends SimpleIOSuite {
               to = StateId("end"),
               eventName = "go",
               guard = ApplyExpression(EqOp, List(expensiveGuard, ConstExpression(IntValue(100)))),
-              effect = ConstExpression(MapValue(Map("done" -> BoolValue(true))))
+              effect = ConstExpression(MapValue(Map("done" -> BoolValue(true)))),
+              dependencies = Set.empty
             )
           )
         )
@@ -471,8 +478,8 @@ object FailureReasonSuite extends SimpleIOSuite {
 
         definition = StateMachineDefinition(
           states = Map(
-            StateId("start") -> State(StateId("start")),
-            StateId("end")   -> State(StateId("end"))
+            StateId("start") -> State(StateId("start"), isFinal = false),
+            StateId("end")   -> State(StateId("end"), isFinal = false)
           ),
           initialState = StateId("start"),
           transitions = List(
@@ -481,7 +488,8 @@ object FailureReasonSuite extends SimpleIOSuite {
               to = StateId("end"),
               eventName = "process",
               guard = ConstExpression(BoolValue(true)),
-              effect = ConstExpression(MapValue(Map("done" -> BoolValue(true))))
+              effect = ConstExpression(MapValue(Map("done" -> BoolValue(true)))),
+              dependencies = Set.empty
             )
           )
         )
@@ -543,7 +551,7 @@ object FailureReasonSuite extends SimpleIOSuite {
 
         definition = StateMachineDefinition(
           states = Map(
-            StateId("idle") -> State(StateId("idle"))
+            StateId("idle") -> State(StateId("idle"), isFinal = false)
           ),
           initialState = StateId("idle"),
           transitions = List.empty

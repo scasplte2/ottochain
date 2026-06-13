@@ -5,7 +5,7 @@ import cats.effect.IO
 import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
 
 import xyz.kd5ujc.schema.GenesisManifest
-import xyz.kd5ujc.schema.registry.{RegistryName, RegistryTarget}
+import xyz.kd5ujc.schema.registry.{RegistryName, RegistryShape, RegistryTarget}
 import xyz.kd5ujc.shared_data.genesis.GenesisManifestLoader
 
 import io.circe.parser.decode
@@ -17,7 +17,7 @@ object GenesisManifestLoaderSuite extends SimpleIOSuite {
   // (schemaShape + JSON-Logic definition), no consensus hashes. definition is the proven timeLock fixture.
   private val manifestJson: String =
     """{"version":1,"packages":[{"name":"std.identity.package","semver":"1.0.0","strict":false,"metadata":{},""" +
-    """"schemaShape":{"stateMessage":{"typeName":"ottochain.apps.identity.v1.Identity",""" +
+    """"machineShape":{"stateMessage":{"typeName":"ottochain.apps.identity.v1.Identity",""" +
     """"fields":[{"name":"id","number":1,"typeName":"string","repeated":false,"optional":false}]},"commands":{}},""" +
     """"definition":{"states":{"locked":{"id":"locked","isFinal":false},"unlocked":{"id":"unlocked","isFinal":true}},""" +
     """"initialState":"locked","transitions":[{"from":"locked","to":"unlocked","eventName":"unlock",""" +
@@ -38,7 +38,10 @@ object GenesisManifestLoaderSuite extends SimpleIOSuite {
         .get(idName)
         .exists(_.target match {
           case RegistryTarget.SchemaPackage(lineage) =>
-            lineage.head.exists(_.schemaShape.stateMessage.typeName == "ottochain.apps.identity.v1.Identity")
+            lineage.head.exists(_.shape match {
+              case RegistryShape.Machine(ms) => ms.stateMessage.typeName == "ottochain.apps.identity.v1.Identity"
+              case _                         => false
+            })
           case _ => false
         })
     )
@@ -50,7 +53,7 @@ object GenesisManifestLoaderSuite extends SimpleIOSuite {
       genesis  <- GenesisManifestLoader.fromManifest[IO](manifest)
       pkg = manifest.packages.head
       expectedLogic  <- pkg.definition.computeDigest
-      expectedSchema <- pkg.schemaShape.computeDigest
+      expectedSchema <- pkg.machineShape.computeDigest
       registered = genesis.calculated.registry
         .get(idName)
         .flatMap(_.target match {

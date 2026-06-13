@@ -6,7 +6,7 @@ import scala.collection.immutable.SortedMap
 
 import io.constellationnetwork.metagraph_sdk.json_logic._
 
-import xyz.kd5ujc.schema.registry.{FieldShape, MessageShape, SchemaShape}
+import xyz.kd5ujc.schema.registry.{FieldShape, MachineShape, MessageShape}
 import xyz.kd5ujc.shared_data.fiber.ConformanceChecker
 import xyz.kd5ujc.shared_data.lifecycle.validate.rules.RegistryRules
 
@@ -21,12 +21,12 @@ import weaver.SimpleIOSuite
  *
  * SCOPE: this is the on-chain MACHINERY check. The full integration — real FileDescriptorSet descriptors,
  * buf compatibility/evolution checks, the Bridge registration ceremony, and cross-version classification —
- * is the SDK lib's job (#34). Here we model each app's state message as the SchemaShape the Bridge would
+ * is the SDK lib's job (#34). Here we model each app's state message as the MachineShape the Bridge would
  * derive, and exercise it on-chain.
  */
 object StandardAppsConformanceSuite extends SimpleIOSuite {
 
-  // ── Faithful SchemaShape projections of the SDK app state messages ────────────────────────────
+  // ── Faithful MachineShape projections of the SDK app state messages ────────────────────────────
 
   // ottochain.apps.identity.v1.Identity
   val identity: MessageShape = MessageShape(
@@ -86,13 +86,13 @@ object StandardAppsConformanceSuite extends SimpleIOSuite {
     )
   )
 
-  private def shapeOf(state: MessageShape): SchemaShape = SchemaShape(state, SortedMap.empty)
+  private def shapeOf(state: MessageShape): MachineShape = MachineShape(state, SortedMap.empty)
 
-  test("every standard-app SchemaShape is well-formed (valid + unique proto field numbers, named)") {
+  test("every standard-app MachineShape is well-formed (valid + unique proto field numbers, named)") {
     for {
-      i <- RegistryRules.L1.schemaShapeWellFormed[IO](shapeOf(identity))
-      g <- RegistryRules.L1.schemaShapeWellFormed[IO](shapeOf(proposal))
-      m <- RegistryRules.L1.schemaShapeWellFormed[IO](shapeOf(market))
+      i <- RegistryRules.L1.machineShapeWellFormed[IO](shapeOf(identity))
+      g <- RegistryRules.L1.machineShapeWellFormed[IO](shapeOf(proposal))
+      m <- RegistryRules.L1.machineShapeWellFormed[IO](shapeOf(market))
     } yield expect(i.isValid) and expect(g.isValid) and expect(m.isValid)
   }
 

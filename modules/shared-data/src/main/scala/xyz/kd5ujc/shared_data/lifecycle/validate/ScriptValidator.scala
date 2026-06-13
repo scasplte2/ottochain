@@ -9,9 +9,9 @@ import io.constellationnetwork.currency.dataApplication.DataState
 import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.signature.SignatureProof
 
-import xyz.kd5ujc.schema.Updates.{CreateScript, InvokeScript}
+import xyz.kd5ujc.schema.Updates.{CreateScript, InvokeScript, UpgradeScript}
 import xyz.kd5ujc.schema.{CalculatedState, OnChain}
-import xyz.kd5ujc.shared_data.lifecycle.validate.rules.{CommonRules, ScriptRules}
+import xyz.kd5ujc.shared_data.lifecycle.validate.rules.{CommonRules, RegistryRules, ScriptRules}
 
 /**
  * Validators for script operations.
@@ -59,6 +59,14 @@ object ScriptValidator {
           "args"
         )
       } yield List(cidExists, seqNumOk, argsStructure, argsSize).combineAll
+
+    /** Validates an UpgradeScript update (structural: script exists, new program depth, sequence) */
+    def upgradeScript(update: UpgradeScript): F[ValidationResult] =
+      for {
+        cidExists <- CommonRules.cidIsFound(update.fiberId, state)
+        seqNumOk  <- ScriptRules.L1.sequenceNumberMatches(update.fiberId, update.targetSequenceNumber, state)
+        programOk <- CommonRules.expressionWithinDepthLimit(update.newProgram, "newProgram", Limits.MaxExpressionDepth)
+      } yield List(cidExists, seqNumOk, programOk).combineAll
   }
 
   /**
@@ -76,13 +84,24 @@ object ScriptValidator {
 
     /** Validates a CreateScript update (L0 specific checks) */
     def createOracle(update: CreateScript): F[ValidationResult] =
-      // CreateScript has no L0-specific validation requirements currently.
-      // Anyone can create an oracle; access control applies to invocations.
-      ().validNec[io.constellationnetwork.currency.dataApplication.DataApplicationValidationError].pure[F]
+      RegistryRules.L0.scriptRefResolvesAndMatches(update.schemaRef, update.scriptProgram, state.calculated)
 
     /** Validates an InvokeScript update (L0 specific checks) */
     def invokeOracle(update: InvokeScript): F[ValidationResult] =
       ScriptRules.L0.accessControlCheck(update.fiberId, proofs, state.calculated)
+
+    /** Validates an UpgradeScript update (active, owner, same-package re-bind + verified hash) */
+    def upgradeScript(update: UpgradeScript): F[ValidationResult] =
+      for {
+        scriptActive  <- ScriptRules.L0.scriptIsActive(update.fiberId, state.calculated)
+        signedByOwner <- ScriptRules.L0.scriptSignedByOwners(update.fiberId, proofs, state.calculated)
+        bindingOk <- ScriptRules.L0.bindingNameMatchesScript(update.fiberId, update.targetRef.name, state.calculated)
+        targetOk <- RegistryRules.L0.scriptRefResolvesAndMatches(
+          Some(update.targetRef),
+          update.newProgram,
+          state.calculated
+        )
+      } yield List(scriptActive, signedByOwner, bindingOk, targetOk).combineAll
   }
 
   /**
@@ -109,6 +128,13 @@ object ScriptValidator {
       for {
         l1Result <- l1.invokeOracle(update)
         l0Result <- l0.invokeOracle(update)
+      } yield l1Result |+| l0Result
+
+    /** Validates an UpgradeScript update (all checks) */
+    def upgradeScript(update: UpgradeScript): F[ValidationResult] =
+      for {
+        l1Result <- l1.upgradeScript(update)
+        l0Result <- l0.upgradeScript(update)
       } yield l1Result |+| l0Result
   }
 }

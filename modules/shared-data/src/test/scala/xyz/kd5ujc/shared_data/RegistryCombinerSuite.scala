@@ -12,7 +12,13 @@ import io.constellationnetwork.metagraph_sdk.json_logic.{IntValue, JsonLogicValu
 import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.Signed
 
-import xyz.kd5ujc.schema.Updates.{CreateStateMachine, PublishVersion, RegisterAlias, SetVersionStatus, UpgradeFiber}
+import xyz.kd5ujc.schema.Updates.{
+  CreateStateMachine,
+  PublishMachineVersion,
+  RegisterAlias,
+  SetVersionStatus,
+  UpgradeFiber
+}
 import xyz.kd5ujc.schema.fiber.{FiberLogEntry, FiberOrdinal, State, StateId, StateMachineDefinition}
 import xyz.kd5ujc.schema.registry._
 import xyz.kd5ujc.schema.{CalculatedState, OnChain, Records}
@@ -43,8 +49,8 @@ object RegistryCombinerSuite extends SimpleIOSuite {
   // Package names now carry the `.package` TLD (Option B): a name is `<labels>.<tld>`.
   private def pkg(n: String): RegistryName = RegistryName.unsafe(s"$n.package")
 
-  private val shape: SchemaShape =
-    SchemaShape(
+  private val shape: MachineShape =
+    MachineShape(
       stateMessage =
         MessageShape("App.State", List(FieldShape("balance", 1, "int64", repeated = false, optional = false))),
       commands = SortedMap(
@@ -68,12 +74,12 @@ object RegistryCombinerSuite extends SimpleIOSuite {
   private val emptyData: JsonLogicValue = MapValue(Map.empty[String, JsonLogicValue])
   private val fiberA = UUID.fromString("11111111-1111-4111-8111-111111111111")
 
-  private def publish(name: String, v: SemVer): PublishVersion =
-    PublishVersion(
+  private def publish(name: String, v: SemVer): PublishMachineVersion =
+    PublishMachineVersion(
       name = pkg(name),
       version = v,
       schemaB64 = b64(s"schema-$name-${v.render}"),
-      schemaShape = shape,
+      machineShape = shape,
       definition = minimalDef,
       strict = false
     )
@@ -90,8 +96,8 @@ object RegistryCombinerSuite extends SimpleIOSuite {
     )
   }
 
-  private def publishWith(name: String, v: SemVer, definition: StateMachineDefinition): PublishVersion =
-    PublishVersion(pkg(name), v, b64(s"schema-$name-${v.render}"), shape, definition, strict = false)
+  private def publishWith(name: String, v: SemVer, definition: StateMachineDefinition): PublishMachineVersion =
+    PublishMachineVersion(pkg(name), v, b64(s"schema-$name-${v.render}"), shape, definition, strict = false)
 
   private val genesis = DataState(OnChain.genesis, CalculatedState.genesis)
 
@@ -236,11 +242,14 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         prC           <- fixture.registry.generateProofs(create, Set(Alice))
         valid         <- validator.validateSignedUpdate(s1, Signed(create, prC))
         combineFailed <- combiner.insert(s1, Signed(create, prC)).map(wasRejected)
-      } yield expect(valid.isInvalid) and expect(combineFailed)
+        // validator passes (structural only — registry lineage is combine-only per TOCTOU rule)
+      } yield expect(valid.isValid) and expect(combineFailed)
     }
   }
 
-  test("creating a fiber with a schemaRef to an unknown name is rejected (validator invalid + combiner aborts)") {
+  test(
+    "creating a fiber with a schemaRef to an unknown name is rejected (combiner aborts; validator passes structural)"
+  ) {
     TestFixture.resource(Set(Alice)).use { fixture =>
       implicit val sp: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0: L0NodeContext[IO] = fixture.l0Context
@@ -256,7 +265,8 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         prC           <- fixture.registry.generateProofs(create, Set(Alice))
         valid         <- validator.validateSignedUpdate(genesis, Signed(create, prC))
         combineFailed <- combiner.insert(genesis, Signed(create, prC)).map(wasRejected)
-      } yield expect(valid.isInvalid) and expect(combineFailed)
+        // validator passes (structural only — registry lineage is combine-only per TOCTOU rule)
+      } yield expect(valid.isValid) and expect(combineFailed)
     }
   }
 
@@ -327,7 +337,9 @@ object RegistryCombinerSuite extends SimpleIOSuite {
     }
   }
 
-  test("upgrading with a definition that does not match the target version's logicHash is rejected") {
+  test(
+    "upgrading with a definition that does not match the target version's logicHash is rejected (combiner; validator structural-only)"
+  ) {
     TestFixture.resource(Set(Alice)).use { fixture =>
       implicit val sp: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0: L0NodeContext[IO] = fixture.l0Context
@@ -356,7 +368,8 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         prU           <- fixture.registry.generateProofs(badUpgrade, Set(Alice))
         valid         <- validator.validateSignedUpdate(s2, Signed(badUpgrade, prU))
         combineFailed <- combiner.insert(s2, Signed(badUpgrade, prU)).map(wasRejected)
-      } yield expect(valid.isInvalid) and expect(combineFailed)
+        // validator passes (structural only — registry hash check is combine-only per TOCTOU rule)
+      } yield expect(valid.isValid) and expect(combineFailed)
     }
   }
 
@@ -428,7 +441,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
       val combiner = Combiner.make[IO]()
       // strict v1; `shape` declares state field "balance: int64"
       val pStrict =
-        PublishVersion(
+        PublishMachineVersion(
           pkg("escrow"),
           SemVer(1, 0, 0),
           b64("schema-escrow-1.0.0"),
@@ -459,7 +472,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
       val combiner = Combiner.make[IO]()
       val p1 = publish("escrow", SemVer(1, 0, 0)) // NON-strict v1 -> create with an extra field is allowed
       val p2strict =
-        PublishVersion(
+        PublishMachineVersion(
           pkg("escrow"),
           SemVer(2, 0, 0),
           b64("schema-escrow-2.0.0"),
@@ -615,7 +628,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
       val combiner = Combiner.make[IO]()
       val meta = SortedMap("repo" -> "https://github.com/acme/escrow", "license" -> "MIT")
       val good =
-        PublishVersion(
+        PublishMachineVersion(
           pkg("escrow"),
           SemVer(1, 0, 0),
           b64("schema"),
@@ -624,7 +637,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
           strict = false,
           metadata = Some(meta)
         )
-      val bad = PublishVersion(
+      val bad = PublishMachineVersion(
         pkg("widget"),
         SemVer(1, 0, 0),
         b64("schema"),

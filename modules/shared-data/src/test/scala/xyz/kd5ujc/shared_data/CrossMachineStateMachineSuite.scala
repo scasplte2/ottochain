@@ -34,8 +34,8 @@ object CrossMachineStateMachineSuite extends SimpleIOSuite {
         sellerfiberId <- UUIDGen.randomUUID[IO]
         sellerDef = StateMachineDefinition(
           states = Map(
-            StateId("holding")  -> State(StateId("holding")),
-            StateId("released") -> State(StateId("released"))
+            StateId("holding")  -> State(StateId("holding"), isFinal = false),
+            StateId("released") -> State(StateId("released"), isFinal = false)
           ),
           initialState = StateId("holding"),
           transitions = List.empty
@@ -66,8 +66,8 @@ object CrossMachineStateMachineSuite extends SimpleIOSuite {
         buyerfiberId <- UUIDGen.randomUUID[IO]
         buyerDef = StateMachineDefinition(
           states = Map(
-            StateId("PENDING")   -> State(StateId("PENDING")),
-            StateId("purchased") -> State(StateId("purchased"))
+            StateId("PENDING")   -> State(StateId("PENDING"), isFinal = false),
+            StateId("purchased") -> State(StateId("purchased"), isFinal = false)
           ),
           initialState = StateId("PENDING"),
           transitions = List(

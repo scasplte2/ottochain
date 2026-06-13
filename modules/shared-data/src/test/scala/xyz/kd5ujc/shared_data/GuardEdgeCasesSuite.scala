@@ -44,8 +44,8 @@ object GuardEdgeCasesSuite extends SimpleIOSuite {
         // Guard references a field that doesn't exist in state
         definition = StateMachineDefinition(
           states = Map(
-            StateId("start") -> State(StateId("start")),
-            StateId("end")   -> State(StateId("end"))
+            StateId("start") -> State(StateId("start"), isFinal = false),
+            StateId("end")   -> State(StateId("end"), isFinal = false)
           ),
           initialState = StateId("start"),
           transitions = List(
@@ -59,7 +59,8 @@ object GuardEdgeCasesSuite extends SimpleIOSuite {
                 EqOp,
                 List(VarExpression(Left("state.missingField")), ConstExpression(BoolValue(true)))
               ),
-              effect = ConstExpression(MapValue(Map("path" -> StrValue("first"))))
+              effect = ConstExpression(MapValue(Map("path" -> StrValue("first")))),
+              dependencies = Set.empty
             ),
             // Fallback guard that always passes
             Transition(
@@ -67,7 +68,8 @@ object GuardEdgeCasesSuite extends SimpleIOSuite {
               to = StateId("end"),
               eventName = "check",
               guard = ConstExpression(BoolValue(true)),
-              effect = ConstExpression(MapValue(Map("path" -> StrValue("fallback"))))
+              effect = ConstExpression(MapValue(Map("path" -> StrValue("fallback")))),
+              dependencies = Set.empty
             )
           )
         )
@@ -145,8 +147,8 @@ object GuardEdgeCasesSuite extends SimpleIOSuite {
 
         definition = StateMachineDefinition(
           states = Map(
-            StateId("start") -> State(StateId("start")),
-            StateId("end")   -> State(StateId("end"))
+            StateId("start") -> State(StateId("start"), isFinal = false),
+            StateId("end")   -> State(StateId("end"), isFinal = false)
           ),
           initialState = StateId("start"),
           transitions = List(
@@ -155,7 +157,8 @@ object GuardEdgeCasesSuite extends SimpleIOSuite {
               to = StateId("end"),
               eventName = "process",
               guard = deepGuard,
-              effect = ConstExpression(MapValue(Map("processed" -> BoolValue(true))))
+              effect = ConstExpression(MapValue(Map("processed" -> BoolValue(true)))),
+              dependencies = Set.empty
             )
           )
         )
@@ -228,8 +231,8 @@ object GuardEdgeCasesSuite extends SimpleIOSuite {
 
         definition = StateMachineDefinition(
           states = Map(
-            StateId("start") -> State(StateId("start")),
-            StateId("end")   -> State(StateId("end"))
+            StateId("start") -> State(StateId("start"), isFinal = false),
+            StateId("end")   -> State(StateId("end"), isFinal = false)
           ),
           initialState = StateId("start"),
           transitions = List(
@@ -238,7 +241,8 @@ object GuardEdgeCasesSuite extends SimpleIOSuite {
               to = StateId("end"),
               eventName = "divide",
               guard = divByZeroGuard,
-              effect = ConstExpression(MapValue(Map("divided" -> BoolValue(true))))
+              effect = ConstExpression(MapValue(Map("divided" -> BoolValue(true)))),
+              dependencies = Set.empty
             ),
             // Fallback
             Transition(
@@ -246,7 +250,8 @@ object GuardEdgeCasesSuite extends SimpleIOSuite {
               to = StateId("end"),
               eventName = "divide",
               guard = ConstExpression(BoolValue(true)),
-              effect = ConstExpression(MapValue(Map("fallback" -> BoolValue(true))))
+              effect = ConstExpression(MapValue(Map("fallback" -> BoolValue(true)))),
+              dependencies = Set.empty
             )
           )
         )
@@ -304,8 +309,8 @@ object GuardEdgeCasesSuite extends SimpleIOSuite {
         // Three transitions - first two guards check specific conditions
         definition = StateMachineDefinition(
           states = Map(
-            StateId("start") -> State(StateId("start")),
-            StateId("end")   -> State(StateId("end"))
+            StateId("start") -> State(StateId("start"), isFinal = false),
+            StateId("end")   -> State(StateId("end"), isFinal = false)
           ),
           initialState = StateId("start"),
           transitions = List(
@@ -318,7 +323,8 @@ object GuardEdgeCasesSuite extends SimpleIOSuite {
                 Gt,
                 List(VarExpression(Left("state.value")), ConstExpression(IntValue(100)))
               ),
-              effect = ConstExpression(MapValue(Map("path" -> StrValue("high"))))
+              effect = ConstExpression(MapValue(Map("path" -> StrValue("high")))),
+              dependencies = Set.empty
             ),
             // Second: requires value > 50
             Transition(
@@ -329,7 +335,8 @@ object GuardEdgeCasesSuite extends SimpleIOSuite {
                 Gt,
                 List(VarExpression(Left("state.value")), ConstExpression(IntValue(50)))
               ),
-              effect = ConstExpression(MapValue(Map("path" -> StrValue("medium"))))
+              effect = ConstExpression(MapValue(Map("path" -> StrValue("medium")))),
+              dependencies = Set.empty
             ),
             // Third: always passes
             Transition(
@@ -337,7 +344,8 @@ object GuardEdgeCasesSuite extends SimpleIOSuite {
               to = StateId("end"),
               eventName = "process",
               guard = ConstExpression(BoolValue(true)),
-              effect = ConstExpression(MapValue(Map("path" -> StrValue("low"))))
+              effect = ConstExpression(MapValue(Map("path" -> StrValue("low")))),
+              dependencies = Set.empty
             )
           )
         )
@@ -401,8 +409,8 @@ object GuardEdgeCasesSuite extends SimpleIOSuite {
 
         definition = StateMachineDefinition(
           states = Map(
-            StateId("start") -> State(StateId("start")),
-            StateId("end")   -> State(StateId("end"))
+            StateId("start") -> State(StateId("start"), isFinal = false),
+            StateId("end")   -> State(StateId("end"), isFinal = false)
           ),
           initialState = StateId("start"),
           transitions = List(
@@ -411,7 +419,8 @@ object GuardEdgeCasesSuite extends SimpleIOSuite {
               to = StateId("end"),
               eventName = "go",
               guard = nonBooleanGuard,
-              effect = ConstExpression(MapValue(Map("done" -> BoolValue(true))))
+              effect = ConstExpression(MapValue(Map("done" -> BoolValue(true)))),
+              dependencies = Set.empty
             )
           )
         )
@@ -469,8 +478,8 @@ object GuardEdgeCasesSuite extends SimpleIOSuite {
 
         definition = StateMachineDefinition(
           states = Map(
-            StateId("start") -> State(StateId("start")),
-            StateId("end")   -> State(StateId("end"))
+            StateId("start") -> State(StateId("start"), isFinal = false),
+            StateId("end")   -> State(StateId("end"), isFinal = false)
           ),
           initialState = StateId("start"),
           transitions = List(
@@ -479,7 +488,8 @@ object GuardEdgeCasesSuite extends SimpleIOSuite {
               to = StateId("end"),
               eventName = "go",
               guard = ConstExpression(BoolValue(true)),
-              effect = ConstExpression(MapValue(Map("done" -> BoolValue(true))))
+              effect = ConstExpression(MapValue(Map("done" -> BoolValue(true)))),
+              dependencies = Set.empty
             )
           )
         )

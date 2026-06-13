@@ -5,7 +5,7 @@ import cats.effect.IO
 import scala.io.Source
 
 import xyz.kd5ujc.schema.GenesisManifest
-import xyz.kd5ujc.schema.registry.{RegistryName, RegistryTarget}
+import xyz.kd5ujc.schema.registry.{RegistryName, RegistryShape, RegistryTarget}
 import xyz.kd5ujc.shared_data.genesis.GenesisManifestLoader
 
 import io.circe.parser.decode
@@ -40,8 +40,12 @@ object StdManifestContractSuite extends SimpleIOSuite {
       genesis.calculated.registry.contains(name) && genesis.onChain.registryCommits.contains(name)
     }) and
     expect(genesis.calculated.registry.values.forall(_.target match {
-      case RegistryTarget.SchemaPackage(lineage) => lineage.head.exists(_.schemaShape.stateMessage.fields.nonEmpty)
-      case _                                     => false
+      case RegistryTarget.SchemaPackage(lineage) =>
+        lineage.head.exists(_.shape match {
+          case RegistryShape.Machine(ms) => ms.stateMessage.fields.nonEmpty
+          case _                         => false
+        })
+      case _ => false
     }))
   }
 }

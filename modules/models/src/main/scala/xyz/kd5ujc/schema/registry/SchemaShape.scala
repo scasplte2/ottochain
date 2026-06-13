@@ -35,16 +35,80 @@ final case class MessageShape(
 )
 
 /**
- * The on-chain projection of a version's proto schema: the State message plus one message per command/event
- * (keyed by event name). Supersedes the old loose `stateMessage: String` + `commands: SortedMap[String,
- * String]` with the typed, field-numbered shape.
+ * The on-chain projection of a state-machine version's proto schema: the State message plus one message per
+ * command/event (keyed by event name). Supersedes the old loose `stateMessage: String` + `commands:
+ * SortedMap[String, String]` with the typed, field-numbered shape.
  */
 @derive(customizableEncoder, customizableDecoder)
-final case class SchemaShape(
+final case class MachineShape(
   stateMessage: MessageShape,
   commands:     SortedMap[String, MessageShape]
 ) {
 
   /** Every message in the shape (state + all commands), for structural validation. */
   def allMessages: List[MessageShape] = stateMessage :: commands.values.toList
+}
+
+/**
+ * The on-chain projection of a script version's surface. Sealed ADT — currently one variant:
+ * [[ScriptShape.MethodDispatch]], the canonical top-level IF-ELIF-…-ELSE dispatch on method name. Future
+ * variants (pipelines, etc.) are added here without breaking the [[RegistryShape]] wire format (the
+ * `scriptShape` field in [[RegistryShape.Script]] naturally discriminates on the inner field names).
+ */
+sealed trait ScriptShape {
+  def allMessages: List[MessageShape]
+}
+
+object ScriptShape {
+
+  /**
+   * The canonical script form: a top-level `{"if":[{"==":[{"var":"method"},"methodA"]},bodyA,...,fallback]}`
+   * dispatch. Each key in `methods` names a callable method; its [[MessageShape]] describes the argument
+   * payload the method expects.
+   */
+  @derive(customizableEncoder, customizableDecoder)
+  final case class MethodDispatch(
+    methods: SortedMap[String, MessageShape]
+  ) extends ScriptShape {
+    def allMessages: List[MessageShape] = methods.values.toList
+  }
+
+  // MethodDispatch encodes as {"methods":{...}} — the "methods" key discriminates from future variants.
+  implicit val encoder: io.circe.Encoder[ScriptShape] = io.circe.Encoder.instance { case m: MethodDispatch =>
+    io.circe.Encoder[MethodDispatch].apply(m)
+  }
+
+  implicit val decoder: io.circe.Decoder[ScriptShape] =
+    io.circe.Decoder[MethodDispatch].map[ScriptShape](identity)
+}
+
+/**
+ * ADT for the advisory schema projection stored in [[RegisteredVersion]]. Exactly one variant is present:
+ * [[RegistryShape.Machine]] for state-machine packages; [[RegistryShape.Script]] for script packages.
+ */
+sealed trait RegistryShape {
+  def allMessages: List[MessageShape]
+}
+
+object RegistryShape {
+
+  @derive(customizableEncoder, customizableDecoder)
+  final case class Machine(machineShape: MachineShape) extends RegistryShape {
+    def allMessages: List[MessageShape] = machineShape.allMessages
+  }
+
+  @derive(customizableEncoder, customizableDecoder)
+  final case class Script(scriptShape: ScriptShape) extends RegistryShape {
+    def allMessages: List[MessageShape] = scriptShape.allMessages
+  }
+
+  // Machine encodes as {"machineShape":{...}}, Script as {"scriptShape":{...}} — distinct field names
+  // act as a natural discriminator, no explicit type tag needed.
+  implicit val encoder: io.circe.Encoder[RegistryShape] = io.circe.Encoder.instance {
+    case m: Machine => io.circe.Encoder[Machine].apply(m)
+    case s: Script  => io.circe.Encoder[Script].apply(s)
+  }
+
+  implicit val decoder: io.circe.Decoder[RegistryShape] =
+    io.circe.Decoder[Machine].map[RegistryShape](identity).or(io.circe.Decoder[Script].map[RegistryShape](identity))
 }

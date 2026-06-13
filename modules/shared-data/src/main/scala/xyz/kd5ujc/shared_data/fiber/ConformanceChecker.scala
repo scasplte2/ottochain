@@ -8,7 +8,7 @@ import xyz.kd5ujc.schema.registry._
 /**
  * Runtime conformance gate (#33, opt-in). When a fiber is bound to a `strict` registered version, the
  * state it PRODUCES (at create, transition, or migration) must conform to that version's typed
- * [[SchemaShape]] — otherwise the transaction is aborted, so a non-conforming state is never committed.
+ * [[MachineShape]] — otherwise the transaction is aborted, so a non-conforming state is never committed.
  *
  * This is the "assume + error-out" tier: it does not prove the logic conforms for all inputs (a static
  * property the chain cannot check cheaply), only that the actual produced state does — exactly how a VM
@@ -44,11 +44,16 @@ object ConformanceChecker {
 
   /**
    * If `binding` resolves to a STRICT registered version, the produced `value` must conform to its
-   * SchemaShape's state message. Returns the violations (empty == conforms OR the gate is not applicable:
+   * MachineShape's state message. Returns the violations (empty == conforms OR the gate is not applicable:
    * unbound fiber, version not found, or non-strict version).
    */
   def violationsFor(binding: Option[SchemaBinding], state: CalculatedState, value: JsonLogicValue): List[String] =
-    strictVersion(binding, state).fold(List.empty[String])(rv => check(rv.schemaShape.stateMessage, value))
+    strictVersion(binding, state).fold(List.empty[String]) { rv =>
+      rv.shape match {
+        case RegistryShape.Machine(machineShape) => check(machineShape.stateMessage, value)
+        case _: RegistryShape.Script             => List.empty
+      }
+    }
 
   private def strictVersion(binding: Option[SchemaBinding], state: CalculatedState): Option[RegisteredVersion] =
     binding.flatMap { b =>

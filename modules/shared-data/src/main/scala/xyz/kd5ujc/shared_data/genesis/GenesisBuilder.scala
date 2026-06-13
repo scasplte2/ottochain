@@ -24,21 +24,21 @@ import xyz.kd5ujc.shared_data.syntax.DataStateOps._
  * uses (`DataStateOps.withAlias` / `withFibersAndOracles`, and `computeDigest` for package entries), so a
  * crafted genesis is byte-consistent with on-chain state — the node can boot from it and prove against it.
  *
- * Package/alias/fiber *content* (schemaHash, schemaShape, logicHash, fiber records) comes from a pinned
+ * Package/alias/fiber *content* (schemaHash, machineShape, logicHash, fiber records) comes from a pinned
  * ottochain-sdk release (genesis-prep) or a test fixture (e2e); this layer only guarantees consistency.
  */
 object GenesisBuilder {
 
   /** A package to pre-register at genesis (one initial version; further versions are published on-chain). */
   final case class PackageSpec(
-    name:        RegistryName,
-    version:     SemVer,
-    schemaHash:  Hash,
-    logicHash:   Hash,
-    schemaShape: SchemaShape,
-    owner:       Set[Address],
-    strict:      Boolean = false,
-    metadata:    SortedMap[String, String] = SortedMap.empty
+    name:         RegistryName,
+    version:      SemVer,
+    schemaHash:   Hash,
+    logicHash:    Hash,
+    machineShape: MachineShape,
+    owner:        Set[Address],
+    strict:       Boolean = false,
+    metadata:     SortedMap[String, String] = SortedMap.empty
   )
 
   /** A nickname for a fiber instance to pre-register at genesis (#29): forward entry + reverse record. */
@@ -82,7 +82,15 @@ object GenesisBuilder {
     specs
       .traverse { s =>
         val rv =
-          RegisteredVersion(s.version, s.schemaHash, s.logicHash, s.schemaShape, RegistryStatus.Active, at, s.strict)
+          RegisteredVersion(
+            s.version,
+            s.schemaHash,
+            s.logicHash,
+            RegistryShape.Machine(s.machineShape),
+            RegistryStatus.Active,
+            at,
+            s.strict
+          )
         val entry = RegistryEntry(s.name, s.owner, RegistryTarget.SchemaPackage(VersionLineage.of(rv)), s.metadata)
         entry.computeDigest.map(hash => (s.name, entry, hash))
       }

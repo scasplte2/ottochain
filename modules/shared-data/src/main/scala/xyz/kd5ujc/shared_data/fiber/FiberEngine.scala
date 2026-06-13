@@ -64,6 +64,18 @@ trait FiberEngine[F[_]] {
     newBinding:    SchemaBinding,
     migration:     Option[JsonLogicExpression]
   ): F[TransactionResult]
+
+  /**
+   * Upgrade a script fiber to `newProgram`/`newBinding`, optionally transforming its stateData via
+   * `migration`. Metered through the same `FiberT` boundary. Scripts have no state-machine state IDs, so
+   * no current-state-in-new-program check is performed.
+   */
+  def migrateScript(
+    fiberId:    UUID,
+    newProgram: JsonLogicExpression,
+    newBinding: SchemaBinding,
+    migration:  Option[JsonLogicExpression]
+  ): F[TransactionResult]
 }
 
 object FiberEngine {
@@ -105,6 +117,16 @@ object FiberEngine {
           .run(FiberContext(ordinal, lastSnapshotHash, epochProgress, limits, gasConfig, fiberGasConfig))
           .runA(ExecutionState.initial)
 
+      def migrateScript(
+        fiberId:    UUID,
+        newProgram: JsonLogicExpression,
+        newBinding: SchemaBinding,
+        migration:  Option[JsonLogicExpression]
+      ): F[TransactionResult] =
+        migrateScriptInternal(fiberId, newProgram, newBinding, migration)
+          .run(FiberContext(ordinal, lastSnapshotHash, epochProgress, limits, gasConfig, fiberGasConfig))
+          .runA(ExecutionState.initial)
+
       private def migrateInternal(
         fiberId:       UUID,
         newDefinition: StateMachineDefinition,
@@ -124,6 +146,102 @@ object FiberEngine {
           case Some(other) =>
             abortWithReason(FailureReason.FiberInputMismatch(other.fiberId, FiberKind.Script, InputKind.Transition))
         }
+
+      private def migrateScriptInternal(
+        fiberId:    UUID,
+        newProgram: JsonLogicExpression,
+        newBinding: SchemaBinding,
+        migration:  Option[JsonLogicExpression]
+      ): FiberT[F, TransactionResult] =
+        calculatedState.getFiber(fiberId) match {
+          case None =>
+            abortWithReason(FailureReason.FiberNotFound(fiberId))
+
+          case Some(fiber) if fiber.status != FiberStatus.Active =>
+            abortWithReason(FailureReason.FiberNotActive(fiberId, fiber.status.toString))
+
+          case Some(script: Records.ScriptFiberRecord) =>
+            migrateScriptFiber(script, newProgram, newBinding, migration)
+
+          case Some(other) =>
+            abortWithReason(
+              FailureReason.FiberInputMismatch(other.fiberId, FiberKind.StateMachine, InputKind.MethodCall)
+            )
+        }
+
+      private def migrateScriptFiber(
+        script:     Records.ScriptFiberRecord,
+        newProgram: JsonLogicExpression,
+        newBinding: SchemaBinding,
+        migration:  Option[JsonLogicExpression]
+      ): FiberT[F, TransactionResult] = {
+        val currentState = script.stateData.getOrElse(NullValue)
+        val evalMigration: FiberT[F, Either[FailureReason, JsonLogicValue]] =
+          migration match {
+            case None       => (currentState: JsonLogicValue).asRight[FailureReason].pure[FiberT[F, *]]
+            case Some(expr) => MeteredEvaluator.eval[F, FiberT[F, *]](expr, currentState, GasExhaustionPhase.Migration)
+          }
+
+        evalMigration.flatMap {
+          case Left(reason)     => aborted(reason)
+          case Right(NullValue) =>
+            // Migration produced null: clear the state
+            for {
+              gasUsed <- ExecutionOps.getGasUsed[FiberT[F, *]]
+              receipt = UpgradeReceipt(
+                fiberId = script.fiberId,
+                ordinal = ordinal,
+                fromBinding = script.schemaBinding,
+                toBinding = newBinding,
+                gasUsed = gasUsed,
+                migrated = migration.isDefined
+              )
+              _ <- ExecutionOps.appendLog[FiberT[F, *]](receipt)
+              updated = script.copy(
+                latestUpdateOrdinal = ordinal,
+                scriptProgram = newProgram,
+                stateData = None,
+                stateDataHash = None,
+                sequenceNumber = script.sequenceNumber.next,
+                schemaBinding = Some(newBinding)
+              )
+              logs <- ExecutionOps.getLogs[FiberT[F, *]]
+            } yield TransactionResult.Committed(
+              updatedStateMachines = Map.empty,
+              updatedOracles = Map(script.fiberId -> updated),
+              logEntries = logs.toList,
+              totalGasUsed = gasUsed
+            ): TransactionResult
+          case Right(newState) =>
+            for {
+              hash    <- newState.computeDigest.liftFiber
+              gasUsed <- ExecutionOps.getGasUsed[FiberT[F, *]]
+              receipt = UpgradeReceipt(
+                fiberId = script.fiberId,
+                ordinal = ordinal,
+                fromBinding = script.schemaBinding,
+                toBinding = newBinding,
+                gasUsed = gasUsed,
+                migrated = migration.isDefined
+              )
+              _ <- ExecutionOps.appendLog[FiberT[F, *]](receipt)
+              updated = script.copy(
+                latestUpdateOrdinal = ordinal,
+                scriptProgram = newProgram,
+                stateData = Some(newState),
+                stateDataHash = Some(hash),
+                sequenceNumber = script.sequenceNumber.next,
+                schemaBinding = Some(newBinding)
+              )
+              logs <- ExecutionOps.getLogs[FiberT[F, *]]
+            } yield TransactionResult.Committed(
+              updatedStateMachines = Map.empty,
+              updatedOracles = Map(script.fiberId -> updated),
+              logEntries = logs.toList,
+              totalGasUsed = gasUsed
+            ): TransactionResult
+        }
+      }
 
       private def aborted(reason: FailureReason): FiberT[F, TransactionResult] =
         ExecutionOps.getGasUsed[FiberT[F, *]].map(TransactionResult.Aborted(reason, _): TransactionResult)

@@ -16,5 +16,5 @@ case class Transition(
   eventName:    String,
   guard:        JsonLogicExpression, // Guard condition
   effect:       JsonLogicExpression, // State transformation
-  dependencies: Set[UUID] = Set.empty // Other machines this transition reads from
+  dependencies: Set[UUID] // Other machines this transition reads from
 )

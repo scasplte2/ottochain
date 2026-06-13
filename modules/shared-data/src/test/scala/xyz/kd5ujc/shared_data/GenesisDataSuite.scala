@@ -17,8 +17,8 @@ import weaver.SimpleIOSuite
 
 object GenesisDataSuite extends SimpleIOSuite {
 
-  private val shape: SchemaShape =
-    SchemaShape(
+  private val shape: MachineShape =
+    MachineShape(
       stateMessage =
         MessageShape("App.State", List(FieldShape("balance", 1, "int64", repeated = false, optional = false))),
       commands = SortedMap(
@@ -36,9 +36,10 @@ object GenesisDataSuite extends SimpleIOSuite {
             version = SemVer(1, 0, 0),
             schemaHash = Hash("schema"),
             logicHash = Hash("logic"),
-            schemaShape = shape,
+            shape = RegistryShape.Machine(shape),
             status = RegistryStatus.Active,
-            registeredAt = SnapshotOrdinal.MinValue
+            registeredAt = SnapshotOrdinal.MinValue,
+            strict = false
           )
         )
       )

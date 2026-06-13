@@ -48,8 +48,8 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
         // Simple state machine
         definition = StateMachineDefinition(
           states = Map(
-            StateId("start") -> State(StateId("start")),
-            StateId("end")   -> State(StateId("end"))
+            StateId("start") -> State(StateId("start"), isFinal = false),
+            StateId("end")   -> State(StateId("end"), isFinal = false)
           ),
           initialState = StateId("start"),
           transitions = List(
@@ -58,7 +58,8 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
               to = StateId("end"),
               eventName = "go",
               guard = ConstExpression(BoolValue(true)),
-              effect = ConstExpression(MapValue(Map("done" -> BoolValue(true))))
+              effect = ConstExpression(MapValue(Map("done" -> BoolValue(true)))),
+              dependencies = Set.empty
             )
           )
         )
@@ -113,8 +114,8 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
         // Machine 1 triggers Machine 2
         machine1Definition = StateMachineDefinition(
           states = Map(
-            StateId("a") -> State(StateId("a")),
-            StateId("b") -> State(StateId("b"))
+            StateId("a") -> State(StateId("a"), isFinal = false),
+            StateId("b") -> State(StateId("b"), isFinal = false)
           ),
           initialState = StateId("a"),
           transitions = List(
@@ -140,15 +141,16 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             )
           )
         )
 
         machine2Definition = StateMachineDefinition(
           states = Map(
-            StateId("x") -> State(StateId("x")),
-            StateId("y") -> State(StateId("y"))
+            StateId("x") -> State(StateId("x"), isFinal = false),
+            StateId("y") -> State(StateId("y"), isFinal = false)
           ),
           initialState = StateId("x"),
           transitions = List(
@@ -157,7 +159,8 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
               to = StateId("y"),
               eventName = "continue",
               guard = ConstExpression(BoolValue(true)),
-              effect = ConstExpression(MapValue(Map("step" -> IntValue(2))))
+              effect = ConstExpression(MapValue(Map("step" -> IntValue(2)))),
+              dependencies = Set.empty
             )
           )
         )
@@ -229,8 +232,8 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
         // Multiple transitions with guards - first few fail, last succeeds
         definition = StateMachineDefinition(
           states = Map(
-            StateId("start") -> State(StateId("start")),
-            StateId("end")   -> State(StateId("end"))
+            StateId("start") -> State(StateId("start"), isFinal = false),
+            StateId("end")   -> State(StateId("end"), isFinal = false)
           ),
           initialState = StateId("start"),
           transitions = List(
@@ -240,7 +243,8 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
               to = StateId("end"),
               eventName = "go",
               guard = ConstExpression(BoolValue(false)),
-              effect = ConstExpression(MapValue(Map("path" -> StrValue("first"))))
+              effect = ConstExpression(MapValue(Map("path" -> StrValue("first")))),
+              dependencies = Set.empty
             ),
             // Second guard: fails
             Transition(
@@ -248,7 +252,8 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
               to = StateId("end"),
               eventName = "go",
               guard = ConstExpression(BoolValue(false)),
-              effect = ConstExpression(MapValue(Map("path" -> StrValue("second"))))
+              effect = ConstExpression(MapValue(Map("path" -> StrValue("second")))),
+              dependencies = Set.empty
             ),
             // Third guard: succeeds
             Transition(
@@ -256,7 +261,8 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
               to = StateId("end"),
               eventName = "go",
               guard = ConstExpression(BoolValue(true)),
-              effect = ConstExpression(MapValue(Map("path" -> StrValue("third"))))
+              effect = ConstExpression(MapValue(Map("path" -> StrValue("third")))),
+              dependencies = Set.empty
             )
           )
         )
@@ -317,8 +323,8 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
         // State machine with guard that accesses state (costs 2 gas for varAccess)
         definition = StateMachineDefinition(
           states = Map(
-            StateId("start") -> State(StateId("start")),
-            StateId("end")   -> State(StateId("end"))
+            StateId("start") -> State(StateId("start"), isFinal = false),
+            StateId("end")   -> State(StateId("end"), isFinal = false)
           ),
           initialState = StateId("start"),
           transitions = List(
@@ -328,7 +334,8 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
               eventName = "go",
               // Guard that reads from state - varAccess costs 2 gas, !! (NOp) costs 1 gas
               guard = ApplyExpression(NOp, List(VarExpression(Left("_state")))),
-              effect = ConstExpression(MapValue(Map("done" -> BoolValue(true))))
+              effect = ConstExpression(MapValue(Map("done" -> BoolValue(true)))),
+              dependencies = Set.empty
             )
           )
         )
@@ -392,8 +399,8 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
 
         definition = StateMachineDefinition(
           states = Map(
-            StateId("start") -> State(StateId("start")),
-            StateId("end")   -> State(StateId("end"))
+            StateId("start") -> State(StateId("start"), isFinal = false),
+            StateId("end")   -> State(StateId("end"), isFinal = false)
           ),
           initialState = StateId("start"),
           transitions = List(
@@ -402,7 +409,8 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
               to = StateId("end"),
               eventName = "go",
               guard = ConstExpression(BoolValue(true)), // Simple guard passes
-              effect = expensiveEffect // Expensive effect exhausts gas
+              effect = expensiveEffect, // Expensive effect exhausts gas
+              dependencies = Set.empty
             )
           )
         )
@@ -466,8 +474,8 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
         // Parent that spawns a child
         parentDefinition = StateMachineDefinition(
           states = Map(
-            StateId("init")    -> State(StateId("init")),
-            StateId("spawned") -> State(StateId("spawned"))
+            StateId("init")    -> State(StateId("init"), isFinal = false),
+            StateId("spawned") -> State(StateId("spawned"), isFinal = false)
           ),
           initialState = StateId("init"),
           transitions = List(
@@ -508,7 +516,8 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             )
           )
         )
@@ -579,8 +588,8 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
         // Machine 1 triggers Machine 2 with expensive computations
         machine1Definition = StateMachineDefinition(
           states = Map(
-            StateId("a") -> State(StateId("a")),
-            StateId("b") -> State(StateId("b"))
+            StateId("a") -> State(StateId("a"), isFinal = false),
+            StateId("b") -> State(StateId("b"), isFinal = false)
           ),
           initialState = StateId("a"),
           transitions = List(
@@ -606,15 +615,16 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             )
           )
         )
 
         machine2Definition = StateMachineDefinition(
           states = Map(
-            StateId("x") -> State(StateId("x")),
-            StateId("y") -> State(StateId("y"))
+            StateId("x") -> State(StateId("x"), isFinal = false),
+            StateId("y") -> State(StateId("y"), isFinal = false)
           ),
           initialState = StateId("x"),
           transitions = List(
@@ -633,7 +643,8 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
                   ),
                   "done" -> ConstExpression(BoolValue(true))
                 )
-              )
+              ),
+              dependencies = Set.empty
             )
           )
         )
@@ -716,8 +727,8 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
         // Machine 1 triggers Machine 2
         machine1Definition = StateMachineDefinition(
           states = Map(
-            StateId("a") -> State(StateId("a")),
-            StateId("b") -> State(StateId("b"))
+            StateId("a") -> State(StateId("a"), isFinal = false),
+            StateId("b") -> State(StateId("b"), isFinal = false)
           ),
           initialState = StateId("a"),
           transitions = List(
@@ -743,15 +754,16 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
                     )
                   )
                 )
-              )
+              ),
+              dependencies = Set.empty
             )
           )
         )
 
         machine2Definition = StateMachineDefinition(
           states = Map(
-            StateId("x") -> State(StateId("x")),
-            StateId("y") -> State(StateId("y"))
+            StateId("x") -> State(StateId("x"), isFinal = false),
+            StateId("y") -> State(StateId("y"), isFinal = false)
           ),
           initialState = StateId("x"),
           transitions = List(
@@ -760,7 +772,8 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
               to = StateId("y"),
               eventName = "respond",
               guard = ConstExpression(BoolValue(true)),
-              effect = ConstExpression(MapValue(Map("step" -> IntValue(2))))
+              effect = ConstExpression(MapValue(Map("step" -> IntValue(2)))),
+              dependencies = Set.empty
             )
           )
         )

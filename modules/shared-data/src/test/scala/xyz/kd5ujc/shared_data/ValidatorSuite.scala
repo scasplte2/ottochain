@@ -27,7 +27,7 @@ object ValidatorSuite extends SimpleIOSuite {
     def minimalDefinition(): StateMachineDefinition = {
       val initial = StateId("initial")
       StateMachineDefinition(
-        states = Map(initial -> State(initial)),
+        states = Map(initial -> State(initial, isFinal = false)),
         initialState = initial,
         transitions = List.empty
       )
@@ -38,8 +38,8 @@ object ValidatorSuite extends SimpleIOSuite {
       val stateB = StateId("stateB")
       StateMachineDefinition(
         states = Map(
-          stateA -> State(stateA),
-          stateB -> State(stateB)
+          stateA -> State(stateA, isFinal = false),
+          stateB -> State(stateB, isFinal = false)
         ),
         initialState = stateA,
         transitions = List(
@@ -48,7 +48,8 @@ object ValidatorSuite extends SimpleIOSuite {
             to = stateB,
             eventName = "advance",
             guard = ConstExpression(BoolValue(true)),
-            effect = ConstExpression(MapValue(Map("moved" -> BoolValue(true))))
+            effect = ConstExpression(MapValue(Map("moved" -> BoolValue(true)))),
+            dependencies = Set.empty
           )
         )
       )
@@ -56,7 +57,7 @@ object ValidatorSuite extends SimpleIOSuite {
 
     def definitionWithStates(count: Int): StateMachineDefinition = {
       val states = (1 to count).map(i => StateId(s"state$i"))
-      val stateMap = states.map(s => s -> State(s)).toMap
+      val stateMap = states.map(s => s -> State(s, isFinal = false)).toMap
       StateMachineDefinition(
         states = stateMap,
         initialState = states.head,
@@ -69,7 +70,7 @@ object ValidatorSuite extends SimpleIOSuite {
       val maxPerState = 20
       val numStates = Math.max(2, (count / maxPerState) + 2)
       val states = (1 to numStates).map(i => StateId(s"state$i"))
-      val stateMap = states.map(s => s -> State(s)).toMap
+      val stateMap = states.map(s => s -> State(s, isFinal = false)).toMap
 
       val transitions = (1 to count).map { i =>
         val fromIdx = ((i - 1) / maxPerState) % (numStates - 1)
@@ -79,7 +80,8 @@ object ValidatorSuite extends SimpleIOSuite {
           to = states(toIdx),
           eventName = s"event$i",
           guard = ConstExpression(BoolValue(true)),
-          effect = ConstExpression(MapValue(Map.empty))
+          effect = ConstExpression(MapValue(Map.empty)),
+          dependencies = Set.empty
         )
       }.toList
 
@@ -99,11 +101,12 @@ object ValidatorSuite extends SimpleIOSuite {
           to = state2,
           eventName = s"event$i",
           guard = ConstExpression(BoolValue(true)),
-          effect = ConstExpression(MapValue(Map.empty))
+          effect = ConstExpression(MapValue(Map.empty)),
+          dependencies = Set.empty
         )
       }.toList
       StateMachineDefinition(
-        states = Map(state1 -> State(state1), state2 -> State(state2)),
+        states = Map(state1 -> State(state1, isFinal = false), state2 -> State(state2, isFinal = false)),
         initialState = state1,
         transitions = transitions
       )
@@ -119,7 +122,7 @@ object ValidatorSuite extends SimpleIOSuite {
     def invalidInitialStateDefinition(): StateMachineDefinition = {
       val existing = StateId("existing")
       StateMachineDefinition(
-        states = Map(existing -> State(existing)),
+        states = Map(existing -> State(existing, isFinal = false)),
         initialState = StateId("nonexistent"),
         transitions = List.empty
       )
@@ -128,7 +131,7 @@ object ValidatorSuite extends SimpleIOSuite {
     def invalidTransitionFromDefinition(): StateMachineDefinition = {
       val stateA = StateId("stateA")
       StateMachineDefinition(
-        states = Map(stateA -> State(stateA)),
+        states = Map(stateA -> State(stateA, isFinal = false)),
         initialState = stateA,
         transitions = List(
           Transition(
@@ -136,7 +139,8 @@ object ValidatorSuite extends SimpleIOSuite {
             to = stateA,
             eventName = "test",
             guard = ConstExpression(BoolValue(true)),
-            effect = ConstExpression(MapValue(Map.empty))
+            effect = ConstExpression(MapValue(Map.empty)),
+            dependencies = Set.empty
           )
         )
       )
@@ -145,7 +149,7 @@ object ValidatorSuite extends SimpleIOSuite {
     def invalidTransitionToDefinition(): StateMachineDefinition = {
       val stateA = StateId("stateA")
       StateMachineDefinition(
-        states = Map(stateA -> State(stateA)),
+        states = Map(stateA -> State(stateA, isFinal = false)),
         initialState = stateA,
         transitions = List(
           Transition(
@@ -153,7 +157,8 @@ object ValidatorSuite extends SimpleIOSuite {
             to = StateId("nonexistent"),
             eventName = "test",
             guard = ConstExpression(BoolValue(true)),
-            effect = ConstExpression(MapValue(Map.empty))
+            effect = ConstExpression(MapValue(Map.empty)),
+            dependencies = Set.empty
           )
         )
       )
@@ -167,10 +172,11 @@ object ValidatorSuite extends SimpleIOSuite {
         to = stateB,
         eventName = "test",
         guard = ConstExpression(BoolValue(true)),
-        effect = ConstExpression(MapValue(Map.empty))
+        effect = ConstExpression(MapValue(Map.empty)),
+        dependencies = Set.empty
       )
       StateMachineDefinition(
-        states = Map(stateA -> State(stateA), stateB -> State(stateB)),
+        states = Map(stateA -> State(stateA, isFinal = false), stateB -> State(stateB, isFinal = false)),
         initialState = stateA,
         transitions = List(transition, transition)
       )
@@ -182,9 +188,9 @@ object ValidatorSuite extends SimpleIOSuite {
       val stateC = StateId("stateC")
       StateMachineDefinition(
         states = Map(
-          stateA -> State(stateA),
-          stateB -> State(stateB),
-          stateC -> State(stateC)
+          stateA -> State(stateA, isFinal = false),
+          stateB -> State(stateB, isFinal = false),
+          stateC -> State(stateC, isFinal = false)
         ),
         initialState = stateA,
         transitions = List(
@@ -193,14 +199,16 @@ object ValidatorSuite extends SimpleIOSuite {
             to = stateB,
             eventName = "test",
             guard = ConstExpression(BoolValue(true)),
-            effect = ConstExpression(MapValue(Map.empty))
+            effect = ConstExpression(MapValue(Map.empty)),
+            dependencies = Set.empty
           ),
           Transition(
             from = stateA,
             to = stateC,
             eventName = "test",
             guard = ConstExpression(BoolValue(true)),
-            effect = ConstExpression(MapValue(Map.empty))
+            effect = ConstExpression(MapValue(Map.empty)),
+            dependencies = Set.empty
           )
         )
       )
@@ -215,8 +223,8 @@ object ValidatorSuite extends SimpleIOSuite {
       val stateB = StateId("stateB")
       StateMachineDefinition(
         states = Map(
-          stateA -> State(stateA),
-          stateB -> State(stateB)
+          stateA -> State(stateA, isFinal = false),
+          stateB -> State(stateB, isFinal = false)
         ),
         initialState = stateA,
         transitions = List(
@@ -232,7 +240,8 @@ object ValidatorSuite extends SimpleIOSuite {
                 ConstExpression(IntValue(2))
               )
             ),
-            effect = ConstExpression(MapValue(Map.empty))
+            effect = ConstExpression(MapValue(Map.empty)),
+            dependencies = Set.empty
           )
         )
       )
@@ -244,8 +253,8 @@ object ValidatorSuite extends SimpleIOSuite {
       val stateB = StateId("stateB")
       StateMachineDefinition(
         states = Map(
-          stateA -> State(stateA),
-          stateB -> State(stateB)
+          stateA -> State(stateA, isFinal = false),
+          stateB -> State(stateB, isFinal = false)
         ),
         initialState = stateA,
         transitions = List(
@@ -255,7 +264,8 @@ object ValidatorSuite extends SimpleIOSuite {
             eventName = "test",
             guard = ConstExpression(BoolValue(true)),
             // Using "merge" as a field name - this collides with the merge operator
-            effect = MapExpression(Map("merge" -> VarExpression(Left("data"))))
+            effect = MapExpression(Map("merge" -> VarExpression(Left("data")))),
+            dependencies = Set.empty
           )
         )
       )

@@ -10,7 +10,7 @@ import xyz.kd5ujc.shared_data.fiber.ConformanceChecker
 import weaver.SimpleIOSuite
 
 /**
- * Unit tests for the shallow runtime conformance gate (#33): produced state vs the on-chain SchemaShape.
+ * Unit tests for the shallow runtime conformance gate (#33): produced state vs the on-chain MachineShape.
  */
 object ConformanceCheckerSuite extends SimpleIOSuite {
 

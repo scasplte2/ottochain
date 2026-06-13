@@ -22,7 +22,7 @@ import org.typelevel.log4cats.slf4j.Slf4jLogger
 /**
  * Combiner for the registry. The chain enforces structural invariants — append-only / immutable /
  * strictly-monotonic via [[VersionLineage]], ownership, and a descriptor size bound — and never PARSES the
- * protobuf descriptor (it hashes `schemaB64` into `schemaHash` and drops the bytes; the typed `schemaShape`
+ * protobuf descriptor (it hashes `schemaB64` into `schemaHash` and drops the bytes; the typed `machineShape`
  * projection is stored as advisory domain metadata). The JSON-Logic `definition` IS typed: it is hashed via
  * `computeDigest` into `logicHash` — the same canonical digest a fiber computes — so a referencing fiber's
  * definition can be verified on-chain (#37). `VersionLineage`'s `Either` is the authoritative invariant
@@ -38,7 +38,7 @@ class RegistryCombiner[F[_]: Async: SecurityProvider](
   maxBundleBytes: Long
 ) {
 
-  def publishVersion(update: Signed[Updates.PublishVersion]): F[DataState[OnChain, CalculatedState]] = {
+  def publishMachineVersion(update: Signed[Updates.PublishMachineVersion]): F[DataState[OnChain, CalculatedState]] = {
     val pv = update.value
     for {
       currentOrdinal <- ctx.getCurrentOrdinal
@@ -65,7 +65,7 @@ class RegistryCombiner[F[_]: Async: SecurityProvider](
         version = pv.version,
         schemaHash = schemaHash,
         logicHash = logicHash,
-        schemaShape = pv.schemaShape,
+        shape = RegistryShape.Machine(pv.machineShape),
         status = RegistryStatus.Active,
         registeredAt = currentOrdinal,
         strict = pv.strict
@@ -100,7 +100,70 @@ class RegistryCombiner[F[_]: Async: SecurityProvider](
             }
       }
       result <- current.withRegistryEntry[F](pv.name, updatedEntry)
-      _      <- Slf4jLogger.getLogger[F].info(s"[registry-publish] applied ${pv.name.render}@${pv.version.render}")
+      _ <- Slf4jLogger.getLogger[F].info(s"[registry-publish-machine] applied ${pv.name.render}@${pv.version.render}")
+    } yield result
+  }
+
+  def publishScriptVersion(update: Signed[Updates.PublishScriptVersion]): F[DataState[OnChain, CalculatedState]] = {
+    val pv = update.value
+    for {
+      currentOrdinal <- ctx.getCurrentOrdinal
+      signers        <- update.proofs.toList.traverse(_.id.toAddress).map(Set.from)
+      _ <- Async[F]
+        .raiseError[Unit](CombineRejected(s"registry name ${pv.name.render} uses a reserved label"))
+        .whenA(RegistryName.isReserved(pv.name))
+      _ <- Async[F]
+        .raiseError[Unit](
+          CombineRejected(s"registry descriptor for ${pv.name.render} exceeds $maxBundleBytes bytes")
+        )
+        .whenA(pv.schemaB64.length.toLong > maxBundleBytes)
+      _ <- RegistryMetadata
+        .validate(pv.metadata.getOrElse(SortedMap.empty[String, String]))
+        .fold(
+          e => Async[F].raiseError[Unit](CombineRejected(s"invalid metadata for ${pv.name.render}: $e")),
+          _ => Async[F].unit
+        )
+      schemaHash <- pv.schemaB64.computeDigest
+      logicHash  <- pv.scriptProgram.computeDigest
+      rv = RegisteredVersion(
+        version = pv.version,
+        schemaHash = schemaHash,
+        logicHash = logicHash,
+        shape = RegistryShape.Script(pv.scriptShape),
+        status = RegistryStatus.Active,
+        registeredAt = currentOrdinal,
+        strict = pv.strict
+      )
+      updatedEntry <- current.calculated.registry.get(pv.name) match {
+        case None =>
+          (RegistryEntry(
+            pv.name,
+            signers,
+            RegistryTarget.SchemaPackage(VersionLineage.of(rv)),
+            pv.metadata.getOrElse(SortedMap.empty[String, String])
+          ): RegistryEntry).pure[F]
+        case Some(entry) =>
+          if (!signers.exists(entry.owner.contains))
+            Async[F].raiseError[RegistryEntry](CombineRejected(s"unauthorized publish to ${pv.name.render}"))
+          else
+            entry.target match {
+              case RegistryTarget.SchemaPackage(lineage) =>
+                lineage
+                  .publish(rv)
+                  .fold(
+                    e =>
+                      Async[F]
+                        .raiseError[RegistryEntry](CombineRejected(s"publish rejected for ${pv.name.render}: $e")),
+                    l => entry.copy(target = RegistryTarget.SchemaPackage(l)).pure[F]
+                  )
+              case other =>
+                Async[F].raiseError[RegistryEntry](
+                  CombineRejected(s"${pv.name.render} is not a schema package (${other.getClass.getSimpleName})")
+                )
+            }
+      }
+      result <- current.withRegistryEntry[F](pv.name, updatedEntry)
+      _ <- Slf4jLogger.getLogger[F].info(s"[registry-publish-script] applied ${pv.name.render}@${pv.version.render}")
     } yield result
   }
 
@@ -191,7 +254,9 @@ class RegistryCombiner[F[_]: Async: SecurityProvider](
           )(_.owners.pure[F])
       case NameTld.Package =>
         Async[F].raiseError[Set[Address]](
-          CombineRejected("cannot register a .package name as a fiber alias (use PublishVersion)")
+          CombineRejected(
+            "cannot register a .package name as a fiber alias (use PublishMachineVersion/PublishScriptVersion)"
+          )
         )
     }
 }
