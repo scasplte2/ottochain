@@ -2,7 +2,6 @@ import fs from 'fs';
 import path from 'path';
 import type {
   OttochainMessage,
-  PublishVersion,
   SchemaShape,
   StateMachineDefinition,
   CalculatedState,
@@ -40,18 +39,21 @@ function loadMaybe<T>(v: string | T): T {
 }
 
 export const generator = ({ options }: { cid?: string; wallets?: unknown; options: PublishVersionOptions }): OttochainMessage => {
-  const msg: PublishVersion = {
+  // NOTE: chain renamed PublishVersion -> PublishMachineVersion and `schemaShape` -> `machineShape`
+  // (machine/script registry symmetry). The @ottochain/sdk types are not regenerated yet, so this is
+  // typed loosely and runs under tsx (no compile-time check) — "force past" until the SDK is updated.
+  const msg = {
     name: options.name,
     version: options.version,
     schemaB64: options.schemaB64 ?? Buffer.from(`descriptor:${options.name}:${options.version}`).toString('base64'),
-    schemaShape: loadMaybe<SchemaShape>(options.schemaShape),
+    machineShape: loadMaybe<SchemaShape>(options.schemaShape),
     definition: loadMaybe<StateMachineDefinition>(options.definition),
     // `strict` is required on the chain (no default) — always send it so the signed canonical matches
     // what the chain re-derives. `metadata` is Option (omit-safe), so it stays conditional.
     strict: options.strict ?? false,
     ...(options.metadata ? { metadata: options.metadata } : {}),
   };
-  return { PublishVersion: msg };
+  return { PublishMachineVersion: msg } as unknown as OttochainMessage;
 };
 
 export const validator = ({ statesMap, options }: { cid?: string; statesMap: StatesMap; options: PublishVersionOptions; wallets?: unknown }) => {
