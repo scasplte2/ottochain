@@ -69,9 +69,9 @@ object ML0Service {
       orderedCombiner(combiner),
       rejectionNotifyingValidator(validator, checkpointService, webhookDispatcher),
       journal,
-      extraRoutes = Some { (_: CommittedReader[F, CalculatedState], context: L0NodeContext[F]) =>
+      extraRoutes = Some { (reader: CommittedReader[F, CalculatedState], context: L0NodeContext[F]) =>
         implicit val ctx: L0NodeContext[F] = context
-        ml0Routes(checkpointService, subscriberRegistry)
+        ml0Routes(checkpointService, subscriberRegistry, reader)
       },
       onConsensusResult =
         Some((reader, snapshot) => onConsensus(reader, snapshot, checkpointService, webhookDispatcher))
@@ -178,7 +178,8 @@ object ML0Service {
 
   private def ml0Routes[F[+_]: Async](
     checkpointService:  CheckpointService[F, CalculatedState],
-    subscriberRegistry: SubscriberRegistry[F]
+    subscriberRegistry: SubscriberRegistry[F],
+    reader:             CommittedReader[F, CalculatedState]
   )(implicit context: L0NodeContext[F]): HttpRoutes[F] =
     new ML0Routes[F](
       new handlers.MetaHandler[F](checkpointService),
@@ -186,6 +187,7 @@ object ML0Service {
       new handlers.ScriptHandler[F](checkpointService),
       new handlers.RegistryHandler[F](checkpointService),
       new handlers.WebhookHandler[F](subscriberRegistry),
-      new handlers.EstimateHandler[F](checkpointService)
+      new handlers.EstimateHandler[F](checkpointService),
+      new handlers.StateProofHandler[F](reader)
     ).public
 }
