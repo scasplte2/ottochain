@@ -13,7 +13,6 @@ import io.constellationnetwork.currency.schema.currency.CurrencyIncrementalSnaps
 import io.constellationnetwork.metagraph_sdk.lifecycle.committed.{CatalogJournal, CommittedApp, CommittedReader}
 import io.constellationnetwork.metagraph_sdk.lifecycle.{CheckpointService, CombinerService, ValidationService}
 import io.constellationnetwork.metagraph_sdk.std.Checkpoint
-import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
 import io.constellationnetwork.security.signature.Signed
 import io.constellationnetwork.security.{Hashed, SecurityProvider}
 
@@ -80,10 +79,10 @@ object ML0Service {
   } yield service
 
   /**
-   * Total-order the batch and clear `latestLogs` before folding, then delegate. The message-level
-   * `signedOrdering` is only PARTIAL (same-name registry ops and duplicate (fiber, sequence) ops
-   * tie); break ties by the signed update's content digest so the surviving op is identical across
-   * nodes (no fork) while the loser becomes a RejectionReceipt rather than aborting the batch.
+   * Clear `latestLogs`, then sort the batch by the TOTAL `OttochainMessage.signedOrdering` (signature
+   * tiebreak lives in models) so every node folds the identical sequence — the surviving op on a tie
+   * is the same network-wide (no fork), the loser becomes a RejectionReceipt — then delegate to the
+   * registry/fiber combiner. No Hasher in the combine path now that the ordering is total.
    */
   private def orderedCombiner[F[+_]: Async](
     inner: CombinerService[F, OttochainMessage, OnChain, CalculatedState]
@@ -100,12 +99,10 @@ object ML0Service {
         previous: DataState[OnChain, CalculatedState],
         batch:    List[Signed[OttochainMessage]]
       )(implicit ctx: L0NodeContext[F]): F[DataState[OnChain, CalculatedState]] =
-        for {
-          keyed <- batch.traverse(u => u.computeDigest.map(h => u -> h.value))
-          totalOrdering = Ordering.Tuple2(OttochainMessage.signedOrdering, Ordering.String)
-          sorted = keyed.sorted(totalOrdering).map(_._1)
-          result <- inner.foldLeft(previous.focus(_.onChain.latestLogs).replace(SortedMap.empty), sorted)
-        } yield result
+        inner.foldLeft(
+          previous.focus(_.onChain.latestLogs).replace(SortedMap.empty),
+          batch.sorted(OttochainMessage.signedOrdering)
+        )
     }
 
   /**
