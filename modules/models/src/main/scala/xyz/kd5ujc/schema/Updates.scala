@@ -246,10 +246,16 @@ object Updates {
     }
 
     /**
-     * Ordering for Signed[OttochainMessage] - delegates to message ordering.
+     * TOTAL ordering for Signed[OttochainMessage]. The message [[ordering]] is only PARTIAL — it
+     * ties for two `Sequenced` ops on the same `(fiberId, targetSequenceNumber)` and for two
+     * non-sequenced ops on the same `fiberId` (e.g. two publishes for the same registry name in one
+     * batch). We complete it to a TOTAL order by tiebreaking on the signature proofs: they are part
+     * of the signed update (so identical on every node) and pure (no Hasher needed), so the combiner
+     * can `batch.sorted(signedOrdering)` and every node folds the identical sequence — the surviving
+     * op on a tie is the same network-wide (no fork) and the loser becomes a RejectionReceipt.
      */
     implicit val signedOrdering: Ordering[Signed[OttochainMessage]] =
-      Ordering.by(_.value)
+      Ordering.by(s => (s.value, s.proofs.toNonEmptyList.toList.map(_.signature.value.value).mkString(",")))
 
     implicit val messageEncoder: Encoder[OttochainMessage] = {
       case u: Updates.CreateStateMachine     => Json.obj(u.messageName -> u.asJson)

@@ -26,7 +26,8 @@ class ML0Routes[F[_]: Async](
   script:       ScriptHandler[F],
   registry:     RegistryHandler[F],
   webhook:      WebhookHandler[F],
-  estimate:     EstimateHandler[F]
+  estimate:     EstimateHandler[F],
+  stateProof:   StateProofHandler[F]
 ) extends MetagraphPublicRoutes[F] {
 
   implicit private val fiberStatusDecoder: QueryParamDecoder[FiberStatus] =
@@ -36,6 +37,7 @@ class ML0Routes[F[_]: Async](
 
   private object StatusQueryParam extends OptionalQueryParamDecoderMatcher[FiberStatus]("status")
   private object EventQueryParam extends QueryParamDecoderMatcher[String]("event")
+  private object FieldQueryParam extends OptionalQueryParamDecoderMatcher[String]("field")
 
   private val v1Routes: HttpRoutes[F] = HttpRoutes.of[F] {
 
@@ -53,12 +55,16 @@ class ML0Routes[F[_]: Async](
     case GET -> Root / "state-machines" / UUIDVar(id) / "audit"     => stateMachine.audit(id).toResponse
     case GET -> Root / "state-machines" / UUIDVar(id) / "estimate-fee" :? EventQueryParam(event) =>
       estimate.transition(id, event).toResponse
+    case GET -> Root / "state-machines" / UUIDVar(id) / "state-proof" :? FieldQueryParam(field) =>
+      stateProof.stateMachine(id, field)
 
     // --- scripts (the legacy /oracles surface is retained) ---
     case GET -> Root / "oracles" :? StatusQueryParam(status)    => script.list(status).toResponse
     case GET -> Root / "oracles" / UUIDVar(id)                  => script.get(id).toResponse
     case GET -> Root / "oracles" / UUIDVar(id) / "invocations"  => script.invocations(id).toResponse
     case GET -> Root / "scripts" / UUIDVar(id) / "estimate-fee" => estimate.script(id).toResponse
+    case GET -> Root / "scripts" / UUIDVar(id) / "state-proof" :? FieldQueryParam(field) =>
+      stateProof.script(id, field)
 
     // --- registry ---
     case GET -> Root / "registry"                           => registry.all.toResponse

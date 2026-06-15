@@ -1,5 +1,6 @@
 package xyz.kd5ujc.metagraph_l0
 
+import java.nio.file.Paths
 import java.util.UUID
 
 import cats.effect.std.Supervisor
@@ -9,6 +10,7 @@ import cats.syntax.all._
 import io.constellationnetwork.currency.dataApplication._
 import io.constellationnetwork.currency.l0.CurrencyL0App
 import io.constellationnetwork.ext.cats.effect.ResourceIO
+import io.constellationnetwork.metagraph_sdk.lifecycle.committed.CatalogJournal
 import io.constellationnetwork.schema.cluster.ClusterId
 import io.constellationnetwork.schema.semver.{MetagraphVersion, TessellationVersion}
 import io.constellationnetwork.security.SecurityProvider
@@ -43,8 +45,13 @@ object Main
       EmberClientBuilder.default[IO].build.map(Some(_))
     }
 
+    // Committed-catalog journal: the node-local LevelDB store that lets a restarted/seeded node
+    // re-hydrate its committed cell (without it, a seed lands unhydrated and stalls at combine).
+    journal <- CatalogJournal.levelDb[IO](Paths.get("committed-catalog"))
+
     l0Service <- ML0Service
       .make[IO](
+        journal = journal,
         httpClient = httpClient,
         metagraphId = config.webhook.metagraphId.getOrElse("DAG3KNyfeKUTuWpMMhormWgWSYMD1pDGB2uaWqxG"),
         genesisPath = config.genesis.path

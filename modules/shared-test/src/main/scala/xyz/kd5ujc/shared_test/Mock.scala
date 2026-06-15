@@ -9,6 +9,8 @@ import io.constellationnetwork.currency.dataApplication.{FeeTransaction, L0NodeC
 import io.constellationnetwork.currency.schema.currency
 import io.constellationnetwork.currency.schema.currency.DataApplicationPart
 import io.constellationnetwork.domain.seedlist.SeedlistEntry
+import io.constellationnetwork.metagraph_sdk.crypto.smt.SparseMerkleRoot
+import io.constellationnetwork.metagraph_sdk.lifecycle.committed.{CommittedBreadcrumb, CommittedOnChain, CommittedRoots}
 import io.constellationnetwork.metagraph_sdk.std.JsonBinaryCodec._
 import io.constellationnetwork.schema._
 import io.constellationnetwork.schema.address.Address
@@ -79,7 +81,13 @@ object Mock {
       val baseSnapshot = generateValueWithRetry(genHashedCurrencyIncSnapshot)
 
       for {
-        onChainBytes <- OnChain.genesis.toBinary
+        // ML0 commits CommittedOnChain[OnChain] (makeL0 wraps OnChain with the committed breadcrumb);
+        // the DL1 validator decodes the wrapper and reads .inner, so the fixture serializes the same
+        // shape. The breadcrumb value is irrelevant to the unwrap.
+        onChainBytes <- CommittedOnChain(
+          OnChain.genesis,
+          CommittedBreadcrumb(SnapshotOrdinal.MinValue, CommittedRoots(Hash.empty, SparseMerkleRoot.empty))
+        ).toBinary
 
         dataAppPart = DataApplicationPart(
           onChainState = onChainBytes,

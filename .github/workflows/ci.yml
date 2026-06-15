@@ -90,11 +90,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-sbt-
 
-      # TEMPORARY: build metakit from source if its pinned version is not yet on Maven Central.
-      # Self-deactivating once published. Remove with the action once the metakit RC ships.
-      - name: metakit from source (until published)
-        uses: ./.github/actions/metakit-from-source
-
       - name: Check formatting (scalafmt)
         run: sbt scalafmtCheckAll
 
@@ -132,11 +127,6 @@ jobs:
           key: ${{ runner.os }}-sbt-${{ hashFiles('**/*.sbt', 'project/plugins.sbt', 'project/build.properties') }}
           restore-keys: |
             ${{ runner.os }}-sbt-
-
-      # TEMPORARY: build metakit from source if its pinned version is not yet on Maven Central.
-      # Self-deactivating once published. Remove with the action once the metakit RC ships.
-      - name: metakit from source (until published)
-        uses: ./.github/actions/metakit-from-source
 
       - name: Run tests with coverage
         run: sbt clean coverage sharedData/test coverageReport

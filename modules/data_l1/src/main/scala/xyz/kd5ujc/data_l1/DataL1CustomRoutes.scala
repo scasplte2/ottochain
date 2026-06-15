@@ -1,11 +1,12 @@
 package xyz.kd5ujc.data_l1
 
 import cats.effect.Async
-import cats.syntax.flatMap._
+import cats.syntax.all._
 
 import io.constellationnetwork.currency.dataApplication.L1NodeContext
 import io.constellationnetwork.ext.http4s.error.RefinedRequestApplicationDecoder
 import io.constellationnetwork.metagraph_sdk.MetagraphPublicRoutes
+import io.constellationnetwork.metagraph_sdk.lifecycle.committed.CommittedOnChain
 import io.constellationnetwork.metagraph_sdk.std.JsonBinaryCodec._
 import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
 import io.constellationnetwork.metagraph_sdk.syntax.all.L1ContextOps
@@ -50,7 +51,9 @@ class DataL1CustomRoutes[F[_]: Async](implicit
       }
 
     case GET -> Root / "onchain" =>
-      context.getOnChainState[OnChain].toResponse
+      // ML0 commits CommittedOnChain[OnChain]; unwrap .inner so this route returns the plain OnChain
+      // (clients and the e2e harness see the unchanged shape).
+      context.getOnChainState[CommittedOnChain[OnChain]].map(_.map(_.inner)).toResponse
   }
 
   protected val routes: HttpRoutes[F] = Router(
