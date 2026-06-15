@@ -1,22 +1,19 @@
 package xyz.kd5ujc.metagraph_l0
 
+import cats.Parallel
 import cats.data.{NonEmptyList, Validated}
 import cats.effect.Async
 import cats.syntax.all._
-import cats.{Applicative, Parallel}
 
 import scala.collection.immutable.SortedMap
 
 import io.constellationnetwork.currency.dataApplication._
 import io.constellationnetwork.currency.dataApplication.dataApplication.DataApplicationValidationErrorOr
 import io.constellationnetwork.currency.schema.currency.CurrencyIncrementalSnapshot
-import io.constellationnetwork.metagraph_sdk.MetagraphCommonService
+import io.constellationnetwork.metagraph_sdk.lifecycle.committed.{CatalogJournal, CommittedApp, CommittedReader}
 import io.constellationnetwork.metagraph_sdk.lifecycle.{CheckpointService, CombinerService, ValidationService}
 import io.constellationnetwork.metagraph_sdk.std.Checkpoint
 import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
-import io.constellationnetwork.metagraph_sdk.syntax.all.CurrencyIncrementalSnapshotOps
-import io.constellationnetwork.schema.SnapshotOrdinal
-import io.constellationnetwork.security.hash.Hash
 import io.constellationnetwork.security.signature.Signed
 import io.constellationnetwork.security.{Hashed, SecurityProvider}
 
@@ -37,12 +34,24 @@ import org.typelevel.log4cats.slf4j.Slf4jLogger
 object ML0Service {
 
   /**
-   * Create the ML0 service with webhook support
+   * The ML0 data application, committed-state edition. `CommittedApp.makeL0` owns the on-chain
+   * wrapping, combine/validateData dispatch, the two-tier committed root (`hashCalculatedState` ->
+   * the snapshot's `calculatedStateProof`), get/setCalculatedState, and the `/committed/...` routes.
+   * We hand it:
+   *   - [[orderedCombiner]]: total-orders the batch (so every node folds the identical sequence) and
+   *     clears `latestLogs` before folding, then delegates to the registry/fiber combiner;
+   *   - [[rejectionNotifyingValidator]]: per-update validation with fire-and-forget rejection
+   *     webhooks (the dispatch the framework's batch `validateData` would otherwise drop);
+   *   - `extraRoutes`: the existing `ML0Routes` handlers (still reading the notification-side
+   *     [[CheckpointService]] cache, refreshed once per snapshot by the consensus hook);
+   *   - `onConsensusResult`: refresh that cache from the committed cell and dispatch the per-snapshot
+   *     webhook (replaces the old hand-rolled `onSnapshotConsensusResult`).
    *
-   * @param httpClient HTTP client for webhook delivery
-   * @param metagraphId The metagraph token identifier (for webhook notifications)
+   * @param journal the committed-catalog journal (LevelDB in production) — REQUIRED: without it a
+   *                seeded/restarted node cannot hydrate and stalls. See the migration proposal.
    */
   def make[F[+_]: Async: Files: Parallel: SecurityProvider](
+    journal:     CatalogJournal[F],
     httpClient:  Option[Client[F]] = None,
     metagraphId: String = "DAG3KNyfeKUTuWpMMhormWgWSYMD1pDGB2uaWqxG",
     genesisPath: Option[String] = None
@@ -54,135 +63,132 @@ object ML0Service {
     combiner           <- Combiner.make[F]().pure[F]
     validator          <- Validator.make[F]
 
-    // Create webhook dispatcher if http client is provided
-    webhookDispatcher = httpClient.map { client =>
-      WebhookDispatcher.make[F](client, subscriberRegistry, metagraphId)
+    webhookDispatcher = httpClient.map(client => WebhookDispatcher.make[F](client, subscriberRegistry, metagraphId))
+
+    service <- CommittedApp.makeL0[F, OttochainMessage, OnChain, CalculatedState](
+      genesisState,
+      orderedCombiner(combiner),
+      rejectionNotifyingValidator(validator, checkpointService, webhookDispatcher),
+      journal,
+      extraRoutes = Some { (_: CommittedReader[F, CalculatedState], context: L0NodeContext[F]) =>
+        implicit val ctx: L0NodeContext[F] = context
+        ml0Routes(checkpointService, subscriberRegistry)
+      },
+      onConsensusResult =
+        Some((reader, snapshot) => onConsensus(reader, snapshot, checkpointService, webhookDispatcher))
+    )
+  } yield service
+
+  /**
+   * Total-order the batch and clear `latestLogs` before folding, then delegate. The message-level
+   * `signedOrdering` is only PARTIAL (same-name registry ops and duplicate (fiber, sequence) ops
+   * tie); break ties by the signed update's content digest so the surviving op is identical across
+   * nodes (no fork) while the loser becomes a RejectionReceipt rather than aborting the batch.
+   */
+  private def orderedCombiner[F[+_]: Async](
+    inner: CombinerService[F, OttochainMessage, OnChain, CalculatedState]
+  ): CombinerService[F, OttochainMessage, OnChain, CalculatedState] =
+    new CombinerService[F, OttochainMessage, OnChain, CalculatedState] {
+
+      def insert(
+        previous: DataState[OnChain, CalculatedState],
+        update:   Signed[OttochainMessage]
+      )(implicit ctx: L0NodeContext[F]): F[DataState[OnChain, CalculatedState]] =
+        inner.insert(previous, update)
+
+      override def foldLeft(
+        previous: DataState[OnChain, CalculatedState],
+        batch:    List[Signed[OttochainMessage]]
+      )(implicit ctx: L0NodeContext[F]): F[DataState[OnChain, CalculatedState]] =
+        for {
+          keyed <- batch.traverse(u => u.computeDigest.map(h => u -> h.value))
+          totalOrdering = Ordering.Tuple2(OttochainMessage.signedOrdering, Ordering.String)
+          sorted = keyed.sorted(totalOrdering).map(_._1)
+          result <- inner.foldLeft(previous.focus(_.onChain.latestLogs).replace(SortedMap.empty), sorted)
+        } yield result
     }
 
-    dataApplicationL0Service <- makeBaseApplicationL0Service(
-      genesisState,
-      checkpointService,
-      combiner,
-      validator,
-      subscriberRegistry,
-      webhookDispatcher
-    ).pure[F]
-  } yield dataApplicationL0Service
+  /**
+   * Per-update validation with fire-and-forget rejection webhooks. `makeL0` routes the framework's
+   * batch `validateData` straight here; the default batch validator would accumulate errors but drop
+   * the per-update rejection dispatch, so we re-add it.
+   */
+  private def rejectionNotifyingValidator[F[+_]: Async: Parallel](
+    inner:             ValidationService[F, OttochainMessage, OnChain, CalculatedState],
+    checkpointService: CheckpointService[F, CalculatedState],
+    webhookDispatcher: Option[WebhookDispatcher[F]]
+  ): ValidationService[F, OttochainMessage, OnChain, CalculatedState] =
+    new ValidationService[F, OttochainMessage, OnChain, CalculatedState] {
 
-  private def makeBaseApplicationL0Service[F[+_]: Async](
-    genesisState:       DataState[OnChain, CalculatedState],
-    checkpointService:  CheckpointService[F, CalculatedState],
-    combiner:           CombinerService[F, OttochainMessage, OnChain, CalculatedState],
-    validator:          ValidationService[F, OttochainMessage, OnChain, CalculatedState],
-    subscriberRegistry: SubscriberRegistry[F],
-    webhookDispatcher:  Option[WebhookDispatcher[F]]
-  )(implicit logger: SelfAwareStructuredLogger[F]): BaseDataApplicationL0Service[F] =
-    BaseDataApplicationL0Service[F, OttochainMessage, OnChain, CalculatedState](
-      new MetagraphCommonService[F, OttochainMessage, OnChain, CalculatedState, L0NodeContext[F]]
-        with DataApplicationL0Service[F, OttochainMessage, OnChain, CalculatedState] {
+      def validateUpdate(update: OttochainMessage)(implicit
+        ctx: L1NodeContext[F]
+      ): F[DataApplicationValidationErrorOr[Unit]] =
+        inner.validateUpdate(update)
 
-        override def genesis: DataState[OnChain, CalculatedState] = genesisState
+      def validateSignedUpdate(
+        current:      DataState[OnChain, CalculatedState],
+        signedUpdate: Signed[OttochainMessage]
+      )(implicit context: L0NodeContext[F]): F[DataApplicationValidationErrorOr[Unit]] =
+        inner.validateSignedUpdate(current, signedUpdate)
 
-        override def onSnapshotConsensusResult(snapshot: Hashed[CurrencyIncrementalSnapshot])(implicit
-          A: Applicative[F]
-        ): F[Unit] =
-          (for {
-            signedUpdates <- snapshot.signed.value.getSignedUpdates[OttochainMessage]
-            _             <- logger.info(s"Got ${signedUpdates.size} updates for ordinal: ${snapshot.ordinal.value}")
+      override def validateData(
+        current: DataState[OnChain, CalculatedState],
+        batch:   NonEmptyList[Signed[OttochainMessage]]
+      )(implicit ctx: L0NodeContext[F]): F[DataApplicationValidationErrorOr[Unit]] =
+        for {
+          ordinal <- checkpointService.get.map(_.ordinal)
+          results <- batch.toList.traverse(su => inner.validateSignedUpdate(current, su).map(su -> _))
+          _ <- webhookDispatcher match {
+            case Some(dispatcher) =>
+              results.collect { case (su, Validated.Invalid(errors)) =>
+                Async[F].start(dispatcher.dispatchRejection(ordinal, su, errors)).void
+              }.sequence_
+            case None => Async[F].unit
+          }
+        } yield results.map(_._2).combineAll
+    }
 
-            // Dispatch webhooks if dispatcher is configured
-            _ <- webhookDispatcher match {
-              case Some(dispatcher) =>
-                // Get current state for notification stats
-                checkpointService.get.flatMap { case Checkpoint(_, state) =>
-                  val stats = NotificationStats(
-                    updatesProcessed = signedUpdates.size,
-                    stateMachinesActive = state.stateMachines.count { case (_, fiber) =>
-                      fiber.status == FiberStatus.Active
-                    },
-                    scriptsActive = state.scripts.count { case (_, script) =>
-                      script.status == FiberStatus.Active
-                    }
-                  )
-
-                  // Fire-and-forget: start webhook dispatch but don't wait for it
-                  Async[F].start(dispatcher.dispatch(snapshot, stats)).void
-                }
-
-              case None =>
-                Async[F].unit
-            }
-          } yield ()).handleErrorWith(logger.error(_)("Error during onSnapshotConsensusResult"))
-
-        override def validateData(
-          state:   DataState[OnChain, CalculatedState],
-          updates: NonEmptyList[Signed[OttochainMessage]]
-        )(implicit context: L0NodeContext[F]): F[DataApplicationValidationErrorOr[Unit]] =
-          for {
-            // Get current ordinal for rejection tracking
-            ordinal <- checkpointService.get.map(_.ordinal)
-
-            // Validate each update individually to track per-update rejections
-            results <- updates.toList.traverse { signedUpdate =>
-              validator.validateSignedUpdate(state, signedUpdate).map(signedUpdate -> _)
-            }
-
-            // Dispatch rejections (fire-and-forget) for failed validations
-            _ <- webhookDispatcher match {
-              case Some(dispatcher) =>
-                results.collect { case (signedUpdate, Validated.Invalid(errors)) =>
-                  Async[F].start(dispatcher.dispatchRejection(ordinal, signedUpdate, errors)).void
-                }.sequence_
-              case None =>
-                Async[F].unit
-            }
-
-            // Return combined result (all errors accumulated)
-          } yield results.map(_._2).combineAll
-
-        override def combine(
-          state:   DataState[OnChain, CalculatedState],
-          updates: List[Signed[OttochainMessage]]
-        )(implicit context: L0NodeContext[F]): F[DataState[OnChain, CalculatedState]] =
-          for {
-            // Order updates with a TOTAL order so every node folds the identical sequence. The message-level
-            // ordering (creates before transitions; per-fiber by sequence number) is only PARTIAL — same-name
-            // registry ops and duplicate (fiber, sequence) ops tie. Break ties by the signed update's content
-            // digest so, on a tie, the surviving op is identical across nodes (no fork) while the loser is
-            // recorded as a RejectionReceipt rather than aborting the batch.
-            keyed <- updates.traverse(u => u.computeDigest.map(h => u -> h.value))
-            // Reuse the models ordering (OttochainMessage.signedOrdering) as the PRIMARY key and only append
-            // the content digest as a tiebreaker — the digest needs the Hasher effect, so it can't live inside
-            // the pure models Ordering. This is the partial models order completed to a total one.
-            totalOrdering = Ordering.Tuple2(OttochainMessage.signedOrdering, Ordering.String)
-            sortedUpdates = keyed.sorted(totalOrdering).map(_._1)
-            result <- combiner.foldLeft(
-              state.focus(_.onChain.latestLogs).replace(SortedMap.empty),
-              sortedUpdates
-            )
-          } yield result
-
-        override def getCalculatedState(implicit
-          context: L0NodeContext[F]
-        ): F[(SnapshotOrdinal, CalculatedState)] =
-          checkpointService.get.map { case Checkpoint(ordinal, state) => ordinal -> state }
-
-        override def setCalculatedState(ordinal: SnapshotOrdinal, state: CalculatedState)(implicit
-          context: L0NodeContext[F]
-        ): F[Boolean] = checkpointService.set(Checkpoint(ordinal, state))
-
-        override def hashCalculatedState(state: CalculatedState)(implicit context: L0NodeContext[F]): F[Hash] =
-          state.computeDigest
-
-        override def routes(implicit context: L0NodeContext[F]): HttpRoutes[F] =
-          new ML0Routes[F](
-            new handlers.MetaHandler[F](checkpointService),
-            new handlers.StateMachineHandler[F](checkpointService),
-            new handlers.ScriptHandler[F](checkpointService),
-            new handlers.RegistryHandler[F](checkpointService),
-            new handlers.WebhookHandler[F](subscriberRegistry),
-            new handlers.EstimateHandler[F](checkpointService)
-          ).public
+  /**
+   * Per-snapshot consensus hook: refresh the notification-side calculated-state cache from the
+   * committed cell (so the HTTP handlers and the webhook stats read the current value), then
+   * fire-and-forget the snapshot webhook.
+   */
+  private def onConsensus[F[+_]: Async](
+    reader:            CommittedReader[F, CalculatedState],
+    snapshot:          Hashed[CurrencyIncrementalSnapshot],
+    checkpointService: CheckpointService[F, CalculatedState],
+    webhookDispatcher: Option[WebhookDispatcher[F]]
+  )(implicit logger: SelfAwareStructuredLogger[F]): F[Unit] =
+    (for {
+      committed <- reader.committed
+      _         <- checkpointService.set(Checkpoint(committed.ordinal, committed.state))
+      // Count from the snapshot's data part directly (the typed decode needs codecs this standalone
+      // hook doesn't carry); updateHashes is the per-snapshot accepted-update set.
+      updatesProcessed = snapshot.signed.value.dataApplication.flatMap(_.updateHashes).fold(0)(_.size)
+      _ <- logger.info(s"Snapshot ordinal ${snapshot.ordinal.value}: $updatesProcessed updates")
+      _ <- webhookDispatcher match {
+        case Some(dispatcher) =>
+          val stats = NotificationStats(
+            updatesProcessed = updatesProcessed,
+            stateMachinesActive =
+              committed.state.stateMachines.count { case (_, fiber) => fiber.status == FiberStatus.Active },
+            scriptsActive = committed.state.scripts.count { case (_, script) => script.status == FiberStatus.Active }
+          )
+          Async[F].start(dispatcher.dispatch(snapshot, stats)).void
+        case None => Async[F].unit
       }
-    )
+    } yield ()).handleErrorWith(logger.error(_)("Error during onSnapshotConsensusResult"))
+
+  private def ml0Routes[F[+_]: Async](
+    checkpointService:  CheckpointService[F, CalculatedState],
+    subscriberRegistry: SubscriberRegistry[F]
+  )(implicit context: L0NodeContext[F]): HttpRoutes[F] =
+    new ML0Routes[F](
+      new handlers.MetaHandler[F](checkpointService),
+      new handlers.StateMachineHandler[F](checkpointService),
+      new handlers.ScriptHandler[F](checkpointService),
+      new handlers.RegistryHandler[F](checkpointService),
+      new handlers.WebhookHandler[F](subscriberRegistry),
+      new handlers.EstimateHandler[F](checkpointService)
+    ).public
 }

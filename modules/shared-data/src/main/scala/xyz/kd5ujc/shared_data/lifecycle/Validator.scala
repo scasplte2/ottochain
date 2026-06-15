@@ -6,6 +6,7 @@ import cats.syntax.all._
 
 import io.constellationnetwork.currency.dataApplication._
 import io.constellationnetwork.currency.dataApplication.dataApplication.DataApplicationValidationErrorOr
+import io.constellationnetwork.metagraph_sdk.lifecycle.committed.CommittedOnChain
 import io.constellationnetwork.metagraph_sdk.lifecycle.{CheckpointService, ValidationService}
 import io.constellationnetwork.metagraph_sdk.std.Checkpoint
 import io.constellationnetwork.metagraph_sdk.syntax.all.L1ContextOps
@@ -172,8 +173,11 @@ object Validator {
                   logger.info(
                     s"[DL1-cache] REFRESHING: snapshotOrdinal=${snapshot.ordinal} > cacheOrdinal=${checkpoint.ordinal}"
                   ) *>
-                  context.getOnChainState[OnChain].flatMap {
-                    case Right(newState) =>
+                  // ML0 now commits CommittedOnChain[OnChain] (makeL0 wraps OnChain with the committed
+                  // breadcrumb); unwrap .inner to get the plain OnChain the fiber sequence checks need.
+                  context.getOnChainState[CommittedOnChain[OnChain]].flatMap {
+                    case Right(committed) =>
+                      val newState = committed.inner
                       val cids = newState.fiberCommits.keys.map(_.toString.take(8)).mkString(", ")
                       logger
                         .info(
