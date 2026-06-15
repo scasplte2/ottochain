@@ -69,7 +69,7 @@ object Validator {
         )(implicit ctx: L1NodeContext[F]): F[DataApplicationValidationErrorOr[Unit]] =
           withOnChainCache(ctx) { checkpoint =>
             val fiberL1 = new FiberValidator.L1Validator[F](checkpoint.state)
-            val oracleL1 = new ScriptValidator.L1Validator[F](checkpoint.state)
+            val scriptL1 = new ScriptValidator.L1Validator[F](checkpoint.state)
             val registryL1 = new RegistryValidator.L1Validator[F]
 
             val updateName = update.getClass.getSimpleName
@@ -99,9 +99,9 @@ object Validator {
                 case u: TransitionStateMachine => fiberL1.processEvent(u)
                 case u: ArchiveStateMachine    => fiberL1.archiveFiber(u)
                 case u: UpgradeFiber           => fiberL1.upgrade(u)
-                case u: CreateScript           => oracleL1.createOracle(u)
-                case u: InvokeScript           => oracleL1.invokeOracle(u)
-                case u: UpgradeScript          => oracleL1.upgradeScript(u)
+                case u: CreateScript           => scriptL1.createScript(u)
+                case u: InvokeScript           => scriptL1.invokeScript(u)
+                case u: UpgradeScript          => scriptL1.upgradeScript(u)
                 case u: PublishMachineVersion  => registryL1.publishMachineVersion(u)
                 case u: PublishScriptVersion   => registryL1.publishScriptVersion(u)
                 case u: SetVersionStatus       => registryL1.setStatus(u)
@@ -128,7 +128,7 @@ object Validator {
           signedUpdate: Signed[OttochainMessage]
         )(implicit context: L0NodeContext[F]): F[DataApplicationValidationErrorOr[Unit]] = {
           val fiberCombined = new FiberValidator.CombinedValidator[F](current, signedUpdate.proofs)
-          val oracleCombined = new ScriptValidator.CombinedValidator[F](current, signedUpdate.proofs)
+          val scriptCombined = new ScriptValidator.CombinedValidator[F](current, signedUpdate.proofs)
 
           // Registry ops use L1 (structural) validation ONLY here, NOT the L0 contextual preview.
           // The L0 checks (ownership, monotonic version) need the CalculatedState version lineage, which the
@@ -147,9 +147,9 @@ object Validator {
             case u: TransitionStateMachine => fiberCombined.processEvent(u)
             case u: ArchiveStateMachine    => fiberCombined.archiveFiber(u)
             case u: UpgradeFiber           => fiberCombined.upgrade(u)
-            case u: CreateScript           => oracleCombined.createOracle(u)
-            case u: InvokeScript           => oracleCombined.invokeOracle(u)
-            case u: UpgradeScript          => oracleCombined.upgradeScript(u)
+            case u: CreateScript           => scriptCombined.createScript(u)
+            case u: InvokeScript           => scriptCombined.invokeScript(u)
+            case u: UpgradeScript          => scriptCombined.upgradeScript(u)
             case u: PublishMachineVersion  => registryL1.publishMachineVersion(u)
             case u: PublishScriptVersion   => registryL1.publishScriptVersion(u)
             case u: SetVersionStatus       => registryL1.setStatus(u)

@@ -33,7 +33,7 @@ object ScriptRules {
 
   object L1 {
 
-    /** Validates that targetSequenceNumber matches the oracle's current sequence number */
+    /** Validates that targetSequenceNumber matches the script's current sequence number */
     def sequenceNumberMatches[F[_]: Applicative](
       fiberId:              UUID,
       targetSequenceNumber: FiberOrdinal,
@@ -48,37 +48,37 @@ object ScriptRules {
 
   object L0 {
 
-    /** Validates oracle access control policy allows the caller */
+    /** Validates script access control policy allows the caller */
     def accessControlCheck[F[_]: Async: SecurityProvider](
-      oracleId: UUID,
+      scriptId: UUID,
       proofs:   NonEmptySet[SignatureProof],
       state:    CalculatedState
     ): F[ValidationResult] = (for {
-      oracle <- EitherT.fromOption[F](
-        state.scripts.get(oracleId),
-        Errors.OracleNotFound(oracleId): DataApplicationValidationError
+      script <- EitherT.fromOption[F](
+        state.scripts.get(scriptId),
+        Errors.ScriptNotFound(scriptId): DataApplicationValidationError
       )
       callerAddresses <- EitherT.liftF(proofs.toList.traverse(_.id.toAddress))
       callerSet = callerAddresses.toSet
       authorized <- EitherT.cond[F](
-        isAuthorized(oracle.accessControl, callerSet, state),
+        isAuthorized(script.accessControl, callerSet, state),
         (),
-        Errors.OracleAccessDenied(oracleId, oracle.accessControl): DataApplicationValidationError
+        Errors.ScriptAccessDenied(scriptId, script.accessControl): DataApplicationValidationError
       )
     } yield authorized).fold(
       _.invalidNec[Unit],
       _.validNec[DataApplicationValidationError]
     )
 
-    /** Validates that an oracle exists */
-    def oracleExists[F[_]: Applicative](
-      oracleId: UUID,
+    /** Validates that an script exists */
+    def scriptExists[F[_]: Applicative](
+      scriptId: UUID,
       state:    CalculatedState
     ): F[ValidationResult] =
       state.scripts
-        .get(oracleId)
+        .get(scriptId)
         .fold(
-          (Errors.OracleNotFound(oracleId): DataApplicationValidationError).invalidNec[Unit].pure[F]
+          (Errors.ScriptNotFound(scriptId): DataApplicationValidationError).invalidNec[Unit].pure[F]
         )(_ => ().validNec[DataApplicationValidationError].pure[F])
 
     /** Validates that a script fiber is in Active status. */
@@ -88,7 +88,7 @@ object ScriptRules {
     ): F[ValidationResult] =
       state.scripts.get(scriptId) match {
         case None =>
-          (Errors.OracleNotFound(scriptId): DataApplicationValidationError).invalidNec[Unit].pure[F]
+          (Errors.ScriptNotFound(scriptId): DataApplicationValidationError).invalidNec[Unit].pure[F]
         case Some(record) =>
           Validated
             .condNec(
@@ -107,7 +107,7 @@ object ScriptRules {
     ): F[ValidationResult] =
       state.scripts.get(scriptId) match {
         case None =>
-          (Errors.OracleNotFound(scriptId): DataApplicationValidationError).invalidNec[Unit].pure[F]
+          (Errors.ScriptNotFound(scriptId): DataApplicationValidationError).invalidNec[Unit].pure[F]
         case Some(record) =>
           proofs.toList.traverse(_.id.toAddress).map { signerList =>
             val signers = signerList.toSet
@@ -130,7 +130,7 @@ object ScriptRules {
     ): F[ValidationResult] =
       state.scripts.get(scriptId) match {
         case None =>
-          (Errors.OracleNotFound(scriptId): DataApplicationValidationError).invalidNec[Unit].pure[F]
+          (Errors.ScriptNotFound(scriptId): DataApplicationValidationError).invalidNec[Unit].pure[F]
         case Some(record) =>
           record.schemaBinding match {
             case Some(b) if b.name === targetName => ().validNec[DataApplicationValidationError].pure[F]
@@ -166,18 +166,18 @@ object ScriptRules {
   }
 
   // ============================================================================
-  // Errors - Oracle-specific validation errors
+  // Errors - Script-specific validation errors
   // ============================================================================
 
   object Errors {
 
-    final case class OracleNotFound(oracleId: UUID) extends DataApplicationValidationError {
-      override val message: String = s"Oracle $oracleId not found"
+    final case class ScriptNotFound(scriptId: UUID) extends DataApplicationValidationError {
+      override val message: String = s"Script $scriptId not found"
     }
 
-    final case class OracleAccessDenied(oracleId: UUID, policy: AccessControlPolicy)
+    final case class ScriptAccessDenied(scriptId: UUID, policy: AccessControlPolicy)
         extends DataApplicationValidationError {
-      override val message: String = s"Access denied to oracle $oracleId (policy: $policy)"
+      override val message: String = s"Access denied to script $scriptId (policy: $policy)"
     }
 
     final case class ScriptNotActive(scriptId: UUID) extends DataApplicationValidationError {

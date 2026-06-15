@@ -17,7 +17,7 @@ import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.hash.Hash
 import io.constellationnetwork.security.signature.signature.SignatureProof
 
-import xyz.kd5ujc.schema.fiber.FiberLogEntry.{EventReceipt, OracleInvocation, UpgradeReceipt}
+import xyz.kd5ujc.schema.fiber.FiberLogEntry.{EventReceipt, ScriptInvocation, UpgradeReceipt}
 import xyz.kd5ujc.schema.fiber._
 import xyz.kd5ujc.schema.registry.SchemaBinding
 import xyz.kd5ujc.schema.{CalculatedState, Records}
@@ -37,7 +37,7 @@ import xyz.kd5ujc.shared_data.syntax.calculatedState._
  * Processing flow:
  * 1. Create FiberContext with ordinal, limits, gas config
  * 2. Lookup fiber by ID and validate it's active
- * 3. Evaluate fiber (guards/effects for SM, script for Oracle)
+ * 3. Evaluate fiber (guards/effects for SM, script for Script)
  * 4. On success:
  *    a. Validate and process spawns (creates child fibers)
  *    b. Build effective state with spawns visible to triggers
@@ -208,7 +208,7 @@ object FiberEngine {
               logs <- ExecutionOps.getLogs[FiberT[F, *]]
             } yield TransactionResult.Committed(
               updatedStateMachines = Map.empty,
-              updatedOracles = Map(script.fiberId -> updated),
+              updatedScripts = Map(script.fiberId -> updated),
               logEntries = logs.toList,
               totalGasUsed = gasUsed
             ): TransactionResult
@@ -236,7 +236,7 @@ object FiberEngine {
               logs <- ExecutionOps.getLogs[FiberT[F, *]]
             } yield TransactionResult.Committed(
               updatedStateMachines = Map.empty,
-              updatedOracles = Map(script.fiberId -> updated),
+              updatedScripts = Map(script.fiberId -> updated),
               logEntries = logs.toList,
               totalGasUsed = gasUsed
             ): TransactionResult
@@ -291,7 +291,7 @@ object FiberEngine {
                   logs <- ExecutionOps.getLogs[FiberT[F, *]]
                 } yield TransactionResult.Committed(
                   updatedStateMachines = Map(sm.fiberId -> updated),
-                  updatedOracles = Map.empty,
+                  updatedScripts = Map.empty,
                   logEntries = logs.toList,
                   totalGasUsed = gasUsed
                 ): TransactionResult
@@ -351,8 +351,8 @@ object FiberEngine {
                 case sm: Records.StateMachineFiberRecord =>
                   processStateMachineSuccess(sm, input, newStateData, newStateId, fiberTriggers, spawns, emittedEvents)
 
-                case oracle: Records.ScriptFiberRecord =>
-                  processOracleSuccess(oracle, input, newStateData, returnValue)
+                case script: Records.ScriptFiberRecord =>
+                  processScriptSuccess(script, input, newStateData, returnValue)
               }
 
             case FiberResult.GuardFailed(attemptedCount) =>
@@ -522,7 +522,7 @@ object FiberEngine {
           val allMachines = Map(primaryFiberId -> updatedFiber) ++ spawnedFibers.map(f => f.fiberId -> f).toMap
           TransactionResult.Committed(
             updatedStateMachines = allMachines,
-            updatedOracles = Map.empty,
+            updatedScripts = Map.empty,
             logEntries = logEntries.toList,
             totalGasUsed = gasUsed,
             maxDepth = depth
@@ -539,12 +539,12 @@ object FiberEngine {
           .make[F, FiberT[F, *]]
           .dispatch(triggers, stateWithSpawns)
           .flatMap {
-            case TransactionResult.Committed(machines, oracles, _, totalGas, maxDepth, opCount) =>
+            case TransactionResult.Committed(machines, scripts, _, totalGas, maxDepth, opCount) =>
               ExecutionOps.getLogs[FiberT[F, *]].map { logs =>
                 val allMachines = spawnedFibers.map(f => f.fiberId -> f).toMap ++ machines
                 TransactionResult.Committed(
                   updatedStateMachines = allMachines,
-                  updatedOracles = oracles,
+                  updatedScripts = scripts,
                   logEntries = logs.toList,
                   totalGasUsed = totalGas,
                   maxDepth = maxDepth,
@@ -556,8 +556,8 @@ object FiberEngine {
               (aborted: TransactionResult).pureFiber[F]
           }
 
-      private def processOracleSuccess(
-        oracle:       Records.ScriptFiberRecord,
+      private def processScriptSuccess(
+        script:       Records.ScriptFiberRecord,
         input:        FiberInput,
         newStateData: JsonLogicValue,
         returnValue:  Option[JsonLogicValue]
@@ -575,14 +575,14 @@ object FiberEngine {
               Async[F]
                 .raiseError[(String, JsonLogicValue, Address)](
                   new RuntimeException(
-                    s"Oracle ${oracle.fiberId} received Transition input (event: ${et}). Oracles only support MethodCall input."
+                    s"Script ${script.fiberId} received Transition input (event: ${et}). Scripts only support MethodCall input."
                   )
                 )
                 .liftFiber
           }
 
-          invocation = OracleInvocation(
-            fiberId = oracle.fiberId,
+          invocation = ScriptInvocation(
+            fiberId = script.fiberId,
             method = method,
             args = args,
             result = returnValue.getOrElse(NullValue),
@@ -594,16 +594,16 @@ object FiberEngine {
           _          <- ExecutionOps.appendLog[FiberT[F, *]](invocation)
           logEntries <- ExecutionOps.getLogs[FiberT[F, *]]
 
-          updatedOracle = oracle.copy(
+          updatedScript = script.copy(
             stateData = Some(newStateData),
             stateDataHash = newHash,
             latestUpdateOrdinal = ordinal,
-            sequenceNumber = oracle.sequenceNumber.next,
+            sequenceNumber = script.sequenceNumber.next,
             lastInvocation = Some(invocation)
           )
         } yield TransactionResult.Committed(
           updatedStateMachines = Map.empty,
-          updatedOracles = Map(oracle.fiberId -> updatedOracle),
+          updatedScripts = Map(script.fiberId -> updatedScript),
           logEntries = logEntries.toList,
           totalGasUsed = gasUsed,
           maxDepth = depth

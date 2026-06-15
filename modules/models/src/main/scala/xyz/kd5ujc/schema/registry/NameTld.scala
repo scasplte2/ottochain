@@ -9,7 +9,7 @@ import enumeratum.{CirceEnum, Enum, EnumEntry}
  *
  *  - `.package` — a versioned schema/program package (its [[VersionLineage]]).
  *  - `.machine` — an alias (nickname) for a state-machine fiber.
- *  - `.script`  — an alias (nickname) for a script/oracle fiber.
+ *  - `.script`  — an alias (nickname) for a script fiber.
  *
  * Putting the TLD in the key lets a package and a fiber alias share label text under different TLDs
  * (`escrow.package` vs `escrow.machine`). See docs/proposals/naming-and-fingerprints.md §3.

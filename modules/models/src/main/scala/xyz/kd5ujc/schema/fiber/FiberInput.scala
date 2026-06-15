@@ -5,7 +5,7 @@ import io.constellationnetwork.schema.address.Address
 
 /**
  * Unified input for fiber processing.
- * Supports both state machine transitions and oracle method calls.
+ * Supports both state machine transitions and script method calls.
  */
 sealed trait FiberInput {
   val key: String
@@ -29,7 +29,7 @@ object FiberInput {
   }
 
   /**
-   * Oracle method call input.
+   * Script method call input.
    *
    * @param method Method name to invoke
    * @param args Arguments for the method

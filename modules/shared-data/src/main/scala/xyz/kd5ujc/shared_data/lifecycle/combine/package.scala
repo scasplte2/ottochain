@@ -9,7 +9,7 @@ import xyz.kd5ujc.schema.{CalculatedState, OnChain}
  *
  * This package separates state combination (insert) concerns by domain:
  * - **Fiber**: State machine fiber creation, event processing, archiving
- * - **Oracle**: Script oracle creation and invocation
+ * - **Script**: Script script creation and invocation
  *
  * The key pattern mirrors the validation module:
  * - Thin Combiner.scala facade delegates to domain-specific combiners

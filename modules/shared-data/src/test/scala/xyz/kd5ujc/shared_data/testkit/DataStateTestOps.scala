@@ -109,9 +109,9 @@ object DataStateTestOps {
     /**
      * Lookup a script fiber record by CID.
      *
-     * @return Some(record) if the oracle exists, None otherwise
+     * @return Some(record) if the script exists, None otherwise
      */
-    def oracleRecord(fiberId: UUID): Option[Records.ScriptFiberRecord] =
+    def scriptRecord(fiberId: UUID): Option[Records.ScriptFiberRecord] =
       state.calculated.scripts.get(fiberId)
 
     /**

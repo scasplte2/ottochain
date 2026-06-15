@@ -8,7 +8,7 @@ import io.constellationnetwork.schema.address.Address
 import io.constellationnetwork.security.hash.Hash
 
 import xyz.kd5ujc.schema.CodecConfiguration._
-import xyz.kd5ujc.schema.fiber.FiberLogEntry.{EventReceipt, OracleInvocation}
+import xyz.kd5ujc.schema.fiber.FiberLogEntry.{EventReceipt, ScriptInvocation}
 import xyz.kd5ujc.schema.fiber._
 import xyz.kd5ujc.schema.registry.SchemaBinding
 
@@ -58,7 +58,7 @@ object Records {
     sequenceNumber:      FiberOrdinal,
     owners:              Set[Address],
     status:              FiberStatus,
-    lastInvocation:      Option[OracleInvocation] = None,
+    lastInvocation:      Option[ScriptInvocation] = None,
     schemaBinding:       Option[SchemaBinding] = None
   ) extends FiberRecord
 }

@@ -20,20 +20,20 @@ import io.circe.parser
 import weaver.SimpleIOSuite
 
 /**
- * Tests for oracle-to-oracle interactions.
+ * Tests for script-to-script interactions.
  *
  * Verifies that:
- * - Oracles can invoke other oracles via _oracleCall
- * - Caller resolution uses the calling oracle's owners
- * - Access control is respected in oracle chains
- * - Gas accumulates across oracle invocations
+ * - Scripts can invoke other scripts via _scriptCall
+ * - Caller resolution uses the calling script's owners
+ * - Access control is respected in script chains
+ * - Gas accumulates across script invocations
  */
-object OracleToOracleSuite extends SimpleIOSuite {
+object ScriptToScriptSuite extends SimpleIOSuite {
 
   import DataStateTestOps._
 
   /**
-   * Inner oracle: simple calculator that adds two numbers
+   * Inner script: simple calculator that adds two numbers
    */
   private val calculatorScript =
     """|{
@@ -45,13 +45,13 @@ object OracleToOracleSuite extends SimpleIOSuite {
        |}""".stripMargin
 
   /**
-   * Outer oracle: calls the inner calculator and doubles the result
-   * Uses _oracleCall to invoke another oracle
+   * Outer script: calls the inner calculator and doubles the result
+   * Uses _scriptCall to invoke another script
    *
    * NOTE: This test documents expected behavior. The actual implementation
-   * may need to support oracle-to-oracle calls in the script.
+   * may need to support script-to-script calls in the script.
    */
-  test("oracle invocation count is tracked correctly") {
+  test("script invocation count is tracked correctly") {
     TestFixture.resource(Set(Alice, Bob)).use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
@@ -63,7 +63,7 @@ object OracleToOracleSuite extends SimpleIOSuite {
         innerfiberId <- IO.randomUUID
         innerProg    <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
 
-        // Create inner oracle with Public access
+        // Create inner script with Public access
         createInner = Updates.CreateScript(
           fiberId = innerfiberId,
           scriptProgram = innerProg,
@@ -77,7 +77,7 @@ object OracleToOracleSuite extends SimpleIOSuite {
           Signed(createInner, createInnerProof)
         )
 
-        // Invoke inner oracle multiple times
+        // Invoke inner script multiple times
         invoke1 = Updates.InvokeScript(
           fiberId = innerfiberId,
           method = "add",
@@ -98,16 +98,16 @@ object OracleToOracleSuite extends SimpleIOSuite {
         invoke2Proof <- registry.generateProofs(invoke2, Set(Bob))
         state3       <- combiner.insert(state2, Signed(invoke2, invoke2Proof))
 
-        oracle = state3.oracleRecord(innerfiberId)
+        script = state3.scriptRecord(innerfiberId)
       } yield expect.all(
-        oracle.isDefined,
-        oracle.map(_.sequenceNumber).contains(FiberOrdinal.unsafeApply(2L)),
-        oracle.flatMap(_.lastInvocation).isDefined
+        script.isDefined,
+        script.map(_.sequenceNumber).contains(FiberOrdinal.unsafeApply(2L)),
+        script.flatMap(_.lastInvocation).isDefined
       )
     }
   }
 
-  test("oracle whitelist denies unauthorized caller") {
+  test("script whitelist denies unauthorized caller") {
     TestFixture.resource(Set(Alice, Bob, Charlie)).use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
@@ -116,26 +116,26 @@ object OracleToOracleSuite extends SimpleIOSuite {
       for {
         combiner <- Combiner.make[IO]().pure[IO]
 
-        oracleFiberId <- IO.randomUUID
+        scriptFiberId <- IO.randomUUID
         prog          <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
 
-        // Create oracle with whitelist access - only Alice allowed
-        createOracle = Updates.CreateScript(
-          fiberId = oracleFiberId,
+        // Create script with whitelist access - only Alice allowed
+        createScript = Updates.CreateScript(
+          fiberId = scriptFiberId,
           scriptProgram = prog,
           initialState = None,
           accessControl = AccessControlPolicy.Whitelist(Set(registry(Alice).address))
         )
 
-        createProof <- registry.generateProofs(createOracle, Set(Alice))
+        createProof <- registry.generateProofs(createScript, Set(Alice))
         state1 <- combiner.insert(
           DataState(OnChain.genesis, CalculatedState.genesis),
-          Signed(createOracle, createProof)
+          Signed(createScript, createProof)
         )
 
         // Alice can invoke (whitelisted)
         invokeAlice = Updates.InvokeScript(
-          fiberId = oracleFiberId,
+          fiberId = scriptFiberId,
           method = "add",
           args = MapValue(Map("a" -> IntValue(1), "b" -> IntValue(2))),
           FiberOrdinal.MinValue
@@ -144,14 +144,14 @@ object OracleToOracleSuite extends SimpleIOSuite {
         aliceProof <- registry.generateProofs(invokeAlice, Set(Alice))
         state2     <- combiner.insert(state1, Signed(invokeAlice, aliceProof))
 
-        oracleAfterAlice = state2.oracleRecord(oracleFiberId)
+        scriptAfterAlice = state2.scriptRecord(scriptFiberId)
 
         // Bob tries to invoke (not whitelisted) - should fail
         invokeBob = Updates.InvokeScript(
-          fiberId = oracleFiberId,
+          fiberId = scriptFiberId,
           method = "add",
           args = MapValue(Map("a" -> IntValue(10), "b" -> IntValue(20))),
-          targetSequenceNumber = state2.calculated.scripts(oracleFiberId).sequenceNumber
+          targetSequenceNumber = state2.calculated.scripts(scriptFiberId).sequenceNumber
         )
 
         bobProof <- registry.generateProofs(invokeBob, Set(Bob))
@@ -159,18 +159,18 @@ object OracleToOracleSuite extends SimpleIOSuite {
         // This should fail - Bob is not whitelisted
         bobResult <- combiner.insert(state2, Signed(invokeBob, bobProof)).attempt
 
-        oracleAfterBob = bobResult.toOption.flatMap(_.oracleRecord(oracleFiberId))
+        scriptAfterBob = bobResult.toOption.flatMap(_.scriptRecord(scriptFiberId))
 
       } yield expect.all(
         // Alice's invocation succeeded
-        oracleAfterAlice.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next),
+        scriptAfterAlice.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next),
         // Bob's invocation should have failed (invocation count unchanged)
-        bobResult.isLeft || oracleAfterBob.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next)
+        bobResult.isLeft || scriptAfterBob.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next)
       )
     }
   }
 
-  test("multiple oracles can be invoked in sequence") {
+  test("multiple scripts can be invoked in sequence") {
     TestFixture.resource(Set(Alice)).use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
@@ -179,11 +179,11 @@ object OracleToOracleSuite extends SimpleIOSuite {
       for {
         combiner <- Combiner.make[IO]().pure[IO]
 
-        oracle1fiberId <- IO.randomUUID
-        oracle2fiberId <- IO.randomUUID
+        script1fiberId <- IO.randomUUID
+        script2fiberId <- IO.randomUUID
         prog           <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
 
-        // Counter oracle for tracking calls
+        // Counter script for tracking calls
         counterScript =
           """|{
              |  "if": [
@@ -195,39 +195,39 @@ object OracleToOracleSuite extends SimpleIOSuite {
 
         counterProg <- IO.fromEither(parser.parse(counterScript).flatMap(_.as[JsonLogicExpression]))
 
-        // Create calculator oracle
-        createOracle1 = Updates.CreateScript(
-          fiberId = oracle1fiberId,
+        // Create calculator script
+        createScript1 = Updates.CreateScript(
+          fiberId = script1fiberId,
           scriptProgram = prog,
           initialState = None,
           accessControl = AccessControlPolicy.Public
         )
 
-        // Create counter oracle
-        createOracle2 = Updates.CreateScript(
-          fiberId = oracle2fiberId,
+        // Create counter script
+        createScript2 = Updates.CreateScript(
+          fiberId = script2fiberId,
           scriptProgram = counterProg,
           initialState = Some(MapValue(Map("value" -> IntValue(0)))),
           accessControl = AccessControlPolicy.Public
         )
 
-        proof1 <- registry.generateProofs(createOracle1, Set(Alice))
-        proof2 <- registry.generateProofs(createOracle2, Set(Alice))
+        proof1 <- registry.generateProofs(createScript1, Set(Alice))
+        proof2 <- registry.generateProofs(createScript2, Set(Alice))
 
         state1 <- combiner.insert(
           DataState(OnChain.genesis, CalculatedState.genesis),
-          Signed(createOracle1, proof1)
+          Signed(createScript1, proof1)
         )
-        state2 <- combiner.insert(state1, Signed(createOracle2, proof2))
+        state2 <- combiner.insert(state1, Signed(createScript2, proof2))
 
-        // Invoke both oracles in sequence
+        // Invoke both scripts in sequence
         invoke1 = Updates.InvokeScript(
-          oracle1fiberId,
+          script1fiberId,
           "add",
           MapValue(Map("a" -> IntValue(5), "b" -> IntValue(3))),
           FiberOrdinal.MinValue
         )
-        invoke2 = Updates.InvokeScript(oracle2fiberId, "increment", MapValue(Map.empty), FiberOrdinal.MinValue)
+        invoke2 = Updates.InvokeScript(script2fiberId, "increment", MapValue(Map.empty), FiberOrdinal.MinValue)
 
         invokeProof1 <- registry.generateProofs(invoke1, Set(Alice))
         invokeProof2 <- registry.generateProofs(invoke2, Set(Alice))
@@ -236,25 +236,25 @@ object OracleToOracleSuite extends SimpleIOSuite {
         state4 <- combiner.insert(state3, Signed(invoke2, invokeProof2))
 
         invoke3 = Updates.InvokeScript(
-          oracle2fiberId,
+          script2fiberId,
           "increment",
           MapValue(Map.empty),
-          state4.calculated.scripts(oracle2fiberId).sequenceNumber
+          state4.calculated.scripts(script2fiberId).sequenceNumber
         )
         invokeProof3 <- registry.generateProofs(invoke3, Set(Alice))
         state5       <- combiner.insert(state4, Signed(invoke3, invokeProof3))
 
-        calculatorOracle = state5.oracleRecord(oracle1fiberId)
-        counterOracle = state5.oracleRecord(oracle2fiberId)
+        calculatorScript = state5.scriptRecord(script1fiberId)
+        counterScript = state5.scriptRecord(script2fiberId)
       } yield expect.all(
-        calculatorOracle.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next),
-        counterOracle.map(_.sequenceNumber).contains(FiberOrdinal.unsafeApply(2L)),
-        counterOracle.flatMap(_.stateData).contains(MapValue(Map("value" -> IntValue(2))))
+        calculatorScript.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next),
+        counterScript.map(_.sequenceNumber).contains(FiberOrdinal.unsafeApply(2L)),
+        counterScript.flatMap(_.stateData).contains(MapValue(Map("value" -> IntValue(2))))
       )
     }
   }
 
-  test("oracle returning valid=false causes invocation failure") {
+  test("script returning valid=false causes invocation failure") {
     TestFixture.resource(Set(Alice)).use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
@@ -263,9 +263,9 @@ object OracleToOracleSuite extends SimpleIOSuite {
       for {
         combiner <- Combiner.make[IO]().pure[IO]
 
-        oracleFiberId <- IO.randomUUID
+        scriptFiberId <- IO.randomUUID
 
-        // Oracle that returns valid=false with an error message
+        // Script that returns valid=false with an error message
         validationScript =
           """|{
              |  "if": [
@@ -283,22 +283,22 @@ object OracleToOracleSuite extends SimpleIOSuite {
 
         validationProg <- IO.fromEither(parser.parse(validationScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScript(
-          fiberId = oracleFiberId,
+        createScript = Updates.CreateScript(
+          fiberId = scriptFiberId,
           scriptProgram = validationProg,
           initialState = None,
           accessControl = AccessControlPolicy.Public
         )
 
-        createProof <- registry.generateProofs(createOracle, Set(Alice))
+        createProof <- registry.generateProofs(createScript, Set(Alice))
         state1 <- combiner.insert(
           DataState(OnChain.genesis, CalculatedState.genesis),
-          Signed(createOracle, createProof)
+          Signed(createScript, createProof)
         )
 
         // Invoke with amount >= 100 - should succeed
         invokeValid = Updates.InvokeScript(
-          fiberId = oracleFiberId,
+          fiberId = scriptFiberId,
           method = "validate",
           args = MapValue(Map("amount" -> IntValue(200))),
           FiberOrdinal.MinValue
@@ -307,14 +307,14 @@ object OracleToOracleSuite extends SimpleIOSuite {
         validProof <- registry.generateProofs(invokeValid, Set(Alice))
         state2     <- combiner.insert(state1, Signed(invokeValid, validProof))
 
-        oracleAfterValid = state2.oracleRecord(oracleFiberId)
+        scriptAfterValid = state2.scriptRecord(scriptFiberId)
 
         // Invoke with amount < 100 - should fail due to valid=false
         invokeInvalid = Updates.InvokeScript(
-          fiberId = oracleFiberId,
+          fiberId = scriptFiberId,
           method = "validate",
           args = MapValue(Map("amount" -> IntValue(50))),
-          targetSequenceNumber = state2.calculated.scripts(oracleFiberId).sequenceNumber
+          targetSequenceNumber = state2.calculated.scripts(scriptFiberId).sequenceNumber
         )
 
         invalidProof  <- registry.generateProofs(invokeInvalid, Set(Alice))
@@ -322,9 +322,9 @@ object OracleToOracleSuite extends SimpleIOSuite {
 
       } yield expect.all(
         // First invocation (valid) should succeed
-        oracleAfterValid.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next),
+        scriptAfterValid.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next),
         // Second invocation (invalid) should either fail or succeed depending on implementation
-        // The key behavior is that the oracle processes the valid=false result
+        // The key behavior is that the script processes the valid=false result
         invalidResult.isLeft || invalidResult.isRight
       )
     }

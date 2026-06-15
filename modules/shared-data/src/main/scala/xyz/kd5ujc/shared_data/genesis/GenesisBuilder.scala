@@ -21,7 +21,7 @@ import xyz.kd5ujc.shared_data.syntax.DataStateOps._
  * Assembles a non-empty genesis `DataState` — the chain-side core of genesis-prep (#39) and the e2e
  * edge-case genesis crafting (#40). Pre-registers packages, fiber-instance aliases (with reverse records),
  * and pre-built fiber/script records. Crucially it reuses the SAME commitment derivations the live combiner
- * uses (`DataStateOps.withAlias` / `withFibersAndOracles`, and `computeDigest` for package entries), so a
+ * uses (`DataStateOps.withAlias` / `withFibersAndScripts`, and `computeDigest` for package entries), so a
  * crafted genesis is byte-consistent with on-chain state — the node can boot from it and prove against it.
  *
  * Package/alias/fiber *content* (schemaHash, machineShape, logicHash, fiber records) comes from a pinned
@@ -69,7 +69,7 @@ object GenesisBuilder {
       withAls <- aliases.foldLeftM(withPkgs) { (st, a) =>
         st.withAlias[F](a.name, aliasEntry(a), a.targetFiberId)
       }
-      withAll <- withAls.withFibersAndOracles[F](fibers, scripts)
+      withAll <- withAls.withFibersAndScripts[F](fibers, scripts)
     } yield withAll
 
   private def aliasEntry(a: AliasSpec): RegistryEntry =

@@ -63,13 +63,13 @@ Everything — states, transitions, guards, effects — is defined in JSON:
 
 ### Scripts
 
-Script oracles are stateful computation units. Where state machines orchestrate *lifecycle* (which state am I in?), oracles handle *logic* (what's the answer?). An oracle exposes named **methods** that other fibers can call.
+Scripts are stateful computation units. Where state machines orchestrate *lifecycle* (which state am I in?), scripts handle *logic* (what's the answer?). A script exposes named **methods** that other fibers can call.
 
 Think of them as on-chain microservices:
 
 ```
 State Machine                    Script
-┌───────────┐    _oracleCall     ┌─────────────┐
+┌───────────┐    _scriptCall     ┌─────────────┐
 │  playing  │───────────────────▶│  Game Logic  │
 │           │    makeMove(x,y)   │             │
 │           │◀───────────────────│  - board    │
@@ -78,7 +78,7 @@ State Machine                    Script
                                  └─────────────┘
 ```
 
-The tic-tac-toe example demonstrates this pattern: the oracle holds the board state and enforces game rules, while the state machine manages the game lifecycle (setup → playing → finished).
+The tic-tac-toe example demonstrates this pattern: the script holds the board state and enforces game rules, while the state machine manages the game lifecycle (setup → playing → finished).
 
 ### Fibers Working Together
 
@@ -88,7 +88,7 @@ The real power emerges when fibers interact:
 - **Dependencies** — A transition can read state from other machines before deciding
 - **Parent-child spawning** — Machines can dynamically create child machines
 - **Broadcast triggers** — One event fans out to many machines simultaneously
-- **Oracle calls** — State machines invoke oracle methods during transitions
+- **Script calls** — State machines invoke script methods during transitions
 
 This composability lets you model complex multi-party systems. The Riverdale Economy example uses 17 machine instances across 6 types to simulate an entire economic ecosystem with manufacturing, retail, banking, consumers, monetary policy, and governance — all in JSON.
 
@@ -102,7 +102,7 @@ OttoChain runs as a metagraph on Constellation's Tessellation framework. Each no
 ┌─────────────────────────────────────────────┐
 │           Data L1 (Port 9300)               │
 │  Fiber processing: state machine events,    │
-│  oracle invocations, validation             │
+│  script invocations, validation             │
 ├─────────────────────────────────────────────┤
 │         Currency L1 (Port 9200)             │
 │  Token transfers and balance tracking       │
@@ -115,7 +115,7 @@ OttoChain runs as a metagraph on Constellation's Tessellation framework. Each no
 └─────────────────────────────────────────────┘
 ```
 
-**Data L1** is where the action happens. When you send an event to a state machine or invoke an oracle method, the Data L1 layer:
+**Data L1** is where the action happens. When you send an event to a state machine or invoke a script method, the Data L1 layer:
 
 1. **Validates** the input (signature proofs, fiber exists, fiber is active)
 2. **Evaluates** the fiber (checks guards, applies effects, runs scripts)
@@ -197,7 +197,7 @@ OttoChain's examples demonstrate the range of what's possible:
 
 | Example | Machines | Complexity | Key Patterns |
 |---------|----------|-----------|--------------|
-| [Tic-Tac-Toe](examples/tictactoe.md) | 1 SM + 1 Oracle | ⭐ | Oracle-centric architecture, self-transitions |
+| [Tic-Tac-Toe](examples/tictactoe.md) | 1 SM + 1 Script | ⭐ | Script-centric architecture, self-transitions |
 | [Fuel Logistics](examples/fuel-logistics.md) | 4 SMs | ⭐⭐ | Cross-machine triggers, GPS tracking |
 | [Clinical Trial](examples/clinical-trial.md) | 6 SMs | ⭐⭐⭐ | Multiple guards, bi-directional transitions |
 | [Real Estate](examples/real-estate.md) | 8 SMs | ⭐⭐⭐ | Self-transitions, lifecycle management |
@@ -211,11 +211,11 @@ The choice to encode everything in JSON is deliberate:
 
 1. **Zero-code deployment** — Define a workflow, submit it as JSON, it's running. No compilation, no deployment pipelines, no smart contract audits.
 
-2. **AI-native** — LLMs understand JSON natively. An AI agent can read a state machine definition, understand the workflow, generate events, and even create new machines. This isn't theoretical — the [OttoBot project](projects/ottobot/ARCHITECTURE.md) demonstrates an AI agent autonomously playing tic-tac-toe through oracle interactions.
+2. **AI-native** — LLMs understand JSON natively. An AI agent can read a state machine definition, understand the workflow, generate events, and even create new machines. This isn't theoretical — the [OttoBot project](projects/ottobot/ARCHITECTURE.md) demonstrates an AI agent autonomously playing tic-tac-toe through script interactions.
 
 3. **Portable and auditable** — A JSON definition is the same everywhere. You can diff two versions, validate schemas at startup, and inspect the complete logic of any workflow without reading source code.
 
-4. **Composable** — JSON Logic expressions can be nested, combined, and extended. OttoChain adds constructs like `_oracleCall`, `_trigger`, `_spawn`, and `_emit` on top of standard JSON Logic to enable cross-fiber coordination.
+4. **Composable** — JSON Logic expressions can be nested, combined, and extended. OttoChain adds constructs like `_scriptCall`, `_trigger`, `_spawn`, and `_emit` on top of standard JSON Logic to enable cross-fiber coordination.
 
 5. **Deterministic** — JSON Logic evaluation is pure and deterministic. Given the same context, the same expression always produces the same result. This is essential for distributed consensus — every node must agree on the outcome.
 

@@ -272,7 +272,7 @@ object RegistryRules {
           }
       }
 
-    /** An alias's target fiber must exist as the kind its TLD requires (.machine -> SM, .script -> oracle). */
+    /** An alias's target fiber must exist as the kind its TLD requires (.machine -> SM, .script -> script). */
     def aliasTargetIsKind[F[_]: Applicative](
       name:          RegistryName,
       targetFiberId: UUID,

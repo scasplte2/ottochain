@@ -11,19 +11,19 @@ object ReservedKeys {
   // Effect Result Keys - Used in extracting side effects from transition results
   val TRIGGERS = "_triggers"
   val SPAWN = "_spawn"
-  val ORACLE_CALL = "_oracleCall"
+  val SCRIPT_CALL = "_scriptCall"
   val EMIT = "_emit"
 
-  // Oracle Return Convention Keys - Used in extractStateAndResult for oracle results
-  val ORACLE_STATE = "_state"
-  val ORACLE_RESULT = "_result"
+  // Script Return Convention Keys - Used in extractStateAndResult for script results
+  val SCRIPT_STATE = "_state"
+  val SCRIPT_RESULT = "_result"
 
   // Trigger Event Keys - Used in extractTriggerEvents for cross-machine event firing
   val TARGET_MACHINE_ID = "targetMachineId"
   val EVENT_NAME = "eventName"
   val PAYLOAD = "payload"
 
-  // Oracle Call Keys - Used in extractOracleCall for oracle invocation
+  // Script Call Keys - Used in extractScriptCall for script invocation
   val FIBER_ID = "fiberId"
   val METHOD = "method"
   val ARGS = "args"
@@ -68,14 +68,14 @@ object ReservedKeys {
   val MACHINES = "machines"
   val PARENT = "parent"
   val CHILDREN = "children"
-  val SCRIPT_ORACLES = "scripts"
+  val SCRIPTS = "scripts"
 
   // Emitted Event Keys - Used in parseEmittedEvent for user-defined event emission
   val NAME = "name"
   val DATA = "data"
   val DESTINATION = "destination"
 
-  // Oracle Invocation Log Keys
+  // Script Invocation Log Keys
   val RESULT = "result"
   val GAS_USED = "gasUsed"
   val INVOKED_AT = "invokedAt"

@@ -12,7 +12,7 @@ Step-by-step guides for using OttoChain:
 | Guide | Description |
 |-------|-------------|
 | [State Machine Design](guides/state-machine-design.md) | How to design and write JSON-encoded state machines |
-| [Terminal Usage](guides/terminal-usage.md) | Interactive CLI for testing state machines and oracles |
+| [Terminal Usage](guides/terminal-usage.md) | Interactive CLI for testing state machines and scripts |
 | [Deployment](guides/deployment.md) | Deploy an OttoChain metagraph to Digital Ocean |
 
 ## 💡 Examples
@@ -21,7 +21,7 @@ Real-world examples demonstrating state machine capabilities, from simple to com
 
 | Example | Complexity | Key Patterns |
 |---------|-----------|--------------|
-| [Tic-Tac-Toe](examples/tictactoe.md) | ⭐ | Oracle-centric architecture, self-transitions |
+| [Tic-Tac-Toe](examples/tictactoe.md) | ⭐ | Script-centric architecture, self-transitions |
 | [Fuel Logistics](examples/fuel-logistics.md) | ⭐⭐ | Cross-machine triggers, GPS tracking |
 | [Clinical Trial](examples/clinical-trial.md) | ⭐⭐⭐ | Multiple guards, bi-directional transitions |
 | [Real Estate](examples/real-estate.md) | ⭐⭐⭐ | Self-transitions, lifecycle management |

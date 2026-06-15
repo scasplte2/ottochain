@@ -37,10 +37,10 @@ sealed trait FailureReason {
       s"Fiber $fiberId is not active (status: $status)"
     case FailureReason.DepthExceeded(depth, maxDepth) =>
       s"Trigger cascade depth exceeded: $depth (max: $maxDepth)"
-    case FailureReason.OracleInvocationFailed(oracleId, method, errorMsg) =>
-      s"Oracle $oracleId method '$method' failed${errorMsg.fold("")(e => s": $e")}"
-    case FailureReason.CallerResolutionFailed(oracleId, sourceId) =>
-      s"Unable to determine caller for oracle $oracleId${sourceId.fold("")(s => s" (source fiber: $s)")}"
+    case FailureReason.ScriptInvocationFailed(scriptId, method, errorMsg) =>
+      s"Script $scriptId method '$method' failed${errorMsg.fold("")(e => s": $e")}"
+    case FailureReason.CallerResolutionFailed(scriptId, sourceId) =>
+      s"Unable to determine caller for script $scriptId${sourceId.fold("")(s => s" (source fiber: $s)")}"
     case FailureReason.MissingProof(fiberId, operation) =>
       s"No signature proof provided for $operation on fiber $fiberId"
     case FailureReason.StateSizeTooLarge(actualBytes, maxBytes) =>
@@ -78,8 +78,8 @@ object FailureReason {
   case class FiberNotActive(fiberId: UUID, currentStatus: String) extends FailureReason
   case class DepthExceeded(depth: Int, maxDepth: Int) extends FailureReason
 
-  case class OracleInvocationFailed(oracleId: UUID, method: String, errorMessage: Option[String]) extends FailureReason
-  case class CallerResolutionFailed(targetOracleId: UUID, sourceFiberId: Option[UUID]) extends FailureReason
+  case class ScriptInvocationFailed(scriptId: UUID, method: String, errorMessage: Option[String]) extends FailureReason
+  case class CallerResolutionFailed(targetScriptId: UUID, sourceFiberId: Option[UUID]) extends FailureReason
   case class MissingProof(fiberId: UUID, operation: String) extends FailureReason
   case class StateSizeTooLarge(actualBytes: Int, maxBytes: Int) extends FailureReason
   case class InvalidChildIdFormat(expression: String, error: String) extends FailureReason

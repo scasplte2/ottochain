@@ -14,7 +14,7 @@ import io.constellationnetwork.metagraph_sdk.json_logic.runtime.JsonLogicEvaluat
 import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
 import io.constellationnetwork.security.SecurityProvider
 
-import xyz.kd5ujc.schema.fiber.FiberLogEntry.{EventReceipt, OracleInvocation}
+import xyz.kd5ujc.schema.fiber.FiberLogEntry.{EventReceipt, ScriptInvocation}
 import xyz.kd5ujc.schema.fiber._
 import xyz.kd5ujc.schema.{CalculatedState, Records}
 import xyz.kd5ujc.shared_data.fiber.core._
@@ -52,7 +52,7 @@ object TriggerHandler {
             .handle(trigger, fiber, state)
 
         case _: Records.ScriptFiberRecord =>
-          new OracleTriggerHandler[F, G]()
+          new ScriptTriggerHandler[F, G]()
             .handle(trigger, fiber, state)
       }
 }
@@ -127,7 +127,7 @@ class StateMachineTriggerHandler[F[_]: Async: SecurityProvider, G[_]: Monad](
     } yield result
 }
 
-class OracleTriggerHandler[F[_]: Async, G[_]: Monad]()(implicit
+class ScriptTriggerHandler[F[_]: Async, G[_]: Monad]()(implicit
   S:    Stateful[G, ExecutionState],
   A:    Ask[G, FiberContext],
   lift: F ~> G
@@ -139,33 +139,33 @@ class OracleTriggerHandler[F[_]: Async, G[_]: Monad]()(implicit
     state:   CalculatedState
   ): G[TriggerHandlerResult] =
     fiber match {
-      case oracle: Records.ScriptFiberRecord =>
-        handleOracle(trigger, oracle, state)
+      case script: Records.ScriptFiberRecord =>
+        handleScript(trigger, script, state)
       case other =>
         (TriggerHandlerResult.Failed(
           FailureReason.FiberInputMismatch(other.fiberId, FiberKind.StateMachine, InputKind.MethodCall)
         ): TriggerHandlerResult).pure[G]
     }
 
-  private def handleOracle(
+  private def handleScript(
     trigger: FiberTrigger,
-    oracle:  Records.ScriptFiberRecord,
+    script:  Records.ScriptFiberRecord,
     state:   CalculatedState
   ): G[TriggerHandlerResult] = {
-    type OracleET[A] = EitherT[G, TriggerHandlerResult, A]
+    type ScriptET[A] = EitherT[G, TriggerHandlerResult, A]
 
-    val computation: OracleET[TriggerHandlerResult] = for {
+    val computation: ScriptET[TriggerHandlerResult] = for {
       callerAddress <- EitherT.fromOption[G](
         trigger.sourceFiberId.flatMap { fiberId =>
           state.getFiber(fiberId).flatMap(_.owners.headOption)
         },
         TriggerHandlerResult.Failed(
-          FailureReason.CallerResolutionFailed(oracle.fiberId, trigger.sourceFiberId)
+          FailureReason.CallerResolutionFailed(script.fiberId, trigger.sourceFiberId)
         ): TriggerHandlerResult
       )
 
       _ <- EitherT[G, TriggerHandlerResult, Unit](
-        ScriptProcessor.validateAccess(oracle.accessControl, callerAddress, oracle.fiberId, state).liftTo[G].map {
+        ScriptProcessor.validateAccess(script.accessControl, callerAddress, script.fiberId, state).liftTo[G].map {
           case Right(_)     => Right(())
           case Left(reason) => Left(TriggerHandlerResult.Failed(reason))
         }
@@ -175,7 +175,7 @@ class OracleTriggerHandler[F[_]: Async, G[_]: Monad]()(implicit
         Map(
           ReservedKeys.METHOD -> StrValue(trigger.input.key),
           ReservedKeys.ARGS   -> trigger.input.content,
-          ReservedKeys.STATE  -> oracle.stateData.getOrElse(NullValue)
+          ReservedKeys.STATE  -> script.stateData.getOrElse(NullValue)
         )
       )
 
@@ -190,14 +190,14 @@ class OracleTriggerHandler[F[_]: Async, G[_]: Monad]()(implicit
       scriptResult <- EitherT[G, TriggerHandlerResult, EvaluationResult[JsonLogicValue]](
         JsonLogicEvaluator
           .tailRecursive[F]
-          .evaluateWithGas(oracle.scriptProgram, inputData, None, GasLimit(remainingGas), gasConfig)
+          .evaluateWithGas(script.scriptProgram, inputData, None, GasLimit(remainingGas), gasConfig)
           .liftTo[G]
           .flatMap {
             case Right(result) =>
               ExecutionOps.chargeGas[G](result.gasUsed.amount).as(result.asRight[TriggerHandlerResult])
 
             case Left(ex) =>
-              ex.toFailureReason[G](GasExhaustionPhase.Oracle).map { reason =>
+              ex.toFailureReason[G](GasExhaustionPhase.Script).map { reason =>
                 (TriggerHandlerResult.Failed(reason): TriggerHandlerResult)
                   .asLeft[EvaluationResult[JsonLogicValue]]
               }
@@ -217,7 +217,7 @@ class OracleTriggerHandler[F[_]: Async, G[_]: Monad]()(implicit
           case BoolValue(false) =>
             Left(
               TriggerHandlerResult.Failed(
-                FailureReason.OracleInvocationFailed(oracle.fiberId, trigger.input.key, Some("returned false"))
+                FailureReason.ScriptInvocationFailed(script.fiberId, trigger.input.key, Some("returned false"))
               )
             )
           case MapValue(m) if m.get("valid").contains(BoolValue(false)) =>
@@ -225,7 +225,7 @@ class OracleTriggerHandler[F[_]: Async, G[_]: Monad]()(implicit
             Left(
               TriggerHandlerResult.Failed(
                 FailureReason
-                  .OracleInvocationFailed(oracle.fiberId, trigger.input.key, Some(s"validation failed: $errorMsg"))
+                  .ScriptInvocationFailed(script.fiberId, trigger.input.key, Some(s"validation failed: $errorMsg"))
               )
             )
           case _ => Right(())
@@ -241,8 +241,8 @@ class OracleTriggerHandler[F[_]: Async, G[_]: Monad]()(implicit
         ExecutionOps.askOrdinal[G]
       )
 
-      invocation = OracleInvocation(
-        fiberId = oracle.fiberId,
+      invocation = ScriptInvocation(
+        fiberId = script.fiberId,
         method = trigger.input.key,
         args = trigger.input.content,
         result = returnValue,
@@ -255,15 +255,15 @@ class OracleTriggerHandler[F[_]: Async, G[_]: Monad]()(implicit
         ExecutionOps.appendLog[G](invocation)
       )
 
-      updatedOracle = oracle.copy(
+      updatedScript = script.copy(
         stateData = newStateData,
         stateDataHash = newHash,
         latestUpdateOrdinal = ordinal,
-        sequenceNumber = oracle.sequenceNumber.next,
+        sequenceNumber = script.sequenceNumber.next,
         lastInvocation = Some(invocation)
       )
 
-      updatedState = state.updateFiber(updatedOracle)
+      updatedState = state.updateFiber(updatedScript)
 
     } yield TriggerHandlerResult.Success(
       updatedState = updatedState,

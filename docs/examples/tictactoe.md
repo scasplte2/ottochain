@@ -1,13 +1,13 @@
 # Tic-Tac-Toe Game
 
-Complete tic-tac-toe implementation using OttoChain script + state machine, demonstrating the **oracle-centric architecture** pattern.
+Complete tic-tac-toe implementation using OttoChain script + state machine, demonstrating the **script-centric architecture** pattern.
 
 ## Table of Contents
 
 1. [Overview](#overview)
 2. [Key Features Demonstrated](#key-features-demonstrated)
 3. [Architecture](#architecture)
-4. [Script Design](#script-oracle-design)
+4. [Script Design](#script-design)
 5. [State Machine Design](#state-machine-design)
 6. [Test Location](#test-location)
 7. [Cell Numbering](#cell-numbering)
@@ -20,20 +20,20 @@ Complete tic-tac-toe implementation using OttoChain script + state machine, demo
 
 ![Tic-Tac-Toe Sequence Diagram](../../diagrams/tictactoe-sequence.png)
 
-This example demonstrates the **oracle-centric architecture** where:
+This example demonstrates the **script-centric architecture** where:
 - **Script** = Game engine (holds board, enforces rules, detects wins)
 - **State Machine** = Lifecycle orchestrator (setup → playing → finished/cancelled)
 
 The game provides a simple but complete example of:
 - Stateful scripts maintaining game state
-- State machines calling oracle methods via `_oracleCall`
-- Guards checking oracle state for transitions
+- State machines calling script methods via `_scriptCall`
+- Guards checking script state for transitions
 - Self-transitions for ongoing gameplay
 - Multiple final states (finished vs cancelled)
 
-### Why Oracle Holds State?
+### Why Script Holds State?
 
-- ✅ **Deterministic rules**: Oracle enforces valid moves, win detection
+- ✅ **Deterministic rules**: Script enforces valid moves, win detection
 - ✅ **Single source of truth**: Board state in one place
 - ✅ **Atomic operations**: makeMove updates board + checks winner in one call
 - ✅ **Simple state machine**: Just lifecycle, no game logic
@@ -44,13 +44,13 @@ The game provides a simple but complete example of:
 
 | Feature | Description |
 |---------|-------------|
-| **Script Pattern** | Oracle holds all game state (board, players, history) |
-| **Oracle Method Dispatch** | Single script with 6 methods: initialize, makeMove, checkWinner, getBoard, resetGame, cancelGame |
-| **Validation Logic** | Oracle validates moves (turn, cell bounds, occupied check) |
+| **Script Pattern** | Script holds all game state (board, players, history) |
+| **Script Method Dispatch** | Single script with 6 methods: initialize, makeMove, checkWinner, getBoard, resetGame, cancelGame |
+| **Validation Logic** | Script validates moves (turn, cell bounds, occupied check) |
 | **Win Detection** | Deterministic check of all 8 winning patterns |
 | **Self-Transitions** | State machine stays in `playing` during moves |
-| **Multiple Guards** | Same event type (make_move) transitions to different states based on oracle status |
-| **Reset Support** | Clear board without recreating oracle/machine |
+| **Multiple Guards** | Same event type (make_move) transitions to different states based on script status |
+| **Reset Support** | Clear board without recreating script/machine |
 | **Structured Outputs** | Emit `game_completed` output on win/draw |
 
 ---
@@ -66,7 +66,7 @@ The game provides a simple but complete example of:
 │          ↓   ↑           │
 │      finished/cancelled  │
 └──────────┬───────────────┘
-           │ _oracleCall
+           │ _scriptCall
            ▼
 ┌──────────────────────────┐
 │   Script          │
@@ -109,7 +109,7 @@ The game provides a simple but complete example of:
 
 ## Script Design
 
-### Oracle State Structure
+### Script State Structure
 
 ```json
 {
@@ -131,7 +131,7 @@ The game provides a simple but complete example of:
 }
 ```
 
-### Oracle Methods
+### Script Methods
 
 #### 1. `initialize(playerX, playerO, gameId)`
 Sets up new game with two players.
@@ -176,7 +176,7 @@ Validates and applies move, checks for win/draw.
   }
 }
 ```
-Note: Returns `_result` only (no `_state`), so oracle state unchanged.
+Note: Returns `_result` only (no `_state`), so script state unchanged.
 
 #### 3. `checkWinner()`
 Returns current game status and winner (read-only).
@@ -217,13 +217,13 @@ Rows:        Columns:     Diagonals:
 
 ### Design Philosophy
 
-**Lifecycle Orchestrator**: The state machine manages setup → playing → finished/cancelled transitions, while the oracle enforces game rules.
+**Lifecycle Orchestrator**: The state machine manages setup → playing → finished/cancelled transitions, while the script enforces game rules.
 
 **Why State Machine is Minimal:**
-- ✅ Oracle holds game state (board, moves, winner)
+- ✅ Script holds game state (board, moves, winner)
 - ✅ State machine only tracks lifecycle phase
-- ✅ Guards check oracle state for transitions
-- ✅ Effects invoke oracle methods via `_oracleCall`
+- ✅ Guards check script state for transitions
+- ✅ Effects invoke script methods via `_scriptCall`
 
 ### State Definitions
 
@@ -233,7 +233,7 @@ Rows:        Columns:     Diagonals:
 
 #### `playing`
 - Game is active, moves being made
-- References oracle for querying game state
+- References script for querying game state
 - **Next States**: `playing` (self), `finished`, `cancelled`
 - **Special**: Self-transitions on both `make_move` and `reset_board`
 
@@ -263,7 +263,7 @@ Rows:        Columns:     Diagonals:
 }
 ```
 
-**Effect:** Calls oracle `initialize` method with player info.
+**Effect:** Calls script `initialize` method with player info.
 
 #### 2. `playing → playing` on `make_move` (game continues)
 
@@ -278,18 +278,18 @@ Rows:        Columns:     Diagonals:
 }
 ```
 
-**Guard:** Oracle status is "InProgress"
+**Guard:** Script status is "InProgress"
 
-**Effect:** Calls oracle `makeMove` method, stays in `playing` state.
+**Effect:** Calls script `makeMove` method, stays in `playing` state.
 
 #### 3. `playing → finished` on `make_move` (win/draw)
 
 **Same Event Type** as transition #2, but different guard!
 
-**Guard:** Oracle status is "Won" OR "Draw"
+**Guard:** Script status is "Won" OR "Draw"
 
 **Effect:**
-- Captures final status, winner, and board from oracle state
+- Captures final status, winner, and board from script state
 - Emits structured output:
 ```json
 {
@@ -306,20 +306,20 @@ Rows:        Columns:     Diagonals:
 
 #### 4. `playing → playing` on `reset_board`
 
-**Guard:** Oracle status is "Won" OR "Draw"
+**Guard:** Script status is "Won" OR "Draw"
 
 **Effect:**
 - Increments state machine's `roundCount`
-- Calls oracle `resetGame` method
+- Calls script `resetGame` method
 - Stays in `playing` state for new round
 
 #### 5. `playing → cancelled` on `cancel_game`
 
-**Effect:** Calls oracle `cancelGame` method with reason.
+**Effect:** Calls script `cancelGame` method with reason.
 
 ### Dependencies
 
-Every transition that reads oracle state must include the oracle CID in its `dependencies` array:
+Every transition that reads script state must include the script CID in its `dependencies` array:
 
 ```json
 {
@@ -330,7 +330,7 @@ Every transition that reads oracle state must include the oracle CID in its `dep
 }
 ```
 
-This ensures the DeterministicEventProcessor loads oracle state before evaluating guards/effects.
+This ensures the DeterministicEventProcessor loads script state before evaluating guards/effects.
 
 ---
 
@@ -353,9 +353,9 @@ The tic-tac-toe example is fully implemented and tested in the Scala test suite:
 4. **Reset and play another round**: Complete game, reset board, play again
 
 The test suite demonstrates:
-- Creating oracle and state machine
+- Creating script and state machine
 - Starting game and making moves
-- Oracle state updates and win detection
+- Script state updates and win detection
 - Invalid move handling (event fails, state unchanged)
 - Multi-round gameplay with reset
 
@@ -383,7 +383,7 @@ Possible extensions to explore:
 - **Undo move**: Add `undoLastMove()` method using moveHistory
 - **Timed moves**: Add turn time limits with auto-forfeit
 - **Tournament mode**: Chain multiple games with bracket progression
-- **AI opponent**: Oracle method for computer player move selection
+- **AI opponent**: Script method for computer player move selection
 
 ---
 

@@ -216,7 +216,7 @@ async function validateWithRetries(
 
 /**
  * Poll an ML0 endpoint until a condition is met.
- * Uses the ML0 custom routes (e.g. /v1/state-machines/{id}, /v1/oracles/{id}).
+ * Uses the ML0 custom routes (e.g. /v1/state-machines/{id}, /v1/scripts/{id}).
  */
 async function waitForMl0Confirmation(
   ml0BaseUrl: string,
@@ -340,7 +340,7 @@ interface Example {
   name: string;
   description: string;
   type: string;
-  oracleFiberId?: string;
+  scriptFiberId?: string;
   testFlows: TestFlow[];
   [key: string]: unknown;
 }
@@ -393,7 +393,7 @@ async function runFlow(
   const l = log ? (...a: unknown[]) => log.log(...a) : (...a: unknown[]) => console.log(...a);
   const session = {
     cid: crypto.randomUUID(),
-    oracleFiberId: null as string | null,
+    scriptFiberId: null as string | null,
   };
 
   for (let i = 0; i < flow.steps.length; i++) {
@@ -479,9 +479,9 @@ async function runFlow(
       };
 
       // Determine which fiber this step targets and fetch its current sequence number
-      // Script actions (createScript, invokeScript, invoke) use the /oracles/ endpoint
-      const isOracleStep =
-        (step.action as string).includes('Oracle') ||
+      // Script actions (createScript, invokeScript, invoke) use the /scripts/ endpoint
+      const isScriptStep =
+        (step.action as string).includes('Script') ||
         (step.action as string).includes('Script') ||
         step.action === 'invoke';
       const isCreateStep =
@@ -489,11 +489,11 @@ async function runFlow(
         step.action === 'createStateMachine' ||
         step.action === 'createScript';
 
-      // For createScript, oracleFiberId is assigned inside the switch below,
+      // For createScript, scriptFiberId is assigned inside the switch below,
       // so we defer activeCid/entityPath until after the switch for create steps.
-      let activeCid = isOracleStep ? session.oracleFiberId! : session.cid;
-      let entityPath = isOracleStep
-        ? `oracles/${activeCid}`
+      let activeCid = isScriptStep ? session.scriptFiberId! : session.cid;
+      let entityPath = isScriptStep
+        ? `scripts/${activeCid}`
         : `state-machines/${activeCid}`;
 
       let preSendSeqNum = -1;
@@ -538,19 +538,19 @@ async function runFlow(
         }
 
         case 'createScript': {
-          session.oracleFiberId = (example.oracleFiberId as string) || crypto.randomUUID();
+          session.scriptFiberId = (example.scriptFiberId as string) || crypto.randomUUID();
           const definition = await loadFileOrModule(
             path.join(examplesDir, example.dir, step.definition!),
             loadContext
           );
 
-          stepOptions = { oracleDefinition: definition };
+          stepOptions = { scriptDefinition: definition };
 
           const libModule = await import('./lib/script/createScript.ts');
           generator = libModule.generator;
           validator = libModule.validator;
           message = generator({
-            cid: session.oracleFiberId,
+            cid: session.scriptFiberId,
             wallets,
             options: stepOptions,
           });
@@ -610,7 +610,7 @@ async function runFlow(
           generator = libModule.generator;
           validator = libModule.validator;
           message = generator({
-            cid: session.oracleFiberId!,
+            cid: session.scriptFiberId!,
             wallets,
             options: stepOptions,
           });
@@ -649,11 +649,11 @@ async function runFlow(
       }
 
       // Re-compute activeCid/entityPath after the switch — createScript assigns
-      // session.oracleFiberId inside the switch, so the pre-switch values may be stale.
+      // session.scriptFiberId inside the switch, so the pre-switch values may be stale.
       if (isCreateStep) {
-        activeCid = isOracleStep ? session.oracleFiberId! : session.cid;
-        entityPath = isOracleStep
-          ? `oracles/${activeCid}`
+        activeCid = isScriptStep ? session.scriptFiberId! : session.cid;
+        entityPath = isScriptStep
+          ? `scripts/${activeCid}`
           : `state-machines/${activeCid}`;
       }
 

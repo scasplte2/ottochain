@@ -5,10 +5,10 @@ This directory contains example-based test resources for the Ottochain e2e test 
 ## Directory Structure
 
 Each example directory contains:
-- `definition.json` - The state machine or oracle definition
+- `definition.json` - The state machine or script definition
 - `initial-data.json` - Initial data for state machines
 - `event-*.json` - Event files for state machine transitions
-- `args-*.json` - Argument files for oracle method invocations
+- `args-*.json` - Argument files for script method invocations
 - `example.json` - Metadata describing the example and its test flows
 
 ## Available Examples
@@ -57,18 +57,18 @@ node terminal.js sm process-event --address <CID> --event examples/simple-order/
 node terminal.js sm process-event --address <CID> --event examples/simple-order/event-deliver.json --expectedState delivered
 ```
 
-### Oracle Examples
+### Script Examples
 
-#### counter-oracle
-A stateful script oracle that maintains a counter with increment, decrement, and reset operations.
+#### counter-script
+A stateful script that maintains a counter with increment, decrement, and reset operations.
 
 **Files:**
-- `definition.json` - Oracle definition
+- `definition.json` - Script definition
 
 **Usage:**
 ```bash
-# Create oracle
-node terminal.js or create --oracle examples/counter-oracle/definition.json
+# Create script
+node terminal.js or create --script examples/counter-script/definition.json
 
 # Invoke methods (use the CID from previous command)
 node terminal.js or invoke --address <CID> --method increment
@@ -77,11 +77,11 @@ node terminal.js or invoke --address <CID> --method decrement
 node terminal.js or invoke --address <CID> --method reset
 ```
 
-#### calculator-oracle
-A stateless script oracle for basic arithmetic operations.
+#### calculator-script
+A stateless script for basic arithmetic operations.
 
 **Files:**
-- `definition.json` - Oracle definition
+- `definition.json` - Script definition
 - `args-add.json` - Arguments for add method
 - `args-subtract.json` - Arguments for subtract method
 - `args-multiply.json` - Arguments for multiply method
@@ -89,41 +89,41 @@ A stateless script oracle for basic arithmetic operations.
 
 **Usage:**
 ```bash
-# Create oracle
-node terminal.js or create --oracle examples/calculator-oracle/definition.json
+# Create script
+node terminal.js or create --script examples/calculator-script/definition.json
 
 # Invoke methods with arguments (use the CID from previous command)
-node terminal.js or invoke --address <CID> --method add --args examples/calculator-oracle/args-add.json
-node terminal.js or invoke --address <CID> --method subtract --args examples/calculator-oracle/args-subtract.json
-node terminal.js or invoke --address <CID> --method multiply --args examples/calculator-oracle/args-multiply.json
-node terminal.js or invoke --address <CID> --method divide --args examples/calculator-oracle/args-divide.json
+node terminal.js or invoke --address <CID> --method add --args examples/calculator-script/args-add.json
+node terminal.js or invoke --address <CID> --method subtract --args examples/calculator-script/args-subtract.json
+node terminal.js or invoke --address <CID> --method multiply --args examples/calculator-script/args-multiply.json
+node terminal.js or invoke --address <CID> --method divide --args examples/calculator-script/args-divide.json
 ```
 
-### Combined Examples (Oracle + State Machine)
+### Combined Examples (Script + State Machine)
 
 #### tictactoe
-A complete tic-tac-toe implementation demonstrating the **oracle-centric architecture** where:
-- **Oracle** = Game engine (holds board state, enforces rules, detects wins)
+A complete tic-tac-toe implementation demonstrating the **script-centric architecture** where:
+- **Script** = Game engine (holds board state, enforces rules, detects wins)
 - **State Machine** = Lifecycle orchestrator (setup → playing → finished)
 
 **Files:**
-- `oracle-definition.json` - Game engine oracle with methods: initialize, makeMove, checkWinner, getBoard, resetGame, cancelGame
+- `script-definition.json` - Game engine script with methods: initialize, makeMove, checkWinner, getBoard, resetGame, cancelGame
 - `sm-definition.json` - Lifecycle state machine with states: setup, playing, finished, cancelled
-- `sm-initial-data.json` - Initial data template (oracleCid injected at runtime)
+- `sm-initial-data.json` - Initial data template (scriptCid injected at runtime)
 - `event-start-game.json` - Start game event template
 - `event-move.json` - Make move event template
 - `event-reset.json` - Reset board event
 
 **Usage:**
 ```bash
-# Run autonomous simulation (creates oracle + state machine automatically)
+# Run autonomous simulation (creates script + state machine automatically)
 node terminal.js simulate tictactoe --games 1
 
 # Or run the predefined test flow
 node terminal.js run --example tictactoe
 
 # Query the results
-node terminal.js query oracles --oracleId <ORACLE_CID>
+node terminal.js query scripts --scriptId <SCRIPT_CID>
 node terminal.js query state-machines --fiberId <FIBER_ID>
 ```
 
@@ -146,7 +146,7 @@ node terminal.js run --example simple-order --target remote
 ```
 
 Test flows automate multi-step operations like:
-1. Creating oracles and state machines
+1. Creating scripts and state machines
 2. Processing events in sequence
 3. Validating state after each step
 4. Tracking CIDs between steps automatically
@@ -173,8 +173,8 @@ node terminal.js list
 # List only state machine examples
 node terminal.js list --type state-machines
 
-# List only oracle examples
-node terminal.js list --type oracles
+# List only script examples
+node terminal.js list --type scripts
 
 # Get detailed info about a specific example
 node terminal.js list --example approval-workflow
@@ -187,14 +187,14 @@ To create a new example:
 1. Create a directory: `examples/my-example/`
 2. Add the required files based on the type:
    - State machines: `definition.json`, `initial-data.json`, `event-*.json`
-   - Oracles: `definition.json`, `args-*.json` (if methods take arguments)
+   - Scripts: `definition.json`, `args-*.json` (if methods take arguments)
 3. Create an `example.json` manifest:
 
 ```json
 {
   "name": "My Example",
   "description": "Description of what this example demonstrates",
-  "type": "state-machine",  // or "oracle"
+  "type": "state-machine",  // or "script"
   "definition": "definition.json",
   "initialData": "initial-data.json",  // for state machines
   "events": [  // for state machines
@@ -206,7 +206,7 @@ To create a new example:
       "to": "target-state"
     }
   ],
-  "methods": [  // for oracles
+  "methods": [  // for scripts
     {
       "name": "method-name",
       "description": "What this method does",

@@ -25,16 +25,16 @@ object ScriptProcessor {
     evaluationResult: JsonLogicValue
   ): F[(Option[JsonLogicValue], JsonLogicValue)] =
     evaluationResult match {
-      case MapValue(m) if m.contains(ReservedKeys.ORACLE_STATE) && m.contains(ReservedKeys.ORACLE_RESULT) =>
-        (m.get(ReservedKeys.ORACLE_STATE), m.getOrElse(ReservedKeys.ORACLE_RESULT, NullValue)).pure[F]
+      case MapValue(m) if m.contains(ReservedKeys.SCRIPT_STATE) && m.contains(ReservedKeys.SCRIPT_RESULT) =>
+        (m.get(ReservedKeys.SCRIPT_STATE), m.getOrElse(ReservedKeys.SCRIPT_RESULT, NullValue)).pure[F]
 
-      case MapValue(m) if m.contains(ReservedKeys.ORACLE_STATE) =>
-        (m.get(ReservedKeys.ORACLE_STATE), evaluationResult).pure[F]
+      case MapValue(m) if m.contains(ReservedKeys.SCRIPT_STATE) =>
+        (m.get(ReservedKeys.SCRIPT_STATE), evaluationResult).pure[F]
 
-      case MapValue(m) if m.contains(ReservedKeys.ORACLE_RESULT) =>
+      case MapValue(m) if m.contains(ReservedKeys.SCRIPT_RESULT) =>
         (
           Option.empty[JsonLogicValue],
-          m.getOrElse(ReservedKeys.ORACLE_RESULT, NullValue)
+          m.getOrElse(ReservedKeys.SCRIPT_RESULT, NullValue)
         ).pure[F]
 
       case other =>
@@ -51,7 +51,7 @@ object ScriptProcessor {
 
     stateDataHashOpt <- update.initialState.traverse[F, Hash](_.computeDigest)
 
-    oracleRecord = Records.ScriptFiberRecord(
+    scriptRecord = Records.ScriptFiberRecord(
       fiberId = update.fiberId,
       creationOrdinal = currentOrdinal,
       latestUpdateOrdinal = currentOrdinal,
@@ -65,7 +65,7 @@ object ScriptProcessor {
       schemaBinding = binding
     )
 
-    result <- current.withRecord[F](update.fiberId, oracleRecord)
+    result <- current.withRecord[F](update.fiberId, scriptRecord)
   } yield result
 
   def validateAccess[F[_]: Async](

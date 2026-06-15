@@ -577,7 +577,7 @@ object FailureReasonSuite extends SimpleIOSuite {
 
         calculatedState = CalculatedState(SortedMap(fiberId -> fiber), SortedMap.empty)
 
-        // Use MethodCall input (oracle-style) with state machine - type mismatch
+        // Use MethodCall input (script-style) with state machine - type mismatch
         input = FiberInput.MethodCall(
           method = "someMethod",
           args = MapValue(Map.empty),
@@ -615,31 +615,31 @@ object FailureReasonSuite extends SimpleIOSuite {
       implicit val jle: JsonLogicEvaluator[IO] = JsonLogicEvaluator.tailRecursive[IO]
       val ordinal = fixture.ordinal
       for {
-        oracleId <- UUIDGen.randomUUID[IO]
+        scriptId <- UUIDGen.randomUUID[IO]
 
-        // Simple oracle script that just returns state
-        oracleScript = VarExpression(Left("_state"))
+        // Simple script script that just returns state
+        scriptSource = VarExpression(Left("_state"))
 
-        oracleData = MapValue(Map("value" -> IntValue(0)))
-        oracleHash <- (oracleData: JsonLogicValue).computeDigest
+        scriptData = MapValue(Map("value" -> IntValue(0)))
+        scriptHash <- (scriptData: JsonLogicValue).computeDigest
 
         // Create a script fiber
-        oracle = Records.ScriptFiberRecord(
-          fiberId = oracleId,
+        script = Records.ScriptFiberRecord(
+          fiberId = scriptId,
           creationOrdinal = ordinal,
           latestUpdateOrdinal = ordinal,
-          scriptProgram = oracleScript,
-          stateData = Some(oracleData),
-          stateDataHash = Some(oracleHash),
+          scriptProgram = scriptSource,
+          stateData = Some(scriptData),
+          stateDataHash = Some(scriptHash),
           owners = Set.empty,
           status = FiberStatus.Active,
           sequenceNumber = FiberOrdinal.MinValue,
           accessControl = AccessControlPolicy.Public
         )
 
-        calculatedState = CalculatedState(SortedMap.empty, SortedMap(oracleId -> oracle))
+        calculatedState = CalculatedState(SortedMap.empty, SortedMap(scriptId -> script))
 
-        // Use Transition input (state machine-style) with oracle - type mismatch
+        // Use Transition input (state machine-style) with script - type mismatch
         input = FiberInput.Transition(
           "someEvent",
           MapValue(Map.empty)
@@ -648,13 +648,13 @@ object FailureReasonSuite extends SimpleIOSuite {
         limits = ExecutionLimits(maxDepth = 10, maxGas = 10_000L)
         orchestrator = FiberEngine.make[IO](calculatedState, ordinal, limits)
 
-        result <- orchestrator.process(oracleId, input, List.empty)
+        result <- orchestrator.process(scriptId, input, List.empty)
 
       } yield result match {
         case TransactionResult.Aborted(reason, _, _) =>
           reason match {
             case FailureReason.FiberInputMismatch(oid, fiberType, inputType) =>
-              expect(oid == oracleId, s"Expected oracle $oracleId, got $oid") and
+              expect(oid == scriptId, s"Expected script $scriptId, got $oid") and
               expect(
                 fiberType == FiberKind.Script,
                 s"Expected fiberType Script, got $fiberType"

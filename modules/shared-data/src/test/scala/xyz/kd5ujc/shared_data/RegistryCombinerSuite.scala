@@ -560,7 +560,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
       implicit val l0: L0NodeContext[IO] = fixture.l0Context
       val combiner = Combiner.make[IO]()
       val create = CreateStateMachine(fiberA, minimalDef, emptyData) // a state machine
-      val alias = RegisterAlias(RegistryName.unsafe("oracle.script"), fiberA) // .script wants a script fiber
+      val alias = RegisterAlias(RegistryName.unsafe("script.script"), fiberA) // .script wants a script fiber
       for {
         validator     <- Validator.make[IO]
         prC           <- fixture.registry.generateProofs(create, Set(Alice))

@@ -464,7 +464,7 @@ Only the keys you include in an effect's result become the new state. If you wan
 
 ### 5. Reserved keys in effects
 Keys prefixed with `_` are extracted by OttoChain's engine as side effects and NOT included in the new state:
-- `_oracleCall` → invokes an oracle
+- `_scriptCall` → invokes a script
 - `_triggers` → fires cross-machine events
 - `_spawn` → creates child fibers
 - `_emit` → emits observable events

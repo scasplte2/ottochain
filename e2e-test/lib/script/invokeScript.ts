@@ -2,9 +2,9 @@ import fs from 'fs';
 import path from 'path';
 import type { OttochainMessage } from '@ottochain/sdk/core';
 import type { StatesMap } from '../types.ts';
-import { validateOracleLogs } from '../validateLogs.ts';
+import { validateScriptLogs } from '../validateLogs.ts';
 
-export interface InvokeOracleOptions {
+export interface InvokeScriptOptions {
   method: string;
   args?: string | object;
   argsData?: object;
@@ -12,7 +12,7 @@ export interface InvokeOracleOptions {
   targetSequenceNumber?: number;
 }
 
-export const generator = ({ cid, options }: { cid: string; wallets?: unknown; options: InvokeOracleOptions }): OttochainMessage => {
+export const generator = ({ cid, options }: { cid: string; wallets?: unknown; options: InvokeScriptOptions }): OttochainMessage => {
   let args: unknown = {};
 
   if (options.argsData && typeof options.argsData === 'object') {
@@ -40,20 +40,20 @@ export const generator = ({ cid, options }: { cid: string; wallets?: unknown; op
   };
 };
 
-export const validator = async ({ cid, statesMap, options, ml0Urls }: { cid: string; statesMap: StatesMap; options: InvokeOracleOptions; wallets?: unknown; ml0Urls?: string[] }) => {
+export const validator = async ({ cid, statesMap, options, ml0Urls }: { cid: string; statesMap: StatesMap; options: InvokeScriptOptions; wallets?: unknown; ml0Urls?: string[] }) => {
   for (const [url, { initial, final }] of Object.entries(statesMap)) {
     const initialRecord = initial?.state?.scripts?.[cid];
     const finalRecord = final?.state?.scripts?.[cid];
 
     if (!initialRecord) {
       throw new Error(
-        `\x1b[33m[invokeScript.validator]\x1b[0m No initial script oracle found for fiberId = ${cid} from ${url}.`
+        `\x1b[33m[invokeScript.validator]\x1b[0m No initial script script found for fiberId = ${cid} from ${url}.`
       );
     }
 
     if (!finalRecord) {
       throw new Error(
-        `\x1b[33m[invokeScript.validator]\x1b[0m No final script oracle found for fiberId = ${cid} from ${url}.`
+        `\x1b[33m[invokeScript.validator]\x1b[0m No final script script found for fiberId = ${cid} from ${url}.`
       );
     }
 
@@ -68,7 +68,7 @@ export const validator = async ({ cid, statesMap, options, ml0Urls }: { cid: str
     const latestInvocation = finalRecord.lastInvocation;
     if (latestInvocation) {
       console.log(
-        `\x1b[33m[invokeScript.validator]\x1b[32m Oracle invoked successfully for fiberId = ${cid} at ${url}.`
+        `\x1b[33m[invokeScript.validator]\x1b[32m Script invoked successfully for fiberId = ${cid} at ${url}.`
       );
       console.log(
         `\x1b[33m[invokeScript.validator]\x1b[0m   Method: ${latestInvocation.method}`
@@ -95,13 +95,13 @@ export const validator = async ({ cid, statesMap, options, ml0Urls }: { cid: str
       }
     } else {
       console.log(
-        `\x1b[33m[invokeScript.validator]\x1b[33m Oracle sequenceNumber increased but no lastInvocation found for fiberId = ${cid} at ${url}.\x1b[0m`
+        `\x1b[33m[invokeScript.validator]\x1b[33m Script sequenceNumber increased but no lastInvocation found for fiberId = ${cid} at ${url}.\x1b[0m`
       );
     }
   }
 
   // US-8: Mandatory log endpoint validation
   if (ml0Urls && ml0Urls.length > 0) {
-    await validateOracleLogs({ ml0Urls, fiberId: cid }, options.method);
+    await validateScriptLogs({ ml0Urls, fiberId: cid }, options.method);
   }
 };

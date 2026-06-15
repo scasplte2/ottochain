@@ -183,9 +183,9 @@ Raw Materials → Manufacturer → Retailer → Consumer
 **Participants**: 2
 **Total States**: 4
 
-A two-player game demonstrating the **oracle-centric architecture** pattern where the script acts as the game engine and the state machine orchestrates the game lifecycle.
+A two-player game demonstrating the **script-centric architecture** pattern where the script acts as the game engine and the state machine orchestrates the game lifecycle.
 
-#### Architecture: Oracle-Centric Pattern
+#### Architecture: Script-Centric Pattern
 
 **Script** (Game Engine):
 - Holds complete game state (board, moves, players)
@@ -196,12 +196,12 @@ A two-player game demonstrating the **oracle-centric architecture** pattern wher
 
 **State Machine** (Lifecycle Orchestrator):
 - Manages game phases: setup → playing → finished/cancelled
-- Calls oracle methods via `_oracleCall`
-- Guards check oracle state for transitions
+- Calls script methods via `_scriptCall`
+- Guards check script state for transitions
 - Self-transitions during gameplay
-- Minimal state - delegates game logic to oracle
+- Minimal state - delegates game logic to script
 
-This separation demonstrates a key architectural pattern: **oracle holds state and logic, state machine orchestrates lifecycle**.
+This separation demonstrates a key architectural pattern: **script holds state and logic, state machine orchestrates lifecycle**.
 
 #### State Machine States
 
@@ -213,12 +213,12 @@ This separation demonstrates a key architectural pattern: **oracle holds state a
 
 #### Key Features
 
-- **Oracle-Centric Pattern** - Oracle is the single source of truth for game state
-- **Oracle Method Dispatch** - Single script with 6 methods handling all game logic
-- **Validation in Oracle** - Move validation happens in oracle, not state machine
+- **Script-Centric Pattern** - Script is the single source of truth for game state
+- **Script Method Dispatch** - Single script with 6 methods handling all game logic
+- **Validation in Script** - Move validation happens in script, not state machine
 - **Self-Transitions** - State machine stays in `playing` during move sequences
-- **Multiple Guards** - Same event (`make_move`) transitions to different states based on oracle status
-- **Win Detection** - Oracle checks all 8 winning patterns deterministically
+- **Multiple Guards** - Same event (`make_move`) transitions to different states based on script status
+- **Win Detection** - Script checks all 8 winning patterns deterministically
 - **Reset Support** - Clear board for new round without recreating machines
 - **Structured Outputs** - Emit `game_completed` output on finish
 
@@ -229,8 +229,8 @@ setup → playing (self-transitions) → finished/cancelled
          │  ↑
          │  └── make_move events ───────┘
          │
-         └──→ _oracleCall(makeMove)
-              - Oracle validates move
+         └──→ _scriptCall(makeMove)
+              - Script validates move
               - Updates board state
               - Checks win/draw
               - Returns result
@@ -238,11 +238,11 @@ setup → playing (self-transitions) → finished/cancelled
 
 #### Why Start Here?
 
-- **Foundational pattern** - Oracle-centric architecture scales to complex logic
+- **Foundational pattern** - Script-centric architecture scales to complex logic
 - **Familiar domain** - Everyone understands tic-tac-toe rules
 - **Clean separation** - State vs. lifecycle management clearly delineated
-- **Core concepts** - Oracle calls, guards, self-transitions, validation patterns
-- **Complete example** - Shows oracle creation, invocation, and state updates
+- **Core concepts** - Script calls, guards, self-transitions, validation patterns
+- **Complete example** - Shows script creation, invocation, and state updates
 - **Well tested** - Full test suite demonstrating all scenarios
 
 **[View Detailed Documentation →](./tictactoe.md)**

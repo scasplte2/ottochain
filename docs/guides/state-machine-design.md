@@ -37,7 +37,7 @@ When your guards and effects execute, they have access to a context object with 
   },
   "parent": {...},            // Parent machine context (if any)
   "children": {...},          // Child machines (if any)
-  "scripts": {...}      // Dependent oracles (if any)
+  "scripts": {...}      // Dependent scripts (if any)
 }
 ```
 
@@ -302,7 +302,7 @@ Effects can include special keys for side effects:
 }
 ```
 
-**Call oracles:**
+**Call scripts:**
 ```json
 {
   "effect": {
@@ -310,8 +310,8 @@ Effects can include special keys for side effects:
       { "var": "state" },
       { "calculationRequested": true }
     ],
-    "_oracleCall": {
-      "cid": "oracle-uuid",
+    "_scriptCall": {
+      "cid": "script-uuid",
       "method": "calculate",
       "args": { "value": { "var": "state.amount" } }
     }

@@ -192,28 +192,28 @@ Use dot-notation paths:
 {"var": "scripts.11111111-1111-1111-1111-111111111111.state.board"}
 ```
 
-### Oracle Context (for Script fibers)
+### Script Context (for Script fibers)
 
-Script oracles receive a different context:
+Scripts receive a different context:
 
 | Key | Type | Description |
 |-----|------|-------------|
 | `_method` | String | Method name being called |
 | `_args` | Object | Method arguments |
-| `_state` | Object/null | Current oracle state |
+| `_state` | Object/null | Current script state |
 
 ## OttoChain Extensions (Reserved Keys)
 
 Effect results can include special keys (prefixed with `_`) that trigger side effects. These are extracted by the engine and **not** merged into state.
 
-### `_oracleCall` — Invoke a Script
+### `_scriptCall` — Invoke a Script
 
 Calls a method on a script fiber:
 
 ```json
 "effect": {
-  "_oracleCall": {
-    "cid": {"var": "state.oracleCid"},
+  "_scriptCall": {
+    "cid": {"var": "state.scriptCid"},
     "method": "makeMove",
     "args": {
       "player": {"var": "event.player"},
@@ -228,11 +228,11 @@ Calls a method on a script fiber:
 ```
 
 Fields:
-- `cid` — UUID of the target oracle (can be a `var` reference)
+- `cid` — UUID of the target script (can be a `var` reference)
 - `method` — Method name string
 - `args` — Arguments object (values are evaluated as expressions)
 
-The oracle processes the call and its return value can influence subsequent evaluation.
+The script processes the call and its return value can influence subsequent evaluation.
 
 ### `_triggers` — Cross-Machine Events
 
@@ -338,7 +338,7 @@ Check that multiple fields exist:
 }
 ```
 
-### Check Dependent Oracle State
+### Check Dependent Script State
 
 Read state from a script via the `scripts` context:
 
@@ -400,14 +400,14 @@ Use `if` within an effect to compute values conditionally:
 }
 ```
 
-### Combined: Oracle Call + State Update + Emit
+### Combined: Script Call + State Update + Emit
 
 A real-world effect combining multiple side effects with state changes:
 
 ```json
 "effect": {
-  "_oracleCall": {
-    "cid": {"var": "state.oracleCid"},
+  "_scriptCall": {
+    "cid": {"var": "state.scriptCid"},
     "method": "makeMove",
     "args": {
       "player": {"var": "event.player"},
@@ -431,7 +431,7 @@ A real-world effect combining multiple side effects with state changes:
 
 The engine processes this by:
 1. Evaluating the entire expression against the context
-2. Extracting `_oracleCall` → invokes the oracle
+2. Extracting `_scriptCall` → invokes the script
 3. Extracting `_emit` → queues emitted events
 4. Remaining keys (`finalStatus`, `winner`, `finalBoard`) → become new state
 
@@ -441,7 +441,7 @@ All JSON Logic evaluation in OttoChain is gas-metered. Each operation (compariso
 
 Gas is configured at two levels:
 - **JLVM Gas** — Per-expression evaluation costs
-- **Fiber Gas** — Per-orchestration operation costs (triggers, spawns, oracle calls)
+- **Fiber Gas** — Per-orchestration operation costs (triggers, spawns, script calls)
 
 ## Further Reading
 

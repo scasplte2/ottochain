@@ -18,10 +18,10 @@ import xyz.kd5ujc.shared_test.TestFixture
 import io.circe.parser
 import weaver.SimpleIOSuite
 
-object StatefulOracleSuite extends SimpleIOSuite {
+object StatefulScriptSuite extends SimpleIOSuite {
 
-  test("oracle state initialization: null initial state") {
-    val oracleScript = """{"method":{"var":"method"},"result":42}"""
+  test("script state initialization: null initial state") {
+    val scriptSource = """{"method":{"var":"method"},"result":42}"""
 
     TestFixture.resource(Set(Alice)).use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
@@ -30,28 +30,28 @@ object StatefulOracleSuite extends SimpleIOSuite {
         combiner <- Combiner.make[IO]().pure[IO]
 
         fiberId <- IO.randomUUID
-        prog    <- IO.fromEither(parser.parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
+        prog    <- IO.fromEither(parser.parse(scriptSource).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScript(
+        createScript = Updates.CreateScript(
           fiberId = fiberId,
           scriptProgram = prog,
           initialState = None,
           accessControl = AccessControlPolicy.Public
         )
 
-        createProof <- fixture.registry.generateProofs(createOracle, Set(Alice))
-        state <- combiner.insert(DataState(OnChain.genesis, CalculatedState.genesis), Signed(createOracle, createProof))
+        createProof <- fixture.registry.generateProofs(createScript, Set(Alice))
+        state <- combiner.insert(DataState(OnChain.genesis, CalculatedState.genesis), Signed(createScript, createProof))
 
-        oracle = state.calculated.scripts.get(fiberId)
-      } yield expect(oracle.isDefined) and
-      expect(oracle.map(_.stateData).contains(None)) and
-      expect(oracle.map(_.stateDataHash).contains(None)) and
-      expect(oracle.map(_.sequenceNumber).contains(FiberOrdinal.MinValue))
+        script = state.calculated.scripts.get(fiberId)
+      } yield expect(script.isDefined) and
+      expect(script.map(_.stateData).contains(None)) and
+      expect(script.map(_.stateDataHash).contains(None)) and
+      expect(script.map(_.sequenceNumber).contains(FiberOrdinal.MinValue))
     }
   }
 
-  test("oracle state transformation: explicit _state and _result") {
-    val oracleScript = """|{
+  test("script state transformation: explicit _state and _result") {
+    val scriptSource = """|{
                           |  "_state": {"counter": 5},
                           |  "_result": {"success": true, "newValue": 5}
                           |}""".stripMargin
@@ -63,45 +63,45 @@ object StatefulOracleSuite extends SimpleIOSuite {
         combiner <- Combiner.make[IO]().pure[IO]
 
         fiberId <- IO.randomUUID
-        prog    <- IO.fromEither(parser.parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
+        prog    <- IO.fromEither(parser.parse(scriptSource).flatMap(_.as[JsonLogicExpression]))
 
         initialData = MapValue(Map("counter" -> IntValue(0)))
 
-        createOracle = Updates.CreateScript(
+        createScript = Updates.CreateScript(
           fiberId = fiberId,
           scriptProgram = prog,
           initialState = Some(initialData),
           accessControl = AccessControlPolicy.Public
         )
 
-        createProof <- fixture.registry.generateProofs(createOracle, Set(Alice))
+        createProof <- fixture.registry.generateProofs(createScript, Set(Alice))
         state1 <- combiner.insert(
           DataState(OnChain.genesis, CalculatedState.genesis),
-          Signed(createOracle, createProof)
+          Signed(createScript, createProof)
         )
 
-        invokeOracle = Updates.InvokeScript(
+        invokeScript = Updates.InvokeScript(
           fiberId = fiberId,
           method = "increment",
           args = MapValue(Map.empty),
           targetSequenceNumber = FiberOrdinal.MinValue
         )
 
-        invokeProof <- fixture.registry.generateProofs(invokeOracle, Set(Alice))
-        state2      <- combiner.insert(state1, Signed(invokeOracle, invokeProof))
+        invokeProof <- fixture.registry.generateProofs(invokeScript, Set(Alice))
+        state2      <- combiner.insert(state1, Signed(invokeScript, invokeProof))
 
-        oracle = state2.calculated.scripts.get(fiberId)
+        script = state2.calculated.scripts.get(fiberId)
         expectedState = MapValue(Map("counter" -> IntValue(5)))
         expectedResult = MapValue(Map("success" -> BoolValue(true), "newValue" -> IntValue(5)))
-      } yield expect(oracle.isDefined) and
-      expect(oracle.flatMap(_.stateData).contains(expectedState)) and
-      expect(oracle.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next)) and
-      expect(oracle.flatMap(_.lastInvocation.map(_.result)).contains(expectedResult))
+      } yield expect(script.isDefined) and
+      expect(script.flatMap(_.stateData).contains(expectedState)) and
+      expect(script.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next)) and
+      expect(script.flatMap(_.lastInvocation.map(_.result)).contains(expectedResult))
     }
   }
 
-  test("oracle state transformation: simple return value becomes state") {
-    val oracleScript = """{"counter": 1}"""
+  test("script state transformation: simple return value becomes state") {
+    val scriptSource = """{"counter": 1}"""
 
     TestFixture.resource(Set(Alice)).use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
@@ -110,42 +110,42 @@ object StatefulOracleSuite extends SimpleIOSuite {
         combiner <- Combiner.make[IO]().pure[IO]
 
         fiberId <- IO.randomUUID
-        prog    <- IO.fromEither(parser.parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
+        prog    <- IO.fromEither(parser.parse(scriptSource).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScript(
+        createScript = Updates.CreateScript(
           fiberId = fiberId,
           scriptProgram = prog,
           initialState = None,
           accessControl = AccessControlPolicy.Public
         )
 
-        createProof <- fixture.registry.generateProofs(createOracle, Set(Alice))
+        createProof <- fixture.registry.generateProofs(createScript, Set(Alice))
         state1 <- combiner.insert(
           DataState(OnChain.genesis, CalculatedState.genesis),
-          Signed(createOracle, createProof)
+          Signed(createScript, createProof)
         )
 
-        invokeOracle = Updates.InvokeScript(
+        invokeScript = Updates.InvokeScript(
           fiberId = fiberId,
           method = "increment",
           args = MapValue(Map.empty),
           targetSequenceNumber = FiberOrdinal.MinValue
         )
 
-        invokeProof <- fixture.registry.generateProofs(invokeOracle, Set(Alice))
-        state2      <- combiner.insert(state1, Signed(invokeOracle, invokeProof))
+        invokeProof <- fixture.registry.generateProofs(invokeScript, Set(Alice))
+        state2      <- combiner.insert(state1, Signed(invokeScript, invokeProof))
 
-        oracle = state2.calculated.scripts.get(fiberId)
+        script = state2.calculated.scripts.get(fiberId)
         expectedState = MapValue(Map("counter" -> IntValue(1)))
-      } yield expect(oracle.isDefined) and
-      expect(oracle.flatMap(_.stateData).contains(expectedState)) and
-      expect(oracle.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next)) and
-      expect(oracle.flatMap(_.lastInvocation.map(_.result)).contains(expectedState))
+      } yield expect(script.isDefined) and
+      expect(script.flatMap(_.stateData).contains(expectedState)) and
+      expect(script.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next)) and
+      expect(script.flatMap(_.lastInvocation.map(_.result)).contains(expectedState))
     }
   }
 
-  test("oracle state transformation: _state only (result is full response)") {
-    val oracleScript = """|{
+  test("script state transformation: _state only (result is full response)") {
+    val scriptSource = """|{
                           |  "_state": {"visits": 1},
                           |  "message": "Visit recorded"
                           |}""".stripMargin
@@ -157,34 +157,34 @@ object StatefulOracleSuite extends SimpleIOSuite {
         combiner <- Combiner.make[IO]().pure[IO]
 
         fiberId <- IO.randomUUID
-        prog    <- IO.fromEither(parser.parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
+        prog    <- IO.fromEither(parser.parse(scriptSource).flatMap(_.as[JsonLogicExpression]))
 
         initialData = MapValue(Map("visits" -> IntValue(0)))
 
-        createOracle = Updates.CreateScript(
+        createScript = Updates.CreateScript(
           fiberId = fiberId,
           scriptProgram = prog,
           initialState = Some(initialData),
           accessControl = AccessControlPolicy.Public
         )
 
-        createProof <- fixture.registry.generateProofs(createOracle, Set(Alice))
+        createProof <- fixture.registry.generateProofs(createScript, Set(Alice))
         state1 <- combiner.insert(
           DataState(OnChain.genesis, CalculatedState.genesis),
-          Signed(createOracle, createProof)
+          Signed(createScript, createProof)
         )
 
-        invokeOracle = Updates.InvokeScript(
+        invokeScript = Updates.InvokeScript(
           fiberId = fiberId,
           method = "visit",
           args = MapValue(Map.empty),
           targetSequenceNumber = FiberOrdinal.MinValue
         )
 
-        invokeProof <- fixture.registry.generateProofs(invokeOracle, Set(Alice))
-        state2      <- combiner.insert(state1, Signed(invokeOracle, invokeProof))
+        invokeProof <- fixture.registry.generateProofs(invokeScript, Set(Alice))
+        state2      <- combiner.insert(state1, Signed(invokeScript, invokeProof))
 
-        oracle = state2.calculated.scripts.get(fiberId)
+        script = state2.calculated.scripts.get(fiberId)
         expectedState = MapValue(Map("visits" -> IntValue(1)))
         expectedResult = MapValue(
           Map(
@@ -192,14 +192,14 @@ object StatefulOracleSuite extends SimpleIOSuite {
             "message" -> StrValue("Visit recorded")
           )
         )
-      } yield expect(oracle.isDefined) and
-      expect(oracle.flatMap(_.stateData).contains(expectedState)) and
-      expect(oracle.flatMap(_.lastInvocation.map(_.result)).contains(expectedResult))
+      } yield expect(script.isDefined) and
+      expect(script.flatMap(_.stateData).contains(expectedState)) and
+      expect(script.flatMap(_.lastInvocation.map(_.result)).contains(expectedResult))
     }
   }
 
-  test("oracle state persistence: multiple invocations maintain state") {
-    val oracleScript = """|{
+  test("script state persistence: multiple invocations maintain state") {
+    val scriptSource = """|{
                           |  "_state": {"callCount": 99},
                           |  "_result": "incremented"
                           |}""".stripMargin
@@ -211,21 +211,21 @@ object StatefulOracleSuite extends SimpleIOSuite {
         combiner <- Combiner.make[IO]().pure[IO]
 
         fiberId <- IO.randomUUID
-        prog    <- IO.fromEither(parser.parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
+        prog    <- IO.fromEither(parser.parse(scriptSource).flatMap(_.as[JsonLogicExpression]))
 
         initialData = MapValue(Map("callCount" -> IntValue(0)))
 
-        createOracle = Updates.CreateScript(
+        createScript = Updates.CreateScript(
           fiberId = fiberId,
           scriptProgram = prog,
           initialState = Some(initialData),
           accessControl = AccessControlPolicy.Public
         )
 
-        createProof <- fixture.registry.generateProofs(createOracle, Set(Alice))
+        createProof <- fixture.registry.generateProofs(createScript, Set(Alice))
         state0 <- combiner.insert(
           DataState(OnChain.genesis, CalculatedState.genesis),
-          Signed(createOracle, createProof)
+          Signed(createScript, createProof)
         )
 
         // First invocation
@@ -233,7 +233,7 @@ object StatefulOracleSuite extends SimpleIOSuite {
         proof1 <- fixture.registry.generateProofs(invoke1, Set(Alice))
         state1 <- combiner.insert(state0, Signed(invoke1, proof1))
 
-        oracle1 = state1.calculated.scripts.get(fiberId)
+        script1 = state1.calculated.scripts.get(fiberId)
 
         // Second invocation
         invoke2 = Updates
@@ -246,13 +246,13 @@ object StatefulOracleSuite extends SimpleIOSuite {
         proof2 <- fixture.registry.generateProofs(invoke2, Set(Alice))
         state2 <- combiner.insert(state1, Signed(invoke2, proof2))
 
-        oracle2 = state2.calculated.scripts.get(fiberId)
+        script2 = state2.calculated.scripts.get(fiberId)
 
-      } yield expect(oracle1.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next)) and
-      expect(oracle1.flatMap(_.stateData).contains(MapValue(Map("callCount" -> IntValue(99))))) and
-      expect(oracle2.map(_.sequenceNumber).contains(FiberOrdinal.unsafeApply(2L))) and
-      expect(oracle2.flatMap(_.stateData).contains(MapValue(Map("callCount" -> IntValue(99))))) and
-      expect(oracle2.map(_.lastInvocation.isDefined).contains(true))
+      } yield expect(script1.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next)) and
+      expect(script1.flatMap(_.stateData).contains(MapValue(Map("callCount" -> IntValue(99))))) and
+      expect(script2.map(_.sequenceNumber).contains(FiberOrdinal.unsafeApply(2L))) and
+      expect(script2.flatMap(_.stateData).contains(MapValue(Map("callCount" -> IntValue(99))))) and
+      expect(script2.map(_.lastInvocation.isDefined).contains(true))
     }
   }
 }

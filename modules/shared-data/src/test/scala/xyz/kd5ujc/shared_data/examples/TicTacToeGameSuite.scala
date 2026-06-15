@@ -28,9 +28,9 @@ object TicTacToeGameSuite extends SimpleIOSuite {
   import DataStateTestOps._
   import TestImports.optionFiberRecordOps
 
-  // Inline state machine definition with dynamic oracle CID via string interpolation.
-  // This replaces the static resource file which had a hardcoded oracle UUID.
-  private def stateMachineJson(oracleFiberId: UUID): String =
+  // Inline state machine definition with dynamic script CID via string interpolation.
+  // This replaces the static resource file which had a hardcoded script UUID.
+  private def stateMachineJson(scriptFiberId: UUID): String =
     s"""{
     "states": {
       "setup": { "id": "setup", "isFinal": false },
@@ -52,8 +52,8 @@ object TicTacToeGameSuite extends SimpleIOSuite {
           ]
         },
         "effect": {
-          "_oracleCall": {
-            "fiberId": {"var": "state.oracleFiberId"},
+          "_scriptCall": {
+            "fiberId": {"var": "state.scriptFiberId"},
             "method": "initialize",
             "args": {
               "playerX": {"var": "event.playerX"},
@@ -73,11 +73,11 @@ object TicTacToeGameSuite extends SimpleIOSuite {
         "to": "playing",
         "eventName": "make_move",
         "guard": {
-          "===": [{"var": "scripts.${oracleFiberId}.state.status"}, "InProgress"]
+          "===": [{"var": "scripts.${scriptFiberId}.state.status"}, "InProgress"]
         },
         "effect": {
-          "_oracleCall": {
-            "fiberId": {"var": "state.oracleFiberId"},
+          "_scriptCall": {
+            "fiberId": {"var": "state.scriptFiberId"},
             "method": "makeMove",
             "args": {
               "player": {"var": "event.player"},
@@ -89,7 +89,7 @@ object TicTacToeGameSuite extends SimpleIOSuite {
             "cell": {"var": "event.cell"}
           }
         },
-        "dependencies": ["${oracleFiberId}"]
+        "dependencies": ["${scriptFiberId}"]
       },
       {
         "from": "playing",
@@ -97,35 +97,35 @@ object TicTacToeGameSuite extends SimpleIOSuite {
         "eventName": "make_move",
         "guard": {
           "or": [
-            {"===": [{"var": "scripts.${oracleFiberId}.state.status"}, "Won"]},
-            {"===": [{"var": "scripts.${oracleFiberId}.state.status"}, "Draw"]}
+            {"===": [{"var": "scripts.${scriptFiberId}.state.status"}, "Won"]},
+            {"===": [{"var": "scripts.${scriptFiberId}.state.status"}, "Draw"]}
           ]
         },
         "effect": {
-          "_oracleCall": {
-            "fiberId": {"var": "state.oracleFiberId"},
+          "_scriptCall": {
+            "fiberId": {"var": "state.scriptFiberId"},
             "method": "makeMove",
             "args": {
               "player": {"var": "event.player"},
               "cell": {"var": "event.cell"}
             }
           },
-          "finalStatus": {"var": "scripts.${oracleFiberId}.state.status"},
-          "winner": {"var": "scripts.${oracleFiberId}.state.winner"},
-          "finalBoard": {"var": "scripts.${oracleFiberId}.state.board"},
+          "finalStatus": {"var": "scripts.${scriptFiberId}.state.status"},
+          "winner": {"var": "scripts.${scriptFiberId}.state.winner"},
+          "finalBoard": {"var": "scripts.${scriptFiberId}.state.board"},
           "_emit": [
             {
               "name": "game_completed",
               "data": {
                 "gameId": {"var": "state.gameId"},
-                "winner": {"var": "scripts.${oracleFiberId}.state.winner"},
-                "status": {"var": "scripts.${oracleFiberId}.state.status"},
-                "moveCount": {"var": "scripts.${oracleFiberId}.state.moveCount"}
+                "winner": {"var": "scripts.${scriptFiberId}.state.winner"},
+                "status": {"var": "scripts.${scriptFiberId}.state.status"},
+                "moveCount": {"var": "scripts.${scriptFiberId}.state.moveCount"}
               }
             }
           ]
         },
-        "dependencies": ["${oracleFiberId}"]
+        "dependencies": ["${scriptFiberId}"]
       },
       {
         "from": "playing",
@@ -133,19 +133,19 @@ object TicTacToeGameSuite extends SimpleIOSuite {
         "eventName": "reset_board",
         "guard": {
           "or": [
-            {"===": [{"var": "scripts.${oracleFiberId}.state.status"}, "Won"]},
-            {"===": [{"var": "scripts.${oracleFiberId}.state.status"}, "Draw"]}
+            {"===": [{"var": "scripts.${scriptFiberId}.state.status"}, "Won"]},
+            {"===": [{"var": "scripts.${scriptFiberId}.state.status"}, "Draw"]}
           ]
         },
         "effect": {
-          "_oracleCall": {
-            "fiberId": {"var": "state.oracleFiberId"},
+          "_scriptCall": {
+            "fiberId": {"var": "state.scriptFiberId"},
             "method": "resetGame",
             "args": {}
           },
           "roundCount": {"+": [{"var": "state.roundCount"}, 1]}
         },
-        "dependencies": ["${oracleFiberId}"]
+        "dependencies": ["${scriptFiberId}"]
       },
       {
         "from": "playing",
@@ -153,8 +153,8 @@ object TicTacToeGameSuite extends SimpleIOSuite {
         "eventName": "cancel_game",
         "guard": {"==": [1, 1]},
         "effect": {
-          "_oracleCall": {
-            "fiberId": {"var": "state.oracleFiberId"},
+          "_scriptCall": {
+            "fiberId": {"var": "state.scriptFiberId"},
             "method": "cancelGame",
             "args": {
               "requestedBy": {"var": "event.requestedBy"},
@@ -181,7 +181,7 @@ object TicTacToeGameSuite extends SimpleIOSuite {
   }"""
 
   /**
-   * Shared setup: creates oracle + state machine and returns the initial DataState
+   * Shared setup: creates script + state machine and returns the initial DataState
    * along with the generated CIDs.
    */
   private def setupGame(
@@ -192,36 +192,36 @@ object TicTacToeGameSuite extends SimpleIOSuite {
     l0ctx: L0NodeContext[IO]
   ): IO[(DataState[OnChain, CalculatedState], UUID, UUID)] =
     for {
-      oracleFiberId  <- UUIDGen.randomUUID[IO]
+      scriptFiberId  <- UUIDGen.randomUUID[IO]
       machineFiberId <- UUIDGen.randomUUID[IO]
 
-      // Load oracle definition from resource (no hardcoded UUIDs)
-      oracleDefJson <- IO {
+      // Load script definition from resource (no hardcoded UUIDs)
+      scriptDefJson <- IO {
         val stream = getClass.getResourceAsStream("/tictactoe/script-definition.json")
         scala.io.Source.fromInputStream(stream).mkString
       }
-      oracleDefParsed <- IO.fromEither(parse(oracleDefJson))
-      oracleScript    <- IO.fromEither(oracleDefParsed.hcursor.downField("scriptProgram").as[JsonLogicExpression])
-      oracleInitialState <- IO.fromEither(
-        oracleDefParsed.hcursor.downField("initialState").as[Option[JsonLogicValue]]
+      scriptDefParsed <- IO.fromEither(parse(scriptDefJson))
+      scriptSource    <- IO.fromEither(scriptDefParsed.hcursor.downField("scriptProgram").as[JsonLogicExpression])
+      scriptInitialState <- IO.fromEither(
+        scriptDefParsed.hcursor.downField("initialState").as[Option[JsonLogicValue]]
       )
 
-      // Create oracle via combiner
-      createOracle = Updates.CreateScript(
-        fiberId = oracleFiberId,
-        scriptProgram = oracleScript,
-        initialState = oracleInitialState,
+      // Create script via combiner
+      createScript = Updates.CreateScript(
+        fiberId = scriptFiberId,
+        scriptProgram = scriptSource,
+        initialState = scriptInitialState,
         accessControl = AccessControlPolicy.Public
       )
-      oracleProof <- registry.generateProofs(createOracle, Set(Alice))
-      stateAfterOracle <- combiner.insert(
+      scriptProof <- registry.generateProofs(createScript, Set(Alice))
+      stateAfterScript <- combiner.insert(
         DataState(OnChain.genesis, CalculatedState.genesis),
-        Signed(createOracle, oracleProof)
+        Signed(createScript, scriptProof)
       )
 
-      // Create state machine with dynamic oracle CID
+      // Create state machine with dynamic script CID
       machineDef <- IO.fromEither(
-        decode[StateMachineDefinition](stateMachineJson(oracleFiberId)).left.map(err =>
+        decode[StateMachineDefinition](stateMachineJson(scriptFiberId)).left.map(err =>
           new RuntimeException(s"Failed to decode state machine JSON: $err")
         )
       )
@@ -229,15 +229,15 @@ object TicTacToeGameSuite extends SimpleIOSuite {
       machineFiber <- FiberBuilder(machineFiberId, ordinal, machineDef)
         .withState("setup")
         .withData(
-          "oracleFiberId" -> StrValue(oracleFiberId.toString),
+          "scriptFiberId" -> StrValue(scriptFiberId.toString),
           "status"        -> StrValue("waiting"),
           "roundCount"    -> IntValue(0)
         )
         .ownedBy(registry, Alice, Bob)
         .build[IO]
 
-      stateAfterMachine <- stateAfterOracle.withRecord[IO](machineFiberId, machineFiber)
-    } yield (stateAfterMachine, oracleFiberId, machineFiberId)
+      stateAfterMachine <- stateAfterScript.withRecord[IO](machineFiberId, machineFiber)
+    } yield (stateAfterMachine, scriptFiberId, machineFiberId)
 
   // Type alias for readability
   private type CombinerService =
@@ -256,7 +256,7 @@ object TicTacToeGameSuite extends SimpleIOSuite {
 
       for {
         combiner                                      <- Combiner.make[IO]().pure[IO]
-        (initialState, oracleFiberId, machineFiberId) <- setupGame(fixture.ordinal, registry, combiner)
+        (initialState, scriptFiberId, machineFiberId) <- setupGame(fixture.ordinal, registry, combiner)
 
         aliceAddr = registry.addresses(Alice)
         bobAddr = registry.addresses(Bob)
@@ -314,15 +314,15 @@ object TicTacToeGameSuite extends SimpleIOSuite {
         )(registry, combiner)
 
         finalMachine = finalState.fiberRecord(machineFiberId)
-        finalOracle = finalState.oracleRecord(oracleFiberId)
+        finalScript = finalState.scriptRecord(scriptFiberId)
 
-        oracleStatus = finalOracle.flatMap { o =>
+        scriptStatus = finalScript.flatMap { o =>
           o.stateData match {
             case Some(MapValue(m)) => m.get("status").collect { case StrValue(s) => s }
             case _                 => None
           }
         }
-        oracleWinner = finalOracle.flatMap { o =>
+        scriptWinner = finalScript.flatMap { o =>
           o.stateData match {
             case Some(MapValue(m)) => m.get("winner").collect { case StrValue(w) => w }
             case _                 => None
@@ -341,11 +341,11 @@ object TicTacToeGameSuite extends SimpleIOSuite {
             }
           )
           .getOrElse(false),
-        finalOracle.isDefined,
-        finalOracle.map(_.sequenceNumber).contains(FiberOrdinal.unsafeApply(6L)),
-        oracleStatus.contains("Won"),
-        oracleWinner.contains("X"),
-        finalOracle.flatMap(_.stateData).exists {
+        finalScript.isDefined,
+        finalScript.map(_.sequenceNumber).contains(FiberOrdinal.unsafeApply(6L)),
+        scriptStatus.contains("Won"),
+        scriptWinner.contains("X"),
+        finalScript.flatMap(_.stateData).exists {
           case MapValue(m) =>
             m.get("board") match {
               case Some(ArrayValue(List(StrValue("X"), StrValue("X"), StrValue("X"), _, _, _, _, _, _))) => true
@@ -365,7 +365,7 @@ object TicTacToeGameSuite extends SimpleIOSuite {
 
       for {
         combiner                                      <- Combiner.make[IO]().pure[IO]
-        (initialState, oracleFiberId, machineFiberId) <- setupGame(fixture.ordinal, registry, combiner)
+        (initialState, scriptFiberId, machineFiberId) <- setupGame(fixture.ordinal, registry, combiner)
 
         aliceAddr = registry.addresses(Alice)
         bobAddr = registry.addresses(Bob)
@@ -405,9 +405,9 @@ object TicTacToeGameSuite extends SimpleIOSuite {
         }
 
         finalMachine = finalState.fiberRecord(machineFiberId)
-        finalOracle = finalState.oracleRecord(oracleFiberId)
+        finalScript = finalState.scriptRecord(scriptFiberId)
 
-        oracleStatus = finalOracle.flatMap { o =>
+        scriptStatus = finalScript.flatMap { o =>
           o.stateData match {
             case Some(MapValue(m)) => m.get("status").collect { case StrValue(s) => s }
             case _                 => None
@@ -417,9 +417,9 @@ object TicTacToeGameSuite extends SimpleIOSuite {
       } yield expect.all(
         finalMachine.isDefined,
         finalMachine.map(_.currentState).contains(StateId("playing")),
-        finalOracle.isDefined,
-        finalOracle.map(_.sequenceNumber).contains(FiberOrdinal.unsafeApply(10L)),
-        oracleStatus.contains("Draw")
+        finalScript.isDefined,
+        finalScript.map(_.sequenceNumber).contains(FiberOrdinal.unsafeApply(10L)),
+        scriptStatus.contains("Draw")
       )
     }
   }
@@ -432,7 +432,7 @@ object TicTacToeGameSuite extends SimpleIOSuite {
 
       for {
         combiner                                      <- Combiner.make[IO]().pure[IO]
-        (initialState, oracleFiberId, machineFiberId) <- setupGame(fixture.ordinal, registry, combiner)
+        (initialState, scriptFiberId, machineFiberId) <- setupGame(fixture.ordinal, registry, combiner)
 
         aliceAddr = registry.addresses(Alice)
         bobAddr = registry.addresses(Bob)
@@ -467,13 +467,13 @@ object TicTacToeGameSuite extends SimpleIOSuite {
         )(registry, combiner)
 
         machineAfterInvalid = state3.fiberRecord(machineFiberId)
-        oracleAfterInvalid = state3.oracleRecord(oracleFiberId)
+        scriptAfterInvalid = state3.scriptRecord(scriptFiberId)
 
       } yield expect.all(
         machineAfterInvalid.isDefined,
         machineAfterInvalid.exists(m => m.lastReceipt.exists(!_.success)),
-        oracleAfterInvalid.map(_.sequenceNumber).contains(FiberOrdinal.unsafeApply(2L)),
-        oracleAfterInvalid.flatMap(_.stateData).exists {
+        scriptAfterInvalid.map(_.sequenceNumber).contains(FiberOrdinal.unsafeApply(2L)),
+        scriptAfterInvalid.flatMap(_.stateData).exists {
           case MapValue(m) => m.get("moveCount").contains(IntValue(1))
           case _           => false
         }
@@ -489,7 +489,7 @@ object TicTacToeGameSuite extends SimpleIOSuite {
 
       for {
         combiner                                      <- Combiner.make[IO]().pure[IO]
-        (initialState, oracleFiberId, machineFiberId) <- setupGame(fixture.ordinal, registry, combiner)
+        (initialState, scriptFiberId, machineFiberId) <- setupGame(fixture.ordinal, registry, combiner)
 
         aliceAddr = registry.addresses(Alice)
         bobAddr = registry.addresses(Bob)
@@ -536,8 +536,8 @@ object TicTacToeGameSuite extends SimpleIOSuite {
         machineAfterReset = stateAfterReset.fiberRecord(machineFiberId)
         roundCount = machineAfterReset.extractInt("roundCount")
 
-        oracleAfterReset = stateAfterReset.oracleRecord(oracleFiberId)
-        oracleStatusAfterReset = oracleAfterReset.flatMap { o =>
+        scriptAfterReset = stateAfterReset.scriptRecord(scriptFiberId)
+        scriptStatusAfterReset = scriptAfterReset.flatMap { o =>
           o.stateData match {
             case Some(MapValue(m)) => m.get("status").collect { case StrValue(s) => s }
             case _                 => None
@@ -548,8 +548,8 @@ object TicTacToeGameSuite extends SimpleIOSuite {
         machineAfterReset.isDefined,
         machineAfterReset.map(_.currentState).contains(StateId("playing")),
         roundCount.contains(BigInt(1)),
-        oracleAfterReset.isDefined,
-        oracleStatusAfterReset.contains("InProgress")
+        scriptAfterReset.isDefined,
+        scriptStatusAfterReset.contains("InProgress")
       )
     }
   }

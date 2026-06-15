@@ -18,7 +18,7 @@ const __dirname = path.dirname(__filename);
 const program = new Command()
   .name('ottochain-terminal')
   .description(
-    'Interactive CLI for testing Ottochain state machines and script oracles'
+    'Interactive CLI for testing Ottochain state machines and script scripts'
   )
   .option(
     '--address <address>',
@@ -248,29 +248,29 @@ stateMachineCmd
   });
 
 // ---------------------------------------------------------------------------
-// Oracle Commands
+// Script Commands
 // ---------------------------------------------------------------------------
 
-const oracleCmd = new Command('oracle')
+const scriptCmd = new Command('script')
   .alias('or')
-  .description('Manage script oracles');
+  .description('Manage script scripts');
 
-oracleCmd
+scriptCmd
   .command('create')
-  .description('Create a new script oracle')
-  .requiredOption('--oracle <path>', 'Path to oracle definition JSON file')
+  .description('Create a new script script')
+  .requiredOption('--script <path>', 'Path to script definition JSON file')
   .action(async (cmdOptions) => {
-    await executeCommand('oracle', 'create', cmdOptions);
+    await executeCommand('script', 'create', cmdOptions);
   });
 
-oracleCmd
+scriptCmd
   .command('invoke')
-  .description('Invoke a method on an existing script oracle')
+  .description('Invoke a method on an existing script script')
   .requiredOption('--method <name>', 'Method name to invoke')
   .option('--args <path>', 'Path to arguments JSON file')
   .option('--expectedResult <json>', 'Expected result (for validation)')
   .action(async (cmdOptions) => {
-    await executeCommand('oracle', 'invoke', cmdOptions);
+    await executeCommand('script', 'invoke', cmdOptions);
   });
 
 // ---------------------------------------------------------------------------
@@ -310,15 +310,15 @@ queryCmd
   });
 
 queryCmd
-  .command('oracles')
+  .command('scripts')
   .alias('or')
-  .description('List all oracles')
+  .description('List all scripts')
   .option('--node <number>', 'Node number (1, 2, or 3). Default: 1', '1')
   .option('--status <status>', 'Filter by status: [Active, Archived]')
-  .option('--oracleId <uuid>', 'Get specific oracle by ID')
-  .option('--invocations', 'Get invocation log (requires --oracleId)')
+  .option('--scriptId <uuid>', 'Get specific script by ID')
+  .option('--invocations', 'Get invocation log (requires --scriptId)')
   .action(async (cmdOptions) => {
-    await executeQuery('oracles', cmdOptions);
+    await executeQuery('scripts', cmdOptions);
   });
 
 async function executeQuery(
@@ -356,13 +356,13 @@ async function executeQuery(
           if (options.status) apiPath += `?status=${options.status}`;
         }
         break;
-      case 'oracles':
-        if (options.oracleId && options.invocations) {
-          apiPath = `/data-application/v1/oracles/${options.oracleId}/invocations`;
-        } else if (options.oracleId) {
-          apiPath = `/data-application/v1/oracles/${options.oracleId}`;
+      case 'scripts':
+        if (options.scriptId && options.invocations) {
+          apiPath = `/data-application/v1/scripts/${options.scriptId}/invocations`;
+        } else if (options.scriptId) {
+          apiPath = `/data-application/v1/scripts/${options.scriptId}`;
         } else {
-          apiPath = '/data-application/v1/oracles';
+          apiPath = '/data-application/v1/scripts';
           if (options.status) apiPath += `?status=${options.status}`;
         }
         break;
@@ -391,7 +391,7 @@ program
   .description('List available examples')
   .option(
     '--type <type>',
-    'Filter by type: [state-machines, oracles, all]',
+    'Filter by type: [state-machines, scripts, all]',
     'all'
   )
   .option('--example <name>', 'Show detailed info for a specific example')
@@ -467,7 +467,7 @@ program
     ).filter((e): e is Record<string, unknown> & { dir: string } => e !== null);
 
     const stateMachines = examples.filter((e) => e.type === 'state-machine');
-    const oracles = examples.filter((e) => e.type === 'oracle');
+    const scripts = examples.filter((e) => e.type === 'script');
     const combined = examples.filter((e) => e.type === 'combined');
 
     if (cmdOptions.type === 'all' || cmdOptions.type === 'state-machines') {
@@ -479,9 +479,9 @@ program
       console.log('');
     }
 
-    if (cmdOptions.type === 'all' || cmdOptions.type === 'oracles') {
-      console.log('\x1b[33mOracle Examples:\x1b[0m');
-      oracles.forEach((e) => {
+    if (cmdOptions.type === 'all' || cmdOptions.type === 'scripts') {
+      console.log('\x1b[33mScript Examples:\x1b[0m');
+      scripts.forEach((e) => {
         console.log(`  \x1b[36m${e.dir}\x1b[0m - ${e.name}`);
         console.log(`    ${e.description}`);
       });
@@ -489,7 +489,7 @@ program
     }
 
     if (cmdOptions.type === 'all' && combined.length > 0) {
-      console.log('\x1b[33mCombined Examples (Oracle + State Machine):\x1b[0m');
+      console.log('\x1b[33mCombined Examples (Script + State Machine):\x1b[0m');
       combined.forEach((e) => {
         console.log(`  \x1b[36m${e.dir}\x1b[0m - ${e.name}`);
         console.log(`    ${e.description}`);
@@ -535,7 +535,7 @@ async function executeCommand(
         processEvent: 'processEvent',
         archive: 'archiveFiber',
       },
-      oracle: {
+      script: {
         create: 'createScript',
         invoke: 'invokeScript',
       },
@@ -654,12 +654,12 @@ program
       console.log('\x1b[36m\n=== Ottochain Interactive Terminal ===\x1b[0m\n');
 
       const action = await question(
-        'What would you like to do?\n  1) Create state machine\n  2) Process event on state machine\n  3) Archive state machine\n  4) Create oracle\n  5) Invoke oracle\n  6) Query state\n\nChoice (1-6): '
+        'What would you like to do?\n  1) Create state machine\n  2) Process event on state machine\n  3) Archive state machine\n  4) Create script\n  5) Invoke script\n  6) Query state\n\nChoice (1-6): '
       );
 
       if (action === '6') {
         const queryType = await question(
-          '\nWhat would you like to query?\n  1) Checkpoint\n  2) Onchain state\n  3) All state machines\n  4) Specific state machine\n  5) All oracles\n  6) Specific oracle\n\nChoice (1-6): '
+          '\nWhat would you like to query?\n  1) Checkpoint\n  2) Onchain state\n  3) All state machines\n  4) Specific state machine\n  5) All scripts\n  6) Specific script\n\nChoice (1-6): '
         );
 
         const node =
@@ -698,15 +698,15 @@ program
             'Filter by status? (Active/Archived) [press enter for all]: '
           );
           cmdOptions.status = status || undefined;
-          await executeQuery('oracles', cmdOptions);
+          await executeQuery('scripts', cmdOptions);
         } else if (queryType === '6') {
-          const oracleId = await question('Enter oracle ID: ');
+          const scriptId = await question('Enter script ID: ');
           const showInvocations = await question(
             'Show invocation log? (y/n) [default: n]: '
           );
-          cmdOptions.oracleId = oracleId;
+          cmdOptions.scriptId = scriptId;
           cmdOptions.invocations = showInvocations.toLowerCase() === 'y';
-          await executeQuery('oracles', cmdOptions);
+          await executeQuery('scripts', cmdOptions);
         }
         return;
       }
@@ -829,10 +829,10 @@ program
         const fiberId = await question('\nEnter fiber ID to archive: ');
         cmdOptions.address = fiberId;
       } else if (action === '4') {
-        category = 'oracle';
+        category = 'script';
         operation = 'create';
 
-        const oracleExamples = fs
+        const scriptExamples = fs
           .readdirSync(examplesDir)
           .filter((dir) => {
             try {
@@ -841,14 +841,14 @@ program
               const example = JSON.parse(
                 fs.readFileSync(examplePath, 'utf8')
               );
-              return example.type === 'oracle';
+              return example.type === 'script';
             } catch {
               return false;
             }
           });
 
-        console.log('\n\x1b[33mAvailable oracle examples:\x1b[0m');
-        oracleExamples.forEach((dir, i) => {
+        console.log('\n\x1b[33mAvailable script examples:\x1b[0m');
+        scriptExamples.forEach((dir, i) => {
           const example = JSON.parse(
             fs.readFileSync(
               path.join(examplesDir, dir, 'example.json'),
@@ -863,16 +863,16 @@ program
         );
         const exampleDir = isNaN(Number(exampleChoice))
           ? exampleChoice
-          : oracleExamples[parseInt(exampleChoice) - 1];
-        cmdOptions.oracle = `examples/${exampleDir}/definition.json`;
+          : scriptExamples[parseInt(exampleChoice) - 1];
+        cmdOptions.script = `examples/${exampleDir}/definition.json`;
       } else if (action === '5') {
-        category = 'oracle';
+        category = 'script';
         operation = 'invoke';
 
-        const oracleId = await question('\nEnter oracle ID (CID): ');
-        cmdOptions.address = oracleId;
+        const scriptId = await question('\nEnter script ID (CID): ');
+        cmdOptions.address = scriptId;
 
-        const oracleExamples = fs
+        const scriptExamples = fs
           .readdirSync(examplesDir)
           .filter((dir) => {
             try {
@@ -881,14 +881,14 @@ program
               const example = JSON.parse(
                 fs.readFileSync(examplePath, 'utf8')
               );
-              return example.type === 'oracle';
+              return example.type === 'script';
             } catch {
               return false;
             }
           });
 
-        console.log('\n\x1b[33mSelect oracle example:\x1b[0m');
-        oracleExamples.forEach((dir, i) => {
+        console.log('\n\x1b[33mSelect script example:\x1b[0m');
+        scriptExamples.forEach((dir, i) => {
           const example = JSON.parse(
             fs.readFileSync(
               path.join(examplesDir, dir, 'example.json'),
@@ -903,7 +903,7 @@ program
         );
         const exampleDir = isNaN(Number(exampleChoice))
           ? exampleChoice
-          : oracleExamples[parseInt(exampleChoice) - 1];
+          : scriptExamples[parseInt(exampleChoice) - 1];
 
         const example = JSON.parse(
           fs.readFileSync(
@@ -1143,7 +1143,7 @@ Examples:
       // Session state to track CIDs between steps
       const session = {
         cid: (globalOpts.address as string) || crypto.randomUUID(),
-        oracleFiberId: null as string | null,
+        scriptFiberId: null as string | null,
       };
 
       for (let i = 0; i < flow.steps.length; i++) {
@@ -1199,8 +1199,8 @@ Examples:
           }
 
           case 'createScript': {
-            session.oracleFiberId =
-              (example.oracleFiberId as string) || crypto.randomUUID();
+            session.scriptFiberId =
+              (example.scriptFiberId as string) || crypto.randomUUID();
             const definition = await loadFileOrModule(
               path.join(
                 examplesDir,
@@ -1210,17 +1210,17 @@ Examples:
               loadContext
             );
 
-            stepOptions = { oracleDefinition: definition };
+            stepOptions = { scriptDefinition: definition };
 
             const libModule = await import('./lib/script/createScript.ts');
             generator = libModule.generator;
             validator = libModule.validator;
             message = generator({
-              cid: session.oracleFiberId,
+              cid: session.scriptFiberId,
               wallets,
               options: stepOptions,
             });
-            console.log(`   Oracle CID: ${session.oracleFiberId}`);
+            console.log(`   Script CID: ${session.scriptFiberId}`);
             break;
           }
 
@@ -1285,7 +1285,7 @@ Examples:
             generator = libModule.generator;
             validator = libModule.validator;
             message = generator({
-              cid: session.oracleFiberId,
+              cid: session.scriptFiberId,
               wallets,
               options: stepOptions,
             });
@@ -1305,12 +1305,12 @@ Examples:
           ...stepOptions!,
           expectedState: step.expectedState,
         };
-        const useOracleCid =
-          (step.action as string).includes('Oracle') ||
+        const useScriptCid =
+          (step.action as string).includes('Script') ||
           step.action === 'invoke';
         await validate(
           validator!,
-          useOracleCid ? session.oracleFiberId! : session.cid,
+          useScriptCid ? session.scriptFiberId! : session.cid,
           initialStates,
           validationOptions,
           wallets,
@@ -1324,8 +1324,8 @@ Examples:
 
       console.log('\x1b[32m\n✓ Flow completed successfully!\x1b[0m');
       console.log(`  State Machine CID: ${session.cid}`);
-      if (session.oracleFiberId) {
-        console.log(`  Oracle CID: ${session.oracleFiberId}`);
+      if (session.scriptFiberId) {
+        console.log(`  Script CID: ${session.scriptFiberId}`);
       }
       console.log('');
       process.exit(0);
@@ -1335,7 +1335,7 @@ Examples:
   });
 
 program.addCommand(stateMachineCmd);
-program.addCommand(oracleCmd);
+program.addCommand(scriptCmd);
 program.addCommand(queryCmd);
 program.addCommand(runCmd);
 

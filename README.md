@@ -3,7 +3,7 @@
 [![CI](https://github.com/scasplte2/ottochain/actions/workflows/ci.yml/badge.svg)](https://github.com/scasplte2/ottochain/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/scasplte2/ottochain/branch/main/graph/badge.svg)](https://codecov.io/gh/scasplte2/ottochain)
 
-A metagraph on [Constellation Network](https://constellationnetwork.io/) for creating automated workflow contracts using JSON-encoded state machines and script oracles.
+A metagraph on [Constellation Network](https://constellationnetwork.io/) for creating automated workflow contracts using JSON-encoded state machines and scripts.
 
 **[📖 Read the Introduction →](docs/introduction.md)**
 
@@ -16,13 +16,13 @@ graph LR
     A["📋 JSON Definition"] -->|deploy| B["🔗 On-Chain Fiber"]
     B -->|events| C["⚙️ Guard → Effect → Transition"]
     C -->|triggers| D["📋 Other Fibers"]
-    C -->|oracle calls| E["🔮 Script Oracles"]
+    C -->|script calls| E["🔮 Scripts"]
 ```
 
 ### Key Capabilities
 
 - **JSON-Encoded State Machines** — Define workflows as states, transitions, guards, and effects in JSON
-- **Script Oracles** — Stateful computation units callable by state machines
+- **Scripts** — Stateful computation units callable by state machines
 - **Cross-Machine Triggers** — One machine's transition fires events on other machines
 - **Parent-Child Spawning** — Dynamically create child machines at runtime
 - **Broadcast Triggers** — Fan out events to many machines simultaneously
@@ -33,7 +33,7 @@ graph LR
 
 | Example | Machines | What It Demonstrates |
 |---------|----------|---------------------|
-| [Tic-Tac-Toe](docs/examples/tictactoe.md) | 1 + oracle | Oracle-centric architecture pattern |
+| [Tic-Tac-Toe](docs/examples/tictactoe.md) | 1 + script | Script-centric architecture pattern |
 | [Fuel Logistics](docs/examples/fuel-logistics.md) | 4 | Cross-machine triggers, GPS tracking |
 | [Clinical Trial](docs/examples/clinical-trial.md) | 6 | Multiple guards, bi-directional transitions |
 | [Real Estate](docs/examples/real-estate.md) | 8 | Self-transitions, lifecycle management |
@@ -54,7 +54,7 @@ OttoChain runs three layers on each node, built on Constellation's Tessellation 
 
 | Layer | Port | Purpose |
 |-------|------|---------|
-| Data L1 | 9300 | Fiber processing — events, oracle calls, validation |
+| Data L1 | 9300 | Fiber processing — events, script calls, validation |
 | Currency L1 | 9200 | Token transfers and balances |
 | Metagraph L0 | 9100 | Consensus, snapshots, state management |
 
@@ -64,7 +64,7 @@ See [Architecture Details](docs/reference/architecture.md) for the full technica
 
 - **Scala 2.13** with cats-effect, fs2, circe
 - **Tessellation** metagraph SDK
-- **JSON Logic** with OttoChain extensions (_oracleCall, _trigger, _spawn, _emit)
+- **JSON Logic** with OttoChain extensions (_scriptCall, _trigger, _spawn, _emit)
 - **sbt** multi-module build
 
 ## License

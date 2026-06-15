@@ -19,10 +19,10 @@ object FiberResult {
    * Gas is tracked via StateT (ExecutionState) — not carried in this result.
    *
    * @param newStateData Updated state data
-   * @param newStateId New state ID (Some for state machines, None for oracles)
+   * @param newStateId New state ID (Some for state machines, None for scripts)
    * @param triggers Triggered events for other fibers
    * @param spawns Child fibers to create (state machines only)
-   * @param returnValue Return value (Some for oracles, None for state machines)
+   * @param returnValue Return value (Some for scripts, None for state machines)
    */
   final case class Success(
     newStateData:  JsonLogicValue,

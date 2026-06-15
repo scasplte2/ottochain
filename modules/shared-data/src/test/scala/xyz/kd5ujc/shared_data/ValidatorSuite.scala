@@ -214,7 +214,7 @@ object ValidatorSuite extends SimpleIOSuite {
       )
     }
 
-    def simpleOracleScript(): JsonLogicExpression =
+    def simpleScript(): JsonLogicExpression =
       ConstExpression(MapValue(Map("result" -> IntValue(42))))
 
     /** Definition with a reserved operator name used as a field in guard */
@@ -732,7 +732,7 @@ object ValidatorSuite extends SimpleIOSuite {
     }
   }
 
-  // ============== Oracle Initial State Tests (L1) ==============
+  // ============== Script Initial State Tests (L1) ==============
 
   test("initialStateIsMapValueOrNull: None accepted") {
     TestFixture.resource().use { fixture =>
@@ -742,7 +742,7 @@ object ValidatorSuite extends SimpleIOSuite {
         validator <- Validator.make[IO]
         fiberId   <- UUIDGen.randomUUID[IO]
         update = Updates
-          .CreateScript(fiberId, Fixtures.simpleOracleScript(), None, AccessControlPolicy.Public)
+          .CreateScript(fiberId, Fixtures.simpleScript(), None, AccessControlPolicy.Public)
         result <- validator.validateUpdate(update)
       } yield expect(result.isValid)
     }
@@ -757,7 +757,7 @@ object ValidatorSuite extends SimpleIOSuite {
         fiberId   <- UUIDGen.randomUUID[IO]
         update = Updates.CreateScript(
           fiberId,
-          Fixtures.simpleOracleScript(),
+          Fixtures.simpleScript(),
           Some(MapValue(Map("counter" -> IntValue(0)))),
           AccessControlPolicy.Public
         )
@@ -775,7 +775,7 @@ object ValidatorSuite extends SimpleIOSuite {
         fiberId   <- UUIDGen.randomUUID[IO]
         update = Updates.CreateScript(
           fiberId,
-          Fixtures.simpleOracleScript(),
+          Fixtures.simpleScript(),
           Some(ArrayValue(List(IntValue(1)))),
           AccessControlPolicy.Public
         )
@@ -856,9 +856,9 @@ object ValidatorSuite extends SimpleIOSuite {
     }
   }
 
-  // ============== Oracle Access Control Tests (L0) ==============
+  // ============== Script Access Control Tests (L0) ==============
 
-  test("oracleAccessControlCheck: public policy allows any caller") {
+  test("scriptAccessControlCheck: public policy allows any caller") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
@@ -866,22 +866,22 @@ object ValidatorSuite extends SimpleIOSuite {
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
         validator <- Validator.make[IO]
-        oracleId  <- UUIDGen.randomUUID[IO]
+        scriptId  <- UUIDGen.randomUUID[IO]
 
-        createOracle = Updates
-          .CreateScript(oracleId, Fixtures.simpleOracleScript(), None, AccessControlPolicy.Public)
-        createProof <- fixture.registry.generateProofs(createOracle, Set(Alice))
+        createScript = Updates
+          .CreateScript(scriptId, Fixtures.simpleScript(), None, AccessControlPolicy.Public)
+        createProof <- fixture.registry.generateProofs(createScript, Set(Alice))
         stateAfterCreate <- combiner
-          .insert(DataState(OnChain.genesis, CalculatedState.genesis), Signed(createOracle, createProof))
+          .insert(DataState(OnChain.genesis, CalculatedState.genesis), Signed(createScript, createProof))
 
-        invokeOracle = Updates.InvokeScript(oracleId, "test", MapValue(Map.empty), FiberOrdinal.MinValue)
-        invokeProof <- fixture.registry.generateProofs(invokeOracle, Set(Bob))
-        result      <- validator.validateSignedUpdate(stateAfterCreate, Signed(invokeOracle, invokeProof))
+        invokeScript = Updates.InvokeScript(scriptId, "test", MapValue(Map.empty), FiberOrdinal.MinValue)
+        invokeProof <- fixture.registry.generateProofs(invokeScript, Set(Bob))
+        result      <- validator.validateSignedUpdate(stateAfterCreate, Signed(invokeScript, invokeProof))
       } yield expect(result.isValid)
     }
   }
 
-  test("oracleAccessControlCheck: whitelist allows authorized caller") {
+  test("scriptAccessControlCheck: whitelist allows authorized caller") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
@@ -889,27 +889,27 @@ object ValidatorSuite extends SimpleIOSuite {
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
         validator <- Validator.make[IO]
-        oracleId  <- UUIDGen.randomUUID[IO]
+        scriptId  <- UUIDGen.randomUUID[IO]
         bobAddr   <- fixture.registry.addresses(Bob).pure[IO]
 
-        createOracle = Updates.CreateScript(
-          oracleId,
-          Fixtures.simpleOracleScript(),
+        createScript = Updates.CreateScript(
+          scriptId,
+          Fixtures.simpleScript(),
           None,
           AccessControlPolicy.Whitelist(Set(bobAddr))
         )
-        createProof <- fixture.registry.generateProofs(createOracle, Set(Alice))
+        createProof <- fixture.registry.generateProofs(createScript, Set(Alice))
         stateAfterCreate <- combiner
-          .insert(DataState(OnChain.genesis, CalculatedState.genesis), Signed(createOracle, createProof))
+          .insert(DataState(OnChain.genesis, CalculatedState.genesis), Signed(createScript, createProof))
 
-        invokeOracle = Updates.InvokeScript(oracleId, "test", MapValue(Map.empty), FiberOrdinal.MinValue)
-        invokeProof <- fixture.registry.generateProofs(invokeOracle, Set(Bob))
-        result      <- validator.validateSignedUpdate(stateAfterCreate, Signed(invokeOracle, invokeProof))
+        invokeScript = Updates.InvokeScript(scriptId, "test", MapValue(Map.empty), FiberOrdinal.MinValue)
+        invokeProof <- fixture.registry.generateProofs(invokeScript, Set(Bob))
+        result      <- validator.validateSignedUpdate(stateAfterCreate, Signed(invokeScript, invokeProof))
       } yield expect(result.isValid)
     }
   }
 
-  test("oracleAccessControlCheck: whitelist denies unauthorized caller") {
+  test("scriptAccessControlCheck: whitelist denies unauthorized caller") {
     TestFixture.resource(Set(Alice, Bob, Charlie)).use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
@@ -917,22 +917,22 @@ object ValidatorSuite extends SimpleIOSuite {
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
         validator <- Validator.make[IO]
-        oracleId  <- UUIDGen.randomUUID[IO]
+        scriptId  <- UUIDGen.randomUUID[IO]
         bobAddr   <- fixture.registry.addresses(Bob).pure[IO]
 
-        createOracle = Updates.CreateScript(
-          oracleId,
-          Fixtures.simpleOracleScript(),
+        createScript = Updates.CreateScript(
+          scriptId,
+          Fixtures.simpleScript(),
           None,
           AccessControlPolicy.Whitelist(Set(bobAddr))
         )
-        createProof <- fixture.registry.generateProofs(createOracle, Set(Alice))
+        createProof <- fixture.registry.generateProofs(createScript, Set(Alice))
         stateAfterCreate <- combiner
-          .insert(DataState(OnChain.genesis, CalculatedState.genesis), Signed(createOracle, createProof))
+          .insert(DataState(OnChain.genesis, CalculatedState.genesis), Signed(createScript, createProof))
 
-        invokeOracle = Updates.InvokeScript(oracleId, "test", MapValue(Map.empty), FiberOrdinal.MinValue)
-        invokeProof <- fixture.registry.generateProofs(invokeOracle, Set(Charlie))
-        result      <- validator.validateSignedUpdate(stateAfterCreate, Signed(invokeOracle, invokeProof))
+        invokeScript = Updates.InvokeScript(scriptId, "test", MapValue(Map.empty), FiberOrdinal.MinValue)
+        invokeProof <- fixture.registry.generateProofs(invokeScript, Set(Charlie))
+        result      <- validator.validateSignedUpdate(stateAfterCreate, Signed(invokeScript, invokeProof))
       } yield expect(result.isInvalid) and
       expect(result.swap.exists(_.exists(_.message.toLowerCase.contains("access denied"))))
     }

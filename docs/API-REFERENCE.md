@@ -210,14 +210,14 @@ All custom routes are prefixed with `/v1/`.
 | `GET` | `/v1/state-machines/{fiberId}` | Get specific state machine by UUID |
 | `GET` | `/v1/state-machines/{fiberId}/events` | Event receipts for a fiber |
 
-#### Oracles (Scripts)
+#### Scripts
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/v1/oracles` | List all script oracles |
-| `GET` | `/v1/oracles?status={status}` | Filter by status |
-| `GET` | `/v1/oracles/{oracleId}` | Get specific oracle by UUID |
-| `GET` | `/v1/oracles/{oracleId}/invocations` | Invocation history for oracle |
+| `GET` | `/v1/scripts` | List all scripts |
+| `GET` | `/v1/scripts?status={status}` | Filter by status |
+| `GET` | `/v1/scripts/{scriptId}` | Get specific script by UUID |
+| `GET` | `/v1/scripts/{scriptId}/invocations` | Invocation history for script |
 
 #### State
 

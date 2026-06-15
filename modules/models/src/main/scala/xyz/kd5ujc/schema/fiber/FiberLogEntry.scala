@@ -18,7 +18,7 @@ import derevo.derive
  * Supertype for log entries emitted by fibers.
  *
  * State machines emit EventReceipt entries.
- * Script oracles emit OracleInvocation entries.
+ * Scripts emit ScriptInvocation entries.
  *
  * These are collected per-ordinal in OnChain.latestLogs for external signaling.
  */
@@ -91,7 +91,7 @@ object FiberLogEntry {
   }
 
   @derive(customizableEncoder, customizableDecoder)
-  final case class OracleInvocation(
+  final case class ScriptInvocation(
     fiberId:   UUID,
     method:    String,
     args:      JsonLogicValue,

@@ -34,7 +34,7 @@ object MeteredEvaluator {
   /**
    * Evaluate `expr` against `context`, charging consumed gas on success.
    *
-   * @param phase the gas-exhaustion phase to attribute a failure to (Guard | Effect | Oracle | Trigger | Spawn)
+   * @param phase the gas-exhaustion phase to attribute a failure to (Guard | Effect | Script | Trigger | Spawn)
    * @return Right(value) with gas already charged, or Left(reason) on evaluation failure (no gas charged)
    */
   def eval[F[_]: Async, G[_]: Monad](

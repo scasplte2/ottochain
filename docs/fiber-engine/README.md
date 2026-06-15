@@ -1,6 +1,6 @@
 # JLVM Fiber Engine
 
-The fiber engine orchestrates deterministic execution of state machines and oracles on the metagraph. This document covers the internal architecture for engine maintainers.
+The fiber engine orchestrates deterministic execution of state machines and scripts on the metagraph. This document covers the internal architecture for engine maintainers.
 
 ## Table of Contents
 
@@ -61,7 +61,7 @@ A fiber is an independently addressable execution unit. Two types exist:
 | Type | Record | Input | Purpose |
 |------|--------|-------|---------|
 | State Machine | `StateMachineFiberRecord` | `Transition` | Guarded state transitions with effects |
-| Oracle | `ScriptFiberRecord` | `MethodCall` | Stateless computations with access control |
+| Script | `ScriptFiberRecord` | `MethodCall` | Stateless computations with access control |
 
 ### FiberInput
 
@@ -102,7 +102,7 @@ Result of a complete transaction (including cascades):
 sealed trait TransactionOutcome
 case class Committed(
   updatedStateMachines: Map[UUID, Records.StateMachineFiberRecord],
-  updatedOracles: Map[UUID, Records.ScriptFiberRecord],
+  updatedScripts: Map[UUID, Records.ScriptFiberRecord],
   statuses: List[(UUID, Records.EventProcessingStatus)],
   totalGasUsed: Long,
   maxDepth: Int = 0,
@@ -161,9 +161,9 @@ Evaluates a single fiber without cascading. Dispatches based on fiber/input comb
 | Fiber Type | Input Type | Action |
 |------------|------------|--------|
 | StateMachine | Transition | Guard evaluation → Effect execution |
-| Oracle | MethodCall | Access control → Script evaluation |
+| Script | MethodCall | Access control → Script evaluation |
 | StateMachine | MethodCall | Error: invalid combination |
-| Oracle | Transition | Error: invalid combination |
+| Script | Transition | Error: invalid combination |
 
 **State Machine Evaluation:**
 1. Validate event against limits
@@ -173,7 +173,7 @@ Evaluates a single fiber without cascading. Dispatches based on fiber/input comb
 5. Extract triggers, spawns, outputs from effect result
 6. Merge effect into current state
 
-**Oracle Evaluation:**
+**Script Evaluation:**
 1. Validate caller against access control policy
 2. Build input data: `{ _method, _args, _state }`
 3. Evaluate script program
@@ -198,9 +198,9 @@ def processStateMachineTrigger(
 ): FiberT[F, Either[FailureReason, TriggerResult]]
 ```
 
-**Trigger processing for oracles:**
+**Trigger processing for scripts:**
 - Converts `Transition` input to `MethodCall` with caller address from source fiber
-- Increments depth (prevents unbounded oracle chains)
+- Increments depth (prevents unbounded script chains)
 
 **Target not found:**
 - Returns `TriggerTargetNotFound` failure
@@ -344,7 +344,7 @@ sealed trait FailureReason
 // Transition failures
 case class NoTransitionFound(fromState, eventType)
 case class NoGuardMatched(fromState, eventType, attemptedGuards)
-case class EvaluationError(phase, message)  // phase: Guard | Effect | Oracle
+case class EvaluationError(phase, message)  // phase: Guard | Effect | Script
 
 // Execution limit failures
 case class CycleDetected(fiberId, eventType)
@@ -360,9 +360,9 @@ case class TriggerTargetNotFound(targetFiberId, sourceFiberId)
 // Spawn failures
 case class SpawnValidationFailed(parentId, errors: List[String])
 
-// Oracle failures
-case class OracleInvocationFailed(oracleId, method, errorMsg)
-case class CallerResolutionFailed(oracleId, sourceId)
+// Script failures
+case class ScriptInvocationFailed(scriptId, method, errorMsg)
+case class CallerResolutionFailed(scriptId, sourceId)
 case class AccessDenied(caller, resourceId, policyType, details)
 case class MissingProof(fiberId, operation)
 
@@ -374,7 +374,7 @@ sealed trait GasExhaustionPhase
 object GasExhaustionPhase {
   case object Guard   // During guard evaluation
   case object Effect  // During effect evaluation
-  case object Oracle  // During oracle script evaluation
+  case object Script  // During script evaluation
   case object Trigger // During trigger dispatch
   case object Spawn   // During spawn processing
 }
@@ -445,17 +445,17 @@ Available via `var` expressions in guards/effects:
 | `machines` | `Map` | Dependent machine states |
 | `parent` | `MapValue?` | Parent fiber state (if exists) |
 | `children` | `Map` | Child fiber states |
-| `scripts` | `Map` | Available oracle states |
+| `scripts` | `Map` | Available script states |
 
-### Context Input Keys (Oracle)
+### Context Input Keys (Script)
 
-Available via `var` expressions in oracle scripts:
+Available via `var` expressions in scripts:
 
 | Key | Type | Description |
 |-----|------|-------------|
 | `method` | `String` | Method being invoked |
 | `args` | `JsonLogicValue` | Method arguments |
-| `state` | `JsonLogicValue?` | Current oracle state (if exists) |
+| `state` | `JsonLogicValue?` | Current script state (if exists) |
 
 ### Output Side-Effect Keys (State Machine)
 
@@ -464,17 +464,17 @@ Extracted from effect results, not merged into state:
 | Key | Type | Purpose |
 |-----|------|---------|
 | `_triggers` | `Array[TriggerSpec]` | Trigger events on other fibers |
-| `_oracleCall` | `OracleCallSpec` | Invoke an oracle |
+| `_scriptCall` | `ScriptCallSpec` | Invoke a script |
 | `_spawn` | `Array[SpawnSpec]` | Spawn child state machines |
 | `_outputs` | `Array[OutputSpec]` | Emit output values |
 
-### Output Return Convention Keys (Oracle)
+### Output Return Convention Keys (Script)
 
-Oracle scripts return results using these keys:
+Scripts return results using these keys:
 
 | Key | Type | Purpose |
 |-----|------|---------|
-| `_state` | `JsonLogicValue?` | New oracle state (optional) |
+| `_state` | `JsonLogicValue?` | New script state (optional) |
 | `_result` | `JsonLogicValue` | Return value to caller |
 
 If neither `_state` nor `_result` is present, the entire output is used as both.
@@ -489,11 +489,11 @@ If neither `_state` nor `_result` is present, the entire output is used as both.
 }
 ```
 
-### OracleCallSpec
+### ScriptCallSpec
 
 ```json
 {
-  "oracleId": "uuid-string",
+  "scriptId": "uuid-string",
   "method": "method_name",
   "args": { /* any JsonLogicValue */ }
 }
@@ -574,7 +574,7 @@ modules/shared-data/src/main/scala/xyz/kd5ujc/shared_data/
 │       ├── ExpressionParser.scala    # Expression parsing utilities
 │       ├── FiberEvaluator.scala      # Single fiber evaluation
 │       ├── FiberOrchestrator.scala   # Transaction coordinator
-│       ├── OracleProcessor.scala     # Oracle CRUD helpers
+│       ├── ScriptProcessor.scala     # Script CRUD helpers
 │       ├── SpawnProcessor.scala      # Child fiber creation
 │       ├── StateMerger.scala         # State composition
 │       ├── TriggerDispatcher.scala   # Cascade processing

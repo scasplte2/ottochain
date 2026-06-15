@@ -13,7 +13,7 @@ object RegistryNameSuite extends SimpleIOSuite {
       expect(RegistryName.from("escrow.package").isRight) and
       expect(RegistryName.from("gov.threshold-dao.package").isRight) and
       expect(RegistryName.from("my-fiber.machine").isRight) and
-      expect(RegistryName.from("oracle.script").isRight) and
+      expect(RegistryName.from("script.script").isRight) and
       expect(RegistryName.from("escrow").isLeft) and // no TLD
       expect(RegistryName.from("escrow.acme").isLeft) and // "acme" is not a reserved TLD
       expect(RegistryName.from(".package").isLeft) and // empty labels

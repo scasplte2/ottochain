@@ -14,7 +14,7 @@ import xyz.kd5ujc.schema.OnChain
 import xyz.kd5ujc.shared_data.lifecycle.validate.{Limits, ValidationResult}
 
 /**
- * Common validation rules shared between fiber and oracle domains.
+ * Common validation rules shared between fiber and script domains.
  *
  * These rules operate on shared concepts like CID uniqueness and
  * structural validation of JsonLogic values/expressions.

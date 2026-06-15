@@ -1,6 +1,6 @@
 /**
  * Debug script for tic-tac-toe test flow.
- * Runs the first few steps manually and queries oracle + SM state between each.
+ * Runs the first few steps manually and queries script + SM state between each.
  */
 import 'dotenv/config';
 import crypto from 'crypto';
@@ -28,11 +28,11 @@ const wallets: Record<string, ReturnType<typeof generateWallet>> = {
 };
 
 const smCid = crypto.randomUUID();
-const oracleFiberId = crypto.randomUUID();
-const session = { cid: smCid, oracleFiberId };
+const scriptFiberId = crypto.randomUUID();
+const session = { cid: smCid, scriptFiberId };
 
 console.log(`SM CID: ${smCid}`);
-console.log(`Oracle CID: ${oracleFiberId}`);
+console.log(`Script CID: ${scriptFiberId}`);
 
 async function loadModule(file: string, context: Record<string, unknown> = {}) {
   const fullPath = path.join(examplesDir, file);
@@ -84,19 +84,19 @@ async function send(message: unknown) {
 async function main() {
   const loadContext = { wallets, session };
 
-  // Step 1: Create Oracle
-  console.log('\n=== Step 1: Create Oracle ===');
-  const oracleDef = await loadModule('script-definition.json');
+  // Step 1: Create Script
+  console.log('\n=== Step 1: Create Script ===');
+  const scriptDef = await loadModule('script-definition.json');
   const createScriptLib = await import('../lib/script/createScript.ts');
-  const oracleMsg = createScriptLib.generator({
-    cid: oracleFiberId,
+  const scriptMsg = createScriptLib.generator({
+    cid: scriptFiberId,
     wallets,
-    options: { oracleDefinition: oracleDef },
+    options: { scriptDefinition: scriptDef },
   });
-  console.log('Oracle message (first 300 chars):', JSON.stringify(oracleMsg).substring(0, 300));
-  await send(oracleMsg);
-  const oracleAfterCreate = await waitForSequence(`oracles/${oracleFiberId}`, 0, 'oracle create');
-  console.log('Oracle after create:', JSON.stringify(oracleAfterCreate, null, 2).substring(0, 500));
+  console.log('Script message (first 300 chars):', JSON.stringify(scriptMsg).substring(0, 300));
+  await send(scriptMsg);
+  const scriptAfterCreate = await waitForSequence(`scripts/${scriptFiberId}`, 0, 'script create');
+  console.log('Script after create:', JSON.stringify(scriptAfterCreate, null, 2).substring(0, 500));
 
   // Step 2: Create State Machine
   console.log('\n=== Step 2: Create State Machine ===');
@@ -137,12 +137,12 @@ async function main() {
   console.log('  lastReceipt:', JSON.stringify(smAfterStart.lastReceipt));
   console.log('  stateData:', JSON.stringify(smAfterStart.stateData));
 
-  // Check oracle state after start_game
-  const oracleAfterStart = await queryEntity(`oracles/${oracleFiberId}`) as Record<string, unknown>;
-  console.log('Oracle after start_game:');
-  console.log('  sequenceNumber:', oracleAfterStart?.sequenceNumber);
-  console.log('  stateData:', JSON.stringify((oracleAfterStart as any)?.stateData)?.substring(0, 500));
-  console.log('  lastInvocation:', JSON.stringify((oracleAfterStart as any)?.lastInvocation)?.substring(0, 500));
+  // Check script state after start_game
+  const scriptAfterStart = await queryEntity(`scripts/${scriptFiberId}`) as Record<string, unknown>;
+  console.log('Script after start_game:');
+  console.log('  sequenceNumber:', scriptAfterStart?.sequenceNumber);
+  console.log('  stateData:', JSON.stringify((scriptAfterStart as any)?.stateData)?.substring(0, 500));
+  console.log('  lastInvocation:', JSON.stringify((scriptAfterStart as any)?.lastInvocation)?.substring(0, 500));
 
   // Step 4: make_move X:0
   console.log('\n=== Step 4: make_move (X, cell 0) ===');
@@ -175,12 +175,12 @@ async function main() {
   console.log('  lastReceipt:', JSON.stringify(smAfterMove.lastReceipt));
   console.log('  stateData:', JSON.stringify(smAfterMove.stateData));
 
-  // Check oracle state after make_move
-  const oracleAfterMove = await queryEntity(`oracles/${oracleFiberId}`) as Record<string, unknown>;
-  console.log('Oracle after make_move:');
-  console.log('  sequenceNumber:', oracleAfterMove?.sequenceNumber);
-  console.log('  stateData:', JSON.stringify((oracleAfterMove as any)?.stateData));
-  console.log('  lastInvocation:', JSON.stringify((oracleAfterMove as any)?.lastInvocation));
+  // Check script state after make_move
+  const scriptAfterMove = await queryEntity(`scripts/${scriptFiberId}`) as Record<string, unknown>;
+  console.log('Script after make_move:');
+  console.log('  sequenceNumber:', scriptAfterMove?.sequenceNumber);
+  console.log('  stateData:', JSON.stringify((scriptAfterMove as any)?.stateData));
+  console.log('  lastInvocation:', JSON.stringify((scriptAfterMove as any)?.lastInvocation));
 }
 
 main().catch((err) => {

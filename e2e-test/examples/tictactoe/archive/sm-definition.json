@@ -55,9 +55,9 @@
         ]
       },
       "effect": {
-        "_oracleCall": {
+        "_scriptCall": {
           "fiberId": {
-            "var": "state.oracleFiberId"
+            "var": "state.scriptFiberId"
           },
           "method": "initialize",
           "args": {
@@ -94,15 +94,15 @@
       "guard": {
         "===": [
           {
-            "var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.status"
+            "var": "scriptScripts.11111111-1111-1111-1111-111111111111.state.status"
           },
           "InProgress"
         ]
       },
       "effect": {
-        "_oracleCall": {
+        "_scriptCall": {
           "fiberId": {
-            "var": "state.oracleFiberId"
+            "var": "state.scriptFiberId"
           },
           "method": "makeMove",
           "args": {
@@ -138,7 +138,7 @@
           {
             "===": [
               {
-                "var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.status"
+                "var": "scriptScripts.11111111-1111-1111-1111-111111111111.state.status"
               },
               "Won"
             ]
@@ -146,7 +146,7 @@
           {
             "===": [
               {
-                "var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.status"
+                "var": "scriptScripts.11111111-1111-1111-1111-111111111111.state.status"
               },
               "Draw"
             ]
@@ -154,9 +154,9 @@
         ]
       },
       "effect": {
-        "_oracleCall": {
+        "_scriptCall": {
           "fiberId": {
-            "var": "state.oracleFiberId"
+            "var": "state.scriptFiberId"
           },
           "method": "makeMove",
           "args": {
@@ -169,13 +169,13 @@
           }
         },
         "finalStatus": {
-          "var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.status"
+          "var": "scriptScripts.11111111-1111-1111-1111-111111111111.state.status"
         },
         "winner": {
-          "var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.winner"
+          "var": "scriptScripts.11111111-1111-1111-1111-111111111111.state.winner"
         },
         "finalBoard": {
-          "var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.board"
+          "var": "scriptScripts.11111111-1111-1111-1111-111111111111.state.board"
         },
         "_outputs": [
           {
@@ -185,13 +185,13 @@
                 "var": "state.gameId"
               },
               "winner": {
-                "var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.winner"
+                "var": "scriptScripts.11111111-1111-1111-1111-111111111111.state.winner"
               },
               "status": {
-                "var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.status"
+                "var": "scriptScripts.11111111-1111-1111-1111-111111111111.state.status"
               },
               "moveCount": {
-                "var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.moveCount"
+                "var": "scriptScripts.11111111-1111-1111-1111-111111111111.state.moveCount"
               }
             }
           }
@@ -212,7 +212,7 @@
           {
             "===": [
               {
-                "var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.status"
+                "var": "scriptScripts.11111111-1111-1111-1111-111111111111.state.status"
               },
               "Won"
             ]
@@ -220,7 +220,7 @@
           {
             "===": [
               {
-                "var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.status"
+                "var": "scriptScripts.11111111-1111-1111-1111-111111111111.state.status"
               },
               "Draw"
             ]
@@ -228,9 +228,9 @@
         ]
       },
       "effect": {
-        "_oracleCall": {
+        "_scriptCall": {
           "fiberId": {
-            "var": "state.oracleFiberId"
+            "var": "state.scriptFiberId"
           },
           "method": "resetGame",
           "args": {}
@@ -261,9 +261,9 @@
         ]
       },
       "effect": {
-        "_oracleCall": {
+        "_scriptCall": {
           "fiberId": {
-            "var": "state.oracleFiberId"
+            "var": "state.scriptFiberId"
           },
           "method": "cancelGame",
           "args": {

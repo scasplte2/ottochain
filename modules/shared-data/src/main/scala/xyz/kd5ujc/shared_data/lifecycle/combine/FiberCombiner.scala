@@ -93,7 +93,7 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
    * Processes a fiber event through the fiber orchestrator.
    *
    * Handles both successful transitions and failures:
-   * - Committed: Applies all fiber and oracle updates
+   * - Committed: Applies all fiber and script updates
    * - Aborted: Records failure receipt on the fiber
    */
   def processFiberEvent(
@@ -133,8 +133,8 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
     outcome <- orchestrator.process(update.fiberId, input, proofsList)
 
     newState <- outcome match {
-      case TransactionResult.Committed(updatedFibers, updatedOracles, logEntries, _, _, _) =>
-        handleCommittedOutcome(updatedFibers, updatedOracles, logEntries)
+      case TransactionResult.Committed(updatedFibers, updatedScripts, logEntries, _, _, _) =>
+        handleCommittedOutcome(updatedFibers, updatedScripts, logEntries)
 
       case TransactionResult.Aborted(reason, gasUsed, _) =>
         handleAbortedOutcome(update.fiberId, update.eventName, reason, gasUsed, currentOrdinal)
@@ -254,8 +254,8 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
     outcome <- orchestrator.migrate(update.fiberId, update.newDefinition, newBinding, update.migration)
 
     newState <- outcome match {
-      case TransactionResult.Committed(updatedFibers, updatedOracles, logEntries, _, _, _) =>
-        handleCommittedOutcome(updatedFibers, updatedOracles, logEntries)
+      case TransactionResult.Committed(updatedFibers, updatedScripts, logEntries, _, _, _) =>
+        handleCommittedOutcome(updatedFibers, updatedScripts, logEntries)
 
       case TransactionResult.Aborted(reason, gasUsed, _) =>
         handleAbortedOutcome(update.fiberId, "__upgrade__", reason, gasUsed, currentOrdinal)
@@ -314,14 +314,14 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
   /**
    * Handles a committed transaction outcome.
    *
-   * Applies fiber/oracle record updates, then appends log entries to OnChain.latestLogs.
+   * Applies fiber/script record updates, then appends log entries to OnChain.latestLogs.
    */
   private def handleCommittedOutcome(
     updatedFibers:  Map[UUID, Records.StateMachineFiberRecord],
-    updatedOracles: Map[UUID, Records.ScriptFiberRecord],
+    updatedScripts: Map[UUID, Records.ScriptFiberRecord],
     logEntries:     List[FiberLogEntry]
   ): F[DataState[OnChain, CalculatedState]] =
-    current.withFibersAndOracles[F](updatedFibers, updatedOracles).map(_.appendLogs(logEntries))
+    current.withFibersAndScripts[F](updatedFibers, updatedScripts).map(_.appendLogs(logEntries))
 
   /**
    * Handles an aborted transaction outcome.

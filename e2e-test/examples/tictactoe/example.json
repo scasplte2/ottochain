@@ -1,9 +1,9 @@
 {
   "name": "Tic-Tac-Toe Game",
-  "description": "Complete tic-tac-toe implementation demonstrating the oracle-centric architecture pattern where the oracle holds game state and the state machine orchestrates the lifecycle",
+  "description": "Complete tic-tac-toe implementation demonstrating the script-centric architecture pattern where the script holds game state and the state machine orchestrates the lifecycle",
   "type": "combined",
 
-  "oracle": {
+  "script": {
     "definition": "script-definition.json",
     "methods": [
       { "name": "initialize", "description": "Initialize game with two players" },
