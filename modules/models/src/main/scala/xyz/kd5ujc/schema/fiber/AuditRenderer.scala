@@ -42,7 +42,7 @@ object AuditRenderer {
       val triggers = if (r.triggersFired > 0) s", ${r.triggersFired} trigger(s)" else ""
       s"[ord ${ord(r.ordinal)}] ${machine(r.fiberId, reverseNames)} '${r.eventName}' $outcome (gas ${r.gasUsed}$triggers)"
 
-    case i: FiberLogEntry.OracleInvocation =>
+    case i: FiberLogEntry.ScriptInvocation =>
       s"[ord ${ord(i.invokedAt)}] ${script(i.fiberId, reverseNames)} .${i.method}() by ${i.invokedBy.show} (gas ${i.gasUsed})"
 
     case r: FiberLogEntry.RejectionReceipt =>

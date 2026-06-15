@@ -20,9 +20,9 @@ import xyz.kd5ujc.shared_test.TestFixture
 import io.circe.parser._
 import weaver.SimpleIOSuite
 
-object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
+object ScriptStateMachineIntegrationSuite extends SimpleIOSuite {
 
-  test("state machine effect invokes oracle during transition") {
+  test("state machine effect invokes script during transition") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
@@ -30,29 +30,29 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
       for {
         combiner <- Combiner.make[IO]().pure[IO]
 
-        oracleFiberId  <- UUIDGen.randomUUID[IO]
+        scriptFiberId  <- UUIDGen.randomUUID[IO]
         machineFiberId <- UUIDGen.randomUUID[IO]
 
-        oracleScript =
+        scriptSource =
           """|{"if":[
              |  {"==":[{"var":"method"},"validateAmount"]},
              |  {">=":[{"var":"args.amount"},100]},
              |  false
              |]}""".stripMargin
 
-        oracleProg <- IO.fromEither(parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
+        scriptProg <- IO.fromEither(parse(scriptSource).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScript(
-          fiberId = oracleFiberId,
-          scriptProgram = oracleProg,
+        createScript = Updates.CreateScript(
+          fiberId = scriptFiberId,
+          scriptProgram = scriptProg,
           initialState = None,
           accessControl = AccessControlPolicy.Public
         )
 
-        oracleProof <- registry.generateProofs(createOracle, Set(Alice))
-        stateAfterOracle <- combiner.insert(
+        scriptProof <- registry.generateProofs(createScript, Set(Alice))
+        stateAfterScript <- combiner.insert(
           DataState(OnChain.genesis, CalculatedState.genesis),
-          Signed(createOracle, oracleProof)
+          Signed(createScript, scriptProof)
         )
 
         machineJson = s"""
@@ -69,8 +69,8 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
               "eventName": "submit",
               "guard": true,
               "effect": {
-                "_oracleCall": {
-                  "fiberId": "$oracleFiberId",
+                "_scriptCall": {
+                  "fiberId": "$scriptFiberId",
                   "method": "validateAmount",
                   "args": {
                     "amount": { "var": "event.amount" }
@@ -90,7 +90,7 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
 
         createMachine = Updates.CreateStateMachine(machineFiberId, machineDef, initialData)
         machineProof      <- registry.generateProofs(createMachine, Set(Bob))
-        stateAfterMachine <- combiner.insert(stateAfterOracle, Signed(createMachine, machineProof))
+        stateAfterMachine <- combiner.insert(stateAfterScript, Signed(createMachine, machineProof))
 
         submitEvent = Updates.TransitionStateMachine(
           machineFiberId,
@@ -105,7 +105,7 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
           .get(machineFiberId)
           .collect { case r: Records.StateMachineFiberRecord => r }
 
-        oracle = finalState.calculated.scripts.get(oracleFiberId)
+        script = finalState.calculated.scripts.get(scriptFiberId)
 
         machineStatus = machine.flatMap { f =>
           f.stateData match {
@@ -125,17 +125,17 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
       expect(machine.map(_.currentState).contains(StateId("validated"))) and
       expect(machineStatus.contains("validated")) and
       expect(submittedAmount.contains(BigInt(150))) and
-      expect(oracle.isDefined) and
-      expect(oracle.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next)) and
-      expect(oracle.flatMap(_.lastInvocation.map(_.method)).contains("validateAmount")) and
-      expect(oracle.flatMap(_.lastInvocation.map(_.result)).exists {
+      expect(script.isDefined) and
+      expect(script.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next)) and
+      expect(script.flatMap(_.lastInvocation.map(_.method)).contains("validateAmount")) and
+      expect(script.flatMap(_.lastInvocation.map(_.result)).exists {
         case BoolValue(true) => true
         case _               => false
       })
     }
   }
 
-  test("state machine effect invokes oracle and oracle call fails - transition should fail") {
+  test("state machine effect invokes script and script call fails - transition should fail") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
@@ -143,29 +143,29 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
       for {
         combiner <- Combiner.make[IO]().pure[IO]
 
-        oracleFiberId  <- UUIDGen.randomUUID[IO]
+        scriptFiberId  <- UUIDGen.randomUUID[IO]
         machineFiberId <- UUIDGen.randomUUID[IO]
 
-        oracleScript =
+        scriptSource =
           """|{"if":[
              |  {"==":[{"var":"method"},"validateAmount"]},
              |  {">=":[{"var":"args.amount"},100]},
              |  false
              |]}""".stripMargin
 
-        oracleProg <- IO.fromEither(parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
+        scriptProg <- IO.fromEither(parse(scriptSource).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScript(
-          fiberId = oracleFiberId,
-          scriptProgram = oracleProg,
+        createScript = Updates.CreateScript(
+          fiberId = scriptFiberId,
+          scriptProgram = scriptProg,
           initialState = None,
           accessControl = AccessControlPolicy.Public
         )
 
-        oracleProof <- registry.generateProofs(createOracle, Set(Alice))
-        stateAfterOracle <- combiner.insert(
+        scriptProof <- registry.generateProofs(createScript, Set(Alice))
+        stateAfterScript <- combiner.insert(
           DataState(OnChain.genesis, CalculatedState.genesis),
-          Signed(createOracle, oracleProof)
+          Signed(createScript, scriptProof)
         )
 
         machineJson = s"""
@@ -182,8 +182,8 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
               "eventName": "submit",
               "guard": true,
               "effect": {
-                "_oracleCall": {
-                  "fiberId": "$oracleFiberId",
+                "_scriptCall": {
+                  "fiberId": "$scriptFiberId",
                   "method": "validateAmount",
                   "args": {
                     "amount": { "var": "event.amount" }
@@ -203,7 +203,7 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
 
         createMachine = Updates.CreateStateMachine(machineFiberId, machineDef, initialData)
         machineProof      <- registry.generateProofs(createMachine, Set(Bob))
-        stateAfterMachine <- combiner.insert(stateAfterOracle, Signed(createMachine, machineProof))
+        stateAfterMachine <- combiner.insert(stateAfterScript, Signed(createMachine, machineProof))
 
         submitEvent = Updates.TransitionStateMachine(
           machineFiberId,
@@ -218,18 +218,18 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
           .get(machineFiberId)
           .collect { case r: Records.StateMachineFiberRecord => r }
 
-        oracle = finalState.calculated.scripts.get(oracleFiberId)
+        script = finalState.calculated.scripts.get(scriptFiberId)
 
       } yield expect(machine.isDefined) and
       expect(machine.map(_.currentState).contains(StateId("PENDING"))) and
       expect(machine.exists(_.lastReceipt.exists(r => !r.success))) and
-      expect(oracle.isDefined) and
-      expect(oracle.map(_.sequenceNumber).contains(FiberOrdinal.MinValue)) and
-      expect(oracle.map(_.lastInvocation.isEmpty).contains(true))
+      expect(script.isDefined) and
+      expect(script.map(_.sequenceNumber).contains(FiberOrdinal.MinValue)) and
+      expect(script.map(_.lastInvocation.isEmpty).contains(true))
     }
   }
 
-  test("state machine guard reads oracle state before transition") {
+  test("state machine guard reads script state before transition") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
@@ -237,24 +237,24 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
       for {
         combiner <- Combiner.make[IO]().pure[IO]
 
-        oracleFiberId  <- UUIDGen.randomUUID[IO]
+        scriptFiberId  <- UUIDGen.randomUUID[IO]
         machineFiberId <- UUIDGen.randomUUID[IO]
 
-        oracleScript = """{"counter": 5}"""
-        oracleProg <- IO.fromEither(parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
-        initialOracleState = MapValue(Map("counter" -> IntValue(3)))
+        scriptSource = """{"counter": 5}"""
+        scriptProg <- IO.fromEither(parse(scriptSource).flatMap(_.as[JsonLogicExpression]))
+        initialScriptState = MapValue(Map("counter" -> IntValue(3)))
 
-        createOracle = Updates.CreateScript(
-          fiberId = oracleFiberId,
-          scriptProgram = oracleProg,
-          initialState = Some(initialOracleState),
+        createScript = Updates.CreateScript(
+          fiberId = scriptFiberId,
+          scriptProgram = scriptProg,
+          initialState = Some(initialScriptState),
           accessControl = AccessControlPolicy.Public
         )
 
-        oracleProof <- registry.generateProofs(createOracle, Set(Alice))
-        stateAfterOracle <- combiner.insert(
+        scriptProof <- registry.generateProofs(createScript, Set(Alice))
+        stateAfterScript <- combiner.insert(
           DataState(OnChain.genesis, CalculatedState.genesis),
-          Signed(createOracle, oracleProof)
+          Signed(createScript, scriptProof)
         )
 
         machineJson = s"""
@@ -271,14 +271,14 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
               "eventName": "unlock",
               "guard": {
                 ">=": [
-                  { "var": "scripts.$oracleFiberId.state.counter" },
+                  { "var": "scripts.$scriptFiberId.state.counter" },
                   5
                 ]
               },
               "effect": {
                 "status": "unlocked"
               },
-              "dependencies": ["$oracleFiberId"]
+              "dependencies": ["$scriptFiberId"]
             }
           ]
         }
@@ -289,7 +289,7 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
 
         createMachine = Updates.CreateStateMachine(machineFiberId, machineDef, initialData)
         machineProof      <- registry.generateProofs(createMachine, Set(Bob))
-        stateAfterMachine <- combiner.insert(stateAfterOracle, Signed(createMachine, machineProof))
+        stateAfterMachine <- combiner.insert(stateAfterScript, Signed(createMachine, machineProof))
 
         unlockEvent = Updates.TransitionStateMachine(
           machineFiberId,
@@ -304,14 +304,14 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
           .get(machineFiberId)
           .collect { case r: Records.StateMachineFiberRecord => r }
 
-        invokeOracle = Updates.InvokeScript(
-          fiberId = oracleFiberId,
+        invokeScript = Updates.InvokeScript(
+          fiberId = scriptFiberId,
           method = "increment",
           args = MapValue(Map.empty),
           targetSequenceNumber = FiberOrdinal.MinValue
         )
-        invokeProof      <- registry.generateProofs(invokeOracle, Set(Alice))
-        stateAfterInvoke <- combiner.insert(stateAfterFirstUnlock, Signed(invokeOracle, invokeProof))
+        invokeProof      <- registry.generateProofs(invokeScript, Set(Alice))
+        stateAfterInvoke <- combiner.insert(stateAfterFirstUnlock, Signed(invokeScript, invokeProof))
 
         secondUnlockEvent = Updates.TransitionStateMachine(
           machineFiberId,
@@ -334,7 +334,7 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
     }
   }
 
-  test("state machine uses oracle invocation result in subsequent state") {
+  test("state machine uses script invocation result in subsequent state") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
@@ -342,29 +342,29 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
       for {
         combiner <- Combiner.make[IO]().pure[IO]
 
-        oracleFiberId  <- UUIDGen.randomUUID[IO]
+        scriptFiberId  <- UUIDGen.randomUUID[IO]
         machineFiberId <- UUIDGen.randomUUID[IO]
 
-        oracleScript =
+        scriptSource =
           """|{"if":[
              |  {"==":[{"var":"method"},"calculateFee"]},
              |  {"*":[{"var":"args.amount"},0.05]},
              |  0
              |]}""".stripMargin
 
-        oracleProg <- IO.fromEither(parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
+        scriptProg <- IO.fromEither(parse(scriptSource).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScript(
-          fiberId = oracleFiberId,
-          scriptProgram = oracleProg,
+        createScript = Updates.CreateScript(
+          fiberId = scriptFiberId,
+          scriptProgram = scriptProg,
           initialState = None,
           accessControl = AccessControlPolicy.Public
         )
 
-        oracleProof <- registry.generateProofs(createOracle, Set(Alice))
-        stateAfterOracle <- combiner.insert(
+        scriptProof <- registry.generateProofs(createScript, Set(Alice))
+        stateAfterScript <- combiner.insert(
           DataState(OnChain.genesis, CalculatedState.genesis),
-          Signed(createOracle, oracleProof)
+          Signed(createScript, scriptProof)
         )
 
         machineJson = s"""
@@ -382,8 +382,8 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
               "eventName": "initiate",
               "guard": true,
               "effect": {
-                "_oracleCall": {
-                  "fiberId": "$oracleFiberId",
+                "_scriptCall": {
+                  "fiberId": "$scriptFiberId",
                   "method": "calculateFee",
                   "args": {
                     "amount": { "var": "event.amount" }
@@ -391,7 +391,7 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
                 },
                 "amount": { "var": "event.amount" }
               },
-              "dependencies": ["$oracleFiberId"]
+              "dependencies": ["$scriptFiberId"]
             },
             {
               "from": "processing",
@@ -401,12 +401,12 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
               "effect": [
                 ["totalAmount", { "+": [
                   { "var": "state.amount" },
-                  { "var": "scripts.$oracleFiberId.lastInvocation.result" }
+                  { "var": "scripts.$scriptFiberId.lastInvocation.result" }
                 ]}],
-                ["feeCalculated", { "var": "scripts.$oracleFiberId.lastInvocation.result" }],
+                ["feeCalculated", { "var": "scripts.$scriptFiberId.lastInvocation.result" }],
                 ["status", "COMPLETED"]
               ],
-              "dependencies": ["$oracleFiberId"]
+              "dependencies": ["$scriptFiberId"]
             }
           ]
         }
@@ -417,7 +417,7 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
 
         createMachine = Updates.CreateStateMachine(machineFiberId, machineDef, initialData)
         machineProof      <- registry.generateProofs(createMachine, Set(Bob))
-        stateAfterMachine <- combiner.insert(stateAfterOracle, Signed(createMachine, machineProof))
+        stateAfterMachine <- combiner.insert(stateAfterScript, Signed(createMachine, machineProof))
 
         initiateEvent = Updates.TransitionStateMachine(
           machineFiberId,
@@ -478,7 +478,7 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
     }
   }
 
-  test("multiple state machines invoking same oracle maintains invocation count") {
+  test("multiple state machines invoking same script maintains invocation count") {
     TestFixture.resource(Set(Alice, Bob, Charlie)).use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
@@ -486,24 +486,24 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
       for {
         combiner <- Combiner.make[IO]().pure[IO]
 
-        oracleFiberId   <- UUIDGen.randomUUID[IO]
+        scriptFiberId   <- UUIDGen.randomUUID[IO]
         machine1fiberId <- UUIDGen.randomUUID[IO]
         machine2fiberId <- UUIDGen.randomUUID[IO]
 
-        oracleScript = """{"result": "validated"}"""
-        oracleProg <- IO.fromEither(parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
+        scriptSource = """{"result": "validated"}"""
+        scriptProg <- IO.fromEither(parse(scriptSource).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScript(
-          fiberId = oracleFiberId,
-          scriptProgram = oracleProg,
+        createScript = Updates.CreateScript(
+          fiberId = scriptFiberId,
+          scriptProgram = scriptProg,
           initialState = None,
           accessControl = AccessControlPolicy.Public
         )
 
-        oracleProof <- registry.generateProofs(createOracle, Set(Alice))
-        stateAfterOracle <- combiner.insert(
+        scriptProof <- registry.generateProofs(createScript, Set(Alice))
+        stateAfterScript <- combiner.insert(
           DataState(OnChain.genesis, CalculatedState.genesis),
-          Signed(createOracle, oracleProof)
+          Signed(createScript, scriptProof)
         )
 
         machineJson = s"""
@@ -520,8 +520,8 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
               "eventName": "validate",
               "guard": true,
               "effect": {
-                "_oracleCall": {
-                  "fiberId": "$oracleFiberId",
+                "_scriptCall": {
+                  "fiberId": "$scriptFiberId",
                   "method": "check",
                   "args": {}
                 },
@@ -538,7 +538,7 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
 
         createMachine1 = Updates.CreateStateMachine(machine1fiberId, machineDef, initialData)
         machine1Proof      <- registry.generateProofs(createMachine1, Set(Bob))
-        stateAfterMachine1 <- combiner.insert(stateAfterOracle, Signed(createMachine1, machine1Proof))
+        stateAfterMachine1 <- combiner.insert(stateAfterScript, Signed(createMachine1, machine1Proof))
 
         createMachine2 = Updates.CreateStateMachine(machine2fiberId, machineDef, initialData)
         machine2Proof      <- registry.generateProofs(createMachine2, Set(Charlie))
@@ -562,13 +562,13 @@ object OracleStateMachineIntegrationSuite extends SimpleIOSuite {
         validate2Proof <- registry.generateProofs(validateEvent2, Set(Charlie))
         finalState     <- combiner.insert(stateAfterValidate1, Signed(validateEvent2, validate2Proof))
 
-        oracle = finalState.calculated.scripts.get(oracleFiberId)
+        script = finalState.calculated.scripts.get(scriptFiberId)
         machine1 = finalState.calculated.stateMachines.get(machine1fiberId)
         machine2 = finalState.calculated.stateMachines.get(machine2fiberId)
 
-      } yield expect(oracle.isDefined) and
-      expect(oracle.map(_.sequenceNumber).contains(FiberOrdinal.unsafeApply(2L))) and
-      expect(oracle.map(_.lastInvocation.isDefined).contains(true)) and
+      } yield expect(script.isDefined) and
+      expect(script.map(_.sequenceNumber).contains(FiberOrdinal.unsafeApply(2L))) and
+      expect(script.map(_.lastInvocation.isDefined).contains(true)) and
       expect(machine1.isDefined) and
       expect(machine2.isDefined) and
       expect(

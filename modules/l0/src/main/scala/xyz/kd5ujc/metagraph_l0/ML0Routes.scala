@@ -58,10 +58,10 @@ class ML0Routes[F[_]: Async](
     case GET -> Root / "state-machines" / UUIDVar(id) / "state-proof" :? FieldQueryParam(field) =>
       stateProof.stateMachine(id, field)
 
-    // --- scripts (the legacy /oracles surface is retained) ---
-    case GET -> Root / "oracles" :? StatusQueryParam(status)    => script.list(status).toResponse
-    case GET -> Root / "oracles" / UUIDVar(id)                  => script.get(id).toResponse
-    case GET -> Root / "oracles" / UUIDVar(id) / "invocations"  => script.invocations(id).toResponse
+    // --- scripts ---
+    case GET -> Root / "scripts" :? StatusQueryParam(status)    => script.list(status).toResponse
+    case GET -> Root / "scripts" / UUIDVar(id)                  => script.get(id).toResponse
+    case GET -> Root / "scripts" / UUIDVar(id) / "invocations"  => script.invocations(id).toResponse
     case GET -> Root / "scripts" / UUIDVar(id) / "estimate-fee" => estimate.script(id).toResponse
     case GET -> Root / "scripts" / UUIDVar(id) / "state-proof" :? FieldQueryParam(field) =>
       stateProof.script(id, field)

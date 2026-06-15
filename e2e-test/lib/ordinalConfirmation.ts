@@ -12,7 +12,7 @@ const TAG = '\x1b[33m[ordinalConfirm]\x1b[0m';
 export interface OrdinalConfirmationOptions {
   /** ML0 base URL (e.g., http://localhost:9200) */
   ml0BaseUrl: string;
-  /** Entity path (e.g., state-machines/{id} or oracles/{id}) */
+  /** Entity path (e.g., state-machines/{id} or scripts/{id}) */
   entityPath: string;
   /** Predicate to check if the entity state is as expected */
   predicate: (data: unknown) => boolean;

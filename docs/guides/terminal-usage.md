@@ -9,7 +9,7 @@ Interactive CLI for testing Ottochain state machines and scripts. This terminal 
 - [Quick Start](#quick-start)
 - [Commands](#commands)
   - [State Machine Commands](#state-machine-commands)
-  - [Oracle Commands](#oracle-commands)
+  - [Script Commands](#script-commands)
   - [Helper Commands](#helper-commands)
 - [Global Options](#global-options)
 - [Examples](#examples)
@@ -57,20 +57,20 @@ npm run terminal -- state-machine process-event \
   --expectedState confirmed
 ```
 
-### Create an Oracle
+### Create a Script
 
 ```bash
-npm run terminal -- oracle create \
-  --oracle resources/oracles/calculator-oracle.json
+npm run terminal -- script create \
+  --script resources/scripts/calculator-script.json
 ```
 
-### Invoke an Oracle
+### Invoke a Script
 
 ```bash
-npm run terminal -- oracle invoke \
+npm run terminal -- script invoke \
   --address <CID-from-create-step> \
   --method add \
-  --args resources/oracles/invoke-args-add.json \
+  --args resources/scripts/invoke-args-add.json \
   --expectedResult '15'
 ```
 
@@ -124,22 +124,22 @@ node terminal.js sm archive \
   --address 7065df56-2eba-49bd-8d55-69c3ead89e05
 ```
 
-### Oracle Commands
+### Script Commands
 
-#### `oracle create` (alias: `or create`)
+#### `script create` (alias: `or create`)
 
 Create a new script.
 
 **Required Options:**
-- `--oracle <path>`: Path to oracle definition JSON file
+- `--script <path>`: Path to script definition JSON file
 
 **Example:**
 ```bash
-node terminal.js oracle create \
-  --oracle resources/oracles/counter-oracle.json
+node terminal.js script create \
+  --script resources/scripts/counter-script.json
 ```
 
-#### `oracle invoke` (alias: `or invoke`)
+#### `script invoke` (alias: `or invoke`)
 
 Invoke a method on an existing script.
 
@@ -165,12 +165,12 @@ node terminal.js or invoke \
 List available example resources.
 
 **Optional:**
-- `--type <type>`: Filter by type: `state-machines`, `oracles`, or `events`
+- `--type <type>`: Filter by type: `state-machines`, `scripts`, or `events`
 
 **Examples:**
 ```bash
 node terminal.js list
-node terminal.js list --type oracles
+node terminal.js list --type scripts
 ```
 
 ## Global Options
@@ -227,8 +227,8 @@ node terminal.js sm event \
 ### Multi-Signer Transaction
 
 ```bash
-node terminal.js oracle create \
-  --oracle resources/oracles/calculator-oracle.json \
+node terminal.js script create \
+  --script resources/scripts/calculator-script.json \
   --wallets alice,bob,charlie
 ```
 
@@ -245,10 +245,10 @@ node terminal.js sm create \
 ### Validation Only (Post-Deployment Check)
 
 ```bash
-node terminal.js oracle invoke \
+node terminal.js script invoke \
   --address abc123... \
   --method add \
-  --args resources/oracles/invoke-args-add.json \
+  --args resources/scripts/invoke-args-add.json \
   --mode validate
 ```
 
@@ -296,7 +296,7 @@ node terminal.js oracle invoke \
 }
 ```
 
-### Oracle Definition Structure
+### Script Definition Structure
 
 ```json
 {
@@ -368,13 +368,13 @@ For verbose output, examine the console logs which show:
 
 1. **State Machines**: Add to `resources/state-machines/`
 2. **Events**: Add to `resources/state-machines/events/`
-3. **Oracles**: Add to `resources/oracles/`
+3. **Scripts**: Add to `resources/scripts/`
 
 ### Extending Operations
 
 To add new operations:
 
-1. Create generator/validator in `lib/state-machine/` or `lib/oracle/`
+1. Create generator/validator in `lib/state-machine/` or `lib/script/`
 2. Add command to `terminal.js`
 3. Update this README
 
@@ -386,9 +386,9 @@ terminal.js (main CLI)
 │   ├── createFiber.js (generator + validator)
 │   ├── processEvent.js (generator + validator)
 │   └── archiveFiber.js (generator + validator)
-├── lib/oracle/
-│   ├── createOracle.js (generator + validator)
-│   └── invokeOracle.js (generator + validator)
+├── lib/script/
+│   ├── createScript.js (generator + validator)
+│   └── invokeScript.js (generator + validator)
 ├── lib/ (shared utilities)
 │   ├── generateProof.js
 │   ├── generateWallet.js
@@ -396,7 +396,7 @@ terminal.js (main CLI)
 │   └── metagraphEnv.js
 └── resources/
     ├── state-machines/
-    ├── oracles/
+    ├── scripts/
     └── state-machines/events/
 ```
 

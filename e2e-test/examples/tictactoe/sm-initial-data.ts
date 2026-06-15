@@ -1,11 +1,11 @@
 import crypto from 'crypto';
 
 export default (context: Record<string, unknown>) => {
-  const session = context?.session as { oracleFiberId?: string } | undefined;
-  const oracleFiberId = session?.oracleFiberId || crypto.randomUUID();
+  const session = context?.session as { scriptFiberId?: string } | undefined;
+  const scriptFiberId = session?.scriptFiberId || crypto.randomUUID();
 
   return {
-    oracleFiberId,
+    scriptFiberId,
     roundCount: 0,
   };
 };

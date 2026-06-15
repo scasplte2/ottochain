@@ -19,7 +19,7 @@ import xyz.kd5ujc.shared_data.fiber.core._
  *
  * Effect results can contain special keys that signal side effects:
  * - _triggers: Cross-machine event triggers
- * - _oracleCall: Oracle invocation
+ * - _scriptCall: Script invocation
  * - _outputs: External system outputs
  * - _spawn: Child machine creation
  *
@@ -56,10 +56,10 @@ object EffectExtractor {
 
   /**
    * Extract ALL side effects from a transition's effect result + expression as a single ordered list
-   * of typed [[FiberEffect]]s. `_triggers` and `_oracleCall` become `Triggered`; `_spawn` directives
+   * of typed [[FiberEffect]]s. `_triggers` and `_scriptCall` become `Triggered`; `_spawn` directives
    * become `Spawned`; `_emit` events become `Emitted`.
    *
-   * Order matches the prior per-key extraction (triggers, then oracle call, then spawns, then emitted),
+   * Order matches the prior per-key extraction (triggers, then script call, then spawns, then emitted),
    * and gas for payload/args evaluation is charged in that order via [[MeteredEvaluator]].
    */
   def extractEffects[F[_]: Async, G[_]: Monad](
@@ -70,11 +70,11 @@ object EffectExtractor {
   )(implicit S: Stateful[G, ExecutionState], A: Ask[G, FiberContext], lift: F ~> G): G[List[FiberEffect]] =
     for {
       triggers   <- extractTriggerEvents[F, G](effectResult, contextData, sourceFiberId)
-      oracleCall <- extractOracleCall[F, G](effectResult, contextData, sourceFiberId)
+      scriptCall <- extractScriptCall[F, G](effectResult, contextData, sourceFiberId)
     } yield {
       val spawns = extractSpawnDirectivesFromExpression(effectExpr)
       val emitted = extractEmittedEvents(effectResult)
-      (triggers ++ oracleCall.toList).map(FiberEffect.Triggered) ++
+      (triggers ++ scriptCall.toList).map(FiberEffect.Triggered) ++
       spawns.map(FiberEffect.Spawned) ++
       emitted.map(FiberEffect.Emitted)
     }
@@ -130,28 +130,28 @@ object EffectExtractor {
     }
 
   /**
-   * Extract oracle call with gas metering via StateT.
+   * Extract script call with gas metering via StateT.
    *
    * Gas is charged to the execution state automatically via Stateful.
    * Gas limit and config are read from FiberContext via Ask.
    *
-   * @param effectResult  The result from effect evaluation containing oracle call definition
+   * @param effectResult  The result from effect evaluation containing script call definition
    * @param contextData   Context data for evaluating args expressions
-   * @param sourceFiberId The fiber that is making this oracle call
-   * @return Optional oracle trigger (gas charged via state)
+   * @param sourceFiberId The fiber that is making this script call
+   * @return Optional script trigger (gas charged via state)
    */
-  def extractOracleCall[F[_]: Async, G[_]: Monad](
+  def extractScriptCall[F[_]: Async, G[_]: Monad](
     effectResult:  JsonLogicValue,
     contextData:   JsonLogicValue,
     sourceFiberId: UUID
   )(implicit S: Stateful[G, ExecutionState], A: Ask[G, FiberContext], lift: F ~> G): G[Option[FiberTrigger]] =
-    extractByKey(effectResult, ReservedKeys.ORACLE_CALL) match {
-      case Some(MapValue(oracleCallMap)) =>
+    extractByKey(effectResult, ReservedKeys.SCRIPT_CALL) match {
+      case Some(MapValue(scriptCallMap)) =>
         (for {
-          cidStr <- OptionT.fromOption[G](oracleCallMap.get(ReservedKeys.FIBER_ID).collect { case StrValue(id) => id })
+          cidStr <- OptionT.fromOption[G](scriptCallMap.get(ReservedKeys.FIBER_ID).collect { case StrValue(id) => id })
           targetId  <- OptionT.fromOption[G](scala.util.Try(UUID.fromString(cidStr)).toOption)
-          method    <- OptionT.fromOption[G](oracleCallMap.get(ReservedKeys.METHOD).collect { case StrValue(m) => m })
-          argsValue <- OptionT.fromOption[G](oracleCallMap.get(ReservedKeys.ARGS))
+          method    <- OptionT.fromOption[G](scriptCallMap.get(ReservedKeys.METHOD).collect { case StrValue(m) => m })
+          argsValue <- OptionT.fromOption[G](scriptCallMap.get(ReservedKeys.ARGS))
           argsExpr = ExpressionParser.valueToExpression(argsValue)
           evaluatedArgs <- OptionT(MeteredEvaluator.evalOpt[F, G](argsExpr, contextData, GasExhaustionPhase.Trigger))
         } yield FiberTrigger(

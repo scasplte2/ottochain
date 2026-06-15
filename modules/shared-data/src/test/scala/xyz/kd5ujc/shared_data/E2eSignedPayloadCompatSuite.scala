@@ -77,8 +77,8 @@ object E2eSignedPayloadCompatSuite extends SimpleIOSuite {
 
   /** CreateScript payload built exactly like e2e-test/lib/script/createScript.ts. */
   private def counterCreateScriptJson: Json = {
-    val oracleDef = loadFixture("e2e-test/examples/counter-script/definition.json")
-    val cursor = oracleDef.hcursor
+    val scriptDef = loadFixture("e2e-test/examples/counter-script/definition.json")
+    val cursor = scriptDef.hcursor
     Json.obj(
       "CreateScript" -> Json.obj(
         "fiberId"       -> Json.fromString(fiberId.toString),
@@ -138,7 +138,7 @@ object E2eSignedPayloadCompatSuite extends SimpleIOSuite {
     val update = decodeMessage(counterCreateScriptJson)
     update match {
       case u: CreateScript =>
-        new ScriptValidator.L1Validator[IO](OnChain.genesis).createOracle(u).map { result =>
+        new ScriptValidator.L1Validator[IO](OnChain.genesis).createScript(u).map { result =>
           expect(
             result.isValid,
             s"L1 validation failed: ${result.fold(_.toNonEmptyList.toList.map(_.message).mkString("; "), _ => "")}"

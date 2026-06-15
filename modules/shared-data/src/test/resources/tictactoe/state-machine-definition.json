@@ -35,7 +35,7 @@
         ]
       },
       "effect": {
-        "_oracleCall": {
+        "_scriptCall": {
           "fiberId": {"var": "state.oracleFiberId"},
           "method": "initialize",
           "args": {
@@ -59,7 +59,7 @@
         "===": [{"var": "scriptOracles.11111111-1111-1111-1111-111111111111.state.status"}, "InProgress"]
       },
       "effect": {
-        "_oracleCall": {
+        "_scriptCall": {
           "fiberId": {"var": "state.oracleFiberId"},
           "method": "makeMove",
           "args": {
@@ -85,7 +85,7 @@
         ]
       },
       "effect": {
-        "_oracleCall": {
+        "_scriptCall": {
           "fiberId": {"var": "state.oracleFiberId"},
           "method": "makeMove",
           "args": {
@@ -121,7 +121,7 @@
         ]
       },
       "effect": {
-        "_oracleCall": {
+        "_scriptCall": {
           "fiberId": {"var": "state.oracleFiberId"},
           "method": "resetGame",
           "args": {}
@@ -136,7 +136,7 @@
       "eventName": "cancel_game",
       "guard": {"==": [1, 1]},
       "effect": {
-        "_oracleCall": {
+        "_scriptCall": {
           "fiberId": {"var": "state.oracleFiberId"},
           "method": "cancelGame",
           "args": {

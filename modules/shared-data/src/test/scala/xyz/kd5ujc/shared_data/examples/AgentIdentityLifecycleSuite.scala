@@ -34,7 +34,7 @@ import weaver.SimpleIOSuite
  * Fiber Architecture:
  *   - AgentIdentity: Core identity + reputation state machine per agent
  *   - PlatformRegistry: Tracks registered attestation source platforms
- *   - ReputationOracle: Script oracle that computes composite reputation scores
+ *   - ReputationScript: Script that computes composite reputation scores
  *
  * State Lifecycle:
  *   Registered → Active → Challenged → Suspended → Probation → Active (recovery)

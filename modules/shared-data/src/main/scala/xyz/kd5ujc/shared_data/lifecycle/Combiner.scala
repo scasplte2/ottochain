@@ -31,11 +31,11 @@ import org.typelevel.log4cats.slf4j.Slf4jLogger
  *   - ArchiveFiber: Mark fiber as archived
  *
  * - '''ScriptCombiner''': Handles script operations
- *   - CreateScript: Initialize new oracle with script
- *   - InvokeScript: Execute oracle method
+ *   - CreateScript: Initialize new script with script
+ *   - InvokeScript: Execute script method
  *
  * @see [[combine.FiberCombiner]] for fiber operations
- * @see [[combine.ScriptCombiner]] for oracle operations
+ * @see [[combine.ScriptCombiner]] for script operations
  */
 object Combiner {
 
@@ -54,7 +54,7 @@ object Combiner {
         update:   Signed[OttochainMessage]
       )(implicit ctx: L0NodeContext[F]): F[DataState[OnChain, CalculatedState]] = {
         val fiberCombiner = FiberCombiner[F](previous, ctx, executionLimits)
-        val oracleCombiner = ScriptCombiner[F](previous, ctx, executionLimits)
+        val scriptCombiner = ScriptCombiner[F](previous, ctx, executionLimits)
         val registryCombiner = RegistryCombiner[F](previous, ctx, Limits.MaxRegistryBundleBytes)
 
         val dispatched: F[DataState[OnChain, CalculatedState]] = update.value match {
@@ -62,9 +62,9 @@ object Combiner {
           case u: Updates.TransitionStateMachine => fiberCombiner.processFiberEvent(Signed(u, update.proofs))
           case u: Updates.ArchiveStateMachine    => fiberCombiner.archiveFiber(Signed(u, update.proofs))
           case u: Updates.UpgradeFiber           => fiberCombiner.upgradeFiber(Signed(u, update.proofs))
-          case u: Updates.CreateScript           => oracleCombiner.createScript(Signed(u, update.proofs))
-          case u: Updates.InvokeScript           => oracleCombiner.invokeScript(Signed(u, update.proofs))
-          case u: Updates.UpgradeScript          => oracleCombiner.upgradeScript(Signed(u, update.proofs))
+          case u: Updates.CreateScript           => scriptCombiner.createScript(Signed(u, update.proofs))
+          case u: Updates.InvokeScript           => scriptCombiner.invokeScript(Signed(u, update.proofs))
+          case u: Updates.UpgradeScript          => scriptCombiner.upgradeScript(Signed(u, update.proofs))
           case u: Updates.PublishMachineVersion  => registryCombiner.publishMachineVersion(Signed(u, update.proofs))
           case u: Updates.PublishScriptVersion   => registryCombiner.publishScriptVersion(Signed(u, update.proofs))
           case u: Updates.SetVersionStatus       => registryCombiner.setVersionStatus(Signed(u, update.proofs))

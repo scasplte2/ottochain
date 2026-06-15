@@ -19,10 +19,10 @@ import xyz.kd5ujc.shared_test.TestFixture
 import io.circe.parser._
 import weaver.SimpleIOSuite
 
-object OracleAccessControlSuite extends SimpleIOSuite {
+object ScriptAccessControlSuite extends SimpleIOSuite {
 
   // A denied/aborted invocation no longer raises out of the combiner — it records a RejectionReceipt and
-  // leaves the oracle unmutated (so one rejected invocation can't abort the whole batch). Negative tests
+  // leaves the script unmutated (so one rejected invocation can't abort the whole batch). Negative tests
   // assert a RejectionReceipt was emitted rather than catching an exception.
   private def wasRejected(state: DataState[OnChain, CalculatedState]): Boolean =
     state.onChain.latestLogs.values.flatten.exists {
@@ -30,92 +30,92 @@ object OracleAccessControlSuite extends SimpleIOSuite {
       case _                                 => false
     }
 
-  test("whitelist allows authorized user to invoke oracle directly") {
+  test("whitelist allows authorized user to invoke script directly") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
       for {
         combiner <- Combiner.make[IO]().pure[IO]
 
-        oracleFiberId <- UUIDGen.randomUUID[IO]
+        scriptFiberId <- UUIDGen.randomUUID[IO]
 
         aliceAddress = fixture.registry.addresses(Alice)
 
-        oracleScript = """{"result": "success"}"""
-        oracleProg <- IO.fromEither(parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
+        scriptSource = """{"result": "success"}"""
+        scriptProg <- IO.fromEither(parse(scriptSource).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScript(
-          fiberId = oracleFiberId,
-          scriptProgram = oracleProg,
+        createScript = Updates.CreateScript(
+          fiberId = scriptFiberId,
+          scriptProgram = scriptProg,
           initialState = None,
           accessControl = AccessControlPolicy.Whitelist(Set(aliceAddress))
         )
 
-        oracleProof <- fixture.registry.generateProofs(createOracle, Set(Alice))
-        stateAfterOracle <- combiner.insert(
+        scriptProof <- fixture.registry.generateProofs(createScript, Set(Alice))
+        stateAfterScript <- combiner.insert(
           DataState(OnChain.genesis, CalculatedState.genesis),
-          Signed(createOracle, oracleProof)
+          Signed(createScript, scriptProof)
         )
 
-        invokeOracle = Updates.InvokeScript(
-          fiberId = oracleFiberId,
+        invokeScript = Updates.InvokeScript(
+          fiberId = scriptFiberId,
           method = "test",
           args = MapValue(Map.empty),
           targetSequenceNumber = FiberOrdinal.MinValue
         )
-        invokeProof <- fixture.registry.generateProofs(invokeOracle, Set(Alice))
-        finalState  <- combiner.insert(stateAfterOracle, Signed(invokeOracle, invokeProof))
+        invokeProof <- fixture.registry.generateProofs(invokeScript, Set(Alice))
+        finalState  <- combiner.insert(stateAfterScript, Signed(invokeScript, invokeProof))
 
-        oracle = finalState.calculated.scripts.get(oracleFiberId)
+        script = finalState.calculated.scripts.get(scriptFiberId)
 
-      } yield expect(oracle.isDefined) and
-      expect(oracle.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next)) and
-      expect(oracle.flatMap(_.lastInvocation.map(_.invokedBy)).contains(aliceAddress))
+      } yield expect(script.isDefined) and
+      expect(script.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next)) and
+      expect(script.flatMap(_.lastInvocation.map(_.invokedBy)).contains(aliceAddress))
     }
   }
 
-  test("whitelist denies unauthorized user from invoking oracle directly") {
+  test("whitelist denies unauthorized user from invoking script directly") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
       for {
         combiner <- Combiner.make[IO]().pure[IO]
 
-        oracleFiberId <- UUIDGen.randomUUID[IO]
+        scriptFiberId <- UUIDGen.randomUUID[IO]
 
         aliceAddress = fixture.registry.addresses(Alice)
 
-        oracleScript = """{"result": "success"}"""
-        oracleProg <- IO.fromEither(parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
+        scriptSource = """{"result": "success"}"""
+        scriptProg <- IO.fromEither(parse(scriptSource).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScript(
-          fiberId = oracleFiberId,
-          scriptProgram = oracleProg,
+        createScript = Updates.CreateScript(
+          fiberId = scriptFiberId,
+          scriptProgram = scriptProg,
           initialState = None,
           accessControl = AccessControlPolicy.Whitelist(Set(aliceAddress))
         )
 
-        oracleProof <- fixture.registry.generateProofs(createOracle, Set(Alice))
-        stateAfterOracle <- combiner.insert(
+        scriptProof <- fixture.registry.generateProofs(createScript, Set(Alice))
+        stateAfterScript <- combiner.insert(
           DataState(OnChain.genesis, CalculatedState.genesis),
-          Signed(createOracle, oracleProof)
+          Signed(createScript, scriptProof)
         )
 
-        invokeOracle = Updates.InvokeScript(
-          fiberId = oracleFiberId,
+        invokeScript = Updates.InvokeScript(
+          fiberId = scriptFiberId,
           method = "test",
           args = MapValue(Map.empty),
           targetSequenceNumber = FiberOrdinal.MinValue
         )
-        invokeProof <- fixture.registry.generateProofs(invokeOracle, Set(Bob))
+        invokeProof <- fixture.registry.generateProofs(invokeScript, Set(Bob))
 
-        rejected <- combiner.insert(stateAfterOracle, Signed(invokeOracle, invokeProof)).map(wasRejected)
+        rejected <- combiner.insert(stateAfterScript, Signed(invokeScript, invokeProof)).map(wasRejected)
 
-        oracle = stateAfterOracle.calculated.scripts.get(oracleFiberId)
+        script = stateAfterScript.calculated.scripts.get(scriptFiberId)
 
       } yield expect(rejected) and
-      expect(oracle.isDefined) and
-      expect(oracle.map(_.sequenceNumber).contains(FiberOrdinal.MinValue))
+      expect(script.isDefined) and
+      expect(script.map(_.sequenceNumber).contains(FiberOrdinal.MinValue))
     }
   }
 
@@ -126,96 +126,96 @@ object OracleAccessControlSuite extends SimpleIOSuite {
       for {
         combiner <- Combiner.make[IO]().pure[IO]
 
-        oracleFiberId <- UUIDGen.randomUUID[IO]
+        scriptFiberId <- UUIDGen.randomUUID[IO]
 
         aliceAddress = fixture.registry.addresses(Alice)
         bobAddress = fixture.registry.addresses(Bob)
 
-        oracleScript = """{"result": "success"}"""
-        oracleProg <- IO.fromEither(parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
+        scriptSource = """{"result": "success"}"""
+        scriptProg <- IO.fromEither(parse(scriptSource).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScript(
-          fiberId = oracleFiberId,
-          scriptProgram = oracleProg,
+        createScript = Updates.CreateScript(
+          fiberId = scriptFiberId,
+          scriptProgram = scriptProg,
           initialState = None,
           accessControl = AccessControlPolicy.Whitelist(Set(aliceAddress, bobAddress))
         )
 
-        oracleProof <- fixture.registry.generateProofs(createOracle, Set(Alice))
-        stateAfterOracle <- combiner.insert(
+        scriptProof <- fixture.registry.generateProofs(createScript, Set(Alice))
+        stateAfterScript <- combiner.insert(
           DataState(OnChain.genesis, CalculatedState.genesis),
-          Signed(createOracle, oracleProof)
+          Signed(createScript, scriptProof)
         )
 
-        invokeOracle1 = Updates.InvokeScript(
-          fiberId = oracleFiberId,
+        invokeScript1 = Updates.InvokeScript(
+          fiberId = scriptFiberId,
           method = "test",
           args = MapValue(Map.empty),
           targetSequenceNumber = FiberOrdinal.MinValue
         )
-        invokeProof1    <- fixture.registry.generateProofs(invokeOracle1, Set(Alice))
-        stateAfterAlice <- combiner.insert(stateAfterOracle, Signed(invokeOracle1, invokeProof1))
+        invokeProof1    <- fixture.registry.generateProofs(invokeScript1, Set(Alice))
+        stateAfterAlice <- combiner.insert(stateAfterScript, Signed(invokeScript1, invokeProof1))
 
-        oracleSeq1 = stateAfterAlice.calculated.scripts(oracleFiberId).sequenceNumber
-        invokeOracle2 = Updates.InvokeScript(
-          fiberId = oracleFiberId,
+        scriptSeq1 = stateAfterAlice.calculated.scripts(scriptFiberId).sequenceNumber
+        invokeScript2 = Updates.InvokeScript(
+          fiberId = scriptFiberId,
           method = "test",
           args = MapValue(Map.empty),
-          targetSequenceNumber = oracleSeq1
+          targetSequenceNumber = scriptSeq1
         )
-        invokeProof2  <- fixture.registry.generateProofs(invokeOracle2, Set(Bob))
-        stateAfterBob <- combiner.insert(stateAfterAlice, Signed(invokeOracle2, invokeProof2))
+        invokeProof2  <- fixture.registry.generateProofs(invokeScript2, Set(Bob))
+        stateAfterBob <- combiner.insert(stateAfterAlice, Signed(invokeScript2, invokeProof2))
 
-        oracleSeq2 = stateAfterBob.calculated.scripts(oracleFiberId).sequenceNumber
-        invokeOracle3 = Updates.InvokeScript(
-          fiberId = oracleFiberId,
+        scriptSeq2 = stateAfterBob.calculated.scripts(scriptFiberId).sequenceNumber
+        invokeScript3 = Updates.InvokeScript(
+          fiberId = scriptFiberId,
           method = "test",
           args = MapValue(Map.empty),
-          targetSequenceNumber = oracleSeq2
+          targetSequenceNumber = scriptSeq2
         )
-        invokeProof3    <- fixture.registry.generateProofs(invokeOracle3, Set(Charlie))
-        charlieRejected <- combiner.insert(stateAfterBob, Signed(invokeOracle3, invokeProof3)).map(wasRejected)
+        invokeProof3    <- fixture.registry.generateProofs(invokeScript3, Set(Charlie))
+        charlieRejected <- combiner.insert(stateAfterBob, Signed(invokeScript3, invokeProof3)).map(wasRejected)
 
-        oracle = stateAfterBob.calculated.scripts.get(oracleFiberId)
+        script = stateAfterBob.calculated.scripts.get(scriptFiberId)
 
-      } yield expect(oracle.isDefined) and
-      expect(oracle.map(_.sequenceNumber).contains(FiberOrdinal.unsafeApply(2L))) and
+      } yield expect(script.isDefined) and
+      expect(script.map(_.sequenceNumber).contains(FiberOrdinal.unsafeApply(2L))) and
       expect(charlieRejected)
     }
   }
 
-  test("state machine _oracleCall respects whitelist - owner is whitelisted") {
+  test("state machine _scriptCall respects whitelist - owner is whitelisted") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
       for {
         combiner <- Combiner.make[IO]().pure[IO]
 
-        oracleFiberId  <- UUIDGen.randomUUID[IO]
+        scriptFiberId  <- UUIDGen.randomUUID[IO]
         machineFiberId <- UUIDGen.randomUUID[IO]
 
         aliceAddress = fixture.registry.addresses(Alice)
 
-        oracleScript =
+        scriptSource =
           """|{"if":[
              |  {"==":[{"var":"method"},"validate"]},
              |  {"result": "validated"},
              |  false
              |]}""".stripMargin
 
-        oracleProg <- IO.fromEither(parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
+        scriptProg <- IO.fromEither(parse(scriptSource).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScript(
-          fiberId = oracleFiberId,
-          scriptProgram = oracleProg,
+        createScript = Updates.CreateScript(
+          fiberId = scriptFiberId,
+          scriptProgram = scriptProg,
           initialState = None,
           accessControl = AccessControlPolicy.Whitelist(Set(aliceAddress))
         )
 
-        oracleProof <- fixture.registry.generateProofs(createOracle, Set(Alice))
-        stateAfterOracle <- combiner.insert(
+        scriptProof <- fixture.registry.generateProofs(createScript, Set(Alice))
+        stateAfterScript <- combiner.insert(
           DataState(OnChain.genesis, CalculatedState.genesis),
-          Signed(createOracle, oracleProof)
+          Signed(createScript, scriptProof)
         )
 
         machineJson = s"""
@@ -232,8 +232,8 @@ object OracleAccessControlSuite extends SimpleIOSuite {
               "eventName": "validate",
               "guard": true,
               "effect": {
-                "_oracleCall": {
-                  "fiberId": "$oracleFiberId",
+                "_scriptCall": {
+                  "fiberId": "$scriptFiberId",
                   "method": "validate",
                   "args": {}
                 },
@@ -250,7 +250,7 @@ object OracleAccessControlSuite extends SimpleIOSuite {
 
         createMachine = Updates.CreateStateMachine(machineFiberId, machineDef, initialData)
         machineProof      <- fixture.registry.generateProofs(createMachine, Set(Alice))
-        stateAfterMachine <- combiner.insert(stateAfterOracle, Signed(createMachine, machineProof))
+        stateAfterMachine <- combiner.insert(stateAfterScript, Signed(createMachine, machineProof))
 
         validateEvent = Updates.TransitionStateMachine(
           machineFiberId,
@@ -265,47 +265,47 @@ object OracleAccessControlSuite extends SimpleIOSuite {
           .get(machineFiberId)
           .collect { case r: Records.StateMachineFiberRecord => r }
 
-        oracle = finalState.calculated.scripts.get(oracleFiberId)
+        script = finalState.calculated.scripts.get(scriptFiberId)
 
       } yield expect(machine.isDefined) and
       expect(machine.map(_.currentState).contains(StateId("validated"))) and
-      expect(oracle.isDefined) and
-      expect(oracle.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next))
+      expect(script.isDefined) and
+      expect(script.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next))
     }
   }
 
-  test("state machine _oracleCall respects whitelist - owner is NOT whitelisted") {
+  test("state machine _scriptCall respects whitelist - owner is NOT whitelisted") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
       for {
         combiner <- Combiner.make[IO]().pure[IO]
 
-        oracleFiberId  <- UUIDGen.randomUUID[IO]
+        scriptFiberId  <- UUIDGen.randomUUID[IO]
         machineFiberId <- UUIDGen.randomUUID[IO]
 
         aliceAddress = fixture.registry.addresses(Alice)
 
-        oracleScript =
+        scriptSource =
           """|{"if":[
              |  {"==":[{"var":"method"},"validate"]},
              |  {"result": "validated"},
              |  false
              |]}""".stripMargin
 
-        oracleProg <- IO.fromEither(parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
+        scriptProg <- IO.fromEither(parse(scriptSource).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScript(
-          fiberId = oracleFiberId,
-          scriptProgram = oracleProg,
+        createScript = Updates.CreateScript(
+          fiberId = scriptFiberId,
+          scriptProgram = scriptProg,
           initialState = None,
           accessControl = AccessControlPolicy.Whitelist(Set(aliceAddress))
         )
 
-        oracleProof <- fixture.registry.generateProofs(createOracle, Set(Alice))
-        stateAfterOracle <- combiner.insert(
+        scriptProof <- fixture.registry.generateProofs(createScript, Set(Alice))
+        stateAfterScript <- combiner.insert(
           DataState(OnChain.genesis, CalculatedState.genesis),
-          Signed(createOracle, oracleProof)
+          Signed(createScript, scriptProof)
         )
 
         machineJson = s"""
@@ -322,8 +322,8 @@ object OracleAccessControlSuite extends SimpleIOSuite {
               "eventName": "validate",
               "guard": true,
               "effect": {
-                "_oracleCall": {
-                  "fiberId": "$oracleFiberId",
+                "_scriptCall": {
+                  "fiberId": "$scriptFiberId",
                   "method": "validate",
                   "args": {}
                 },
@@ -340,7 +340,7 @@ object OracleAccessControlSuite extends SimpleIOSuite {
 
         createMachine = Updates.CreateStateMachine(machineFiberId, machineDef, initialData)
         machineProof      <- fixture.registry.generateProofs(createMachine, Set(Bob))
-        stateAfterMachine <- combiner.insert(stateAfterOracle, Signed(createMachine, machineProof))
+        stateAfterMachine <- combiner.insert(stateAfterScript, Signed(createMachine, machineProof))
 
         validateEvent = Updates.TransitionStateMachine(
           machineFiberId,
@@ -355,7 +355,7 @@ object OracleAccessControlSuite extends SimpleIOSuite {
           .get(machineFiberId)
           .collect { case r: Records.StateMachineFiberRecord => r }
 
-        oracle = finalState.calculated.scripts.get(oracleFiberId)
+        script = finalState.calculated.scripts.get(scriptFiberId)
 
       } yield expect(machine.isDefined) and
       expect(machine.map(_.currentState).contains(StateId("idle"))) and
@@ -367,47 +367,47 @@ object OracleAccessControlSuite extends SimpleIOSuite {
           )
         )
       ) and
-      expect(oracle.isDefined) and
-      expect(oracle.map(_.sequenceNumber).contains(FiberOrdinal.MinValue))
+      expect(script.isDefined) and
+      expect(script.map(_.sequenceNumber).contains(FiberOrdinal.MinValue))
     }
   }
 
-  test("trigger directive to oracle respects whitelist - unauthorized owner blocked") {
+  test("trigger directive to script respects whitelist - unauthorized owner blocked") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
       for {
         combiner <- Combiner.make[IO]().pure[IO]
 
-        oracleFiberId  <- UUIDGen.randomUUID[IO]
+        scriptFiberId  <- UUIDGen.randomUUID[IO]
         machineFiberId <- UUIDGen.randomUUID[IO]
 
         aliceAddress = fixture.registry.addresses(Alice)
 
-        // Oracle with whitelist - only Alice allowed
-        oracleScript =
+        // Script with whitelist - only Alice allowed
+        scriptSource =
           """|{"if":[
              |  {"==":[{"var":"method"},"process"]},
              |  {"result": "processed"},
              |  false
              |]}""".stripMargin
 
-        oracleProg <- IO.fromEither(parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
+        scriptProg <- IO.fromEither(parse(scriptSource).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScript(
-          fiberId = oracleFiberId,
-          scriptProgram = oracleProg,
+        createScript = Updates.CreateScript(
+          fiberId = scriptFiberId,
+          scriptProgram = scriptProg,
           initialState = None,
           accessControl = AccessControlPolicy.Whitelist(Set(aliceAddress))
         )
 
-        oracleProof <- fixture.registry.generateProofs(createOracle, Set(Alice))
-        stateAfterOracle <- combiner.insert(
+        scriptProof <- fixture.registry.generateProofs(createScript, Set(Alice))
+        stateAfterScript <- combiner.insert(
           DataState(OnChain.genesis, CalculatedState.genesis),
-          Signed(createOracle, oracleProof)
+          Signed(createScript, scriptProof)
         )
 
-        // State machine that uses _triggers to invoke the oracle (NOT _oracleCall)
+        // State machine that uses _triggers to invoke the script (NOT _scriptCall)
         // Owner is Bob, who is NOT in the whitelist
         machineJson = s"""
         {
@@ -426,7 +426,7 @@ object OracleAccessControlSuite extends SimpleIOSuite {
                 "status": "triggered",
                 "_triggers": [
                   {
-                    "targetMachineId": "$oracleFiberId",
+                    "targetMachineId": "$scriptFiberId",
                     "eventName": "process",
                     "payload": {}
                   }
@@ -444,7 +444,7 @@ object OracleAccessControlSuite extends SimpleIOSuite {
         // Create state machine owned by Bob (not in whitelist)
         createMachine = Updates.CreateStateMachine(machineFiberId, machineDef, initialData)
         machineProof      <- fixture.registry.generateProofs(createMachine, Set(Bob))
-        stateAfterMachine <- combiner.insert(stateAfterOracle, Signed(createMachine, machineProof))
+        stateAfterMachine <- combiner.insert(stateAfterScript, Signed(createMachine, machineProof))
 
         triggerEvent = Updates.TransitionStateMachine(
           machineFiberId,
@@ -459,10 +459,10 @@ object OracleAccessControlSuite extends SimpleIOSuite {
           .get(machineFiberId)
           .collect { case r: Records.StateMachineFiberRecord => r }
 
-        oracle = finalState.calculated.scripts.get(oracleFiberId)
+        script = finalState.calculated.scripts.get(scriptFiberId)
 
       } yield expect(machine.isDefined) and
-      // The SM's transition should have been aborted due to oracle access denial
+      // The SM's transition should have been aborted due to script access denial
       expect(machine.map(_.currentState).contains(StateId("idle"))) and
       expect(
         machine.exists(
@@ -472,9 +472,9 @@ object OracleAccessControlSuite extends SimpleIOSuite {
           )
         )
       ) and
-      expect(oracle.isDefined) and
-      // Oracle should NOT have been invoked
-      expect(oracle.map(_.sequenceNumber).contains(FiberOrdinal.MinValue))
+      expect(script.isDefined) and
+      // Script should NOT have been invoked
+      expect(script.map(_.sequenceNumber).contains(FiberOrdinal.MinValue))
     }
   }
 
@@ -485,10 +485,10 @@ object OracleAccessControlSuite extends SimpleIOSuite {
       for {
         combiner <- Combiner.make[IO]().pure[IO]
 
-        oracleFiberId <- IO.randomUUID
+        scriptFiberId <- IO.randomUUID
         ownerFiberId  <- IO.randomUUID // Non-existent fiber ID
 
-        oracleScript =
+        scriptSource =
           """|{
              |  "if": [
              |    { "==": [{ "var": "method" }, "process"] },
@@ -497,33 +497,33 @@ object OracleAccessControlSuite extends SimpleIOSuite {
              |  ]
              |}""".stripMargin
 
-        oracleProg <- IO.fromEither(parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
+        scriptProg <- IO.fromEither(parse(scriptSource).flatMap(_.as[JsonLogicExpression]))
 
-        // Create oracle with FiberOwned access control (pointing to non-existent fiber)
-        createOracle = Updates.CreateScript(
-          fiberId = oracleFiberId,
-          scriptProgram = oracleProg,
+        // Create script with FiberOwned access control (pointing to non-existent fiber)
+        createScript = Updates.CreateScript(
+          fiberId = scriptFiberId,
+          scriptProgram = scriptProg,
           initialState = None,
           accessControl = AccessControlPolicy.FiberOwned(ownerFiberId)
         )
 
-        oracleProof <- fixture.registry.generateProofs(createOracle, Set(Alice))
-        stateAfterOracle <- combiner.insert(
+        scriptProof <- fixture.registry.generateProofs(createScript, Set(Alice))
+        stateAfterScript <- combiner.insert(
           DataState(OnChain.genesis, CalculatedState.genesis),
-          Signed(createOracle, oracleProof)
+          Signed(createScript, scriptProof)
         )
 
-        // Attempt to invoke the oracle (should fail - owner fiber doesn't exist)
-        invokeOracle = Updates.InvokeScript(
-          fiberId = oracleFiberId,
+        // Attempt to invoke the script (should fail - owner fiber doesn't exist)
+        invokeScript = Updates.InvokeScript(
+          fiberId = scriptFiberId,
           method = "process",
           args = MapValue(Map.empty),
           targetSequenceNumber = FiberOrdinal.MinValue
         )
 
-        invokeProof <- fixture.registry.generateProofs(invokeOracle, Set(Alice))
+        invokeProof <- fixture.registry.generateProofs(invokeScript, Set(Alice))
         // The denied invocation no longer raises — it records a RejectionReceipt; assert on its reason.
-        invokeState <- combiner.insert(stateAfterOracle, Signed(invokeOracle, invokeProof))
+        invokeState <- combiner.insert(stateAfterScript, Signed(invokeScript, invokeProof))
         reasons = invokeState.onChain.latestLogs.values.flatten
           .collect { case r: FiberLogEntry.RejectionReceipt =>
             r.reason.toLowerCase

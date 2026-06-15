@@ -12,12 +12,12 @@ import io.constellationnetwork.metagraph_sdk.lifecycle.CheckpointService
 import io.constellationnetwork.metagraph_sdk.std.Checkpoint
 import io.constellationnetwork.metagraph_sdk.syntax.all.L0ContextOps
 
-import xyz.kd5ujc.schema.fiber.FiberLogEntry.OracleInvocation
+import xyz.kd5ujc.schema.fiber.FiberLogEntry.ScriptInvocation
 import xyz.kd5ujc.schema.fiber.FiberStatus
 import xyz.kd5ujc.schema.{CalculatedState, OnChain, Records}
 
 /**
- * Script-fiber logic (the legacy `/oracles` API surface is retained; "script" is the current term):
+ * Script-fiber logic backing the `/scripts` API surface:
  * list (optionally by status), single record, invocation log.
  */
 class ScriptHandler[F[_]: Async](
@@ -42,10 +42,10 @@ class ScriptHandler[F[_]: Async](
       state.scripts.get(scriptId).asRight[DataApplicationValidationError]
     }
 
-  def invocations(scriptId: UUID): F[Either[DataApplicationValidationError, List[OracleInvocation]]] =
+  def invocations(scriptId: UUID): F[Either[DataApplicationValidationError, List[ScriptInvocation]]] =
     context
       .getOnChainState[OnChain]
       .map(_.map { onChain =>
-        onChain.latestLogs.getOrElse(scriptId, List.empty).collect { case i: OracleInvocation => i }
+        onChain.latestLogs.getOrElse(scriptId, List.empty).collect { case i: ScriptInvocation => i }
       })
 }

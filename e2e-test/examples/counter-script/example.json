@@ -1,7 +1,7 @@
 {
-  "name": "Counter Oracle",
-  "description": "A stateful script oracle that maintains a counter and supports increment, decrement, and reset operations",
-  "type": "oracle",
+  "name": "Counter Script",
+  "description": "A stateful script script that maintains a counter and supports increment, decrement, and reset operations",
+  "type": "script",
   "definition": "definition.json",
   "methods": [
     {
@@ -26,7 +26,7 @@
   "testFlows": [
     {
       "name": "Basic counter operations",
-      "description": "Create oracle, increment twice, decrement once, reset",
+      "description": "Create script, increment twice, decrement once, reset",
       "steps": [
         { "action": "createScript", "definition": "definition.json" },
         { "action": "invoke", "method": "increment" },

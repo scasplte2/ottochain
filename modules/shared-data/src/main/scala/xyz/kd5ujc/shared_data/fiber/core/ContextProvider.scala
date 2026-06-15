@@ -13,7 +13,7 @@ import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.hash.Hash
 import io.constellationnetwork.security.signature.signature.SignatureProof
 
-import xyz.kd5ujc.schema.fiber.FiberLogEntry.OracleInvocation
+import xyz.kd5ujc.schema.fiber.FiberLogEntry.ScriptInvocation
 import xyz.kd5ujc.schema.fiber.{FiberInput, ReservedKeys}
 import xyz.kd5ujc.schema.{CalculatedState, Records}
 
@@ -31,12 +31,12 @@ import xyz.kd5ujc.schema.{CalculatedState, Records}
  * - parent: parent fiber data (if any)
  * - children: child fiber data
  * - machines: dependent machine states
- * - scripts: dependent oracle states
+ * - scripts: dependent script states
  *
- * For oracles, context includes:
+ * For scripts, context includes:
  * - _method: method name
  * - _args: method arguments
- * - _state: current oracle state
+ * - _state: current script state
  */
 trait ContextProvider[F[_]] {
 
@@ -94,10 +94,10 @@ object ContextProvider {
               Async[F].raiseError(new RuntimeException("Cannot use MethodCall input with StateMachineFiberRecord"))
           }
 
-        case oracle: Records.ScriptFiberRecord =>
+        case script: Records.ScriptFiberRecord =>
           input match {
             case _: FiberInput.MethodCall =>
-              buildOracleContext(oracle, input.key, input.content)
+              buildScriptContext(script, input.key, input.content)
             case _: FiberInput.Transition =>
               Async[F].raiseError(new RuntimeException("Cannot use Transition input with ScriptFiberRecord"))
           }
@@ -117,7 +117,7 @@ object ContextProvider {
           machinesData <- buildMachinesContext(dependencies)
           parentData   <- buildParentContext(fiber)
           childrenData <- buildChildrenContext(fiber)
-          oraclesData  <- buildOraclesContext(dependencies)
+          scriptsData  <- buildScriptsContext(dependencies)
         } yield MapValue(
           Map(
             ReservedKeys.STATE              -> fiber.stateData,
@@ -133,14 +133,14 @@ object ContextProvider {
             ReservedKeys.MACHINES           -> machinesData,
             ReservedKeys.PARENT             -> parentData,
             ReservedKeys.CHILDREN           -> childrenData,
-            ReservedKeys.SCRIPT_ORACLES     -> oraclesData
+            ReservedKeys.SCRIPTS            -> scriptsData
           )
         )
 
-      // === Oracle Context ===
+      // === Script Context ===
 
-      private def buildOracleContext(
-        oracle: Records.ScriptFiberRecord,
+      private def buildScriptContext(
+        script: Records.ScriptFiberRecord,
         method: String,
         args:   JsonLogicValue
       ): F[JsonLogicValue] =
@@ -148,7 +148,7 @@ object ContextProvider {
           Map(
             ReservedKeys.METHOD -> StrValue(method),
             ReservedKeys.ARGS   -> args,
-            ReservedKeys.STATE  -> oracle.stateData.getOrElse(NullValue)
+            ReservedKeys.STATE  -> script.stateData.getOrElse(NullValue)
           )
         ).pure[F]
 
@@ -235,8 +235,8 @@ object ContextProvider {
           (f: Records.StateMachineFiberRecord) => buildFiberSummary(f)
         )
 
-      private def buildOraclesContext(dependencies: Set[UUID]): F[MapValue] =
-        resolveFibers(dependencies, calculatedState.scripts.get, buildOracleSummary)
+      private def buildScriptsContext(dependencies: Set[UUID]): F[MapValue] =
+        resolveFibers(dependencies, calculatedState.scripts.get, buildScriptSummary)
 
       // === Summary Builders (reused across contexts) ===
 
@@ -255,17 +255,17 @@ object ContextProvider {
         MapValue(fullMap)
       }
 
-      private def buildOracleSummary(oracle: Records.ScriptFiberRecord): MapValue =
+      private def buildScriptSummary(script: Records.ScriptFiberRecord): MapValue =
         MapValue(
           Map(
-            ReservedKeys.STATE           -> oracle.stateData.getOrElse(NullValue),
-            ReservedKeys.STATUS          -> StrValue(oracle.status.toString),
-            ReservedKeys.SEQUENCE_NUMBER -> IntValue(oracle.sequenceNumber.value.value),
-            ReservedKeys.LAST_INVOCATION -> oracle.lastInvocation.map(buildInvocationSummary).getOrElse(NullValue)
+            ReservedKeys.STATE           -> script.stateData.getOrElse(NullValue),
+            ReservedKeys.STATUS          -> StrValue(script.status.toString),
+            ReservedKeys.SEQUENCE_NUMBER -> IntValue(script.sequenceNumber.value.value),
+            ReservedKeys.LAST_INVOCATION -> script.lastInvocation.map(buildInvocationSummary).getOrElse(NullValue)
           )
         )
 
-      private def buildInvocationSummary(inv: OracleInvocation): MapValue =
+      private def buildInvocationSummary(inv: ScriptInvocation): MapValue =
         MapValue(
           Map(
             ReservedKeys.METHOD     -> StrValue(inv.method),

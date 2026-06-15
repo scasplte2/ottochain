@@ -20,14 +20,14 @@ import io.circe.parser
 import weaver.SimpleIOSuite
 
 /**
- * Unit tests for the calculator oracle (stateless - initialState: null).
- * Based on e2e-test/examples/calculator-oracle/definition.json
+ * Unit tests for the calculator script (stateless - initialState: null).
+ * Based on e2e-test/examples/calculator-script/definition.json
  */
-object CalculatorOracleSuite extends SimpleIOSuite {
+object CalculatorScriptSuite extends SimpleIOSuite {
 
   import DataStateTestOps._
 
-  // Calculator Oracle definition (stateless) - matches e2e definition
+  // Calculator Script definition (stateless) - matches e2e definition
   private val calculatorScript =
     """|{
        |  "if": [
@@ -55,35 +55,35 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         cid  <- IO.randomUUID
         prog <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScript(
+        createScript = Updates.CreateScript(
           fiberId = cid,
           scriptProgram = prog,
           initialState = None,
           accessControl = AccessControlPolicy.Public
         )
 
-        createProof <- registry.generateProofs(createOracle, Set(Alice))
+        createProof <- registry.generateProofs(createScript, Set(Alice))
         state1 <- combiner.insert(
           DataState(OnChain.genesis, CalculatedState.genesis),
-          Signed(createOracle, createProof)
+          Signed(createScript, createProof)
         )
 
-        invokeOracle = Updates.InvokeScript(
+        invokeScript = Updates.InvokeScript(
           fiberId = cid,
           method = "add",
           args = MapValue(Map("a" -> IntValue(10), "b" -> IntValue(5))),
           targetSequenceNumber = FiberOrdinal.MinValue
         )
 
-        invokeProof <- registry.generateProofs(invokeOracle, Set(Alice))
-        state2      <- combiner.insert(state1, Signed(invokeOracle, invokeProof))
+        invokeProof <- registry.generateProofs(invokeScript, Set(Alice))
+        state2      <- combiner.insert(state1, Signed(invokeScript, invokeProof))
 
-        oracle = state2.oracleRecord(cid)
-        result = oracle.flatMap(_.lastInvocation.map(_.result))
+        script = state2.scriptRecord(cid)
+        result = script.flatMap(_.lastInvocation.map(_.result))
       } yield expect.all(
-        oracle.isDefined,
+        script.isDefined,
         result.contains(IntValue(15)),
-        oracle.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next)
+        script.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next)
       )
     }
   }
@@ -100,33 +100,33 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         cid  <- IO.randomUUID
         prog <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScript(
+        createScript = Updates.CreateScript(
           fiberId = cid,
           scriptProgram = prog,
           initialState = None,
           accessControl = AccessControlPolicy.Public
         )
 
-        createProof <- registry.generateProofs(createOracle, Set(Alice))
+        createProof <- registry.generateProofs(createScript, Set(Alice))
         state1 <- combiner.insert(
           DataState(OnChain.genesis, CalculatedState.genesis),
-          Signed(createOracle, createProof)
+          Signed(createScript, createProof)
         )
 
-        invokeOracle = Updates.InvokeScript(
+        invokeScript = Updates.InvokeScript(
           fiberId = cid,
           method = "subtract",
           args = MapValue(Map("a" -> IntValue(20), "b" -> IntValue(8))),
           targetSequenceNumber = FiberOrdinal.MinValue
         )
 
-        invokeProof <- registry.generateProofs(invokeOracle, Set(Alice))
-        state2      <- combiner.insert(state1, Signed(invokeOracle, invokeProof))
+        invokeProof <- registry.generateProofs(invokeScript, Set(Alice))
+        state2      <- combiner.insert(state1, Signed(invokeScript, invokeProof))
 
-        oracle = state2.oracleRecord(cid)
-        result = oracle.flatMap(_.lastInvocation.map(_.result))
+        script = state2.scriptRecord(cid)
+        result = script.flatMap(_.lastInvocation.map(_.result))
       } yield expect.all(
-        oracle.isDefined,
+        script.isDefined,
         result.contains(IntValue(12))
       )
     }
@@ -144,33 +144,33 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         cid  <- IO.randomUUID
         prog <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScript(
+        createScript = Updates.CreateScript(
           fiberId = cid,
           scriptProgram = prog,
           initialState = None,
           accessControl = AccessControlPolicy.Public
         )
 
-        createProof <- registry.generateProofs(createOracle, Set(Alice))
+        createProof <- registry.generateProofs(createScript, Set(Alice))
         state1 <- combiner.insert(
           DataState(OnChain.genesis, CalculatedState.genesis),
-          Signed(createOracle, createProof)
+          Signed(createScript, createProof)
         )
 
-        invokeOracle = Updates.InvokeScript(
+        invokeScript = Updates.InvokeScript(
           fiberId = cid,
           method = "multiply",
           args = MapValue(Map("a" -> IntValue(7), "b" -> IntValue(6))),
           targetSequenceNumber = FiberOrdinal.MinValue
         )
 
-        invokeProof <- registry.generateProofs(invokeOracle, Set(Alice))
-        state2      <- combiner.insert(state1, Signed(invokeOracle, invokeProof))
+        invokeProof <- registry.generateProofs(invokeScript, Set(Alice))
+        state2      <- combiner.insert(state1, Signed(invokeScript, invokeProof))
 
-        oracle = state2.oracleRecord(cid)
-        result = oracle.flatMap(_.lastInvocation.map(_.result))
+        script = state2.scriptRecord(cid)
+        result = script.flatMap(_.lastInvocation.map(_.result))
       } yield expect.all(
-        oracle.isDefined,
+        script.isDefined,
         result.contains(IntValue(42))
       )
     }
@@ -188,33 +188,33 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         cid  <- IO.randomUUID
         prog <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScript(
+        createScript = Updates.CreateScript(
           fiberId = cid,
           scriptProgram = prog,
           initialState = None,
           accessControl = AccessControlPolicy.Public
         )
 
-        createProof <- registry.generateProofs(createOracle, Set(Alice))
+        createProof <- registry.generateProofs(createScript, Set(Alice))
         state1 <- combiner.insert(
           DataState(OnChain.genesis, CalculatedState.genesis),
-          Signed(createOracle, createProof)
+          Signed(createScript, createProof)
         )
 
-        invokeOracle = Updates.InvokeScript(
+        invokeScript = Updates.InvokeScript(
           fiberId = cid,
           method = "divide",
           args = MapValue(Map("a" -> IntValue(100), "b" -> IntValue(4))),
           targetSequenceNumber = FiberOrdinal.MinValue
         )
 
-        invokeProof <- registry.generateProofs(invokeOracle, Set(Alice))
-        state2      <- combiner.insert(state1, Signed(invokeOracle, invokeProof))
+        invokeProof <- registry.generateProofs(invokeScript, Set(Alice))
+        state2      <- combiner.insert(state1, Signed(invokeScript, invokeProof))
 
-        oracle = state2.oracleRecord(cid)
-        result = oracle.flatMap(_.lastInvocation.map(_.result))
+        script = state2.scriptRecord(cid)
+        result = script.flatMap(_.lastInvocation.map(_.result))
       } yield expect.all(
-        oracle.isDefined,
+        script.isDefined,
         result.contains(IntValue(25))
       )
     }
@@ -232,33 +232,33 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         cid  <- IO.randomUUID
         prog <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScript(
+        createScript = Updates.CreateScript(
           fiberId = cid,
           scriptProgram = prog,
           initialState = None,
           accessControl = AccessControlPolicy.Public
         )
 
-        createProof <- registry.generateProofs(createOracle, Set(Alice))
+        createProof <- registry.generateProofs(createScript, Set(Alice))
         state1 <- combiner.insert(
           DataState(OnChain.genesis, CalculatedState.genesis),
-          Signed(createOracle, createProof)
+          Signed(createScript, createProof)
         )
 
-        invokeOracle = Updates.InvokeScript(
+        invokeScript = Updates.InvokeScript(
           fiberId = cid,
           method = "unknownMethod",
           args = MapValue(Map("a" -> IntValue(1), "b" -> IntValue(2))),
           targetSequenceNumber = FiberOrdinal.MinValue
         )
 
-        invokeProof <- registry.generateProofs(invokeOracle, Set(Alice))
-        state2      <- combiner.insert(state1, Signed(invokeOracle, invokeProof))
+        invokeProof <- registry.generateProofs(invokeScript, Set(Alice))
+        state2      <- combiner.insert(state1, Signed(invokeScript, invokeProof))
 
-        oracle = state2.oracleRecord(cid)
-        result = oracle.flatMap(_.lastInvocation.map(_.result))
+        script = state2.scriptRecord(cid)
+        result = script.flatMap(_.lastInvocation.map(_.result))
       } yield expect.all(
-        oracle.isDefined,
+        script.isDefined,
         result.contains(NullValue)
       )
     }
@@ -276,17 +276,17 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         cid  <- IO.randomUUID
         prog <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScript(
+        createScript = Updates.CreateScript(
           fiberId = cid,
           scriptProgram = prog,
           initialState = None,
           accessControl = AccessControlPolicy.Public
         )
 
-        createProof <- registry.generateProofs(createOracle, Set(Alice))
+        createProof <- registry.generateProofs(createScript, Set(Alice))
         state0 <- combiner.insert(
           DataState(OnChain.genesis, CalculatedState.genesis),
-          Signed(createOracle, createProof)
+          Signed(createScript, createProof)
         )
 
         // First invocation: add
@@ -319,10 +319,10 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         proof3 <- registry.generateProofs(invoke3, Set(Alice))
         state3 <- combiner.insert(state2, Signed(invoke3, proof3))
 
-        oracle = state3.oracleRecord(cid)
+        script = state3.scriptRecord(cid)
       } yield expect.all(
-        oracle.map(_.sequenceNumber).contains(FiberOrdinal.unsafeApply(3L)),
-        oracle.flatMap(_.lastInvocation).isDefined
+        script.map(_.sequenceNumber).contains(FiberOrdinal.unsafeApply(3L)),
+        script.flatMap(_.lastInvocation).isDefined
       )
     }
   }
@@ -339,7 +339,7 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         cid  <- IO.randomUUID
         prog <- IO.fromEither(parser.parse(calculatorScript).flatMap(_.as[JsonLogicExpression]))
 
-        createOracle = Updates.CreateScript(
+        createScript = Updates.CreateScript(
           fiberId = cid,
           scriptProgram = prog,
           initialState = None,
@@ -347,13 +347,13 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         )
 
         // Alice creates
-        createProof <- registry.generateProofs(createOracle, Set(Alice))
+        createProof <- registry.generateProofs(createScript, Set(Alice))
         state1 <- combiner.insert(
           DataState(OnChain.genesis, CalculatedState.genesis),
-          Signed(createOracle, createProof)
+          Signed(createScript, createProof)
         )
 
-        invokeOracle = Updates.InvokeScript(
+        invokeScript = Updates.InvokeScript(
           fiberId = cid,
           method = "add",
           args = MapValue(Map("a" -> IntValue(5), "b" -> IntValue(3))),
@@ -361,13 +361,13 @@ object CalculatorOracleSuite extends SimpleIOSuite {
         )
 
         // Bob invokes
-        invokeProof <- registry.generateProofs(invokeOracle, Set(Bob))
-        state2      <- combiner.insert(state1, Signed(invokeOracle, invokeProof))
+        invokeProof <- registry.generateProofs(invokeScript, Set(Bob))
+        state2      <- combiner.insert(state1, Signed(invokeScript, invokeProof))
 
-        oracle = state2.oracleRecord(cid)
-        result = oracle.flatMap(_.lastInvocation.map(_.result))
+        script = state2.scriptRecord(cid)
+        result = script.flatMap(_.lastInvocation.map(_.result))
       } yield expect.all(
-        oracle.isDefined,
+        script.isDefined,
         result.contains(IntValue(8))
       )
     }

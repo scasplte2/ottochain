@@ -20,7 +20,7 @@ import xyz.kd5ujc.shared_data.fiber.core._
 /**
  * Processes spawn directives to create child fibers.
  *
- * Only applicable to state machines (oracles don't spawn children).
+ * Only applicable to state machines (scripts don't spawn children).
  *
  * Processing flow:
  * 1. Validate all directives using SpawnValidator (collect all errors)

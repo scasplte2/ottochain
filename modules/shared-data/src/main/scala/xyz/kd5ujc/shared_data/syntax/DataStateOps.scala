@@ -26,12 +26,12 @@ trait DataStateOps {
   implicit class DataStateSyntax(private val state: DataState[OnChain, CalculatedState]) {
 
     /**
-     * Update a single fiber or oracle record with automatic hash computation.
+     * Update a single fiber or script record with automatic hash computation.
      *
      * Computes RecordHash from the full record and extracts stateDataHash from
      * the record's field. Routes to the correct CalculatedState field based on type.
      *
-     * @param id     The fiber/oracle CID
+     * @param id     The fiber/script CID
      * @param record The updated record (StateMachineFiberRecord or ScriptFiberRecord)
      * @return Updated DataState with both OnChain and CalculatedState modified
      */
@@ -49,21 +49,21 @@ trait DataStateOps {
               .focus(_.calculated.stateMachines)
               .modify(_.updated(id, sm))
           }
-        case oracle: Records.ScriptFiberRecord =>
-          oracle.computeDigest.map { recordHash =>
-            val commit = FiberCommit(recordHash, oracle.stateDataHash, oracle.sequenceNumber)
+        case script: Records.ScriptFiberRecord =>
+          script.computeDigest.map { recordHash =>
+            val commit = FiberCommit(recordHash, script.stateDataHash, script.sequenceNumber)
             state
               .focus(_.onChain.fiberCommits)
               .modify(_.updated(id, commit))
               .focus(_.calculated.scripts)
-              .modify(_.updated(id, oracle))
+              .modify(_.updated(id, script))
           }
       }
 
     /**
      * Batch update for multiple records of mixed types.
      *
-     * Separates into state machines and oracles, computes hashes for each,
+     * Separates into state machines and scripts, computes hashes for each,
      * and applies all updates atomically.
      *
      * @param records Map of CIDs to updated records
@@ -73,36 +73,36 @@ trait DataStateOps {
       records: Map[UUID, Records.FiberRecord]
     ): F[DataState[OnChain, CalculatedState]] = {
       val sms = records.collect { case (id, sm: Records.StateMachineFiberRecord) => id -> sm }
-      val oracles = records.collect { case (id, o: Records.ScriptFiberRecord) => id -> o }
+      val scripts = records.collect { case (id, o: Records.ScriptFiberRecord) => id -> o }
 
       for {
         smHashes <- sms.toList.traverse { case (id, sm) =>
           sm.computeDigest.map(recordHash => id -> FiberCommit(recordHash, Some(sm.stateDataHash), sm.sequenceNumber))
         }
-        oracleHashes <- oracles.toList.traverse { case (id, o) =>
+        scriptHashes <- scripts.toList.traverse { case (id, o) =>
           o.computeDigest.map(recordHash => id -> FiberCommit(recordHash, o.stateDataHash, o.sequenceNumber))
         }
       } yield state
         .focus(_.onChain.fiberCommits)
-        .modify(_ ++ smHashes.toMap ++ oracleHashes.toMap)
+        .modify(_ ++ smHashes.toMap ++ scriptHashes.toMap)
         .focus(_.calculated.stateMachines)
         .modify(_ ++ sms)
         .focus(_.calculated.scripts)
-        .modify(_ ++ oracles)
+        .modify(_ ++ scripts)
     }
 
     /**
-     * Batch update for state machines and oracles provided as separate typed maps.
+     * Batch update for state machines and scripts provided as separate typed maps.
      *
      * @param fibers  Map of fiber IDs to updated fiber records
-     * @param oracles Map of oracle IDs to updated oracle records
+     * @param scripts Map of script IDs to updated script records
      * @return Updated DataState with all entities applied
      */
-    def withFibersAndOracles[F[_]: Async](
+    def withFibersAndScripts[F[_]: Async](
       fibers:  Map[UUID, Records.StateMachineFiberRecord],
-      oracles: Map[UUID, Records.ScriptFiberRecord]
+      scripts: Map[UUID, Records.ScriptFiberRecord]
     ): F[DataState[OnChain, CalculatedState]] =
-      withRecords(fibers ++ oracles)
+      withRecords(fibers ++ scripts)
 
     /**
      * Commit a registry entry atomically: store the entry in CalculatedState.registry and its hash in

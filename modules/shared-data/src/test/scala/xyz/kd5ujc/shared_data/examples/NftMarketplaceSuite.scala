@@ -25,7 +25,7 @@ object NftMarketplaceSuite extends SimpleIOSuite {
   import DataStateTestOps._
   import TestImports.optionFiberRecordOps
 
-  test("nft-marketplace: spawned listing triggers royalty oracle on sale") {
+  test("nft-marketplace: spawned listing triggers royalty script on sale") {
     import io.circe.parser._
 
     TestFixture.resource(Set(Alice, Bob, Charlie)).use { fixture =>
@@ -37,11 +37,11 @@ object NftMarketplaceSuite extends SimpleIOSuite {
       for {
         combiner <- Combiner.make[IO]().pure[IO]
 
-        // Get royalty oracle ID early to reference in NFT listing definition
-        royaltyOracleId <- UUIDGen.randomUUID[IO]
+        // Get royalty script ID early to reference in NFT listing definition
+        royaltyScriptId <- UUIDGen.randomUUID[IO]
 
-        // JSON-encoded oracle program for calculating and recording royalties
-        royaltyOracleJson =
+        // JSON-encoded script program for calculating and recording royalties
+        royaltyScriptJson =
           """{
             "if": [
               { "===": [{ "var": "method" }, "recordRoyalty" ] },
@@ -85,20 +85,20 @@ object NftMarketplaceSuite extends SimpleIOSuite {
           }"""
 
         royaltyProgramExpr <- IO.fromEither(
-          decode[JsonLogicExpression](royaltyOracleJson).left
-            .map(err => new RuntimeException(s"Failed to decode oracle JSON: $err"))
+          decode[JsonLogicExpression](royaltyScriptJson).left
+            .map(err => new RuntimeException(s"Failed to decode script JSON: $err"))
         )
 
-        // Create royalty oracle
-        royaltyOracleData = MapValue(Map("totalRoyalties" -> IntValue(0)))
-        royaltyHash <- (royaltyOracleData: JsonLogicValue).computeDigest
+        // Create royalty script
+        royaltyScriptData = MapValue(Map("totalRoyalties" -> IntValue(0)))
+        royaltyHash <- (royaltyScriptData: JsonLogicValue).computeDigest
 
-        royaltyOracle = Records.ScriptFiberRecord(
-          fiberId = royaltyOracleId,
+        royaltyScript = Records.ScriptFiberRecord(
+          fiberId = royaltyScriptId,
           creationOrdinal = ordinal,
           latestUpdateOrdinal = ordinal,
           scriptProgram = royaltyProgramExpr,
-          stateData = Some(royaltyOracleData),
+          stateData = Some(royaltyScriptData),
           stateDataHash = Some(royaltyHash),
           accessControl = AccessControlPolicy.Public,
           owners = Set(registry.addresses(Alice)),
@@ -106,7 +106,7 @@ object NftMarketplaceSuite extends SimpleIOSuite {
           sequenceNumber = FiberOrdinal.MinValue
         )
 
-        // JSON-encoded NFT listing state machine with oracle trigger on sale
+        // JSON-encoded NFT listing state machine with script trigger on sale
         nftListingJson =
           s"""{
           "states": {
@@ -150,7 +150,7 @@ object NftMarketplaceSuite extends SimpleIOSuite {
                 },
                 "_triggers": [
                   {
-                    "targetMachineId": "${royaltyOracleId}",
+                    "targetMachineId": "${royaltyScriptId}",
                     "eventName": "recordRoyalty",
                     "payload": {
                       "nftId": { "var": "state.nftId" },
@@ -166,7 +166,7 @@ object NftMarketplaceSuite extends SimpleIOSuite {
                   }
                 ]
               },
-              "dependencies": ["${royaltyOracleId}"]
+              "dependencies": ["${royaltyScriptId}"]
             },
             {
               "from": "listed",
@@ -266,7 +266,7 @@ object NftMarketplaceSuite extends SimpleIOSuite {
                             },
                             "_triggers": [
                               {
-                                "targetMachineId": "${royaltyOracleId}",
+                                "targetMachineId": "${royaltyScriptId}",
                                 "eventName": "recordRoyalty",
                                 "payload": {
                                   "nftId": { "var": "state.nftId" },
@@ -282,7 +282,7 @@ object NftMarketplaceSuite extends SimpleIOSuite {
                               }
                             ]
                           },
-                          "dependencies": ["${royaltyOracleId}"]
+                          "dependencies": ["${royaltyScriptId}"]
                         },
                         {
                           "from": "listed",
@@ -339,7 +339,7 @@ object NftMarketplaceSuite extends SimpleIOSuite {
 
         inState <- DataState(OnChain.genesis, CalculatedState.genesis)
           .withRecord[IO](marketplacefiberId, marketplaceFiber)
-          .flatMap(_.withRecord[IO](royaltyOracleId, royaltyOracle))
+          .flatMap(_.withRecord[IO](royaltyScriptId, royaltyScript))
 
         // Alice creates an NFT listing (spawns child)
         nftListingId1 <- UUIDGen.randomUUID[IO]
@@ -398,7 +398,7 @@ object NftMarketplaceSuite extends SimpleIOSuite {
 
         nftListing2 = state2.fiberRecord(nftListingId2)
 
-        // Bob purchases Alice's NFT (should trigger royalty oracle)
+        // Bob purchases Alice's NFT (should trigger royalty script)
         state3 <- state2.transition(
           nftListingId1,
           "purchase",
@@ -418,15 +418,15 @@ object NftMarketplaceSuite extends SimpleIOSuite {
         salePrice1 = nftListing1AfterSale.extractInt("salePrice")
         royaltyAmount1 = nftListing1AfterSale.extractInt("royaltyAmount")
 
-        // Verify royalty oracle was triggered and state updated
-        oracleAfterSale1 = state3.oracleRecord(royaltyOracleId)
-        totalRoyalties1: Option[BigInt] = oracleAfterSale1.flatMap { o =>
+        // Verify royalty script was triggered and state updated
+        scriptAfterSale1 = state3.scriptRecord(royaltyScriptId)
+        totalRoyalties1: Option[BigInt] = scriptAfterSale1.flatMap { o =>
           o.stateData.flatMap {
             case MapValue(m) => m.get("totalRoyalties").collect { case IntValue(t) => t }
             case _           => None
           }
         }
-        lastRecordedNft1: Option[String] = oracleAfterSale1.flatMap { o =>
+        lastRecordedNft1: Option[String] = scriptAfterSale1.flatMap { o =>
           o.stateData.flatMap {
             case MapValue(m) =>
               m.get("lastRecorded").flatMap {
@@ -436,7 +436,7 @@ object NftMarketplaceSuite extends SimpleIOSuite {
             case _ => None
           }
         }
-        lastRecordedCreator1: Option[String] = oracleAfterSale1.flatMap { o =>
+        lastRecordedCreator1: Option[String] = scriptAfterSale1.flatMap { o =>
           o.stateData.flatMap {
             case MapValue(m) =>
               m.get("lastRecorded").flatMap {
@@ -461,15 +461,15 @@ object NftMarketplaceSuite extends SimpleIOSuite {
           Bob
         )(registry, combiner)
 
-        // Verify second sale triggered oracle again
-        oracleFinal = finalState.oracleRecord(royaltyOracleId)
-        totalRoyaltiesFinal: Option[BigInt] = oracleFinal.flatMap { o =>
+        // Verify second sale triggered script again
+        scriptFinal = finalState.scriptRecord(royaltyScriptId)
+        totalRoyaltiesFinal: Option[BigInt] = scriptFinal.flatMap { o =>
           o.stateData.flatMap {
             case MapValue(m) => m.get("totalRoyalties").collect { case IntValue(t) => t }
             case _           => None
           }
         }
-        lastRecordedNft2: Option[String] = oracleFinal.flatMap { o =>
+        lastRecordedNft2: Option[String] = scriptFinal.flatMap { o =>
           o.stateData.flatMap {
             case MapValue(m) =>
               m.get("lastRecorded").flatMap {
@@ -479,7 +479,7 @@ object NftMarketplaceSuite extends SimpleIOSuite {
             case _ => None
           }
         }
-        oracleInvocationCount: Option[FiberOrdinal] = oracleFinal.map(_.sequenceNumber)
+        scriptInvocationCount: Option[FiberOrdinal] = scriptFinal.map(_.sequenceNumber)
 
         // Verify marketplace still active with 2 listings
         listingCountFinal = finalState.fiberRecord(marketplacefiberId).extractInt("listingCount")
@@ -504,15 +504,15 @@ object NftMarketplaceSuite extends SimpleIOSuite {
         buyer1.contains(registry.addresses(Bob).toString),
         salePrice1.contains(BigInt(1200)),
         royaltyAmount1.contains(BigInt(6000)), // 1200 * 5
-        // Verify royalty oracle was triggered after first sale
-        oracleAfterSale1.isDefined,
-        oracleAfterSale1.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next),
+        // Verify royalty script was triggered after first sale
+        scriptAfterSale1.isDefined,
+        scriptAfterSale1.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next),
         totalRoyalties1.contains(BigInt(6000)),
         lastRecordedNft1.contains("nft-001"),
         lastRecordedCreator1.contains(registry.addresses(Alice).toString),
-        // Verify oracle was triggered again after second sale
-        oracleFinal.isDefined,
-        oracleInvocationCount.contains(FiberOrdinal.unsafeApply(2L)),
+        // Verify script was triggered again after second sale
+        scriptFinal.isDefined,
+        scriptInvocationCount.contains(FiberOrdinal.unsafeApply(2L)),
         totalRoyaltiesFinal.contains(BigInt(9000)), // 6000 + 3000
         lastRecordedNft2.contains("nft-002"),
         // Verify marketplace final state

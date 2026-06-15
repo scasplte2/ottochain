@@ -3,29 +3,29 @@ import path from 'path';
 import type { OttochainMessage } from '@ottochain/sdk/core';
 import type { StatesMap } from '../types.ts';
 
-export interface CreateOracleOptions {
-  oracle?: string;
-  oracleDefinition?: {
+export interface CreateScriptOptions {
+  script?: string;
+  scriptDefinition?: {
     scriptProgram: unknown;
     accessControl: unknown;
     initialState?: unknown;
   };
 }
 
-export const generator = ({ cid, options }: { cid: string; wallets?: unknown; options: CreateOracleOptions }): OttochainMessage => {
-  let oracleDefinition: { scriptProgram: unknown; accessControl: unknown; initialState?: unknown };
+export const generator = ({ cid, options }: { cid: string; wallets?: unknown; options: CreateScriptOptions }): OttochainMessage => {
+  let scriptDefinition: { scriptProgram: unknown; accessControl: unknown; initialState?: unknown };
 
-  if (options.oracleDefinition && typeof options.oracleDefinition === 'object') {
-    oracleDefinition = options.oracleDefinition;
-  } else if (typeof options.oracle === 'string') {
-    const oraclePath = path.resolve(options.oracle);
-    if (!fs.existsSync(oraclePath)) {
-      throw new Error(`Oracle definition file not found: ${oraclePath}`);
+  if (options.scriptDefinition && typeof options.scriptDefinition === 'object') {
+    scriptDefinition = options.scriptDefinition;
+  } else if (typeof options.script === 'string') {
+    const scriptPath = path.resolve(options.script);
+    if (!fs.existsSync(scriptPath)) {
+      throw new Error(`Script definition file not found: ${scriptPath}`);
     }
-    oracleDefinition = JSON.parse(fs.readFileSync(oraclePath, 'utf8'));
+    scriptDefinition = JSON.parse(fs.readFileSync(scriptPath, 'utf8'));
   } else {
     throw new Error(
-      'Either options.oracle (path) or options.oracleDefinition (object) must be provided'
+      'Either options.script (path) or options.scriptDefinition (object) must be provided'
     );
   }
 
@@ -37,9 +37,9 @@ export const generator = ({ cid, options }: { cid: string; wallets?: unknown; op
   // requirement.
   const createMsg: Record<string, unknown> = {
     fiberId: cid,
-    scriptProgram: oracleDefinition.scriptProgram,
-    initialState: oracleDefinition.initialState ?? null,
-    accessControl: oracleDefinition.accessControl,
+    scriptProgram: scriptDefinition.scriptProgram,
+    initialState: scriptDefinition.initialState ?? null,
+    accessControl: scriptDefinition.accessControl,
   };
 
   return { CreateScript: createMsg } as unknown as OttochainMessage;
@@ -51,25 +51,25 @@ export const validator = ({ cid, statesMap }: { cid: string; statesMap: StatesMa
 
     if (!finalRecord) {
       throw new Error(
-        `\x1b[33m[createScript.validator]\x1b[0m No script oracle found for fiberId = ${cid} in final state from ${url}.`
+        `\x1b[33m[createScript.validator]\x1b[0m No script script found for fiberId = ${cid} in final state from ${url}.`
       );
     }
 
     if (finalRecord.status !== 'ACTIVE') {
       throw new Error(
-        `\x1b[33m[createScript.validator]\x1b[0m Expected oracle status "ACTIVE" but found "${finalRecord.status}" for fiberId = ${cid} at ${url}.`
+        `\x1b[33m[createScript.validator]\x1b[0m Expected script status "ACTIVE" but found "${finalRecord.status}" for fiberId = ${cid} at ${url}.`
       );
     }
 
     // US-7: invocationCount → sequenceNumber
     if (finalRecord.sequenceNumber !== 0) {
       throw new Error(
-        `\x1b[33m[createScript.validator]\x1b[0m Expected sequenceNumber 0 for new oracle but found ${finalRecord.sequenceNumber} for fiberId = ${cid} at ${url}.`
+        `\x1b[33m[createScript.validator]\x1b[0m Expected sequenceNumber 0 for new script but found ${finalRecord.sequenceNumber} for fiberId = ${cid} at ${url}.`
       );
     }
 
     console.log(
-      `\x1b[33m[createScript.validator]\x1b[32m Oracle created successfully for fiberId = ${cid} at ${url}!\x1b[0m`
+      `\x1b[33m[createScript.validator]\x1b[32m Script created successfully for fiberId = ${cid} at ${url}!\x1b[0m`
     );
   }
 };

@@ -18,17 +18,17 @@ import io.circe.parser._
 import weaver.SimpleIOSuite
 
 /**
- * Oracle Escrow State Machine — Unit Tests
+ * Script Escrow State Machine — Unit Tests
  *
  * An escrow contract that uses a script to determine release conditions.
  * Demonstrates:
  * - State machine with conditional transitions (guards)
- * - Script oracle creation and invocation
- * - Integration of oracle results into state transitions
+ * - Script script creation and invocation
+ * - Integration of script results into state transitions
  */
-object OracleEscrowSuite extends SimpleIOSuite {
+object ScriptEscrowSuite extends SimpleIOSuite {
 
-  test("Oracle Escrow: Fund, Oracle Check, Release") {
+  test("Script Escrow: Fund, Script Check, Release") {
     TestFixture.resource(Set(Alice)).use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
@@ -36,7 +36,7 @@ object OracleEscrowSuite extends SimpleIOSuite {
       for {
         combiner <- Combiner.make[IO]().pure[IO]
         fiberId  <- IO.randomUUID
-        oracleId <- IO.randomUUID
+        scriptId <- IO.randomUUID
 
         // State machine definition
         machineJson = """
@@ -65,7 +65,7 @@ object OracleEscrowSuite extends SimpleIOSuite {
               "dependencies": []
             }
           ],
-          "metadata": { "name": "OracleEscrow" }
+          "metadata": { "name": "ScriptEscrow" }
         }
         """
 
@@ -80,19 +80,19 @@ object OracleEscrowSuite extends SimpleIOSuite {
           Signed(createOp, createProof)
         )
 
-        // Create the oracle script (always returns true)
-        oracleScript = """{"==": [1, 1]}"""
-        oracleProg <- IO.fromEither(parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
+        // Create the script script (always returns true)
+        scriptSource = """{"==": [1, 1]}"""
+        scriptProg <- IO.fromEither(parse(scriptSource).flatMap(_.as[JsonLogicExpression]))
 
-        // Create the oracle
-        createOracle = Updates.CreateScript(
-          fiberId = oracleId,
-          scriptProgram = oracleProg,
+        // Create the script
+        createScript = Updates.CreateScript(
+          fiberId = scriptId,
+          scriptProgram = scriptProg,
           initialState = None,
           accessControl = AccessControlPolicy.Public
         )
-        oracleProof <- fixture.registry.generateProofs(createOracle, Set(Alice))
-        state2      <- combiner.insert(state1, Signed(createOracle, oracleProof))
+        scriptProof <- fixture.registry.generateProofs(createScript, Set(Alice))
+        state2      <- combiner.insert(state1, Signed(createScript, scriptProof))
 
         // Fund the escrow
         fundOp = Updates.TransitionStateMachine(
@@ -104,17 +104,17 @@ object OracleEscrowSuite extends SimpleIOSuite {
         fundProof <- fixture.registry.generateProofs(fundOp, Set(Alice))
         state3    <- combiner.insert(state2, Signed(fundOp, fundProof))
 
-        // Invoke Oracle (simulating an external check)
-        invokeOracle = Updates.InvokeScript(
-          fiberId = oracleId,
+        // Invoke Script (simulating an external check)
+        invokeScript = Updates.InvokeScript(
+          fiberId = scriptId,
           method = "invoke",
           args = MapValue(Map.empty[String, JsonLogicValue]),
           targetSequenceNumber = FiberOrdinal.MinValue
         )
-        invokeProof <- fixture.registry.generateProofs(invokeOracle, Set(Alice))
-        state4      <- combiner.insert(state3, Signed(invokeOracle, invokeProof))
+        invokeProof <- fixture.registry.generateProofs(invokeScript, Set(Alice))
+        state4      <- combiner.insert(state3, Signed(invokeScript, invokeProof))
 
-        // Release to beneficiary (using oracle result in guard)
+        // Release to beneficiary (using script result in guard)
         releaseOp = Updates.TransitionStateMachine(
           fiberId,
           "release",
@@ -146,7 +146,7 @@ object OracleEscrowSuite extends SimpleIOSuite {
     }
   }
 
-  test("Oracle Escrow: Fund, Oracle Check, Refund") {
+  test("Script Escrow: Fund, Script Check, Refund") {
     TestFixture.resource(Set(Alice)).use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
@@ -154,7 +154,7 @@ object OracleEscrowSuite extends SimpleIOSuite {
       for {
         combiner <- Combiner.make[IO]().pure[IO]
         fiberId  <- IO.randomUUID
-        oracleId <- IO.randomUUID
+        scriptId <- IO.randomUUID
 
         // State machine definition
         machineJson = """
@@ -192,7 +192,7 @@ object OracleEscrowSuite extends SimpleIOSuite {
               "dependencies": []
             }
           ],
-          "metadata": { "name": "OracleEscrow" }
+          "metadata": { "name": "ScriptEscrow" }
         }
         """
 
@@ -207,19 +207,19 @@ object OracleEscrowSuite extends SimpleIOSuite {
           Signed(createOp, createProof)
         )
 
-        // Create the oracle script (always returns true)
-        oracleScript = """{"==": [1, 1]}"""
-        oracleProg <- IO.fromEither(parse(oracleScript).flatMap(_.as[JsonLogicExpression]))
+        // Create the script script (always returns true)
+        scriptSource = """{"==": [1, 1]}"""
+        scriptProg <- IO.fromEither(parse(scriptSource).flatMap(_.as[JsonLogicExpression]))
 
-        // Create the oracle
-        createOracle = Updates.CreateScript(
-          fiberId = oracleId,
-          scriptProgram = oracleProg,
+        // Create the script
+        createScript = Updates.CreateScript(
+          fiberId = scriptId,
+          scriptProgram = scriptProg,
           initialState = None,
           accessControl = AccessControlPolicy.Public
         )
-        oracleProof <- fixture.registry.generateProofs(createOracle, Set(Alice))
-        state2      <- combiner.insert(state1, Signed(createOracle, oracleProof))
+        scriptProof <- fixture.registry.generateProofs(createScript, Set(Alice))
+        state2      <- combiner.insert(state1, Signed(createScript, scriptProof))
 
         // Fund the escrow
         fundOp = Updates.TransitionStateMachine(
@@ -231,17 +231,17 @@ object OracleEscrowSuite extends SimpleIOSuite {
         fundProof <- fixture.registry.generateProofs(fundOp, Set(Alice))
         state3    <- combiner.insert(state2, Signed(fundOp, fundProof))
 
-        // Invoke Oracle
-        invokeOracle = Updates.InvokeScript(
-          fiberId = oracleId,
+        // Invoke Script
+        invokeScript = Updates.InvokeScript(
+          fiberId = scriptId,
           method = "invoke",
           args = MapValue(Map.empty[String, JsonLogicValue]),
           targetSequenceNumber = FiberOrdinal.MinValue
         )
-        invokeProof <- fixture.registry.generateProofs(invokeOracle, Set(Alice))
-        state4      <- combiner.insert(state3, Signed(invokeOracle, invokeProof))
+        invokeProof <- fixture.registry.generateProofs(invokeScript, Set(Alice))
+        state4      <- combiner.insert(state3, Signed(invokeScript, invokeProof))
 
-        // Refund (Oracle result is false, so guard fails)
+        // Refund (Script result is false, so guard fails)
         refundOp = Updates.TransitionStateMachine(
           fiberId,
           "refund",

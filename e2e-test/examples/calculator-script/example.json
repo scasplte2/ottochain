@@ -1,7 +1,7 @@
 {
-  "name": "Calculator Oracle",
-  "description": "A stateless script oracle that performs basic arithmetic operations",
-  "type": "oracle",
+  "name": "Calculator Script",
+  "description": "A stateless script script that performs basic arithmetic operations",
+  "type": "script",
   "definition": "definition.json",
   "methods": [
     {
@@ -32,7 +32,7 @@
   "testFlows": [
     {
       "name": "All arithmetic operations",
-      "description": "Create oracle and test all arithmetic methods",
+      "description": "Create script and test all arithmetic methods",
       "steps": [
         { "action": "createScript", "definition": "definition.json" },
         { "action": "invoke", "method": "add", "args": "args-add.json" },

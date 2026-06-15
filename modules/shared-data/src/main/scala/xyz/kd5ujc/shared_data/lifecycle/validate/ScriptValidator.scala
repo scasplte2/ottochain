@@ -31,7 +31,7 @@ object ScriptValidator {
   class L1Validator[F[_]: Monad](state: OnChain) {
 
     /** Validates a CreateScript update */
-    def createOracle(update: CreateScript): F[ValidationResult] =
+    def createScript(update: CreateScript): F[ValidationResult] =
       for {
         cidCheck       <- CommonRules.cidNotUsed(update.fiberId, state)
         initialStateOk <- CommonRules.isMapValueOrNull(update.initialState, "initialState")
@@ -48,7 +48,7 @@ object ScriptValidator {
       } yield List(cidCheck, initialStateOk, scriptDepthOk, initialStateSizeOk).combineAll
 
     /** Validates an InvokeScript update */
-    def invokeOracle(update: InvokeScript): F[ValidationResult] =
+    def invokeScript(update: InvokeScript): F[ValidationResult] =
       for {
         cidExists     <- CommonRules.cidIsFound(update.fiberId, state)
         seqNumOk      <- ScriptRules.L1.sequenceNumberMatches(update.fiberId, update.targetSequenceNumber, state)
@@ -83,11 +83,11 @@ object ScriptValidator {
   ) {
 
     /** Validates a CreateScript update (L0 specific checks) */
-    def createOracle(update: CreateScript): F[ValidationResult] =
+    def createScript(update: CreateScript): F[ValidationResult] =
       RegistryRules.L0.scriptRefResolvesAndMatches(update.schemaRef, update.scriptProgram, state.calculated)
 
     /** Validates an InvokeScript update (L0 specific checks) */
-    def invokeOracle(update: InvokeScript): F[ValidationResult] =
+    def invokeScript(update: InvokeScript): F[ValidationResult] =
       ScriptRules.L0.accessControlCheck(update.fiberId, proofs, state.calculated)
 
     /** Validates an UpgradeScript update (active, owner, same-package re-bind + verified hash) */
@@ -117,17 +117,17 @@ object ScriptValidator {
     private val l0 = new L0Validator[F](state, proofs)
 
     /** Validates a CreateScript update (all checks) */
-    def createOracle(update: CreateScript): F[ValidationResult] =
+    def createScript(update: CreateScript): F[ValidationResult] =
       for {
-        l1Result <- l1.createOracle(update)
-        l0Result <- l0.createOracle(update)
+        l1Result <- l1.createScript(update)
+        l0Result <- l0.createScript(update)
       } yield l1Result |+| l0Result
 
     /** Validates an InvokeScript update (all checks) */
-    def invokeOracle(update: InvokeScript): F[ValidationResult] =
+    def invokeScript(update: InvokeScript): F[ValidationResult] =
       for {
-        l1Result <- l1.invokeOracle(update)
-        l0Result <- l0.invokeOracle(update)
+        l1Result <- l1.invokeScript(update)
+        l0Result <- l0.invokeScript(update)
       } yield l1Result |+| l0Result
 
     /** Validates an UpgradeScript update (all checks) */

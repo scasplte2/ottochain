@@ -388,7 +388,7 @@ object PredictionMarketSuite extends SimpleIOSuite {
         invokeProof <- fixture.registry.generateProofs(invokeOp, Set(Alice))
         state2      <- combiner.insert(state1, Signed(invokeOp, invokeProof))
 
-        result = state2.oracleRecord(scriptId).flatMap(_.lastInvocation).map(_.result)
+        result = state2.scriptRecord(scriptId).flatMap(_.lastInvocation).map(_.result)
 
       } yield expect.all(
         result.isDefined,
@@ -447,7 +447,7 @@ object PredictionMarketSuite extends SimpleIOSuite {
         invokeProof <- fixture.registry.generateProofs(invokeOp, Set(Alice))
         state2      <- combiner.insert(state1, Signed(invokeOp, invokeProof))
 
-        result = state2.oracleRecord(scriptId).flatMap(_.lastInvocation).map(_.result)
+        result = state2.scriptRecord(scriptId).flatMap(_.lastInvocation).map(_.result)
 
       } yield expect.all(
         result.isDefined,
@@ -600,7 +600,7 @@ object PredictionMarketSuite extends SimpleIOSuite {
         scriptInvokeProof <- fixture.registry.generateProofs(invokeScript, Set(Alice))
         state10           <- combiner.insert(state9, Signed(invokeScript, scriptInvokeProof))
 
-        scriptResult = state10.oracleRecord(scriptId).flatMap(_.lastInvocation).map(_.result)
+        scriptResult = state10.scriptRecord(scriptId).flatMap(_.lastInvocation).map(_.result)
         outcome = scriptResult.flatMap {
           case MapValue(m) => m.get("outcome")
           case _           => None

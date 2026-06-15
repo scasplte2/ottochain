@@ -22,7 +22,7 @@ import xyz.kd5ujc.shared_data.fiber.core._
 import xyz.kd5ujc.shared_data.syntax.all._
 
 /**
- * Unified evaluator for both state machine and oracle fibers.
+ * Unified evaluator for both state machine and script fibers.
  *
  * Operates in G[_] with Stateful[G, ExecutionState] for consistent gas tracking via StateT.
  *
@@ -30,7 +30,7 @@ import xyz.kd5ujc.shared_data.syntax.all._
  * - StateMachineFiberRecord + Transition → guard/effect evaluation
  * - ScriptFiberRecord + MethodCall → script evaluation
  *
- * Invalid combinations (SM + MethodCall, Oracle + Transition) return Failed.
+ * Invalid combinations (SM + MethodCall, Script + Transition) return Failed.
  */
 trait FiberEvaluator[G[_]] {
 
@@ -65,17 +65,17 @@ object FiberEvaluator {
         case (sm: Records.StateMachineFiberRecord, FiberInput.Transition(eventType, payload)) =>
           evaluateStateMachine(sm, eventType, payload, proofs)
 
-        case (oracle: Records.ScriptFiberRecord, FiberInput.MethodCall(method, args, caller)) =>
-          evaluateOracle(oracle, method, args, caller)
+        case (script: Records.ScriptFiberRecord, FiberInput.MethodCall(method, args, caller)) =>
+          evaluateScript(script, method, args, caller)
 
         case (sm: Records.StateMachineFiberRecord, _: FiberInput.MethodCall) =>
           FailureReason
             .FiberInputMismatch(sm.fiberId, FiberKind.StateMachine, InputKind.MethodCall)
             .pureOutcome[G]
 
-        case (oracle: Records.ScriptFiberRecord, _: FiberInput.Transition) =>
+        case (script: Records.ScriptFiberRecord, _: FiberInput.Transition) =>
           FailureReason
-            .FiberInputMismatch(oracle.fiberId, FiberKind.Script, InputKind.Transition)
+            .FiberInputMismatch(script.fiberId, FiberKind.Script, InputKind.Transition)
             .pureOutcome[G]
       }
 
@@ -275,18 +275,18 @@ object FiberEvaluator {
         } yield result
 
       // ──────────────────────────────────────────────────────────────────────────
-      // Oracle Evaluation
+      // Script Evaluation
       // ──────────────────────────────────────────────────────────────────────────
 
-      private def evaluateOracle(
-        oracle: Records.ScriptFiberRecord,
+      private def evaluateScript(
+        script: Records.ScriptFiberRecord,
         method: String,
         args:   JsonLogicValue,
         caller: io.constellationnetwork.schema.address.Address
       ): G[FiberResult] =
         for {
           result <- ScriptProcessor
-            .validateAccess[F](oracle.accessControl, caller, oracle.fiberId, calculatedState)
+            .validateAccess[F](script.accessControl, caller, script.fiberId, calculatedState)
             .liftTo[G]
             .flatMap {
               case Left(reason) => reason.pureOutcome[G]
@@ -296,17 +296,17 @@ object FiberEvaluator {
                   Map(
                     ReservedKeys.METHOD -> StrValue(method),
                     ReservedKeys.ARGS   -> args,
-                    ReservedKeys.STATE  -> oracle.stateData.getOrElse(NullValue)
+                    ReservedKeys.STATE  -> script.stateData.getOrElse(NullValue)
                   )
                 )
 
-                MeteredEvaluator.eval[F, G](oracle.scriptProgram, inputData, GasExhaustionPhase.Oracle).flatMap {
+                MeteredEvaluator.eval[F, G](script.scriptProgram, inputData, GasExhaustionPhase.Script).flatMap {
                   case Right(evaluationResult) =>
                     for {
                       stateAndResult <- ScriptProcessor.extractStateAndResult[F](evaluationResult).liftTo[G]
                       (newStateData, returnValue) = stateAndResult
                     } yield FiberResult.Success(
-                      newStateData = newStateData.getOrElse(oracle.stateData.getOrElse(NullValue)),
+                      newStateData = newStateData.getOrElse(script.stateData.getOrElse(NullValue)),
                       newStateId = None,
                       triggers = List.empty,
                       spawns = List.empty,

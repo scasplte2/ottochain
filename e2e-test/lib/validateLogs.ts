@@ -57,33 +57,33 @@ export async function validateEventLogs(
 }
 
 /**
- * Validate that the latest OracleInvocation on a script oracle confirms
+ * Validate that the latest ScriptInvocation on a script script confirms
  * a successful invocation. Uses the ML0 custom route:
- *   GET /data-application/v1/oracles/{fiberId}
+ *   GET /data-application/v1/scripts/{fiberId}
  *
- * The `lastInvocation` field on the oracle record contains the most recent
+ * The `lastInvocation` field on the script record contains the most recent
  * invocation result.
  */
-export async function validateOracleLogs(
+export async function validateScriptLogs(
   ctx: LogValidationContext,
   expectedMethod?: string
 ): Promise<void> {
   for (const ml0Url of ctx.ml0Urls) {
     const client = new HttpClient(
-      `${ml0Url}/data-application/v1/oracles/${ctx.fiberId}`
+      `${ml0Url}/data-application/v1/scripts/${ctx.fiberId}`
     );
 
-    const oracle = await client.get<Record<string, unknown>>('');
-    if (!oracle) {
+    const script = await client.get<Record<string, unknown>>('');
+    if (!script) {
       throw new Error(
-        `${TAG} Oracle not found for fiberId = ${ctx.fiberId} at ${ml0Url}`
+        `${TAG} Script not found for fiberId = ${ctx.fiberId} at ${ml0Url}`
       );
     }
 
-    const lastInvocation = oracle.lastInvocation as Record<string, unknown> | null;
+    const lastInvocation = script.lastInvocation as Record<string, unknown> | null;
     if (!lastInvocation) {
       throw new Error(
-        `${TAG} No lastInvocation found on oracle for fiberId = ${ctx.fiberId} at ${ml0Url}`
+        `${TAG} No lastInvocation found on script for fiberId = ${ctx.fiberId} at ${ml0Url}`
       );
     }
 
@@ -94,7 +94,7 @@ export async function validateOracleLogs(
     }
 
     console.log(
-      `${TAG}\x1b[32m Oracle invocation verified (method: ${lastInvocation.method}, result: ${JSON.stringify(lastInvocation.result)}) for fiberId = ${ctx.fiberId} at ${ml0Url}\x1b[0m`
+      `${TAG}\x1b[32m Script invocation verified (method: ${lastInvocation.method}, result: ${JSON.stringify(lastInvocation.result)}) for fiberId = ${ctx.fiberId} at ${ml0Url}\x1b[0m`
     );
   }
 }

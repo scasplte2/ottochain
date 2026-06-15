@@ -56,12 +56,12 @@ class ScriptCombiner[F[_]: Async: SecurityProvider](
     lastSnapshotHash <- ctx.getLastSnapshotHash
     epochProgress    <- ctx.getEpochProgress
 
-    // Verify oracle exists and sequence number matches before processing
-    oracleRecord <- current.calculated.scripts
+    // Verify script exists and sequence number matches before processing
+    scriptRecord <- current.calculated.scripts
       .get(update.fiberId)
       .fold(
         Async[F].raiseError[Records.ScriptFiberRecord](
-          CombineRejected(s"Oracle ${update.fiberId} not found")
+          CombineRejected(s"Script ${update.fiberId} not found")
         )
       )(_.pure[F])
 
@@ -69,10 +69,10 @@ class ScriptCombiner[F[_]: Async: SecurityProvider](
     _ <- Async[F]
       .raiseError(
         CombineRejected(
-          s"Sequence number mismatch: target=${update.targetSequenceNumber}, actual=${oracleRecord.sequenceNumber}"
+          s"Sequence number mismatch: target=${update.targetSequenceNumber}, actual=${scriptRecord.sequenceNumber}"
         )
       )
-      .whenA(oracleRecord.sequenceNumber =!= update.targetSequenceNumber)
+      .whenA(scriptRecord.sequenceNumber =!= update.targetSequenceNumber)
 
     caller <- update.proofs.toList.headOption
       .fold(Async[F].raiseError[Address](CombineRejected("No proof provided")))(
@@ -97,17 +97,17 @@ class ScriptCombiner[F[_]: Async: SecurityProvider](
     outcome <- orchestrator.process(update.fiberId, input, update.proofs.toList)
 
     newState <- outcome match {
-      case TransactionResult.Committed(_, updatedOracles, logEntries, _, _, _) =>
-        updatedOracles.get(update.fiberId) match {
-          case Some(updatedOracle) =>
-            current.withRecord[F](update.fiberId, updatedOracle).map(_.appendLogs(logEntries))
+      case TransactionResult.Committed(_, updatedScripts, logEntries, _, _, _) =>
+        updatedScripts.get(update.fiberId) match {
+          case Some(updatedScript) =>
+            current.withRecord[F](update.fiberId, updatedScript).map(_.appendLogs(logEntries))
 
           case None =>
-            Async[F].raiseError(CombineRejected(s"Oracle ${update.fiberId} not found in orchestrator result"))
+            Async[F].raiseError(CombineRejected(s"Script ${update.fiberId} not found in orchestrator result"))
         }
 
       case TransactionResult.Aborted(reason, _, _) =>
-        Async[F].raiseError(CombineRejected(s"Oracle invocation failed: ${reason.toMessage}"))
+        Async[F].raiseError(CombineRejected(s"Script invocation failed: ${reason.toMessage}"))
     }
   } yield newState
 
@@ -185,8 +185,8 @@ class ScriptCombiner[F[_]: Async: SecurityProvider](
     outcome <- orchestrator.migrateScript(update.fiberId, update.newProgram, newBinding, update.migration)
 
     newState <- outcome match {
-      case TransactionResult.Committed(_, updatedOracles, logEntries, _, _, _) =>
-        updatedOracles.get(update.fiberId) match {
+      case TransactionResult.Committed(_, updatedScripts, logEntries, _, _, _) =>
+        updatedScripts.get(update.fiberId) match {
           case Some(updated) => current.withRecord[F](update.fiberId, updated).map(_.appendLogs(logEntries))
           case None =>
             Async[F].raiseError(CombineRejected(s"Script ${update.fiberId} not in orchestrator result"))

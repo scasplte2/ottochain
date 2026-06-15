@@ -583,7 +583,7 @@ pnpm update @ottochain/sdk --force
 |----------|-------------------------------|--------------------------|----------------------------------|
 | Contract | `src/apps/contracts/`          | `routes/contract.ts`      | PROPOSED → ACTIVE → COMPLETED    |
 | Market   | `src/apps/markets/`            | `routes/market.ts`        | PROPOSED → OPEN → SETTLED        |
-| Oracle   | `src/apps/oracles/`            | `routes/oracle.ts`        | REGISTERED → ACTIVE → FINALIZED  |
+| Script   | `src/apps/scripts/`            | `routes/script.ts`        | REGISTERED → ACTIVE → FINALIZED  |
 | Agent    | `src/apps/identity/`           | `routes/agent.ts`         | REGISTERED → ACTIVE              |
 | DAO      | `src/apps/governance/`         | `routes/governance.ts`    | PROPOSED → ACTIVE → DISSOLVED    |
 | Corporate| `src/apps/corporate/`          | `routes/corporate.ts`     | FORMATION → ACTIVE → DISSOLVED   |

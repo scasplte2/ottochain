@@ -8,7 +8,7 @@ import io.constellationnetwork.currency.dataApplication.DataApplicationValidatio
  * Validation package for the lifecycle module.
  *
  * This package separates validation concerns by:
- * - **Domain**: Fiber operations vs Oracle operations
+ * - **Domain**: Fiber operations vs Script operations
  * - **Layer**: L1 (structural, pre-consensus) vs L0 (contextual, with proofs)
  *
  * The key distinction:
