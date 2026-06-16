@@ -282,6 +282,8 @@ object RegistryRules {
         case NameTld.Machine => state.stateMachines.contains(targetFiberId)
         case NameTld.Script  => state.scripts.contains(targetFiberId)
         case NameTld.Package => false
+        // .asset alias dispatch is Phase 4 (asset-model §5c); not a valid fiber-alias target yet.
+        case NameTld.Asset => false
       }
       Validated
         .condNec(

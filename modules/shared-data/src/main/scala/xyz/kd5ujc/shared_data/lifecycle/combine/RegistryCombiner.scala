@@ -258,6 +258,12 @@ class RegistryCombiner[F[_]: Async: SecurityProvider](
             "cannot register a .package name as a fiber alias (use PublishMachineVersion/PublishScriptVersion)"
           )
         )
+      // .asset alias dispatch (routing to the `assets` map / policy package) is Phase 4 (asset-model §5c).
+      // Until then a .asset name cannot be registered as a fiber alias.
+      case NameTld.Asset =>
+        Async[F].raiseError[Set[Address]](
+          CombineRejected("cannot register a .asset name as a fiber alias (asset alias dispatch is not yet wired)")
+        )
     }
 }
 

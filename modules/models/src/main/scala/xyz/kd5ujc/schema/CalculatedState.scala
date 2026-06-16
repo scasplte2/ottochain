@@ -4,7 +4,7 @@ import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.util.UUID
 
-import scala.collection.immutable.SortedMap
+import scala.collection.immutable.{SortedMap, SortedSet}
 
 import io.constellationnetwork.currency.dataApplication.DataCalculatedState
 import io.constellationnetwork.metagraph_sdk.lifecycle.committed.{CommitKey, CommittedView}
@@ -23,13 +23,24 @@ case class CalculatedState(
   scripts:       SortedMap[UUID, Records.ScriptFiberRecord],
   registry:      SortedMap[RegistryName, RegistryEntry] = SortedMap.empty,
   // Reverse records (#29): fiber UUID -> its canonical registered name, for human-readable audit trails.
-  reverseNames: SortedMap[UUID, RegistryName] = SortedMap.empty
+  reverseNames: SortedMap[UUID, RegistryName] = SortedMap.empty,
+  // Asset instances (asset-model §5b): UUID -> its AssetRecord (dedicated record, NOT a fiber).
+  assets: SortedMap[UUID, Records.AssetRecord] = SortedMap.empty,
+  // Used commit-reveal nonces per asset (asset-model §8/§5e), BOUNDED — pruned past expiresAt in combine.
+  usedNonces: SortedMap[UUID, SortedSet[Long]] = SortedMap.empty
 ) extends DataCalculatedState
 
 object CalculatedState {
 
   val genesis: CalculatedState =
-    CalculatedState(SortedMap.empty, SortedMap.empty, SortedMap.empty, SortedMap.empty)
+    CalculatedState(
+      SortedMap.empty,
+      SortedMap.empty,
+      SortedMap.empty,
+      SortedMap.empty,
+      SortedMap.empty,
+      SortedMap.empty
+    )
 
   /**
    * Projects the FULL calculated state into metakit's committed dictionary, so the two-tier
@@ -42,6 +53,12 @@ object CalculatedState {
    *   - `registry/<name>` from `registry` (the name renders lowercase; an over-long name that would
    *                        overflow a 64-char CommitKey segment falls back to `registry/h/<sha256>`)
    *   - `reverse/<uuid>`  from `reverseNames`
+   *   - `asset/<uuid>`    from `assets` (asset-model §5b — instance custody, light-client provable)
+   *   - `nonce/<uuid>`    from `usedNonces`; the `SortedSet[Long]` value is committed as a JSON array of
+   *                        its sorted elements (total, deterministic)
+   *
+   * Asset POLICIES need no projection of their own — they live in `registry` as `RegistryEntry`s
+   * (`AssetPolicyPackage`) and are already covered by the `registry/<name>` key.
    *
    * Key derivation is TOTAL — `entries` has no error channel, and a non-total key would throw inside
    * combine (a consensus halt). UUIDs always fit a segment; only an over-long registry name takes
@@ -58,7 +75,11 @@ object CalculatedState {
         val reverse = s.reverseNames.toList.map { case (id, n) =>
           CommitKey.unsafe(s"reverse/$id") -> Json.fromString(n.render)
         }
-        SortedMap.from(fibers ::: scripts ::: registry ::: reverse)
+        val assets = s.assets.toList.map { case (id, r) => CommitKey.unsafe(s"asset/$id") -> r.asJson }
+        val nonces = s.usedNonces.toList.map { case (id, ns) =>
+          CommitKey.unsafe(s"nonce/$id") -> Json.fromValues(ns.toList.map(Json.fromLong))
+        }
+        SortedMap.from(fibers ::: scripts ::: registry ::: reverse ::: assets ::: nonces)
       }
     }
 

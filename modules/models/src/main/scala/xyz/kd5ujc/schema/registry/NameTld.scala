@@ -10,6 +10,8 @@ import enumeratum.{CirceEnum, Enum, EnumEntry}
  *  - `.package` — a versioned schema/program package (its [[VersionLineage]]).
  *  - `.machine` — an alias (nickname) for a state-machine fiber.
  *  - `.script`  — an alias (nickname) for a script fiber.
+ *  - `.asset`   — a versioned asset-policy package (its [[VersionLineage]]); policy : asset :: package :
+ *                 fiber (docs/proposals/asset-model.md §5c).
  *
  * Putting the TLD in the key lets a package and a fiber alias share label text under different TLDs
  * (`escrow.package` vs `escrow.machine`). See docs/proposals/naming-and-fingerprints.md §3.
@@ -22,4 +24,5 @@ object NameTld extends Enum[NameTld] with CirceEnum[NameTld] {
   case object Package extends NameTld
   case object Machine extends NameTld
   case object Script extends NameTld
+  case object Asset extends NameTld
 }

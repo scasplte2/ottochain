@@ -37,4 +37,15 @@ object RegistryNameSuite extends SimpleIOSuite {
       expect(RegistryName.ordering.lt(a, b)) // "alpha.package" < "beta.machine"
     )
   }
+
+  test("the new .asset TLD parses and round-trips (asset-policy package name)") {
+    val n = RegistryName.from("gold.acme.asset")
+    IO.pure(
+      expect(n.map(_.tld) == Right(NameTld.Asset)) and
+      expect(n.map(_.render) == Right("gold.acme.asset")) and
+      expect(n.map(_.labels.value) == Right("gold.acme")) and
+      // .asset is a recognised TLD, so a bare ".asset" with empty labels is still rejected on the labels
+      expect(RegistryName.from(".asset").isLeft)
+    )
+  }
 }

@@ -8,6 +8,7 @@ import io.constellationnetwork.schema.address.Address
 import io.constellationnetwork.security.hash.Hash
 
 import xyz.kd5ujc.schema.CodecConfiguration._
+import xyz.kd5ujc.schema.asset.{AssetHolder, OriginProvenance, TokenBehavior}
 import xyz.kd5ujc.schema.fiber.FiberLogEntry.{EventReceipt, ScriptInvocation}
 import xyz.kd5ujc.schema.fiber._
 import xyz.kd5ujc.schema.registry.SchemaBinding
@@ -61,4 +62,39 @@ object Records {
     lastInvocation:      Option[ScriptInvocation] = None,
     schemaBinding:       Option[SchemaBinding] = None
   ) extends FiberRecord
+
+  /**
+   * An asset INSTANCE record — deliberately NOT a [[FiberRecord]] (asset-model D1: dedicated `AssetRecord`,
+   * not asset-as-fiber). An asset has no JSON-Logic definition of its own; its behavior lives in the bound
+   * policy package version, pinned here via [[SchemaBinding]] exactly as a state-machine pins its schema
+   * ("pin once at mint; re-resolution is an explicit upgrade"). Lives in `CalculatedState.assets`. See
+   * docs/proposals/asset-model.md §5b/§5c.
+   *
+   *   - `behavior`          — cached from the bound policy version (the authoritative copy; the combiner
+   *                           re-derives composite behavior from records, never from the `OnChain` commit bits).
+   *   - `holder`            — wallet or live fiber custody ([[AssetHolder]]).
+   *   - `componentFiberIds` — present iff this is a composite; stored verbatim for retraction.
+   *   - `parentCompositeId` — set on a component that has been folded into a composite.
+   *   - `provenance`        — `None` for natively-issued assets; carries cross-chain origin for bridged-in
+   *                           assets (D2 forward-ref → asset-interop-functor.md, full behavior Phase 6).
+   *
+   * Ordinals/sequence mirror the fiber records (`SnapshotOrdinal` for create/latest, `FiberOrdinal` for the
+   * monotonic sequence number). A `= None` default on a `CalculatedState` record is fine — signing-canonical
+   * invariant #1 governs SIGNED messages only, and `AssetRecord` is server-derived state.
+   */
+  @derive(customizableEncoder, customizableDecoder)
+  final case class AssetRecord(
+    assetId:             UUID,
+    schemaBinding:       SchemaBinding,
+    behavior:            TokenBehavior,
+    holder:              AssetHolder,
+    amount:              Long,
+    sequenceNumber:      FiberOrdinal,
+    creationOrdinal:     SnapshotOrdinal,
+    latestUpdateOrdinal: SnapshotOrdinal,
+    expiresAt:           Option[SnapshotOrdinal] = None,
+    componentFiberIds:   Option[List[UUID]] = None,
+    parentCompositeId:   Option[UUID] = None,
+    provenance:          Option[OriginProvenance] = None
+  )
 }

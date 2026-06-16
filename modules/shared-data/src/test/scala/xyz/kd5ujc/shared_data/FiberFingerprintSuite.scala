@@ -38,11 +38,14 @@ object FiberFingerprintSuite extends SimpleIOSuite {
     val u = samples(2)
     val sm = FiberFingerprint.of(u, FiberKind.StateMachine)
     val sc = FiberFingerprint.of(u, FiberKind.Script)
+    val as = FiberFingerprint.of(u, FiberKind.Asset)
     IO.pure(
       expect(sm.endsWith(".machine")) and
       expect(sc.endsWith(".script")) and
+      expect(as.endsWith(".asset")) and // Phase 2: asset instances get a `.asset` proquint handle
       expect(FiberFingerprint.decode(sm) == Right(u)) and
-      expect(FiberFingerprint.decode(sc) == Right(u))
+      expect(FiberFingerprint.decode(sc) == Right(u)) and
+      expect(FiberFingerprint.decode(as) == Right(u))
     )
   }
 

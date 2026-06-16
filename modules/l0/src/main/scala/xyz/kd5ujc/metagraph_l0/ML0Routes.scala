@@ -66,6 +66,12 @@ class ML0Routes[F[_]: Async](
     case GET -> Root / "scripts" / UUIDVar(id) / "state-proof" :? FieldQueryParam(field) =>
       stateProof.script(id, field)
 
+    // --- assets ---
+    // Custody state-proof for an asset instance (asset-model §5b). A list/get handler over `assets`
+    // arrives with the asset combiner (Phase 4) — the committed state-proof is a pure read here.
+    case GET -> Root / "assets" / UUIDVar(id) / "state-proof" :? FieldQueryParam(field) =>
+      stateProof.asset(id, field)
+
     // --- registry ---
     case GET -> Root / "registry"                           => registry.all.toResponse
     case GET -> Root / "registry" / "reverse" / UUIDVar(id) => registry.reverse(id).toResponse
