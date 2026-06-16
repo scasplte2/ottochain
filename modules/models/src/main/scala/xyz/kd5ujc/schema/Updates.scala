@@ -283,8 +283,9 @@ object Updates {
   /**
    * Apply a typed morphism ([[MorphismKind]]) to an asset instance. `Sequenced` — ordered by
    * `(assetId, targetSequenceNumber)`. The optional fields carry per-kind directives (recipient for
-   * Transfer/Wrap; otherAssetIds + compositeId for Compose; shardIds for Fractionalize). All optional
-   * fields are `Option` (invariant #1); the stateful application is Phase 4.
+   * Transfer/Wrap; otherAssetIds + compositeId for Compose; shardIds for Fractionalize; `nonce` for a
+   * commit-reveal symmetric Compose that consumes a counter-party's [[AuthorizeCompose]] intent). All
+   * optional fields are `Option` (invariant #1); the stateful application is Phase 4.
    */
   @derive(customizableDecoder, customizableEncoder)
   final case class ApplyMorphism(
@@ -294,7 +295,8 @@ object Updates {
     recipient:            Option[AssetHolder] = None,
     otherAssetIds:        Option[List[UUID]] = None,
     compositeId:          Option[UUID] = None,
-    shardIds:             Option[List[UUID]] = None
+    shardIds:             Option[List[UUID]] = None,
+    nonce:                Option[Long] = None
   ) extends AssetOp
       with OttochainMessage
       with Sequenced {
