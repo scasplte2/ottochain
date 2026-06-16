@@ -196,6 +196,49 @@ contention pitfall (Aptos's lesson: a max-supply *counter* serializes mint/burn)
 (`Σ inputs = Σ outputs ± policy-path mint/burn`) is an explicit combiner invariant — OttoChain has no
 linear types, so this re-implements Move's free guarantee as a deterministic check (§7 law suite).
 
+### Policy lifecycle & instance semantics (the resolve-asymmetry invariant)
+
+An asset policy is a registry package (§5), so it inherits the registry version lifecycle verbatim
+(`VersionLineage.setStatus`, `RegistryStatus`):
+
+```
+Active      — mintable + recommended.            resolve() selects it.
+Deprecated  — still resolvable + mintable, discouraged for new instances (reversible ↔ Active).
+Yanked      — NOT mintable: resolve() EXCLUDES it. Terminal.
+```
+
+Every existing `AssetRecord` pins its policy version via `SchemaBinding` *for life* (the same "pin once at
+mint; re-resolution is an explicit upgrade" rule fibers use). So an instance keeps functioning through any
+status change of its policy version — **assets are never auto-burned on yank.**
+
+**The resolve-asymmetry invariant (load-bearing — anti-rug-pull):**
+
+| Path | Lineage lookup | Effect of yanking the version |
+|------|----------------|-------------------------------|
+| **Mint** (`MintAsset`) | `VersionLineage.resolve` | a yanked version **BLOCKS new mints** (`resolve` excludes `Yanked`). |
+| **Morphisms** on existing instances (`ApplyMorphism`: Transfer/Burn/Compose/Decompose/…) | **direct `versions.get(schemaBinding.version)`** | the pinned version is returned **regardless of status**, so existing instances **keep working**. |
+
+This asymmetry is deliberate and must not be "unified." If morphism resolution switched to `resolve()`,
+yanking a policy version would retroactively **brick every existing instance** (a Transfer/Burn would
+suddenly fail to resolve) — i.e. a **rug-pull**: an owner could trap holders' assets by yanking. The mint
+path uses `resolve` so an owner *can* close off new supply (the legitimate use of yank); the morphism path
+uses the direct pinned lookup so it can *never* strand assets already in holders' hands. The asymmetry is
+enforced in `AssetCombiner` (`resolvePolicy` = mint, `resolve`; `resolveAssetPolicy` = morphisms, direct
+`versions.get`) and guarded by a combiner test (a yank blocks a new mint but leaves an existing instance's
+Transfer succeeding, unchanged-except-holder, not burned).
+
+> **Optional future "frozen yank" (non-default).** A policy could opt into a stricter yank that limits
+> existing instances to **exit-only** morphisms (Transfer/Burn) — letting holders withdraw but freezing
+> further composition/state change — as a *policy choice*, never the default (the default keeps full
+> functionality through yank). This would be modeled as a policy-version flag read combiner-only (rule #3),
+> not a change to the resolve-asymmetry above.
+
+> **Implementation note (gap).** `RegistryCombiner.setVersionStatus` (the `SetVersionStatus` op) today
+> handles only `RegistryTarget.SchemaPackage` (machine/script) lineages — it raises `CombineRejected` for an
+> `AssetPolicyPackage`. So *on-chain* yanking of an asset policy needs `setVersionStatus` to learn the asset
+> variant (a small additive change, parallel to the alias-dispatch gap in §5c). The lifecycle primitive
+> (`VersionLineage.setStatus`) already supports it; only the op dispatch is missing.
+
 ---
 
 ## 4. Typed morphisms
@@ -236,10 +279,24 @@ These — not "monoidal laws" — are what the law suite checks:
 
 1. **Commutative aggregation monoid.** Components compose by **multiset-union** of
    `componentFiberIds`; the unit is the **empty multiset** (the unit/empty composite maps to the lattice
-   top, `28`). `Compose` is union. `Decompose ∘ Compose = id` is a **RETRACTION** — a *left* inverse
-   realized by **storing the component ids verbatim** in the composite record and returning them
-   unmodified. It is **not** two-sided: `Compose ∘ Decompose` is **not** claimed (and must not be
-   asserted in the law suite). No behavior transformation occurs during the round-trip.
+   top, `28`). `Compose` is union. `Decompose ∘ Compose = id` is a **RETRACTION** — a *left* inverse. It is
+   **not** two-sided: `Compose ∘ Decompose` is **not** claimed (and must not be asserted in the law suite).
+
+   **FAITHFUL retraction (Phase-4 hardening).** The retraction is realized FAITHFULLY: at `Compose` the
+   combiner builds a canonical (sorted-by-`assetId`) `List[ComponentWitness]` capturing each part's full
+   restorable state — `(assetId, schemaBinding, behavior, holder, amount, expiresAt, componentFiberIds,
+   componentsCommitment, provenance)` — and stores `componentsCommitment = hash(canonicalWitnesses)` on the
+   composite (alongside `componentFiberIds` verbatim, for the id-multiset and the L1 commit). `Decompose`
+   takes a **mandatory reveal witness** (`ApplyMorphism.priorComponents`), recomputes the hash, requires it
+   to equal the stored commitment, requires the witness id-set to equal `componentFiberIds`, requires
+   `Σ witness.amount == composite.amount`, and then restores each component EXACTLY (its own behavior /
+   holder / amount / binding / nested anchors — modulo reset creation/latest ordinals + sequence). So
+   `Decompose ∘ Compose = id` holds on the full **component state**, not merely the id multiset — A and B
+   with different behaviors/holders/amounts come back as themselves; the composite's `foldMeet` behavior and
+   source-holder custody do **not** leak onto the restored components. This is **choice (a), STRICT**: a
+   committed composite MUST decompose faithfully — there is **NO lossy fallback**; a missing / mismatched /
+   non-conserving witness is a graceful `CombineRejected`. The `componentsCommitment` is recursive (a
+   restored component can itself be a composite and decompose faithfully).
 
 2. **Behavior homomorphism.** `behavior : (AssetAggregate, ⊎) → (𝓑, meet)` is a **strict monoid
    homomorphism**: `behavior(Compose(xs)) = foldMeet(map(behavior, xs))`, with the empty aggregate ↦

@@ -16,6 +16,7 @@ import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
 import io.constellationnetwork.schema.SnapshotOrdinal
 import io.constellationnetwork.schema.address.Address
 import io.constellationnetwork.security.SecurityProvider
+import io.constellationnetwork.security.hash.Hash
 import io.constellationnetwork.security.signature.Signed
 
 import xyz.kd5ujc.schema.Records.AssetRecord
@@ -558,9 +559,15 @@ class AssetCombiner[F[_]: Async: SecurityProvider](
 
   /**
    * Compose → require all components `C=1`; `composite.behavior := foldMeet(source :: components)` (the
-   * behavior homomorphism); store the component ids VERBATIM on the composite (the retraction anchor); mark
-   * the source + components consumed (removed, and tagged `parentCompositeId`); the composite id comes from
-   * `compositeId`. Amount is conserved: `composite.amount == Σ (source + components).amount`.
+   * behavior homomorphism); store the component ids VERBATIM on the composite (the retraction anchor) AND a
+   * `componentsCommitment` — `hash(canonicalWitnesses)` over the full per-component state (the FAITHFUL
+   * retraction anchor, Phase-4 hardening, asset-model §4); mark the source + components consumed; the
+   * composite id comes from `compositeId`. Amount is conserved: `composite.amount == Σ parts.amount`.
+   *
+   * The witness list captures each part's `(assetId, schemaBinding, behavior, holder, amount, expiresAt,
+   * componentFiberIds, componentsCommitment, provenance)` — exactly the RESTORABLE fields — and is
+   * CANONICALIZED (sorted by `assetId`) before hashing, so the commitment is independent of the order the
+   * components were supplied. `Decompose` recomputes this hash from the reveal witness and matches it.
    *
    * Commit-reveal (asset-model §5e/§8): if `a.nonce` is present, this is a symmetric (cross-holder) compose;
    * the nonce must be a LIVE pending authorization recorded by one of the counter-parties (via
@@ -592,23 +599,28 @@ class AssetCombiner[F[_]: Async: SecurityProvider](
         Async[F].raiseError(CombineRejected(s"composite id $compositeId already exists"))
       else {
         val componentIds = parts.map(_.assetId)
-        val composite = source.copy(
-          assetId = compositeId,
-          behavior = TokenBehavior.foldMeet(parts.map(_.behavior)),
-          amount = parts.map(_.amount).sum,
-          sequenceNumber = FiberOrdinal.MinValue,
-          creationOrdinal = ordinal,
-          latestUpdateOrdinal = ordinal,
-          componentFiberIds = Some(componentIds), // stored VERBATIM — the retraction anchor
-          parentCompositeId = None
-        )
-        // Consume the commit-reveal nonce (if present) atomically within this pass, BEFORE consuming the
-        // components, so a failure raises before any state mutation.
-        consumeNonce(current, a.nonce, counterParties).flatMap { stateAfterNonce =>
-          // Mark each component consumed: remove from the live set (its record is preserved inside the
-          // composite's componentFiberIds for the Decompose retraction).
-          val consumed = componentIds.foldLeft(stateAfterNonce) { case (st, id) => removeAsset(st, id) }
-          writeAsset(consumed, composite)
+        // Build + canonicalize the per-component witnesses, then commit to them (the FAITHFUL anchor).
+        val canonicalWitnesses = canonicalize(parts.map(witnessOf))
+        componentsCommitment(canonicalWitnesses).flatMap { commit =>
+          val composite = source.copy(
+            assetId = compositeId,
+            behavior = TokenBehavior.foldMeet(parts.map(_.behavior)),
+            amount = parts.map(_.amount).sum,
+            sequenceNumber = FiberOrdinal.MinValue,
+            creationOrdinal = ordinal,
+            latestUpdateOrdinal = ordinal,
+            componentFiberIds = Some(componentIds), // stored VERBATIM — the id-multiset retraction anchor
+            componentsCommitment = Some(commit), // the FAITHFUL component-state commitment
+            parentCompositeId = None
+          )
+          // Consume the commit-reveal nonce (if present) atomically within this pass, BEFORE consuming the
+          // components, so a failure raises before any state mutation.
+          consumeNonce(current, a.nonce, counterParties).flatMap { stateAfterNonce =>
+            // Mark each component consumed: remove from the live set (its full state is committed in the
+            // composite's componentsCommitment for the FAITHFUL Decompose retraction).
+            val consumed = componentIds.foldLeft(stateAfterNonce) { case (st, id) => removeAsset(st, id) }
+            writeAsset(consumed, composite)
+          }
         }
       }
     }
@@ -643,45 +655,74 @@ class AssetCombiner[F[_]: Async: SecurityProvider](
     }
 
   /**
-   * Decompose → require `componentFiberIds` present; RESTORE the component records exactly as stored (the
-   * retraction — `Decompose ∘ Compose = id` on `componentFiberIds`), then REMOVE the composite. Restored
-   * components are returned unmodified (same ids, behaviors, amounts) so the round-trip is the identity on
-   * the component multiset. Amount is conserved: `Σ restored.amount == composite.amount`.
+   * Decompose → the FAITHFUL retraction (Phase-4 hardening, choice (a) STRICT). A committed composite MUST
+   * decompose faithfully — there is NO lossy fallback; a missing / mismatched / non-conserving reveal witness
+   * is a graceful `CombineRejected`. The reveal witness (`a.priorComponents`) carries each original
+   * component's full restorable state; the combiner verifies it against the composite's commitment and
+   * restores each component EXACTLY (behavior / holder / amount / schemaBinding / expiresAt / nested
+   * composite anchors / provenance), modulo the reset ordinals + sequence. Validation order:
+   *
+   *   1. require `source.componentsCommitment` is `Some(commit)` — a faithfully-composable composite carries
+   *      a component commitment; its absence means it cannot be decomposed faithfully.
+   *   2. require `a.priorComponents` is `Some(witnesses)` — the reveal is mandatory.
+   *   3. canonicalize `witnesses` (sort by `assetId`), recompute the hash, require `== commit`.
+   *   4. require the witness `assetId` SET == `source.componentFiberIds` SET (the right components).
+   *   5. require `Σ witness.amount == source.amount` (conservation).
+   *   6. restore each witness as a fresh `AssetRecord` (creation/latest = `ordinal`, sequence
+   *      `FiberOrdinal.MinValue`), write each, REMOVE the composite.
+   *
+   * Amount is conserved by check (5); custody is restored to each witnessed `holder` (returning components to
+   * their pre-Compose owners). This is the genuine `Decompose ∘ Compose = id` on component state.
    */
   private def applyDecompose(
     a:       Updates.ApplyMorphism,
     source:  AssetRecord,
     ordinal: SnapshotOrdinal
   ): F[DataState[OnChain, CalculatedState]] =
-    source.componentFiberIds
-      .filter(_.nonEmpty)
-      .fold(
-        Async[F].raiseError[DataState[OnChain, CalculatedState]](
-          CombineRejected(s"Decompose of ${a.assetId} requires a composite (no componentFiberIds)")
+    for {
+      // (1) the composite must carry a component commitment.
+      commit <- source.componentsCommitment.fold(
+        Async[F].raiseError[Hash](
+          CombineRejected(s"composite ${a.assetId} is missing a component commitment; cannot decompose faithfully")
         )
-      ) { componentIds =>
-        // Reconstruct the component records from the stored ids. We do not retain the full original records
-        // (only their ids — the verbatim retraction anchor), so the restored components inherit the composite's
-        // schemaBinding/behavior. The IDENTITY guaranteed by the retraction is on the id multiset (and amount
-        // conservation), per the RFC's "stored componentFiberIds returned unmodified" — never a two-sided
-        // Compose ∘ Decompose = id.
-        val n = componentIds.length.toLong
-        val base = source.amount / n
-        val rem = source.amount - base * n
-        val restored = componentIds.zipWithIndex.map { case (cid, i) =>
-          source.copy(
-            assetId = cid,
-            amount = if (i == 0) base + rem else base,
-            sequenceNumber = FiberOrdinal.MinValue,
-            creationOrdinal = ordinal,
-            latestUpdateOrdinal = ordinal,
-            componentFiberIds = None,
-            parentCompositeId = None
-          )
-        }
-        val withoutComposite = removeAsset(current, a.assetId)
-        restored.foldLeftM(withoutComposite) { case (st, comp) => writeAsset(st, comp) }
-      }
+      )(_.pure[F])
+
+      // (2) the reveal witness is mandatory.
+      witnesses <- a.priorComponents.fold(
+        Async[F].raiseError[List[ComponentWitness]](
+          CombineRejected(s"Decompose of ${a.assetId} requires a priorComponents witness")
+        )
+      )(_.pure[F])
+
+      // (3) the canonical reveal must hash to the stored commitment.
+      canonical = canonicalize(witnesses)
+      recomputed <- componentsCommitment(canonical)
+      _ <- raiseRejected(
+        recomputed === commit,
+        s"priorComponents witness for ${a.assetId} does not match the stored commitment"
+      )
+
+      // (4) the witness id set must equal the composite's component id set.
+      storedIds = source.componentFiberIds.getOrElse(Nil).toSet
+      witnessIds = witnesses.map(_.assetId).toSet
+      _ <- raiseRejected(
+        witnessIds == storedIds,
+        s"priorComponents witness ids ${witnessIds.mkString("{", ",", "}")} do not match the composite " +
+        s"${storedIds.mkString("{", ",", "}")}"
+      )
+
+      // (5) amounts must conserve the composite amount.
+      witnessTotal = witnesses.map(_.amount).sum
+      _ <- raiseRejected(
+        witnessTotal === source.amount,
+        s"priorComponents witness amounts ($witnessTotal) do not conserve the composite amount (${source.amount})"
+      )
+
+      // (6) restore each witness as a fresh record (reset ordinals + sequence), remove the composite.
+      restored = witnesses.map(restoreWitness(_, ordinal))
+      withoutComposite = removeAsset(current, a.assetId)
+      result <- restored.foldLeftM(withoutComposite) { case (st, comp) => writeAsset(st, comp) }
+    } yield result
 
   /** Wrap → behavior unchanged (identity-preserving custody); optional recipient re-custodies. */
   private def applyWrap(
@@ -777,7 +818,24 @@ class AssetCombiner[F[_]: Async: SecurityProvider](
       case Some(spec) => spec.pure[F]
     }
 
-  /** Resolve the asset's bound `AssetPolicy` version (combiner-only registry lineage read). */
+  /**
+   * Resolve the asset's bound `AssetPolicy` version (combiner-only registry lineage read).
+   *
+   * == INTENTIONAL & LOAD-BEARING: direct `versions.get`, NOT `resolve()` (anti-rug-pull invariant) ==
+   * This looks up the EXACT pinned version (`schemaBinding.version`) via `versions.get`, which returns the
+   * version REGARDLESS of its lifecycle status (Active / Deprecated / Yanked). This is deliberate and MUST
+   * NOT be "fixed" to `VersionLineage.resolve` (which EXCLUDES `Yanked`). The asymmetry is the policy
+   * lifecycle / anti-rug-pull invariant (asset-model.md §3/§5, "Policy lifecycle & instance semantics"):
+   *
+   *   - MINTING uses `resolve` (see [[resolvePolicy]]) → a yanked policy version BLOCKS new mints.
+   *   - EXISTING-INSTANCE morphisms use this direct `versions.get` → already-minted assets keep working
+   *     through any status change. Assets are NEVER auto-burned on yank.
+   *
+   * Switching this to `resolve()` would retroactively BRICK every existing instance the instant a policy
+   * version is yanked (a Transfer/Burn/Decompose would suddenly fail to resolve) — i.e. a rug-pull: an owner
+   * could trap holders' assets by yanking. Existing `AssetRecord`s pin their policy version via
+   * `SchemaBinding` for life precisely so a status change cannot strand them. Keep the direct lookup.
+   */
   private def resolveAssetPolicy(source: AssetRecord): F[RegistryShape.AssetPolicy] =
     current.calculated.registry
       .get(source.schemaBinding.name)
@@ -957,6 +1015,60 @@ class AssetCombiner[F[_]: Async: SecurityProvider](
   /** Derived total supply for a policy: `Σ amount` over assets whose binding name matches. */
   private def derivedSupply(policyName: RegistryName): Long =
     current.calculated.assets.values.filter(_.schemaBinding.name === policyName).map(_.amount).sum
+
+  // ════════════════════════════════════════════════════════════════════════════════════════════════
+  // Component-witness commitment (the FAITHFUL Compose/Decompose retraction, asset-model §4)
+  // ════════════════════════════════════════════════════════════════════════════════════════════════
+
+  /** Snapshot a consumed component's RESTORABLE state as a [[ComponentWitness]] (excludes volatile ordinals). */
+  private def witnessOf(record: AssetRecord): ComponentWitness =
+    ComponentWitness(
+      assetId = record.assetId,
+      schemaBinding = record.schemaBinding,
+      behavior = record.behavior,
+      holder = record.holder,
+      amount = record.amount,
+      expiresAt = record.expiresAt,
+      componentFiberIds = record.componentFiberIds,
+      componentsCommitment = record.componentsCommitment,
+      provenance = record.provenance
+    )
+
+  /**
+   * Restore a [[ComponentWitness]] to a fresh [[AssetRecord]] at `ordinal`: the volatile
+   * creation/latest ordinals reset to `ordinal` and the sequence to `FiberOrdinal.MinValue`; every other
+   * field (behavior / holder / amount / schemaBinding / expiresAt / nested composite anchors / provenance)
+   * is carried VERBATIM from the witness. `parentCompositeId` clears (the component is live again).
+   */
+  private def restoreWitness(w: ComponentWitness, ordinal: SnapshotOrdinal): AssetRecord =
+    AssetRecord(
+      assetId = w.assetId,
+      schemaBinding = w.schemaBinding,
+      behavior = w.behavior,
+      holder = w.holder,
+      amount = w.amount,
+      sequenceNumber = FiberOrdinal.MinValue,
+      creationOrdinal = ordinal,
+      latestUpdateOrdinal = ordinal,
+      expiresAt = w.expiresAt,
+      componentFiberIds = w.componentFiberIds,
+      componentsCommitment = w.componentsCommitment,
+      parentCompositeId = None,
+      provenance = w.provenance
+    )
+
+  /** Canonical ordering of a witness list — sort by `assetId` so the commitment is order-independent. */
+  private def canonicalize(ws: List[ComponentWitness]): List[ComponentWitness] =
+    ws.sortBy(_.assetId)
+
+  /**
+   * The component commitment — `hash(canonicalWitnesses)` over the canonical-JSON of the SORTED
+   * `List[ComponentWitness]`, via the SAME digest mechanism the combiner uses everywhere
+   * (`computeDigest` = `JsonBinaryHasher`/`HasherOps` over the canonical JSON). The caller passes an
+   * already-`canonicalize`d list; this hashes it as-is.
+   */
+  private def componentsCommitment(canonicalWitnesses: List[ComponentWitness]): F[Hash] =
+    canonicalWitnesses.computeDigest
 
   /** Drop nonce entries for assets that no longer exist (bounded growth, R7). */
   private def pruneStaleNonces(nonces: SortedMap[UUID, SortedSet[Long]]): SortedMap[UUID, SortedSet[Long]] =

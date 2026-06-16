@@ -93,8 +93,59 @@ object AssetMorphismLawSuite extends SimpleIOSuite {
   private def assetOf(state: DataState[OnChain, CalculatedState], id: UUID): Option[AssetRecord] =
     state.calculated.assets.get(id)
 
+  /**
+   * Build the Decompose reveal witness for a component from its LIVE pre-Compose record — mirrors the
+   * combiner's `witnessOf` exactly (the restorable fields, excluding the volatile creation/latest ordinals +
+   * sequence). The combiner committed `hash(sorted-by-assetId witnesses)` at Compose; supplying the same
+   * witnesses at Decompose recomputes the same hash → faithful retraction.
+   */
+  private def witnessFor(r: AssetRecord): ComponentWitness =
+    ComponentWitness(
+      assetId = r.assetId,
+      schemaBinding = r.schemaBinding,
+      behavior = r.behavior,
+      holder = r.holder,
+      amount = r.amount,
+      expiresAt = r.expiresAt,
+      componentFiberIds = r.componentFiberIds,
+      componentsCommitment = r.componentsCommitment,
+      provenance = r.provenance
+    )
+
   private def totalSupply(state: DataState[OnChain, CalculatedState], name: String): Long =
     state.calculated.assets.values.filter(_.schemaBinding.name == asset(name)).map(_.amount).sum
+
+  /**
+   * Yank a policy version DIRECTLY in the test fixture state. The combiner's `SetVersionStatus` op handles
+   * only `SchemaPackage` (machine/script) lineages today — NOT `AssetPolicyPackage` — so the deterministic
+   * way to exercise the yank lifecycle for an asset policy is to transform the registry lineage in-state via
+   * `VersionLineage.setStatus(version, Yanked)` (the same primitive a future asset-aware status op would
+   * call). This mirrors the task's "directly in the test fixture state" path.
+   */
+  private def yankPolicy(
+    state:   DataState[OnChain, CalculatedState],
+    name:    String,
+    version: SemVer
+  ): DataState[OnChain, CalculatedState] = {
+    val rn = asset(name)
+    val updatedRegistry = state.calculated.registry.get(rn) match {
+      case Some(entry) =>
+        entry.target match {
+          case RegistryTarget.AssetPolicyPackage(lineage) =>
+            lineage.setStatus(version, RegistryStatus.Yanked) match {
+              case Right(yanked) =>
+                state.calculated.registry.updated(
+                  rn,
+                  entry.copy(target = RegistryTarget.AssetPolicyPackage(yanked))
+                )
+              case Left(e) => sys.error(s"yank setup failed: $e")
+            }
+          case other => sys.error(s"$name is not an asset-policy package: $other")
+        }
+      case None => sys.error(s"$name not found in registry")
+    }
+    state.copy(calculated = state.calculated.copy(registry = updatedRegistry))
+  }
 
   private def mintTo(
     id:     UUID,
@@ -131,7 +182,7 @@ object AssetMorphismLawSuite extends SimpleIOSuite {
 
   // ── Behavior homomorphism + retraction (Compose / Decompose) ──────────────────────────────────
 
-  test("Compose stores foldMeet(component behaviors) and the verbatim componentFiberIds (homomorphism)") {
+  test("Compose stores foldMeet(behaviors) + verbatim componentFiberIds + a componentsCommitment (homomorphism)") {
     TestFixture.resource(Set(Alice)).use { fixture =>
       implicit val sp: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0: L0NodeContext[IO] = fixture.l0Context
@@ -169,12 +220,97 @@ object AssetMorphismLawSuite extends SimpleIOSuite {
       expect(comp.exists(_.behavior == expectedBehavior)) and
       expect(comp.exists(_.behavior == TokenBehavior.GovernedFungible)) and // meet acquires G
       expect(comp.flatMap(_.componentFiberIds).contains(List(a1, a2))) and // stored VERBATIM
+      expect(comp.flatMap(_.componentsCommitment).isDefined) and // FAITHFUL anchor present
       // components consumed from the live set
       expect(assetOf(s5, a1).isEmpty) and expect(assetOf(s5, a2).isEmpty)
     }
   }
 
-  test("Decompose ∘ Compose = id on componentFiberIds (the retraction) and conserves amount") {
+  test("FAITHFUL Decompose ∘ Compose = id: restores DIFFERENT behaviors/holders/amounts from the reveal witness") {
+    TestFixture.resource(Set(Alice, Bob)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val aliceHolder = AssetHolder.Wallet(fixture.registry.addresses(Alice))
+      val bobHolder = AssetHolder.Wallet(fixture.registry.addresses(Bob))
+      // A and B have DIFFERENT behaviors, holders, and amounts — the genuine faithful retraction.
+      //   A = Fungible (TSC--), held by Alice, 30
+      //   B = GovernedFungible (TSC-G), held by Bob, 70
+      // Both are combinable. The composite behavior = meet = GovernedFungible (acquires G); restoring must
+      // bring BACK A's plain Fungible behavior and Alice custody (not the composite's behavior/holder).
+      val pFun = policyOp("fund", TokenBehavior.Fungible)
+      val pGov = policyOp("govf", TokenBehavior.GovernedFungible)
+      val mintA = mintTo(a1, "fund", aliceHolder, 30L)
+      val mintB = mintTo(a2, "govf", bobHolder, 70L)
+      // Alice (composite source-holder) drives Compose; symmetric consent via nonce is exercised elsewhere.
+      // Here we keep custody on the source-holder path: mint both to Alice's wallet would lose the
+      // holder-difference, so instead A is Alice's and B is Bob's, and Bob authorizes the compose.
+      val farFuture = SnapshotOrdinal.unsafeApply(Long.MaxValue)
+      val bobAuth = AuthorizeCompose(a2, asset("fund"), nonce = 5L, expiresAt = farFuture, FiberOrdinal.MinValue)
+      val compose =
+        ApplyMorphism(
+          a1,
+          MorphismKind.Compose,
+          FiberOrdinal.MinValue,
+          otherAssetIds = Some(List(a2)),
+          compositeId = Some(composite),
+          nonce = Some(5L)
+        )
+      for {
+        pr1  <- fixture.registry.generateProofs(pFun, Set(Alice))
+        s1   <- combiner.insert(genesis, Signed(pFun, pr1))
+        pr2  <- fixture.registry.generateProofs(pGov, Set(Bob))
+        s2   <- combiner.insert(s1, Signed(pGov, pr2))
+        prMA <- fixture.registry.generateProofs(mintA, Set(Alice))
+        s3   <- combiner.insert(s2, Signed(mintA, prMA))
+        prMB <- fixture.registry.generateProofs(mintB, Set(Bob))
+        s4   <- combiner.insert(s3, Signed(mintB, prMB))
+        // capture the ORIGINAL component records (pre-Compose) to build the reveal witness
+        origA = assetOf(s4, a1)
+        origB = assetOf(s4, a2)
+        prAuth <- fixture.registry.generateProofs(bobAuth, Set(Bob))
+        s5     <- combiner.insert(s4, Signed(bobAuth, prAuth))
+        prC    <- fixture.registry.generateProofs(compose, Set(Alice))
+        s6     <- combiner.insert(s5, Signed(compose, prC))
+        comp = assetOf(s6, composite)
+        // Build the faithful reveal witness from the captured originals.
+        witnesses = List(origA, origB).flatten.map(witnessFor)
+        // The composite inherits the SOURCE holder (Alice), so Decompose must be signed by Alice.
+        decompose = ApplyMorphism(
+          composite,
+          MorphismKind.Decompose,
+          FiberOrdinal.MinValue,
+          priorComponents = Some(witnesses)
+        )
+        prD <- fixture.registry.generateProofs(decompose, Set(Alice))
+        s7  <- combiner.insert(s6, Signed(decompose, prD))
+        restoredA = assetOf(s7, a1)
+        restoredB = assetOf(s7, a2)
+      } yield
+      // the composite was built and consumed the parts
+      expect(comp.isDefined) and
+      expect(comp.exists(_.behavior == TokenBehavior.GovernedFungible)) and
+      expect(comp.exists(_.amount == 100L)) and
+      // composite consumed; BOTH components restored FAITHFULLY
+      expect(assetOf(s7, composite).isEmpty) and
+      expect(restoredA.isDefined) and expect(restoredB.isDefined) and
+      // A restored to its ORIGINAL behavior (Fungible, NOT the composite's GovernedFungible), holder, amount
+      expect(restoredA.exists(_.behavior == TokenBehavior.Fungible)) and
+      expect(restoredA.exists(_.holder == aliceHolder)) and
+      expect(restoredA.exists(_.amount == 30L)) and
+      expect(restoredA.exists(_.schemaBinding.name == asset("fund"))) and
+      // B restored to its ORIGINAL behavior (GovernedFungible), holder (Bob), amount
+      expect(restoredB.exists(_.behavior == TokenBehavior.GovernedFungible)) and
+      expect(restoredB.exists(_.holder == bobHolder)) and
+      expect(restoredB.exists(_.amount == 70L)) and
+      expect(restoredB.exists(_.schemaBinding.name == asset("govf"))) and
+      // amount conserved end-to-end
+      expect(totalSupply(s7, "fund") == 30L) and
+      expect(totalSupply(s7, "govf") == 70L)
+    }
+  }
+
+  test("Decompose with NO priorComponents witness is CombineRejected (strict, no lossy fallback)") {
     TestFixture.resource(Set(Alice)).use { fixture =>
       implicit val sp: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0: L0NodeContext[IO] = fixture.l0Context
@@ -191,7 +327,7 @@ object AssetMorphismLawSuite extends SimpleIOSuite {
           otherAssetIds = Some(List(a2)),
           compositeId = Some(composite)
         )
-      // Decompose targets the composite (sequenceNumber starts at 0 on the freshly-minted composite).
+      // Decompose with priorComponents OMITTED → strict reject.
       val decompose = ApplyMorphism(composite, MorphismKind.Decompose, FiberOrdinal.MinValue)
       for {
         prP  <- fixture.registry.generateProofs(p, Set(Alice))
@@ -202,17 +338,108 @@ object AssetMorphismLawSuite extends SimpleIOSuite {
         s3   <- combiner.insert(s2, Signed(mint2, prM2))
         prC  <- fixture.registry.generateProofs(compose, Set(Alice))
         s4   <- combiner.insert(s3, Signed(compose, prC))
-        totalAfterCompose = totalSupply(s4, "gold")
+        prD  <- fixture.registry.generateProofs(decompose, Set(Alice))
+        s5   <- combiner.insert(s4, Signed(decompose, prD))
+      } yield expect(wasRejected(s5)) and
+      // composite is unchanged (still present); components NOT restored
+      expect(assetOf(s5, composite).isDefined) and
+      expect(assetOf(s5, a1).isEmpty) and expect(assetOf(s5, a2).isEmpty)
+    }
+  }
+
+  test("Decompose with a TAMPERED witness (wrong behavior/amount) → hash mismatch → CombineRejected") {
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val holder = AssetHolder.Wallet(fixture.registry.addresses(Alice))
+      val p = policyOp("gold", TokenBehavior.Fungible)
+      val mint1 = mintTo(a1, "gold", holder, 30L)
+      val mint2 = mintTo(a2, "gold", holder, 70L)
+      val compose =
+        ApplyMorphism(
+          a1,
+          MorphismKind.Compose,
+          FiberOrdinal.MinValue,
+          otherAssetIds = Some(List(a2)),
+          compositeId = Some(composite)
+        )
+      for {
+        prP  <- fixture.registry.generateProofs(p, Set(Alice))
+        s1   <- combiner.insert(genesis, Signed(p, prP))
+        prM1 <- fixture.registry.generateProofs(mint1, Set(Alice))
+        s2   <- combiner.insert(s1, Signed(mint1, prM1))
+        prM2 <- fixture.registry.generateProofs(mint2, Set(Alice))
+        s3   <- combiner.insert(s2, Signed(mint2, prM2))
+        origA = assetOf(s3, a1)
+        origB = assetOf(s3, a2)
+        prC <- fixture.registry.generateProofs(compose, Set(Alice))
+        s4  <- combiner.insert(s3, Signed(compose, prC))
+        // TAMPER: keep the same ids + total (30+70), but flip A's behavior bit (drop G is moot; flip C off).
+        // The id-set and amount-sum checks still pass, but the COMMITMENT hash will not match.
+        tampered = List(origA, origB).flatten.map(witnessFor) match {
+          case wA :: wB :: Nil => List(wA.copy(behavior = wA.behavior.copy(combinable = false)), wB)
+          case other           => other
+        }
+        decompose = ApplyMorphism(
+          composite,
+          MorphismKind.Decompose,
+          FiberOrdinal.MinValue,
+          priorComponents = Some(tampered)
+        )
         prD <- fixture.registry.generateProofs(decompose, Set(Alice))
         s5  <- combiner.insert(s4, Signed(decompose, prD))
-      } yield
-      // composite consumed, the two original components restored (same ids)
-      expect(assetOf(s5, composite).isEmpty) and
-      expect(assetOf(s5, a1).isDefined) and
-      expect(assetOf(s5, a2).isDefined) and
-      // amount conserved across compose (100) and decompose (back to 100)
-      expect(totalAfterCompose == 100L) and
-      expect(totalSupply(s5, "gold") == 100L)
+      } yield expect(wasRejected(s5)) and
+      expect(assetOf(s5, composite).isDefined) and // unchanged on reject
+      expect(assetOf(s5, a1).isEmpty)
+    }
+  }
+
+  test("Decompose with a witness whose amounts don't sum to the composite → CombineRejected") {
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val holder = AssetHolder.Wallet(fixture.registry.addresses(Alice))
+      val p = policyOp("gold", TokenBehavior.Fungible)
+      val mint1 = mintTo(a1, "gold", holder, 30L)
+      val mint2 = mintTo(a2, "gold", holder, 70L)
+      val compose =
+        ApplyMorphism(
+          a1,
+          MorphismKind.Compose,
+          FiberOrdinal.MinValue,
+          otherAssetIds = Some(List(a2)),
+          compositeId = Some(composite)
+        )
+      for {
+        prP  <- fixture.registry.generateProofs(p, Set(Alice))
+        s1   <- combiner.insert(genesis, Signed(p, prP))
+        prM1 <- fixture.registry.generateProofs(mint1, Set(Alice))
+        s2   <- combiner.insert(s1, Signed(mint1, prM1))
+        prM2 <- fixture.registry.generateProofs(mint2, Set(Alice))
+        s3   <- combiner.insert(s2, Signed(mint2, prM2))
+        origA = assetOf(s3, a1)
+        origB = assetOf(s3, a2)
+        prC <- fixture.registry.generateProofs(compose, Set(Alice))
+        s4  <- combiner.insert(s3, Signed(compose, prC))
+        // INFLATE A's amount: now the witness amounts sum to 130 ≠ composite 100. The hash ALSO mismatches,
+        // but conservation is the law under test; either way it must reject (strict).
+        badSum = List(origA, origB).flatten.map(witnessFor) match {
+          case wA :: wB :: Nil => List(wA.copy(amount = wA.amount + 30L), wB)
+          case other           => other
+        }
+        decompose = ApplyMorphism(
+          composite,
+          MorphismKind.Decompose,
+          FiberOrdinal.MinValue,
+          priorComponents = Some(badSum)
+        )
+        prD <- fixture.registry.generateProofs(decompose, Set(Alice))
+        s5  <- combiner.insert(s4, Signed(decompose, prD))
+      } yield expect(wasRejected(s5)) and
+      expect(assetOf(s5, composite).isDefined) and
+      expect(assetOf(s5, a1).isEmpty)
     }
   }
 
@@ -520,6 +747,54 @@ object AssetMorphismLawSuite extends SimpleIOSuite {
         prC <- fixture.registry.generateProofs(compose, Set(Bob))
         sC  <- combiner.insert(s5, Signed(compose, prC)).map(wasRejected)
       } yield expect(authRejected) and expect(nonceAbsent) and expect(sC)
+    }
+  }
+
+  // ── Policy lifecycle / yank semantics (anti-rug-pull resolve-asymmetry) ────────────────────────
+
+  test("yanking a policy version BLOCKS new mints but leaves an existing instance's morphism working") {
+    TestFixture.resource(Set(Alice, Bob)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val aliceHolder = AssetHolder.Wallet(fixture.registry.addresses(Alice))
+      val bobHolder = AssetHolder.Wallet(fixture.registry.addresses(Bob))
+      val p = policyOp("gold", TokenBehavior.Fungible) // v1.0.0
+      // Mint an instance against the LIVE policy, THEN yank the version.
+      val mint1 = mintTo(a1, "gold", aliceHolder, 100L)
+      // After yank: a NEW mint against the yanked version must be rejected (mint = resolve, excludes Yanked).
+      val mint2 = mintTo(a2, "gold", aliceHolder, 50L)
+      // After yank: a morphism on the EXISTING instance must still SUCCEED (morphism = direct versions.get).
+      val transfer =
+        ApplyMorphism(a1, MorphismKind.Transfer, FiberOrdinal.MinValue, recipient = Some(bobHolder))
+      for {
+        prP  <- fixture.registry.generateProofs(p, Set(Alice))
+        s1   <- combiner.insert(genesis, Signed(p, prP))
+        prM1 <- fixture.registry.generateProofs(mint1, Set(Alice))
+        s2   <- combiner.insert(s1, Signed(mint1, prM1))
+        existedBeforeYank = assetOf(s2, a1).isDefined
+        // YANK v1.0.0 directly in state.
+        s3 = yankPolicy(s2, "gold", SemVer(1, 0, 0))
+        // (1) a new mint against the yanked version is rejected, and the asset is NOT created.
+        prM2 <- fixture.registry.generateProofs(mint2, Set(Alice))
+        s4   <- combiner.insert(s3, Signed(mint2, prM2))
+        mintRejected = wasRejected(s4)
+        newMintAbsent = assetOf(s4, a2).isEmpty
+        // (2) a Transfer on the EXISTING instance still succeeds; the asset is unchanged-except-holder.
+        prT <- fixture.registry.generateProofs(transfer, Set(Alice))
+        s5  <- combiner.insert(s3, Signed(transfer, prT))
+        transferOk = !wasRejected(s5)
+        movedHolder = assetOf(s5, a1).map(_.holder).contains(bobHolder)
+        // not burned, amount intact, still bound to the same (now-yanked) policy version
+        stillExists = assetOf(s5, a1).isDefined
+        amountIntact = assetOf(s5, a1).map(_.amount).contains(100L)
+        sameBinding = assetOf(s5, a1).map(_.schemaBinding.version).contains(SemVer(1, 0, 0))
+      } yield expect(existedBeforeYank) and
+      // (1) yanked-version mint is blocked (anti-rug-pull: resolve excludes Yanked)
+      expect(mintRejected) and expect(newMintAbsent) and
+      // (2) existing instance keeps working (direct versions.get; assets never auto-burned)
+      expect(transferOk) and expect(movedHolder) and
+      expect(stillExists) and expect(amountIntact) and expect(sameBinding)
     }
   }
 }

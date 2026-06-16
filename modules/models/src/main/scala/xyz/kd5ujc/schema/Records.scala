@@ -74,6 +74,10 @@ object Records {
    *                           re-derives composite behavior from records, never from the `OnChain` commit bits).
    *   - `holder`            — wallet or live fiber custody ([[AssetHolder]]).
    *   - `componentFiberIds` — present iff this is a composite; stored verbatim for retraction.
+   *   - `componentsCommitment` — present iff this is a composite (Phase-4 hardening); the digest of the
+   *                           CANONICAL (sorted-by-`assetId`) `List[ComponentWitness]` of the consumed
+   *                           parts, so `Decompose` can verify the reveal witness and restore each component
+   *                           FAITHFULLY (behavior/holder/amount/binding) — `None` for non-composites.
    *   - `parentCompositeId` — set on a component that has been folded into a composite.
    *   - `provenance`        — `None` for natively-issued assets; carries cross-chain origin for bridged-in
    *                           assets (D2 forward-ref → asset-interop-functor.md, full behavior Phase 6).
@@ -84,17 +88,18 @@ object Records {
    */
   @derive(customizableEncoder, customizableDecoder)
   final case class AssetRecord(
-    assetId:             UUID,
-    schemaBinding:       SchemaBinding,
-    behavior:            TokenBehavior,
-    holder:              AssetHolder,
-    amount:              Long,
-    sequenceNumber:      FiberOrdinal,
-    creationOrdinal:     SnapshotOrdinal,
-    latestUpdateOrdinal: SnapshotOrdinal,
-    expiresAt:           Option[SnapshotOrdinal] = None,
-    componentFiberIds:   Option[List[UUID]] = None,
-    parentCompositeId:   Option[UUID] = None,
-    provenance:          Option[OriginProvenance] = None
+    assetId:              UUID,
+    schemaBinding:        SchemaBinding,
+    behavior:             TokenBehavior,
+    holder:               AssetHolder,
+    amount:               Long,
+    sequenceNumber:       FiberOrdinal,
+    creationOrdinal:      SnapshotOrdinal,
+    latestUpdateOrdinal:  SnapshotOrdinal,
+    expiresAt:            Option[SnapshotOrdinal] = None,
+    componentFiberIds:    Option[List[UUID]] = None,
+    componentsCommitment: Option[Hash] = None,
+    parentCompositeId:    Option[UUID] = None,
+    provenance:           Option[OriginProvenance] = None
   )
 }

@@ -97,7 +97,41 @@ object AssetOpSigningCanonicalSuite extends SimpleIOSuite {
       recipient = None,
       otherAssetIds = None,
       compositeId = None,
-      shardIds = None
+      shardIds = None,
+      priorComponents = None
+    )
+
+  // A ComponentWitness with every INNER Option omitted (None) — exercises the nested omit-safety too.
+  private val witness: ComponentWitness =
+    ComponentWitness(
+      assetId = assetId,
+      schemaBinding = SchemaBinding(
+        RegistryName.unsafe("gold.acme.asset"),
+        SemVer(1, 0, 0),
+        io.constellationnetwork.security.hash.Hash("schema-hash"),
+        io.constellationnetwork.security.hash.Hash("logic-hash")
+      ),
+      behavior = TokenBehavior.Fungible,
+      holder = AssetHolder.Wallet(holder),
+      amount = 100L,
+      expiresAt = None,
+      componentFiberIds = None,
+      componentsCommitment = None,
+      provenance = None
+    )
+
+  // ApplyMorphism (Decompose) carrying a POPULATED priorComponents reveal witness — proves the new Option
+  // field round-trips through the signing canonical (CLAUDE.md requires coverage for changed signed messages).
+  private val applyMorphismDecompose: Updates.ApplyMorphism =
+    Updates.ApplyMorphism(
+      assetId = assetId,
+      kind = MorphismKind.Decompose,
+      targetSequenceNumber = FiberOrdinal.MinValue,
+      recipient = None,
+      otherAssetIds = None,
+      compositeId = None,
+      shardIds = None,
+      priorComponents = Some(List(witness))
     )
 
   // AuthorizeCompose — every field is required (no defaults), nothing to omit.
@@ -111,10 +145,11 @@ object AssetOpSigningCanonicalSuite extends SimpleIOSuite {
     )
 
   private val cases: List[(String, OttochainMessage)] = List(
-    "CreateAssetPolicy" -> createAssetPolicy,
-    "MintAsset"         -> mintAsset,
-    "ApplyMorphism"     -> applyMorphism,
-    "AuthorizeCompose"  -> authorizeCompose
+    "CreateAssetPolicy"                            -> createAssetPolicy,
+    "MintAsset"                                    -> mintAsset,
+    "ApplyMorphism (all-None)"                     -> applyMorphism,
+    "ApplyMorphism (Decompose w/ priorComponents)" -> applyMorphismDecompose,
+    "AuthorizeCompose"                             -> authorizeCompose
   )
 
   cases.foreach { case (name, msg) =>

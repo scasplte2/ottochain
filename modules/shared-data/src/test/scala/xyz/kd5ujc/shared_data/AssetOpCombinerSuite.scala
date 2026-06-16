@@ -8,11 +8,19 @@ import cats.effect.IO
 import scala.collection.immutable.SortedMap
 
 import io.constellationnetwork.currency.dataApplication.{DataState, L0NodeContext}
+import io.constellationnetwork.metagraph_sdk.json_logic.{BoolValue, ConstExpression}
 import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.hash.Hash
 import io.constellationnetwork.security.signature.Signed
 
-import xyz.kd5ujc.schema.Updates.{ApplyMorphism, AuthorizeCompose, CreateAssetPolicy, MintAsset, OttochainMessage}
+import xyz.kd5ujc.schema.Updates.{
+  ApplyMorphism,
+  AuthorizeCompose,
+  CreateAssetPolicy,
+  MintAsset,
+  OttochainMessage,
+  SetVersionStatus
+}
 import xyz.kd5ujc.schema.asset._
 import xyz.kd5ujc.schema.fiber.{FiberLogEntry, FiberOrdinal}
 import xyz.kd5ujc.schema.registry._
@@ -59,6 +67,24 @@ object AssetOpCombinerSuite extends SimpleIOSuite {
     behavior: TokenBehavior = TokenBehavior.Fungible
   ): CreateAssetPolicy =
     CreateAssetPolicy(asset(name), v, behavior, supply, morphisms, stateShape)
+
+  // A genuinely mintable policy (open mintPolicy guard) for the on-chain lifecycle test below.
+  private val openSupply: SupplyPolicy =
+    SupplyPolicy(maxSupply = None, mintPolicy = Some(ConstExpression(BoolValue(true))), burnPolicy = None, Some(0))
+
+  private def mintablePolicy(name: String, v: SemVer): CreateAssetPolicy =
+    CreateAssetPolicy(asset(name), v, TokenBehavior.Fungible, openSupply, morphisms, stateShape)
+
+  private def policyStatus(
+    state: DataState[OnChain, CalculatedState],
+    name:  String,
+    v:     SemVer
+  ): Option[RegistryStatus] =
+    state.calculated.registry
+      .get(asset(name))
+      .map(_.target)
+      .collect { case RegistryTarget.AssetPolicyPackage(l) => l.versions.get(v).map(_.status) }
+      .flatten
 
   private val genesis = DataState(OnChain.genesis, CalculatedState.genesis)
 
@@ -154,7 +180,9 @@ object AssetOpCombinerSuite extends SimpleIOSuite {
 
   // ── (c) combiner stubs produce a graceful RejectionReceipt (snapshot not aborted) ──────────────
 
-  test("MintAsset / ApplyMorphism / AuthorizeCompose are gracefully rejected (RejectionReceipt, phase-4 stub)") {
+  test(
+    "MintAsset / ApplyMorphism / AuthorizeCompose against an unknown policy/asset are gracefully rejected (snapshot not aborted)"
+  ) {
     TestFixture.resource(Set(Alice)).use { fixture =>
       implicit val sp: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0: L0NodeContext[IO] = fixture.l0Context
@@ -223,6 +251,36 @@ object AssetOpCombinerSuite extends SimpleIOSuite {
         valid         <- validator.validateSignedUpdate(s1, Signed(p2, pr2))
         combineFailed <- combiner.insert(s1, Signed(p2, pr2)).map(wasRejected)
       } yield expect(valid.isValid) and expect(combineFailed)
+    }
+  }
+
+  // ── (e) on-chain policy lifecycle: yank an asset policy via the real SetVersionStatus op ────────
+
+  test("an asset policy is Yanked via the on-chain SetVersionStatus op; yank blocks new mints, prior asset untouched") {
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val a1 = UUID.fromString("33333333-3333-4333-8333-333333333331")
+      val a2 = UUID.fromString("33333333-3333-4333-8333-333333333332")
+      val holderFiber = UUID.fromString("44444444-4444-4444-8444-444444444444")
+      val p = mintablePolicy("platinum", SemVer(1, 0, 0))
+      val mint1 = MintAsset(a1, SchemaRef(asset("platinum"), VersionReq.Latest), AssetHolder.Fiber(holderFiber), 10L)
+      val yank = SetVersionStatus(asset("platinum"), SemVer(1, 0, 0), RegistryStatus.Yanked)
+      val mint2 = MintAsset(a2, SchemaRef(asset("platinum"), VersionReq.Latest), AssetHolder.Fiber(holderFiber), 5L)
+      for {
+        prP  <- fixture.registry.generateProofs(p, Set(Alice))
+        s1   <- combiner.insert(genesis, Signed(p, prP))
+        prM1 <- fixture.registry.generateProofs(mint1, Set(Alice))
+        s2   <- combiner.insert(s1, Signed(mint1, prM1))
+        prY  <- fixture.registry.generateProofs(yank, Set(Alice))
+        s3   <- combiner.insert(s2, Signed(yank, prY))
+        prM2 <- fixture.registry.generateProofs(mint2, Set(Alice))
+        s4   <- combiner.insert(s3, Signed(mint2, prM2))
+      } yield expect(s2.calculated.assets.contains(a1)) and // mintable BEFORE yank
+      expect(policyStatus(s3, "platinum", SemVer(1, 0, 0)).contains(RegistryStatus.Yanked)) and // on-chain yank applied
+      expect(wasRejected(s4)) and // a NEW mint against the yanked version is blocked
+      expect(s4.calculated.assets.contains(a1)) // the existing asset is untouched (NOT burned)
     }
   }
 }
