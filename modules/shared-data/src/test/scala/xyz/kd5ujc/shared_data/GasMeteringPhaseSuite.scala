@@ -93,7 +93,7 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
         result <- orchestrator.process(fiberId, input, List.empty)
 
       } yield result match {
-        case TransactionResult.Committed(machines, _, _, _, _, _) =>
+        case TransactionResult.Committed(machines, _, _, _, _, _, _) =>
           expect(machines.get(fiberId).exists(_.currentState == StateId("end")))
         case TransactionResult.Aborted(reason, _, _) =>
           failure(s"Expected Committed but got Aborted: ${reason.toMessage}")
@@ -210,7 +210,7 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
         result <- orchestrator.process(machine1Id, input, List.empty)
 
       } yield result match {
-        case TransactionResult.Committed(machines, _, _, _, _, _) =>
+        case TransactionResult.Committed(machines, _, _, _, _, _, _) =>
           // Both machines should have transitioned
           expect(machines.get(machine1Id).exists(_.currentState == StateId("b"))) and
           expect(machines.get(machine2Id).exists(_.currentState == StateId("y")))
@@ -296,7 +296,7 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
         result <- orchestrator.process(fiberId, input, List.empty)
 
       } yield result match {
-        case TransactionResult.Committed(machines, _, _, _, _, _) =>
+        case TransactionResult.Committed(machines, _, _, _, _, _, _) =>
           val updated = machines.get(fiberId)
           expect(updated.isDefined) and
           expect(updated.exists(_.currentState == StateId("end"))) and
@@ -375,7 +375,7 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
             reason.isInstanceOf[FailureReason.GasExhaustedFailure],
             s"Expected GasExhaustedFailure but got: ${reason.getClass.getSimpleName}"
           )
-        case TransactionResult.Committed(_, _, _, _, _, _) =>
+        case TransactionResult.Committed(_, _, _, _, _, _, _) =>
           failure("Expected Aborted with GasExhaustedFailure for gas limit of 0")
       }
     }
@@ -454,7 +454,7 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
               // Any abort with an expensive effect under low gas is expected behavior
               success
           }
-        case TransactionResult.Committed(_, _, _, gasUsed, _, _) =>
+        case TransactionResult.Committed(_, _, _, gasUsed, _, _, _) =>
           // If it somehow completes with 100 gas, document that behavior
           expect(gasUsed <= 100L)
       }
@@ -557,7 +557,7 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
 
       } yield {
         val highSuccess = resultHigh match {
-          case TransactionResult.Committed(machines, _, _, _, _, _) =>
+          case TransactionResult.Committed(machines, _, _, _, _, _, _) =>
             machines.contains(childId) // Child was created
           case _ => false
         }
@@ -565,7 +565,7 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
         val lowFailed = resultLow match {
           case TransactionResult.Aborted(reason, _, _) =>
             reason.isInstanceOf[FailureReason.GasExhaustedFailure]
-          case TransactionResult.Committed(_, _, _, _, _, _) =>
+          case TransactionResult.Committed(_, _, _, _, _, _, _) =>
             false // Unexpectedly succeeded
         }
 
@@ -694,7 +694,7 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
         result <- orchestrator.process(machine1Id, input, List.empty)
 
       } yield result match {
-        case TransactionResult.Committed(machines, _, _, gasUsed, _, _) =>
+        case TransactionResult.Committed(machines, _, _, gasUsed, _, _, _) =>
           // Both machines transitioned
           // Gas includes: guard eval + effect eval + trigger overhead for both machines
           // Actual gas depends on FiberGasConfig and VM gas costs
@@ -836,9 +836,9 @@ object GasMeteringPhaseSuite extends SimpleIOSuite {
 
       } yield (resultDefault, resultMainnet, resultMinimal) match {
         case (
-              TransactionResult.Committed(_, _, _, defaultGas, _, _),
-              TransactionResult.Committed(_, _, _, mainnetGas, _, _),
-              TransactionResult.Committed(_, _, _, minimalGas, _, _)
+              TransactionResult.Committed(_, _, _, defaultGas, _, _, _),
+              TransactionResult.Committed(_, _, _, mainnetGas, _, _, _),
+              TransactionResult.Committed(_, _, _, minimalGas, _, _, _)
             ) =>
           // Verify gas was actually consumed (trigger chain has overhead)
           // Each config: trigger overhead + guard + effect for 2 machines

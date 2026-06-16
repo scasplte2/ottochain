@@ -244,6 +244,7 @@ object FiberEvaluator {
           allTriggers = effects.collect { case FiberEffect.Triggered(t) => t }
           spawnMachines = effects.collect { case FiberEffect.Spawned(d) => d }
           emittedEvents = effects.collect { case FiberEffect.Emitted(ev) => ev }
+          assetTransfers = effects.collect { case t: FiberEffect.AssetTransferred => t }
 
           // Charge orchestration overhead
           _ <- ExecutionOps.chargeGas[G](fiberGasConfig.contextBuild.amount)
@@ -268,7 +269,8 @@ object FiberEvaluator {
                     triggers = allTriggers,
                     spawns = spawnMachines,
                     returnValue = None,
-                    emittedEvents = emittedEvents
+                    emittedEvents = emittedEvents,
+                    assetTransfers = assetTransfers
                   )
                 case Left(reason) => reason.asOutcome
               }

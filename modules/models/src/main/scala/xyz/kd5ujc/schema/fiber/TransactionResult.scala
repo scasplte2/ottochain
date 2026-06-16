@@ -21,6 +21,12 @@ object TransactionResult {
    * @param totalGasUsed Total gas consumed by all operations
    * @param maxDepth Maximum trigger chain depth reached
    * @param operationCount Total number of JsonLogic operations executed
+   * @param assetTransfers Fiber-held asset custody transfers keyed by the EMITTING fiber id — the
+   *                       `_transferAsset` return channel (asset-model.md §9/§10, R2). The combiner
+   *                       (`AssetCombiner.applyFiberTransfer`) enforces the holder-ownership defense (R1)
+   *                       against the emitting fiber before applying any of these. Cascading triggers merge
+   *                       their own maps (`dispatchTriggers`). `= Map.empty` default is safe: `TransactionResult`
+   *                       is in-process engine data, never a signed canonical.
    */
   final case class Committed(
     updatedStateMachines: Map[UUID, Records.StateMachineFiberRecord],
@@ -28,7 +34,8 @@ object TransactionResult {
     logEntries:           List[FiberLogEntry],
     totalGasUsed:         Long,
     maxDepth:             Int = 0,
-    operationCount:       Long = 0L
+    operationCount:       Long = 0L,
+    assetTransfers:       Map[UUID, List[FiberEffect.AssetTransferred]] = Map.empty
   ) extends TransactionResult
 
   /**

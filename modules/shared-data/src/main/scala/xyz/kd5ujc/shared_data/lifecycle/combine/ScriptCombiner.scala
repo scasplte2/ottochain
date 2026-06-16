@@ -97,7 +97,7 @@ class ScriptCombiner[F[_]: Async: SecurityProvider](
     outcome <- orchestrator.process(update.fiberId, input, update.proofs.toList)
 
     newState <- outcome match {
-      case TransactionResult.Committed(_, updatedScripts, logEntries, _, _, _) =>
+      case TransactionResult.Committed(_, updatedScripts, logEntries, _, _, _, _) =>
         updatedScripts.get(update.fiberId) match {
           case Some(updatedScript) =>
             current.withRecord[F](update.fiberId, updatedScript).map(_.appendLogs(logEntries))
@@ -185,7 +185,7 @@ class ScriptCombiner[F[_]: Async: SecurityProvider](
     outcome <- orchestrator.migrateScript(update.fiberId, update.newProgram, newBinding, update.migration)
 
     newState <- outcome match {
-      case TransactionResult.Committed(_, updatedScripts, logEntries, _, _, _) =>
+      case TransactionResult.Committed(_, updatedScripts, logEntries, _, _, _, _) =>
         updatedScripts.get(update.fiberId) match {
           case Some(updated) => current.withRecord[F](update.fiberId, updated).map(_.appendLogs(logEntries))
           case None =>

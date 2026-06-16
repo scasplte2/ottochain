@@ -1,5 +1,7 @@
 package xyz.kd5ujc.shared_data.fiber.triggers
 
+import java.util.UUID
+
 import cats.effect.Async
 import cats.mtl.{Ask, Stateful}
 import cats.syntax.all._
@@ -48,8 +50,9 @@ object TriggerDispatcher {
    * Pending uses List for O(1) prepend (depth-first processing).
    */
   final private case class QueueState(
-    pending:  List[FiberTrigger],
-    txnState: CalculatedState
+    pending:        List[FiberTrigger],
+    txnState:       CalculatedState,
+    assetTransfers: Map[UUID, List[FiberEffect.AssetTransferred]]
   )
 
   def make[F[_]: Async: SecurityProvider, G[_]: Monad](implicit
@@ -69,7 +72,7 @@ object TriggerDispatcher {
         triggers:  List[FiberTrigger],
         baseState: CalculatedState
       ): G[TransactionResult] = {
-        val initialQueue = QueueState(triggers, baseState)
+        val initialQueue = QueueState(triggers, baseState, Map.empty)
 
         Monad[G].tailRecM(initialQueue)(processNext)
       }
@@ -97,15 +100,26 @@ object TriggerDispatcher {
                   updatedScripts = qs.txnState.scripts,
                   logEntries = logEntries.toList,
                   totalGasUsed = gasUsed,
-                  maxDepth = depth
+                  maxDepth = depth,
+                  assetTransfers = qs.assetTransfers
                 ): TransactionResult).asRight[QueueState]
 
               case trigger :: rest =>
                 processSingleTrigger(trigger, qs.txnState).flatMap {
-                  case Right((nextState, moreTriggers)) =>
+                  case Right((nextState, moreTriggers, transfers)) =>
+                    // Accumulate the triggered fiber's _transferAsset effects keyed by the EMITTING (triggered)
+                    // fiber id — the holder-defense key the combiner uses (R1).
+                    val nextTransfers =
+                      if (transfers.isEmpty) qs.assetTransfers
+                      else
+                        qs.assetTransfers.updated(
+                          trigger.targetFiberId,
+                          qs.assetTransfers.getOrElse(trigger.targetFiberId, List.empty) ++ transfers
+                        )
                     QueueState(
                       pending = moreTriggers ++ rest,
-                      txnState = nextState
+                      txnState = nextState,
+                      assetTransfers = nextTransfers
                     ).asLeft[TransactionResult].pure[G]
 
                   case Left(reason) =>
@@ -118,7 +132,7 @@ object TriggerDispatcher {
         }
 
       private type TriggerResult =
-        (CalculatedState, List[FiberTrigger])
+        (CalculatedState, List[FiberTrigger], List[FiberEffect.AssetTransferred])
 
       private def processSingleTrigger(
         trigger: FiberTrigger,
@@ -168,10 +182,10 @@ object TriggerDispatcher {
           _             <- ExecutionOps.markProcessed[G](fiber.fiberId, trigger.input.key)
           handlerResult <- handler.handle(trigger, fiber, state)
           result <- handlerResult match {
-            case TriggerHandlerResult.Success(updatedState, cascadeTriggers) =>
+            case TriggerHandlerResult.Success(updatedState, cascadeTriggers, assetTransfers) =>
               ExecutionOps
                 .incrementDepth[G]
-                .as((updatedState, cascadeTriggers).asRight[FailureReason])
+                .as((updatedState, cascadeTriggers, assetTransfers).asRight[FailureReason])
 
             case TriggerHandlerResult.Failed(reason) =>
               reason.asLeft[TriggerResult].pure[G]

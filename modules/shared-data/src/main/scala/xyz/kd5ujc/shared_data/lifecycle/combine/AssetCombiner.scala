@@ -20,7 +20,7 @@ import io.constellationnetwork.security.signature.Signed
 
 import xyz.kd5ujc.schema.Records.AssetRecord
 import xyz.kd5ujc.schema.asset._
-import xyz.kd5ujc.schema.fiber.{ExecutionLimits, FiberOrdinal}
+import xyz.kd5ujc.schema.fiber.{ExecutionLimits, FiberEffect, FiberOrdinal, FiberStatus}
 import xyz.kd5ujc.schema.registry._
 import xyz.kd5ujc.schema.{AssetCommit, CalculatedState, OnChain, Updates}
 import xyz.kd5ujc.shared_data.syntax.all._
@@ -354,6 +354,108 @@ class AssetCombiner[F[_]: Async: SecurityProvider](
       _      <- Slf4jLogger.getLogger[F].info(s"[asset-authorize-compose] ${ac.assetId} nonce=${ac.nonce}")
     } yield result
   }
+
+  // ════════════════════════════════════════════════════════════════════════════════════════════════
+  // Phase 5 — fiber-held asset transfer return channel (asset-model.md §9/§10)
+  // ════════════════════════════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Apply the `_transferAsset` effects a committed fiber transition produced, AFTER the fiber-combine pass has
+   * written the transition's state mutations onto `st`. This is the authoritative landing site of the §9
+   * return channel; it is the ONLY way a fiber-held asset moves (`_transferAsset` effects are `FiberEffect`s,
+   * never `OttochainMessage`s — a raw morphism on a fiber-held asset is rejected in Phase 4).
+   *
+   * `transfersByEmitter` keys the per-fiber transfer lists by the EMITTING fiber id (the primary fiber + any
+   * cascade-triggered fibers). Each transfer is applied via [[applyFiberTransfer]] with the holder defense
+   * (R1) checked against THAT emitting fiber. Applied within the SAME combiner pass, single-pass, in a
+   * deterministic order (emitter id, then list order). No re-entrancy (R20): applying a transfer mutates only
+   * `assets`/`assetCommits` and NEVER re-triggers a fiber transition — there is no fiber dispatch here.
+   *
+   * ALL-OR-NOTHING per transition: any rejected transfer raises `CombineRejected`, which `Combiner.insert`
+   * turns into a single `RejectionReceipt` for the whole update and discards the partial mutation (the fiber's
+   * logic is faulty/malicious). The cap `ExecutionLimits.maxAssetMutations` bounds the total transfers applied.
+   */
+  def applyFiberTransfers(
+    st:                 DataState[OnChain, CalculatedState],
+    transfersByEmitter: Map[UUID, List[FiberEffect.AssetTransferred]]
+  ): F[DataState[OnChain, CalculatedState]] = {
+    // Deterministic order: by emitting fiber id, preserving each list's emission order.
+    val ordered: List[(UUID, FiberEffect.AssetTransferred)] =
+      transfersByEmitter.toList
+        .sortBy(_._1)
+        .flatMap { case (emitter, ts) => ts.map(emitter -> _) }
+
+    val maxMutations = ExecutionLimits().maxAssetMutations
+    for {
+      _ <- raiseRejected(
+        ordered.size.toLong <= maxMutations,
+        s"transition emitted ${ordered.size} asset transfers, exceeding maxAssetMutations $maxMutations"
+      )
+      currentOrdinal <- ctx.getCurrentOrdinal
+      result <- ordered.foldLeftM(st) { case (acc, (emitter, transfer)) =>
+        applyFiberTransfer(acc, emitter, transfer, currentOrdinal)
+      }
+    } yield result
+  }
+
+  /**
+   * Apply ONE fiber-held asset transfer with the R1 holder-ownership defense. The combiner NEVER trusts the
+   * extracted effect:
+   *   1. resolve `transfer.assetId` against `st.calculated.assets` (missing → reject),
+   *   2. require `holder == AssetHolder.Fiber(emittingFiberId)` — a fiber may not transfer an asset it does
+   *      not hold (the single highest-risk check, §9),
+   *   3. require `behavior.transferable` (a soulbound held asset cannot leave custody),
+   *   4. if the recipient is `Fiber(x)`, require it resolves to a LIVE, non-archived fiber record (§5e/§10),
+   * then set `holder := recipient`, bump the sequence number, and re-commit. Graceful `CombineRejected` on any
+   * failure.
+   */
+  def applyFiberTransfer(
+    st:              DataState[OnChain, CalculatedState],
+    emittingFiberId: UUID,
+    transfer:        FiberEffect.AssetTransferred,
+    ordinal:         SnapshotOrdinal
+  ): F[DataState[OnChain, CalculatedState]] =
+    for {
+      source <- st.calculated.assets
+        .get(transfer.assetId)
+        .fold(
+          Async[F].raiseError[AssetRecord](
+            CombineRejected(s"fiber $emittingFiberId tried to transfer unknown asset ${transfer.assetId}")
+          )
+        )(_.pure[F])
+
+      // (R1) the emitting fiber MUST be the current holder.
+      _ <- raiseRejected(
+        source.holder == AssetHolder.Fiber(emittingFiberId),
+        s"fiber $emittingFiberId does not hold asset ${transfer.assetId} (holder=${source.holder}) — transfer rejected"
+      )
+
+      // behavior gate: a non-transferable (soulbound) held asset cannot be moved out of custody.
+      _ <- raiseRejected(
+        source.behavior.transferable,
+        s"asset ${transfer.assetId} is not transferable (T=0) — fiber $emittingFiberId cannot transfer it"
+      )
+
+      // Target liveness: a Fiber recipient must be a live, non-archived fiber record (§5e/§10).
+      _ <- transfer.recipient match {
+        case AssetHolder.Fiber(targetId) =>
+          raiseRejected(
+            st.calculated.stateMachines.get(targetId).exists(_.status == FiberStatus.Active),
+            s"transfer recipient fiber $targetId is not a live, non-archived state machine"
+          )
+        case AssetHolder.Wallet(_) => Async[F].unit
+      }
+
+      moved = source.copy(
+        holder = transfer.recipient,
+        sequenceNumber = source.sequenceNumber.next,
+        latestUpdateOrdinal = ordinal
+      )
+      result <- writeAsset(st, moved)
+      _ <- Slf4jLogger
+        .getLogger[F]
+        .info(s"[asset-fiber-transfer] ${transfer.assetId} from fiber $emittingFiberId to ${transfer.recipient}")
+    } yield result
 
   // ════════════════════════════════════════════════════════════════════════════════════════════════
   // Apply per kind (codomain function + state mutation + sequence increment)

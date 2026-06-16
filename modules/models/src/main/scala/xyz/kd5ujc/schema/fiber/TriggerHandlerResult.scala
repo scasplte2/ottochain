@@ -13,10 +13,15 @@ object TriggerHandlerResult {
    *
    * @param updatedState    State with the target fiber updated
    * @param cascadeTriggers Additional triggers to process
+   * @param assetTransfers  Fiber-held asset custody transfers (`_transferAsset`) emitted by THIS triggered
+   *                        transition. Surfaced so the dispatcher can carry them to the combiner keyed by the
+   *                        emitting (triggered) fiber id, where the holder defense (R1) is enforced. Scripts
+   *                        never emit transfers (always empty).
    */
   final case class Success(
     updatedState:    CalculatedState,
-    cascadeTriggers: List[FiberTrigger]
+    cascadeTriggers: List[FiberTrigger],
+    assetTransfers:  List[FiberEffect.AssetTransferred] = List.empty
   ) extends TriggerHandlerResult
 
   /**

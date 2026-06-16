@@ -98,7 +98,7 @@ object FailureReasonSuite extends SimpleIOSuite {
             case other =>
               failure(s"Expected NoTransitionFound but got: ${other.getClass.getSimpleName}")
           }
-        case TransactionResult.Committed(_, _, _, _, _, _) =>
+        case TransactionResult.Committed(_, _, _, _, _, _, _) =>
           failure("Expected Aborted with NoTransitionFound, but transaction was committed")
       }
     }
@@ -176,7 +176,7 @@ object FailureReasonSuite extends SimpleIOSuite {
             case other =>
               failure(s"Expected NoGuardMatched but got: ${other.getClass.getSimpleName}")
           }
-        case TransactionResult.Committed(_, _, _, _, _, _) =>
+        case TransactionResult.Committed(_, _, _, _, _, _, _) =>
           failure("Expected Aborted with NoGuardMatched, but transaction was committed")
       }
     }
@@ -265,7 +265,7 @@ object FailureReasonSuite extends SimpleIOSuite {
             case other =>
               failure(s"Expected TriggerTargetNotFound but got: ${other.getClass.getSimpleName}")
           }
-        case TransactionResult.Committed(_, _, _, _, _, _) =>
+        case TransactionResult.Committed(_, _, _, _, _, _, _) =>
           failure("Expected Aborted with TriggerTargetNotFound, but transaction was committed")
       }
     }
@@ -372,7 +372,7 @@ object FailureReasonSuite extends SimpleIOSuite {
       } yield result match {
         case TransactionResult.Aborted(reason, _, _) =>
           expect(reason.isInstanceOf[FailureReason.CycleDetected])
-        case TransactionResult.Committed(_, _, _, _, _, _) =>
+        case TransactionResult.Committed(_, _, _, _, _, _, _) =>
           failure("Expected Aborted with CycleDetected, got Committed")
       }
     }
@@ -457,7 +457,7 @@ object FailureReasonSuite extends SimpleIOSuite {
                 s"Expected GasExhaustedFailure in Guard phase but got: ${other.getClass.getSimpleName}: ${other.toMessage}"
               )
           }
-        case TransactionResult.Committed(_, _, _, _, _, _) =>
+        case TransactionResult.Committed(_, _, _, _, _, _, _) =>
           failure("Expected Aborted with GasExhaustedFailure, but transaction was committed")
       }
     }
@@ -531,7 +531,7 @@ object FailureReasonSuite extends SimpleIOSuite {
         result <- orchestrator.process(fiberId, input, List.empty)
 
       } yield result match {
-        case TransactionResult.Committed(_, _, _, _, _, _) =>
+        case TransactionResult.Committed(_, _, _, _, _, _, _) =>
           success
         case TransactionResult.Aborted(reason, _, _) =>
           failure(s"Expected Committed but got Aborted: ${reason}")
@@ -602,7 +602,7 @@ object FailureReasonSuite extends SimpleIOSuite {
             case other =>
               failure(s"Expected FiberInputMismatch but got: ${other.getClass.getSimpleName}")
           }
-        case TransactionResult.Committed(_, _, _, _, _, _) =>
+        case TransactionResult.Committed(_, _, _, _, _, _, _) =>
           failure("Expected Aborted with FiberInputMismatch, but transaction was committed")
       }
     }
@@ -663,7 +663,7 @@ object FailureReasonSuite extends SimpleIOSuite {
             case other =>
               failure(s"Expected FiberInputMismatch but got: ${other.getClass.getSimpleName}")
           }
-        case TransactionResult.Committed(_, _, _, _, _, _) =>
+        case TransactionResult.Committed(_, _, _, _, _, _, _) =>
           failure("Expected Aborted with FiberInputMismatch, but transaction was committed")
       }
     }
