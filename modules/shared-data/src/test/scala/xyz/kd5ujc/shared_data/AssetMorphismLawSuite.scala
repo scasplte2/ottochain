@@ -70,6 +70,7 @@ object AssetMorphismLawSuite extends SimpleIOSuite {
       MorphismKind.Fractionalize -> MorphismSpec(MorphismVisibility.Public, None, None, None),
       MorphismKind.Compose       -> MorphismSpec(MorphismVisibility.Public, None, None, None),
       MorphismKind.Decompose     -> MorphismSpec(MorphismVisibility.Public, None, None, None),
+      MorphismKind.Pool          -> MorphismSpec(MorphismVisibility.Public, None, None, None),
       MorphismKind.Wrap          -> MorphismSpec(MorphismVisibility.Public, None, None, None),
       MorphismKind.Stake         -> MorphismSpec(MorphismVisibility.Public, None, None, None)
     )
@@ -160,6 +161,30 @@ object AssetMorphismLawSuite extends SimpleIOSuite {
   private val a2 = UUID.fromString("aaaaaaaa-0000-4000-8000-000000000002")
   private val a3 = UUID.fromString("aaaaaaaa-0000-4000-8000-000000000003")
   private val composite = UUID.fromString("cccccccc-0000-4000-8000-00000000000c")
+  private val pooled = UUID.fromString("b00b00b0-0000-4000-8000-00000000900d")
+
+  // A mint carrying an OriginProvenance (for the Pool provenance-forgetting test). Distinct origins per call.
+  private def mintWithProv(
+    id:     UUID,
+    policy: String,
+    holder: AssetHolder,
+    amount: Long,
+    origin: String
+  ): MintAsset =
+    MintAsset(
+      id,
+      SchemaRef(asset(policy), VersionReq.Latest),
+      holder,
+      amount,
+      provenance = Some(
+        OriginProvenance(
+          originChainId = origin,
+          originAssetRef = s"ref:$origin",
+          fullPath = List(origin),
+          attestationHash = io.constellationnetwork.security.hash.Hash(s"attest-$origin")
+        )
+      )
+    )
 
   // A driver that publishes a Fungible (TSC--) policy and mints a wallet-held asset of `amount` to `who`.
   private def setupOne(
@@ -795,6 +820,220 @@ object AssetMorphismLawSuite extends SimpleIOSuite {
       // (2) existing instance keeps working (direct versions.get; assets never auto-burned)
       expect(transferOk) and expect(movedHolder) and
       expect(stillExists) and expect(amountIntact) and expect(sameBinding)
+    }
+  }
+
+  // ── Pool — the lossy, provenance-forgetting DUAL of Compose (coequalizer / quotient) ───────────
+  // Pool melts N same-policy, same-owner fragments into ONE fungible balance, conserving Σ amount and
+  // FORGETTING per-component identity/origin (no witness stored → not a composite → no Decompose).
+
+  test("Pool conserves Σ amount + preserves behavior; the output is NOT a composite and Decompose of it is REJECTED") {
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val holder = AssetHolder.Wallet(fixture.registry.addresses(Alice))
+      // Three same-policy fragments (e.g. wrapped-USDC bridged via several paths), all held by Alice.
+      val p = policyOp("usdc", TokenBehavior.Fungible) // TSC-- (C=1, combinable)
+      val mint1 = mintTo(a1, "usdc", holder, 40L)
+      val mint2 = mintTo(a2, "usdc", holder, 35L)
+      val mint3 = mintTo(a3, "usdc", holder, 25L)
+      // Pool a1 with a2,a3 → one pooled output. compositeId = the pooled-output id.
+      val pool =
+        ApplyMorphism(
+          a1,
+          MorphismKind.Pool,
+          FiberOrdinal.MinValue,
+          otherAssetIds = Some(List(a2, a3)),
+          compositeId = Some(pooled)
+        )
+      // A Decompose of the pooled output must be rejected for free (it is not a composite).
+      val decomposePooled = ApplyMorphism(
+        pooled,
+        MorphismKind.Decompose,
+        FiberOrdinal.MinValue,
+        priorComponents = Some(Nil)
+      )
+      for {
+        prP  <- fixture.registry.generateProofs(p, Set(Alice))
+        s1   <- combiner.insert(genesis, Signed(p, prP))
+        prM1 <- fixture.registry.generateProofs(mint1, Set(Alice))
+        s2   <- combiner.insert(s1, Signed(mint1, prM1))
+        prM2 <- fixture.registry.generateProofs(mint2, Set(Alice))
+        s3   <- combiner.insert(s2, Signed(mint2, prM2))
+        prM3 <- fixture.registry.generateProofs(mint3, Set(Alice))
+        s4   <- combiner.insert(s3, Signed(mint3, prM3))
+        supplyBefore = totalSupply(s4, "usdc")
+        prPool <- fixture.registry.generateProofs(pool, Set(Alice))
+        s5     <- combiner.insert(s4, Signed(pool, prPool))
+        out = assetOf(s5, pooled)
+        supplyAfter = totalSupply(s5, "usdc")
+        // Attempt to Decompose the pooled output — must be a graceful reject; pooled output untouched.
+        prD <- fixture.registry.generateProofs(decomposePooled, Set(Alice))
+        s6  <- combiner.insert(s5, Signed(decomposePooled, prD))
+      } yield
+      // pooled output exists, with the conserved scalar and the shared policy behavior
+      expect(out.isDefined) and
+      expect(out.exists(_.amount == 100L)) and // Σ = 40+35+25 conserved
+      expect(out.exists(_.behavior == TokenBehavior.Fungible)) and // behavior preserved (shared policy)
+      expect(out.exists(_.holder == holder)) and
+      // NOT a composite: no retraction anchors were stored (the parts are identified)
+      expect(out.exists(_.componentFiberIds.isEmpty)) and
+      expect(out.exists(_.componentsCommitment.isEmpty)) and
+      // all parts consumed
+      expect(assetOf(s5, a1).isEmpty) and expect(assetOf(s5, a2).isEmpty) and expect(assetOf(s5, a3).isEmpty) and
+      // derived supply unchanged across the pool (no mint/burn)
+      expect(supplyBefore == 100L) and expect(supplyAfter == 100L) and
+      // Decompose of a pooled (non-composite) asset is REJECTED for free; the pooled output is untouched
+      expect(wasRejected(s6)) and expect(assetOf(s6, pooled).isDefined)
+    }
+  }
+
+  test("Pool FORGETS provenance: distinct OriginProvenance inputs → pooled output provenance == None") {
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val holder = AssetHolder.Wallet(fixture.registry.addresses(Alice))
+      // Same policy, but two fragments carrying DIFFERENT cross-chain provenance (bridge-A vs bridge-B).
+      val p = policyOp("wusdc", TokenBehavior.Fungible)
+      val mintA = mintWithProv(a1, "wusdc", holder, 60L, origin = "eip155:1")
+      val mintB = mintWithProv(a2, "wusdc", holder, 40L, origin = "cosmoshub-4")
+      val pool =
+        ApplyMorphism(
+          a1,
+          MorphismKind.Pool,
+          FiberOrdinal.MinValue,
+          otherAssetIds = Some(List(a2)),
+          compositeId = Some(pooled)
+        )
+      for {
+        prP  <- fixture.registry.generateProofs(p, Set(Alice))
+        s1   <- combiner.insert(genesis, Signed(p, prP))
+        prMA <- fixture.registry.generateProofs(mintA, Set(Alice))
+        s2   <- combiner.insert(s1, Signed(mintA, prMA))
+        prMB <- fixture.registry.generateProofs(mintB, Set(Alice))
+        s3   <- combiner.insert(s2, Signed(mintB, prMB))
+        // sanity: inputs really do carry distinct provenance
+        provA = assetOf(s3, a1).flatMap(_.provenance)
+        provB = assetOf(s3, a2).flatMap(_.provenance)
+        prPool <- fixture.registry.generateProofs(pool, Set(Alice))
+        s4     <- combiner.insert(s3, Signed(pool, prPool))
+        out = assetOf(s4, pooled)
+      } yield expect(provA.isDefined) and expect(provB.isDefined) and expect(provA != provB) and
+      expect(out.isDefined) and
+      expect(out.exists(_.amount == 100L)) and
+      // the melt FORGETS the per-voucher origin lineage — provenance is dropped
+      expect(out.exists(_.provenance.isEmpty))
+    }
+  }
+
+  test("a mixed-policy Pool (two different policy names) is CombineRejected; nothing consumed") {
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val holder = AssetHolder.Wallet(fixture.registry.addresses(Alice))
+      // Two DIFFERENT policies — both combinable, both held by Alice — but Pool requires ONE canonical policy.
+      val pGold = policyOp("gold", TokenBehavior.Fungible)
+      val pUsd = policyOp("usd", TokenBehavior.Fungible)
+      val mintGold = mintTo(a1, "gold", holder, 50L)
+      val mintUsd = mintTo(a2, "usd", holder, 50L)
+      val pool =
+        ApplyMorphism(
+          a1,
+          MorphismKind.Pool,
+          FiberOrdinal.MinValue,
+          otherAssetIds = Some(List(a2)),
+          compositeId = Some(pooled)
+        )
+      for {
+        prPg   <- fixture.registry.generateProofs(pGold, Set(Alice))
+        s1     <- combiner.insert(genesis, Signed(pGold, prPg))
+        prPu   <- fixture.registry.generateProofs(pUsd, Set(Alice))
+        s2     <- combiner.insert(s1, Signed(pUsd, prPu))
+        prMG   <- fixture.registry.generateProofs(mintGold, Set(Alice))
+        s3     <- combiner.insert(s2, Signed(mintGold, prMG))
+        prMU   <- fixture.registry.generateProofs(mintUsd, Set(Alice))
+        s4     <- combiner.insert(s3, Signed(mintUsd, prMU))
+        prPool <- fixture.registry.generateProofs(pool, Set(Alice))
+        s5     <- combiner.insert(s4, Signed(pool, prPool))
+      } yield expect(wasRejected(s5)) and
+      // nothing consumed, no pooled output produced
+      expect(assetOf(s5, pooled).isEmpty) and
+      expect(assetOf(s5, a1).isDefined) and expect(assetOf(s5, a2).isDefined) and
+      expect(assetOf(s5, a1).map(_.amount).contains(50L)) and
+      expect(assetOf(s5, a2).map(_.amount).contains(50L))
+    }
+  }
+
+  test("Pool with a part held by a DIFFERENT wallet is CombineRejected (single-owner R1); nothing consumed") {
+    TestFixture.resource(Set(Alice, Bob)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val aliceHolder = AssetHolder.Wallet(fixture.registry.addresses(Alice))
+      val bobHolder = AssetHolder.Wallet(fixture.registry.addresses(Bob))
+      // Same policy, but the two fragments are owned by DIFFERENT wallets — Pool melts one's OWN fragments.
+      val p = policyOp("usdc", TokenBehavior.Fungible)
+      val mintAlice = mintTo(a1, "usdc", aliceHolder, 50L)
+      val mintBob = mintTo(a2, "usdc", bobHolder, 50L)
+      // Alice signs a Pool of her a1 with Bob's a2 — she does not own a2 → reject (no AuthorizeCompose path).
+      val pool =
+        ApplyMorphism(
+          a1,
+          MorphismKind.Pool,
+          FiberOrdinal.MinValue,
+          otherAssetIds = Some(List(a2)),
+          compositeId = Some(pooled)
+        )
+      for {
+        prP    <- fixture.registry.generateProofs(p, Set(Alice))
+        s1     <- combiner.insert(genesis, Signed(p, prP))
+        prMA   <- fixture.registry.generateProofs(mintAlice, Set(Alice))
+        s2     <- combiner.insert(s1, Signed(mintAlice, prMA))
+        prMB   <- fixture.registry.generateProofs(mintBob, Set(Bob))
+        s3     <- combiner.insert(s2, Signed(mintBob, prMB))
+        prPool <- fixture.registry.generateProofs(pool, Set(Alice))
+        s4     <- combiner.insert(s3, Signed(pool, prPool))
+      } yield expect(wasRejected(s4)) and
+      expect(assetOf(s4, pooled).isEmpty) and
+      expect(assetOf(s4, a1).map(_.holder).contains(aliceHolder)) and
+      expect(assetOf(s4, a2).map(_.holder).contains(bobHolder))
+    }
+  }
+
+  test("Pool with a Fiber-held part is CombineRejected (deferred to phase 5); nothing consumed") {
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val aliceHolder = AssetHolder.Wallet(fixture.registry.addresses(Alice))
+      val fiberHolder = AssetHolder.Fiber(UUID.fromString("ffffffff-0000-4000-8000-00000000000f"))
+      val p = policyOp("usdc", TokenBehavior.Fungible)
+      val mintWallet = mintTo(a1, "usdc", aliceHolder, 50L)
+      val mintFiber = mintTo(a2, "usdc", fiberHolder, 50L) // a fiber-held same-policy fragment
+      val pool =
+        ApplyMorphism(
+          a1,
+          MorphismKind.Pool,
+          FiberOrdinal.MinValue,
+          otherAssetIds = Some(List(a2)),
+          compositeId = Some(pooled)
+        )
+      for {
+        prP    <- fixture.registry.generateProofs(p, Set(Alice))
+        s1     <- combiner.insert(genesis, Signed(p, prP))
+        prMW   <- fixture.registry.generateProofs(mintWallet, Set(Alice))
+        s2     <- combiner.insert(s1, Signed(mintWallet, prMW))
+        prMF   <- fixture.registry.generateProofs(mintFiber, Set(Alice))
+        s3     <- combiner.insert(s2, Signed(mintFiber, prMF))
+        prPool <- fixture.registry.generateProofs(pool, Set(Alice))
+        s4     <- combiner.insert(s3, Signed(pool, prPool))
+      } yield expect(wasRejected(s4)) and
+      expect(assetOf(s4, pooled).isEmpty) and
+      expect(assetOf(s4, a1).map(_.holder).contains(aliceHolder)) and
+      expect(assetOf(s4, a2).map(_.holder).contains(fiberHolder))
     }
   }
 }

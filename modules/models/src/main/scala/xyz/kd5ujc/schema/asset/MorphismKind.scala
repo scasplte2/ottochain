@@ -15,6 +15,14 @@ import enumeratum.{CirceEnum, CirceKeyEnum, Enum, EnumEntry}
  *  - `Fractionalize` (`S=1`)            — shards: source behavior with `C` forced to 0.
  *  - `Compose`       (all `C=1`)        — `meet` of all component behaviors.
  *  - `Decompose`     (`isComposite`)    — original component behaviors restored.
+ *  - `Pool`          (all `C=1`)        — the LOSSY, provenance-forgetting DUAL of Compose: melt N
+ *                                          same-policy, same-owner fragments into ONE fungible balance
+ *                                          (`amount = Σ`), forgetting per-component identity/origin. No
+ *                                          witness is stored, so a pooled output is NOT a composite and has
+ *                                          NO Decompose. The coequalizer/quotient to Compose's retraction —
+ *                                          the holder-side complement to the interop functor's canonical
+ *                                          `policyId` cure (preserve-by-default vs forget-by-opt-in). See
+ *                                          asset-model.md §4 ("Pool — the lossy dual of Compose").
  *  - `Wrap`          (`T=1`)            — same behavior (identity-preserving on `β`).
  *  - `Stake`         (`T=1`)            — source behavior with `E:=1` (moves DOWN the lattice).
  *
@@ -33,6 +41,7 @@ object MorphismKind extends Enum[MorphismKind] with CirceEnum[MorphismKind] with
   case object Fractionalize extends MorphismKind
   case object Compose extends MorphismKind
   case object Decompose extends MorphismKind
+  case object Pool extends MorphismKind
   case object Wrap extends MorphismKind
   case object Stake extends MorphismKind
 

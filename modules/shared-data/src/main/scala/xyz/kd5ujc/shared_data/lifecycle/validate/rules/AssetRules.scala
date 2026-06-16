@@ -43,8 +43,9 @@ object AssetRules {
      *  - `Transfer`      requires `transferable`
      *  - `Fractionalize` requires `splittable`
      *  - `Compose`       requires `combinable`
+     *  - `Pool`          requires `combinable` (the lossy dual of Compose — same C=1 gate)
      *  - `Decompose`/`Wrap`/`Stake`/`Burn` are structurally OK here; the combiner checks the rest
-     *    (isComposite, policy allowlists, supply, meet, …).
+     *    (isComposite, single-policy, single-owner, policy allowlists, supply, meet, …).
      */
     def applyMorphismStructural[F[_]: Applicative](
       update: ApplyMorphism,
@@ -83,6 +84,19 @@ object AssetRules {
                 Errors.MorphismNotPermittedByBehavior(
                   update.assetId,
                   "Compose",
+                  "combinable (C=0: not combinable)"
+                ): DataApplicationValidationError
+              )
+            case MorphismKind.Pool =>
+              // Pool is the lossy dual of Compose; it melts combinable fragments, so it shares the C=1 gate.
+              // Single-policy / single-owner / amount-conservation are STATEFUL (need CalculatedState) and stay
+              // in the combiner as graceful CombineRejected (invariant #3).
+              Validated.condNec(
+                behavior.combinable,
+                (),
+                Errors.MorphismNotPermittedByBehavior(
+                  update.assetId,
+                  "Pool",
                   "combinable (C=0: not combinable)"
                 ): DataApplicationValidationError
               )

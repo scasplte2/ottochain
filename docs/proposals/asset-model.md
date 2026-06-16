@@ -256,6 +256,7 @@ A morphism is a typed transformation with a **domain guard** (a predicate on the
 | Fractionalize | `S=1` | shards: source behavior with `C` forced to `0` |
 | Compose | all components `C=1` | `meet(all component behaviors)` |
 | Decompose | `isComposite` | original component behaviors restored |
+| Pool | all parts `C=1` | one fungible output, `amount = Σ`, `behavior` = the shared policy's (lossy dual of Compose — see below) |
 | Wrap | `T=1` | same behavior (identity-preserving on `β`) |
 | Stake | `T=1` | source behavior with `E:=1` (moves *down* the lattice) |
 
@@ -306,6 +307,48 @@ These — not "monoidal laws" — are what the law suite checks:
 
 `meet` is associative and commutative on `TokenBehavior`, so nesting composites is order-independent: a
 basket of `[basket of [A, B], C]` has the same behavior as `[A, B, C]`.
+
+### Pool — the lossy dual of Compose
+
+`Compose` is a **retraction**: it stores a witness (`componentFiberIds` + `componentsCommitment`) so
+`Decompose` can restore the originals exactly. Its **dual** is `Pool` — a deliberately **LOSSY**,
+provenance-forgetting melt. Categorically `Pool` is the **coequalizer / quotient-by-relabeling**: it
+*identifies* the parts (collapses them up to their shared policy) and keeps only the conserved scalar,
+where `Compose` keeps the parts distinct and restorable. `Pool` stores **NEITHER** a component witness
+nor a component commitment, so a pooled output is **not a composite** (`componentFiberIds == None`) and
+has **no `Decompose`** — un-pooling would need exactly the witness `Pool` deliberately didn't write, so
+the model already rejects `Decompose` on a non-composite *for free* (the same `isComposite` gate Compose
+relies on). It is **witness-free**: a small, additive, deterministic combiner branch — no new signed
+message, no new committed key, no zk, no nonce.
+
+It is constrained to make the melt unambiguous and law-abiding:
+
+- **Single canonical policy.** Every part must share `schemaBinding.name`, so the output `behavior` is
+  unambiguously the shared policy's behavior and derived supply stays coherent. A mixed-policy `Pool` is a
+  graceful `CombineRejected`.
+- **Single owner (holder-ownership R1).** The signer must own **every** part (a fiber-held part is
+  rejected, deferred to the fiber-transfer channel exactly as elsewhere). `Pool` melts one's **own**
+  fragments, so — unlike a cross-holder `Compose` — it needs **no** `AuthorizeCompose` nonce.
+- **Conservation.** The output `amount = Σ parts.amount`, so the **`derivedSupply` invariant holds**:
+  `Pool` can neither mint nor burn (it is amount-conserving, only identity-forgetting). It shares
+  Compose's structural `C=1` (combinable) domain gate.
+
+Output: one `AssetRecord(assetId = compositeId, amount = Σ, behavior = the shared policy's, holder =
+source.holder, componentFiberIds = None, componentsCommitment = None, provenance = None)`; all parts are
+consumed. The policy/guard layer applies as for any morphism (a policy enables `Pool` via its
+`MorphismSpec`; a `Governed` `Pool` runs the guard).
+
+**Why it is useful — the holder-side complement to the interop cure.** `Pool` is the holder-side
+counterpart to the interop functor's *structural* anti-fragmentation cure (`asset-interop-functor.md`):
+even when wrapped-USDC-from-bridge-A and -from-bridge-B legitimately carry **different**
+`OriginProvenance`, a holder can `Pool` them into one fungible balance, *knowingly and publicly* trading
+the per-bridge attestation lineage for fungibility. The two are **different axes** —
+**preserve-by-default** (which canonical `policyId` an asset belongs to) vs **forget-by-opt-in** (whether
+a holder keeps the origin breadcrumb) — so offering both is coherent, *provided* `Pool` is gated to a
+single canonical policy (which it is). `Mix` (a quotient by a *hidden* permutation / coinjoin) is
+**declined** — a commit-reveal shuffle reveals the permutation to the public combiner (so it is not
+actually unlinkable), and real unlinkability needs a zk shuffle + an unbounded nullifier set that fights
+the public-readable-state ethos. See `docs/proposals/asset-model-zk-extension.md` §3.
 
 ---
 

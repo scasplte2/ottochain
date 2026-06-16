@@ -279,7 +279,7 @@ class AssetCombiner[F[_]: Async: SecurityProvider](
       }
 
       // APPLY the codomain function + state mutation.
-      result <- applyKind(a, source, counterParties, policy, currentOrdinal)
+      result <- applyKind(a, source, counterParties, policy, signers, currentOrdinal)
       _      <- Slf4jLogger.getLogger[F].info(s"[asset-morphism] ${a.kind} on ${a.assetId}")
     } yield result
   }
@@ -467,6 +467,7 @@ class AssetCombiner[F[_]: Async: SecurityProvider](
     source:         AssetRecord,
     counterParties: List[AssetRecord],
     policy:         RegistryShape.AssetPolicy,
+    signers:        Set[Address],
     ordinal:        SnapshotOrdinal
   ): F[DataState[OnChain, CalculatedState]] =
     a.kind match {
@@ -475,6 +476,7 @@ class AssetCombiner[F[_]: Async: SecurityProvider](
       case MorphismKind.Fractionalize => applyFractionalize(a, source, ordinal)
       case MorphismKind.Compose       => applyCompose(a, source, counterParties, ordinal)
       case MorphismKind.Decompose     => applyDecompose(a, source, ordinal)
+      case MorphismKind.Pool          => applyPool(a, source, counterParties, signers, ordinal)
       case MorphismKind.Wrap          => applyWrap(a, source, ordinal)
       case MorphismKind.Stake         => applyStake(a, source, ordinal)
     }
@@ -724,6 +726,77 @@ class AssetCombiner[F[_]: Async: SecurityProvider](
       result <- restored.foldLeftM(withoutComposite) { case (st, comp) => writeAsset(st, comp) }
     } yield result
 
+  /**
+   * Pool → the LOSSY, provenance-forgetting DUAL of Compose (asset-model.md §4 "Pool — the lossy dual of
+   * Compose"). Where `Compose` is a RETRACTION (stores `componentFiberIds` + `componentsCommitment` so
+   * `Decompose` can restore the originals), `Pool` is a COEQUALIZER / quotient-by-relabeling: it IDENTIFIES
+   * the parts and keeps only the conserved scalar. It melts N fragments into ONE fungible balance, knowingly
+   * trading per-voucher provenance/identity for fungibility — the holder-side complement to the interop
+   * functor's canonical-`policyId` anti-fragmentation cure (preserve-by-default vs forget-by-opt-in).
+   *
+   * Gates (beyond the structural `C=1` of [[structuralOk]] and the policy/guard layer of [[applyMorphism]]):
+   *   1. SINGLE CANONICAL POLICY — every part shares `schemaBinding.name` (so `behavior` is unambiguous and
+   *      `derivedSupply` stays coherent with the canonical-`policyId` cure). Else graceful `CombineRejected`.
+   *   2. SINGLE OWNER (holder-ownership R1) — the signer owns EVERY part (wallet-held → signer is the holder;
+   *      a fiber-held part → reject, deferred to Phase 5 exactly as the source check is). Pool melts one's OWN
+   *      fragments, so there is NO AuthorizeCompose nonce (unlike a cross-holder `Compose`).
+   *   3. `compositeId` present and not already existing.
+   *
+   * Then write ONE output `AssetRecord(assetId = compositeId, amount = Σ parts.amount, behavior =
+   * parts.head.behavior, holder = source.holder, componentFiberIds = None, componentsCommitment = None,
+   * provenance = None, fresh ordinals, sequence MinValue)` and CONSUME all parts. Because Σ is preserved the
+   * `derivedSupply` invariant holds (Pool cannot mint/burn); because NO witness is stored the output is NOT a
+   * composite (`componentFiberIds == None`) and `Decompose` of it is rejected for free (the model already
+   * rejects Decompose on a non-composite — see [[structuralOk]]/[[applyDecompose]]).
+   */
+  private def applyPool(
+    a:              Updates.ApplyMorphism,
+    source:         AssetRecord,
+    counterParties: List[AssetRecord],
+    signers:        Set[Address],
+    ordinal:        SnapshotOrdinal
+  ): F[DataState[OnChain, CalculatedState]] =
+    a.compositeId.fold(
+      Async[F].raiseError[DataState[OnChain, CalculatedState]](
+        CombineRejected(s"Pool of ${a.assetId} requires a compositeId (the pooled-output id)")
+      )
+    ) { compositeId =>
+      val parts = source :: counterParties
+      val canonicalName = source.schemaBinding.name
+      for {
+        // (1) single canonical policy: every part shares the source's policy name.
+        _ <- raiseRejected(
+          parts.forall(_.schemaBinding.name === canonicalName),
+          s"Pool requires one canonical policy (parts span " +
+          s"${parts.map(_.schemaBinding.name.render).distinct.mkString(", ")})"
+        )
+        // (2) single owner (R1): the signer must own EVERY part; a fiber-held part is rejected (Phase 5),
+        // exactly as the source holder-ownership check defers.
+        _ <- parts.traverse_(requireWalletHolder(_, signers))
+        // (3) the pooled-output id must be fresh.
+        _ <- raiseRejected(
+          !current.calculated.assets.contains(compositeId),
+          s"Pool output id $compositeId already exists"
+        )
+        // Write ONE fungible output that FORGETS per-component identity/origin; consume all parts.
+        pooled = source.copy(
+          assetId = compositeId,
+          behavior = parts.head.behavior, // == canonical policy behavior (all parts share the policy)
+          amount = parts.map(_.amount).sum, // CONSERVATION: Σ preserved => derivedSupply invariant holds
+          holder = source.holder,
+          sequenceNumber = FiberOrdinal.MinValue,
+          creationOrdinal = ordinal,
+          latestUpdateOrdinal = ordinal,
+          componentFiberIds = None, // NOT a composite — no retraction anchor
+          componentsCommitment = None, // no witness stored — provenance/identity deliberately forgotten
+          parentCompositeId = None,
+          provenance = None // FORGET origin: the melt is the point
+        )
+        consumed = parts.map(_.assetId).foldLeft(current) { case (st, id) => removeAsset(st, id) }
+        result <- writeAsset(consumed, pooled)
+      } yield result
+    }
+
   /** Wrap → behavior unchanged (identity-preserving custody); optional recipient re-custodies. */
   private def applyWrap(
     a:       Updates.ApplyMorphism,
@@ -780,6 +853,9 @@ class AssetCombiner[F[_]: Async: SecurityProvider](
         raiseRejected(source.behavior.splittable, s"Fractionalize requires splittable (S=0) on ${source.assetId}")
       case MorphismKind.Compose =>
         raiseRejected(source.behavior.combinable, s"Compose requires combinable (C=0) on ${source.assetId}")
+      case MorphismKind.Pool =>
+        // Same C=1 gate as Compose: pooling melts combinable fragments (the lossy dual of Compose).
+        raiseRejected(source.behavior.combinable, s"Pool requires combinable (C=0) on ${source.assetId}")
       case MorphismKind.Decompose =>
         raiseRejected(
           source.componentFiberIds.exists(_.nonEmpty),
