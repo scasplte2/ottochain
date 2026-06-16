@@ -54,7 +54,8 @@ lazy val commonTestSettings = Seq(
       Libraries.catsEffectTestkit,
       Libraries.weaverCats,
       Libraries.weaverDiscipline,
-      Libraries.weaverScalaCheck
+      Libraries.weaverScalaCheck,
+      Libraries.catsLaws
   ).map(_ % Test)
 )
 
