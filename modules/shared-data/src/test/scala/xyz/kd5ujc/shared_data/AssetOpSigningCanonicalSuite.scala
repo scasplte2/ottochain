@@ -134,6 +134,40 @@ object AssetOpSigningCanonicalSuite extends SimpleIOSuite {
       priorComponents = Some(List(witness))
     )
 
+  // A ZkVerify witness payload (a JsonLogicValue) — exercises the new `witness: Option[JsonLogicValue]`
+  // field round-tripping through the signing canonical. JsonLogicValue has Circe codecs in metakit; a
+  // populated witness must encode->decode->encode identically (no injected defaults, no key reordering loss).
+  private val zkWitness: io.constellationnetwork.metagraph_sdk.json_logic.JsonLogicValue =
+    io.constellationnetwork.metagraph_sdk.json_logic.MapValue(
+      Map(
+        "leaf"  -> io.constellationnetwork.metagraph_sdk.json_logic.StrValue("0x" + "0" * 63 + "1"),
+        "index" -> io.constellationnetwork.metagraph_sdk.json_logic.IntValue(BigInt(5)),
+        "siblings" -> io.constellationnetwork.metagraph_sdk.json_logic.ArrayValue(
+          List(io.constellationnetwork.metagraph_sdk.json_logic.StrValue("0x" + "0" * 63 + "2"))
+        )
+      )
+    )
+
+  // ApplyMorphism (Transfer) carrying a POPULATED witness — proves the new Option field is omit-safe AND
+  // round-trips when present (CLAUDE.md requires coverage for changed signed messages).
+  private val applyMorphismWithWitness: Updates.ApplyMorphism =
+    Updates.ApplyMorphism(
+      assetId = assetId,
+      kind = MorphismKind.Transfer,
+      targetSequenceNumber = FiberOrdinal.MinValue,
+      witness = Some(zkWitness)
+    )
+
+  // MintAsset carrying a POPULATED witness (proof-gated mint shape).
+  private val mintAssetWithWitness: Updates.MintAsset =
+    Updates.MintAsset(
+      assetId = assetId,
+      policyRef = SchemaRef(RegistryName.unsafe("gold.acme.asset"), VersionReq.Latest),
+      holder = AssetHolder.Wallet(holder),
+      amount = 100L,
+      witness = Some(zkWitness)
+    )
+
   // AuthorizeCompose — every field is required (no defaults), nothing to omit.
   private val authorizeCompose: Updates.AuthorizeCompose =
     Updates.AuthorizeCompose(
@@ -147,8 +181,10 @@ object AssetOpSigningCanonicalSuite extends SimpleIOSuite {
   private val cases: List[(String, OttochainMessage)] = List(
     "CreateAssetPolicy"                            -> createAssetPolicy,
     "MintAsset"                                    -> mintAsset,
+    "MintAsset (w/ ZkVerify witness)"              -> mintAssetWithWitness,
     "ApplyMorphism (all-None)"                     -> applyMorphism,
     "ApplyMorphism (Decompose w/ priorComponents)" -> applyMorphismDecompose,
+    "ApplyMorphism (w/ ZkVerify witness)"          -> applyMorphismWithWitness,
     "AuthorizeCompose"                             -> authorizeCompose
   )
 

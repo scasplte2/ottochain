@@ -274,7 +274,12 @@ object Updates {
     holder:     AssetHolder,
     amount:     Long,
     expiresAt:  Option[SnapshotOrdinal] = None,
-    provenance: Option[OriginProvenance] = None
+    provenance: Option[OriginProvenance] = None,
+    // ZkVerify-gated mint (asset-model.md §8): an optional proof / Merkle-membership witness the policy's
+    // `mintPolicy` guard reads under the reserved `witness` context key (e.g. `pmt_verify` over
+    // `{"var":"witness.leaf"}` / `groth16_verify` over `{"var":"witness.proof"}`). `Option` (invariant #1 —
+    // omit-safe: `None` -> `null` -> dropped by `dropNulls`; `JsonLogicValue` has Circe codecs in metakit).
+    witness: Option[JsonLogicValue] = None
   ) extends AssetOp
       with OttochainMessage {
     val fiberId: UUID = assetId
@@ -300,7 +305,13 @@ object Updates {
     compositeId:          Option[UUID] = None,
     shardIds:             Option[List[UUID]] = None,
     nonce:                Option[Long] = None,
-    priorComponents:      Option[List[ComponentWitness]] = None
+    priorComponents:      Option[List[ComponentWitness]] = None,
+    // ZkVerify-gated morphism (asset-model.md §8): an optional proof / Merkle-membership witness a
+    // `Governed` morphism's `MorphismSpec.guard` reads under the reserved `witness` context key (e.g.
+    // `pmt_verify` over `{"var":"witness.leaf"}` / `groth16_verify` over `{"var":"witness.proof"}`), so the
+    // guard can require a zk/inclusion proof carried on the transaction. `Option` (invariant #1 — omit-safe:
+    // `None` -> `null` -> dropped by `dropNulls`; `JsonLogicValue` has Circe codecs in metakit).
+    witness: Option[JsonLogicValue] = None
   ) extends AssetOp
       with OttochainMessage
       with Sequenced {

@@ -951,11 +951,33 @@ class AssetCombiner[F[_]: Async: SecurityProvider](
         "amount"  -> IntValue(BigInt(m.amount)),
         "holder"  -> holderJlv(m.holder),
         "signers" -> jsonAsJlv(signers.toList.map(_.show).asJson),
-        "ordinal" -> IntValue(BigInt(ordinal.value.value))
+        "ordinal" -> IntValue(BigInt(ordinal.value.value)),
+        // ZkVerify-gated mint (asset-model.md §8): the optional proof / Merkle-membership witness carried on
+        // the signed `MintAsset`, exposed under the reserved `witness` key so a `mintPolicy` guard can call a
+        // metakit verifier opcode over it — e.g. `{"pmt_verify":[<root>,{"var":"witness.leaf"},
+        // {"var":"witness.index"},{"var":"witness.siblings"}]}` ("mint iff this inclusion proof verifies").
+        "witness" -> m.witness.getOrElse(NullValue)
       )
     )
 
-  /** Context for a Governed morphism guard. */
+  /**
+   * Context for a Governed morphism guard.
+   *
+   * == ZkVerify-gated morphisms (asset-model.md §8) ==
+   * The reserved `witness` key exposes the optional proof / Merkle-membership witness carried on the signed
+   * [[Updates.ApplyMorphism]] (`NullValue` when omitted). A `Governed` morphism's `MorphismSpec.guard` can
+   * therefore REQUIRE a zk/inclusion proof by calling one of metakit's verifier opcodes over it — e.g.
+   * `{"pmt_verify":[<root>,{"var":"witness.leaf"},{"var":"witness.index"},{"var":"witness.siblings"}]}` or
+   * `{"groth16_verify":[<vkey>,{"var":"witness.publicValues"},{"var":"witness.proof"}]}`. The opcode runs
+   * DETERMINISTICALLY in the combiner through the SAME [[evalGuardOrReject]] path every guard uses (one
+   * reused verifier, gas-metered, not hand-rolled per use); a false / failed verification is a graceful
+   * `CombineRejected`, never a snapshot abort.
+   *
+   * CAVEAT (be honest): metakit's Groth16 / Poseidon-Merkle verifier has NO public security audit. A
+   * ZkVerify-gated guard is sound only up to the correctness of that verifier, so it MUST NOT be used to
+   * protect real value until metakit's verifier is independently audited. See
+   * docs/proposals/asset-model.md §8 ("ZkVerify-gated morphisms").
+   */
   private def morphismContext(
     a:       Updates.ApplyMorphism,
     source:  AssetRecord,
@@ -970,7 +992,9 @@ class AssetCombiner[F[_]: Async: SecurityProvider](
         "holder"    -> holderJlv(source.holder),
         "recipient" -> a.recipient.fold(NullValue: JsonLogicValue)(holderJlv),
         "signers"   -> jsonAsJlv(signers.toList.map(_.show).asJson),
-        "ordinal"   -> IntValue(BigInt(ordinal.value.value))
+        "ordinal"   -> IntValue(BigInt(ordinal.value.value)),
+        // The proof / Merkle-membership witness for a ZkVerify-gated guard (NullValue when omitted).
+        "witness" -> a.witness.getOrElse(NullValue)
       )
     )
 

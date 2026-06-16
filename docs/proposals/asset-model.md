@@ -777,6 +777,42 @@ ticket composable only with a certified resale policy:
 }
 ```
 
+### ZkVerify-gated morphisms (zk-as-integrity)
+
+A `Governed` morphism's `guard` — and a `mintPolicy` guard — may REQUIRE a zero-knowledge proof or a
+Merkle-membership proof carried on the transaction. The signed `ApplyMorphism` / `MintAsset` carries an
+optional `witness: Option[JsonLogicValue]`, which the combiner exposes to the guard under the reserved
+`witness` context key. The guard then calls one of metakit's already-wired, gas-metered verifier opcodes
+(`groth16_verify`, `pmt_verify`, `poseidon`) over that witness:
+
+```json
+{ "morphisms": {
+    "Transfer": { "visibility": "Governed",
+                  "guard": { "pmt_verify": [ "<merkle-root>",
+                                             {"var": "witness.leaf"},
+                                             {"var": "witness.index"},
+                                             {"var": "witness.siblings"} ] } } } }
+```
+
+or, for a proof-gated mint ("mint iff this membership/inclusion proof verifies"):
+
+```json
+{ "mintPolicy": { "groth16_verify": [ "<vkey>",
+                                      {"var": "witness.publicValues"},
+                                      {"var": "witness.proof"} ] } }
+```
+
+This is **pure wiring, no new cryptography**: the verifier opcodes already exist in metakit and run
+DETERMINISTICALLY in the combiner through the same `JsonLogicEvaluator.evaluateWithGas` path every guard
+uses (`AssetCombiner.evalGuardOrReject`) — one reused verifier, not a hand-rolled per-use check. A false
+or failed verification is a graceful `CombineRejected`, never a snapshot abort (CLAUDE.md rule #2/#3:
+combiner-only, stateful gate). Out of scope (intentionally): confidential amounts, homomorphic
+commitments, shielded pools, nullifier sets, range proofs — any new crypto.
+
+**CAVEAT (honest):** metakit's Groth16 / Poseidon-Merkle verifier has **no public security audit**. A
+`ZkVerify`-gated guard is sound only up to the correctness of that verifier, so it **must not protect real
+value** until metakit's verifier is independently audited.
+
 ### Symmetric composition (two holders) — commit-reveal nonce
 
 When two assets from different holders are composed (e.g. an LP deposit), both must consent, via a
