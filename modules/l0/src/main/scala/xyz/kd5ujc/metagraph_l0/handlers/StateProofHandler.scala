@@ -32,6 +32,10 @@ class StateProofHandler[F[_]: Async](reader: CommittedReader[F, CalculatedState]
   def script(id: UUID, field: Option[String]): F[Response[F]] =
     proofFor(s"script/$id", field)(_.scripts.get(id).map(_.asJson))
 
+  /** Custody proof for an asset instance — mirrors `stateMachine`/`script` against the `asset/<id>` key. */
+  def asset(id: UUID, field: Option[String]): F[Response[F]] =
+    proofFor(s"asset/$id", field)(_.assets.get(id).map(_.asJson))
+
   private def proofFor(keyStr: String, field: Option[String])(
     recordOf: CalculatedState => Option[Json]
   ): F[Response[F]] = {

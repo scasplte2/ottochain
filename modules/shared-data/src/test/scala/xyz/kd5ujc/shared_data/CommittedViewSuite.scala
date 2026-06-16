@@ -4,10 +4,16 @@ import java.util.UUID
 
 import cats.effect.IO
 
-import scala.collection.immutable.SortedMap
+import scala.collection.immutable.{SortedMap, SortedSet}
+
+import io.constellationnetwork.schema.SnapshotOrdinal
+import io.constellationnetwork.security.hash.Hash
 
 import xyz.kd5ujc.schema.CalculatedState
-import xyz.kd5ujc.schema.registry.{RegistryEntry, RegistryName, RegistryTarget}
+import xyz.kd5ujc.schema.Records.AssetRecord
+import xyz.kd5ujc.schema.asset.{AssetHolder, TokenBehavior}
+import xyz.kd5ujc.schema.fiber.FiberOrdinal
+import xyz.kd5ujc.schema.registry.{RegistryEntry, RegistryName, RegistryTarget, SchemaBinding, SemVer}
 
 import weaver.SimpleIOSuite
 
@@ -56,5 +62,35 @@ object CommittedViewSuite extends SimpleIOSuite {
 
   test("genesis projects to an empty dictionary") {
     IO.pure(expect(CalculatedState.committedView.entries(CalculatedState.genesis).isEmpty))
+  }
+
+  // ── asset/nonce projections (Phase 2) — TOTAL keys per asset instance and per used-nonce entry ──
+
+  private val assetId = UUID.fromString("00000000-0000-0000-0000-0000000000a1")
+
+  private val assetRecord = AssetRecord(
+    assetId = assetId,
+    schemaBinding = SchemaBinding(RegistryName.unsafe("gold.asset"), SemVer(1, 0, 0), Hash("sh"), Hash("lh")),
+    behavior = TokenBehavior.Fungible,
+    holder = AssetHolder.Fiber(UUID.fromString("00000000-0000-0000-0000-0000000000cc")),
+    amount = 100L,
+    sequenceNumber = FiberOrdinal.MinValue,
+    creationOrdinal = SnapshotOrdinal.MinValue,
+    latestUpdateOrdinal = SnapshotOrdinal.MinValue
+  )
+
+  test("entries projects asset/<uuid> and nonce/<uuid> keys totally (an empty nonce set is fine)") {
+    val s = CalculatedState.genesis.copy(
+      assets = SortedMap(assetId -> assetRecord),
+      usedNonces = SortedMap(assetId -> SortedSet(5L, 2L, 9L), rid -> SortedSet.empty[Long])
+    )
+    val keys = CalculatedState.committedView.entries(s).keySet.map(_.value)
+    IO.pure(
+      expect(keys.contains(s"asset/$assetId")) and
+      expect(keys.contains(s"nonce/$assetId")) and
+      expect(keys.contains(s"nonce/$rid")) and // empty SortedSet still projects (no throw, no drop)
+      // total: one key per asset + one per used-nonce entry
+      expect(CalculatedState.committedView.entries(s).size == s.assets.size + s.usedNonces.size)
+    )
   }
 }

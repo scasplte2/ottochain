@@ -13,6 +13,7 @@ object ReservedKeys {
   val SPAWN = "_spawn"
   val SCRIPT_CALL = "_scriptCall"
   val EMIT = "_emit"
+  val TRANSFER_ASSET = "_transferAsset" // Fiber-held asset custody transfer (asset-model.md §10)
 
   // Script Return Convention Keys - Used in extractStateAndResult for script results
   val SCRIPT_STATE = "_state"
@@ -69,6 +70,16 @@ object ReservedKeys {
   val PARENT = "parent"
   val CHILDREN = "children"
   val SCRIPTS = "scripts"
+  val HELD_ASSETS = "heldAssets" // Assets held by this fiber (asset-model.md §10), injected into eval context
+
+  // Asset Transfer Directive Keys - Used in extractAssetTransfers for _transferAsset
+  val ASSET_ID = "assetId"
+  val RECIPIENT = "recipient"
+
+  // heldAssets summary keys (the per-asset projection injected into context)
+  val BEHAVIOR = "behavior"
+  val AMOUNT = "amount"
+  val EXPIRES_AT = "expiresAt"
 
   // Emitted Event Keys - Used in parseEmittedEvent for user-defined event emission
   val NAME = "name"

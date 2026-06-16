@@ -104,7 +104,7 @@ object GuardEdgeCasesSuite extends SimpleIOSuite {
         result <- orchestrator.process(fiberId, input, List.empty)
 
       } yield result match {
-        case TransactionResult.Committed(machines, _, _, _, _, _) =>
+        case TransactionResult.Committed(machines, _, _, _, _, _, _) =>
           // First guard should fail (missing field evaluates to null != true), fallback should succeed
           val updated = machines.get(fiberId)
           expect(updated.isDefined, "Updated fiber should exist") and
@@ -192,7 +192,7 @@ object GuardEdgeCasesSuite extends SimpleIOSuite {
         result <- orchestrator.process(fiberId, input, List.empty)
 
       } yield result match {
-        case TransactionResult.Committed(machines, _, _, gasUsed, _, _) =>
+        case TransactionResult.Committed(machines, _, _, gasUsed, _, _, _) =>
           // Deeply nested guard: 10 levels of nested conditionals
           // Each level has: if (1) = 2 gas ops, so ~20 gas minimum
           val expectedMinGas = 10L
@@ -380,7 +380,7 @@ object GuardEdgeCasesSuite extends SimpleIOSuite {
         result <- orchestrator.process(fiberId, input, List.empty)
 
       } yield result match {
-        case TransactionResult.Committed(machines, _, _, _, _, _) =>
+        case TransactionResult.Committed(machines, _, _, _, _, _, _) =>
           val updated = machines.get(fiberId)
           expect(updated.isDefined) and
           // Second transition should be taken (75 > 50 but 75 not > 100)
@@ -460,7 +460,7 @@ object GuardEdgeCasesSuite extends SimpleIOSuite {
             reason.isInstanceOf[FailureReason.EvaluationError],
             s"Expected EvaluationError but got: ${reason.getClass.getSimpleName}: ${reason.toMessage}"
           )
-        case TransactionResult.Committed(_, _, _, _, _, _) =>
+        case TransactionResult.Committed(_, _, _, _, _, _, _) =>
           failure("Expected Aborted with EvaluationError, but transaction was committed")
       }
     }
@@ -529,7 +529,7 @@ object GuardEdgeCasesSuite extends SimpleIOSuite {
             reason.isInstanceOf[FailureReason.EvaluationError],
             s"Expected EvaluationError but got: ${reason.getClass.getSimpleName}"
           )
-        case TransactionResult.Committed(_, _, _, _, _, _) =>
+        case TransactionResult.Committed(_, _, _, _, _, _, _) =>
           failure("Expected Aborted with EvaluationError for non-MapValue state data")
       }
     }

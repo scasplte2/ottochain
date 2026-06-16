@@ -23,14 +23,20 @@ object FiberResult {
    * @param triggers Triggered events for other fibers
    * @param spawns Child fibers to create (state machines only)
    * @param returnValue Return value (Some for scripts, None for state machines)
+   * @param emittedEvents User-defined events emitted for external consumption
+   * @param assetTransfers Fiber-held asset custody transfers (`_transferAsset`, asset-model.md §10). A safe
+   *                       `= List.empty` default is fine ONLY because `FiberResult` is an in-process engine
+   *                       type, never a signed canonical (signing-canonical invariant #1 governs signed
+   *                       messages only). The combiner re-checks holder-ownership before applying any of these.
    */
   final case class Success(
-    newStateData:  JsonLogicValue,
-    newStateId:    Option[StateId],
-    triggers:      List[FiberTrigger],
-    spawns:        List[SpawnDirective],
-    returnValue:   Option[JsonLogicValue],
-    emittedEvents: List[EmittedEvent] = List.empty
+    newStateData:   JsonLogicValue,
+    newStateId:     Option[StateId],
+    triggers:       List[FiberTrigger],
+    spawns:         List[SpawnDirective],
+    returnValue:    Option[JsonLogicValue],
+    emittedEvents:  List[EmittedEvent] = List.empty,
+    assetTransfers: List[FiberEffect.AssetTransferred] = List.empty
   ) extends FiberResult
 
   /**

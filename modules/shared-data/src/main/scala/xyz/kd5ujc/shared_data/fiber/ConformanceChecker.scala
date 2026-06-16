@@ -52,6 +52,9 @@ object ConformanceChecker {
       rv.shape match {
         case RegistryShape.Machine(machineShape) => check(machineShape.stateMessage, value)
         case _: RegistryShape.Script             => List.empty
+        // Asset-state conformance is gated by the asset combiner (asset-model.md §5d), not this
+        // fiber-state checker — a SchemaBinding here resolves only SchemaPackages (see strictVersion).
+        case _: RegistryShape.AssetPolicy => List.empty
       }
     }
 

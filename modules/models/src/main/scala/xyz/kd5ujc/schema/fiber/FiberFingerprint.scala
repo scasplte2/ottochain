@@ -46,6 +46,7 @@ object FiberFingerprint {
   def tld(kind: FiberKind): String = kind match {
     case FiberKind.StateMachine => "machine"
     case FiberKind.Script       => "script"
+    case FiberKind.Asset        => "asset"
   }
 
   /**

@@ -15,7 +15,7 @@ import io.constellationnetwork.security.signature.Signed
 
 import xyz.kd5ujc.schema.Updates._
 import xyz.kd5ujc.schema.{CalculatedState, OnChain}
-import xyz.kd5ujc.shared_data.lifecycle.validate.{FiberValidator, RegistryValidator, ScriptValidator}
+import xyz.kd5ujc.shared_data.lifecycle.validate.{AssetValidator, FiberValidator, RegistryValidator, ScriptValidator}
 
 import org.typelevel.log4cats.SelfAwareStructuredLogger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
@@ -71,6 +71,7 @@ object Validator {
             val fiberL1 = new FiberValidator.L1Validator[F](checkpoint.state)
             val scriptL1 = new ScriptValidator.L1Validator[F](checkpoint.state)
             val registryL1 = new RegistryValidator.L1Validator[F]
+            val assetL1 = new AssetValidator.L1Validator[F](checkpoint.state)
 
             val updateName = update.getClass.getSimpleName
             val fiberId = update match {
@@ -85,6 +86,10 @@ object Validator {
               case u: PublishScriptVersion   => u.fiberId.toString
               case u: SetVersionStatus       => u.fiberId.toString
               case u: RegisterAlias          => u.fiberId.toString
+              case u: CreateAssetPolicy      => u.fiberId.toString
+              case u: MintAsset              => u.fiberId.toString
+              case u: ApplyMorphism          => u.fiberId.toString
+              case u: AuthorizeCompose       => u.fiberId.toString
             }
             val cids = checkpoint.state.fiberCommits.keys.map(_.toString.take(8)).mkString(", ")
 
@@ -106,6 +111,10 @@ object Validator {
                 case u: PublishScriptVersion   => registryL1.publishScriptVersion(u)
                 case u: SetVersionStatus       => registryL1.setStatus(u)
                 case u: RegisterAlias          => registryL1.registerAlias(u)
+                case u: CreateAssetPolicy      => assetL1.createAssetPolicy(u)
+                case u: MintAsset              => assetL1.mintAsset(u)
+                case u: ApplyMorphism          => assetL1.applyMorphism(u)
+                case u: AuthorizeCompose       => assetL1.authorizeCompose(u)
               }
               _ <- logger.info(
                 s"[DL1-validate] $updateName fiberId=${fiberId.take(8)}... " +
@@ -142,6 +151,16 @@ object Validator {
           // partial-block-accept fix is the real solution, deferred.)
           val registryL1 = new RegistryValidator.L1Validator[F]
 
+          // Asset ops use L1 (structural) validation ONLY here — the SAME TOCTOU rule as registry ops, made
+          // explicit by CLAUDE.md invariant #3: validateSignedUpdate (block acceptance) must NEVER read
+          // CalculatedState registry/asset/nonce lineage. Every asset stateful check (policy allowlists,
+          // supply cap, mint policy, nonce uniqueness, composite membership, meet/codomain) is a TOCTOU
+          // block-poisoning hazard — a concurrent publish/mint/yank flips a once-valid op to Invalid at ML0
+          // re-validation and tessellation drops the ENTIRE DL1 block (all-or-nothing). Those checks live
+          // ONLY in the AssetCombiner (Phase 4) as graceful CombineRejected -> RejectionReceipt. ApplyMorphism
+          // L1 reads only OnChain.assetCommits (the safe behavior bitmask + sequence number), never lineage.
+          val assetL1 = new AssetValidator.L1Validator[F](current.onChain)
+
           signedUpdate.value match {
             case u: CreateStateMachine     => fiberCombined.createFiber(u)
             case u: TransitionStateMachine => fiberCombined.processEvent(u)
@@ -154,6 +173,10 @@ object Validator {
             case u: PublishScriptVersion   => registryL1.publishScriptVersion(u)
             case u: SetVersionStatus       => registryL1.setStatus(u)
             case u: RegisterAlias          => registryL1.registerAlias(u)
+            case u: CreateAssetPolicy      => assetL1.createAssetPolicy(u)
+            case u: MintAsset              => assetL1.mintAsset(u)
+            case u: ApplyMorphism          => assetL1.applyMorphism(u)
+            case u: AuthorizeCompose       => assetL1.authorizeCompose(u)
           }
         }
 

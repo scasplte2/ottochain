@@ -13,6 +13,8 @@ import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.hash.Hash
 import io.constellationnetwork.security.signature.signature.SignatureProof
 
+import xyz.kd5ujc.schema.Records.AssetRecord
+import xyz.kd5ujc.schema.asset.AssetHolder
 import xyz.kd5ujc.schema.fiber.FiberLogEntry.ScriptInvocation
 import xyz.kd5ujc.schema.fiber.{FiberInput, ReservedKeys}
 import xyz.kd5ujc.schema.{CalculatedState, Records}
@@ -80,6 +82,43 @@ object ContextProvider {
   ): ContextProvider[F] =
     new ContextProvider[F] {
 
+      /**
+       * Holder-keyed index of fiber-held assets (asset-model.md §10), built ONCE per provider construction —
+       * NOT an O(all-assets) filter per evaluation (R20 perf cliff). Maps each holding fiber id to its held
+       * `AssetRecord`s; consulted by [[heldAssetsContext]] when a fiber's guards/effects are evaluated.
+       */
+      private val heldAssetsByFiber: Map[UUID, List[AssetRecord]] =
+        calculatedState.assets.values.toList.foldLeft(Map.empty[UUID, List[AssetRecord]]) { (acc, asset) =>
+          asset.holder match {
+            case AssetHolder.Fiber(fid) => acc.updated(fid, asset :: acc.getOrElse(fid, List.empty))
+            case AssetHolder.Wallet(_)  => acc
+          }
+        }
+
+      /**
+       * The `heldAssets` projection injected into a fiber's evaluation context: a map `assetId → {behavior,
+       * amount, expiresAt}` over the assets this fiber holds, so guards can reason about held state, e.g.
+       * `{ ">": [{ "var": "heldAssets.<id>.expiresAt" }, { "var": "$ordinal" }] }`. Deterministic and bounded
+       * (one entry per held asset). An empty map for a fiber that holds nothing.
+       */
+      private def heldAssetsContext(fiberId: UUID): MapValue =
+        MapValue(
+          heldAssetsByFiber
+            .getOrElse(fiberId, List.empty)
+            .map { asset =>
+              asset.assetId.toString -> (MapValue(
+                Map(
+                  ReservedKeys.BEHAVIOR -> IntValue(BigInt(asset.behavior.bits)),
+                  ReservedKeys.AMOUNT   -> IntValue(BigInt(asset.amount)),
+                  ReservedKeys.EXPIRES_AT -> asset.expiresAt.fold(NullValue: JsonLogicValue)(o =>
+                    IntValue(o.value.value)
+                  )
+                )
+              ): JsonLogicValue)
+            }
+            .toMap
+        )
+
       def buildContext(
         fiber:        Records.FiberRecord,
         input:        FiberInput,
@@ -133,7 +172,8 @@ object ContextProvider {
             ReservedKeys.MACHINES           -> machinesData,
             ReservedKeys.PARENT             -> parentData,
             ReservedKeys.CHILDREN           -> childrenData,
-            ReservedKeys.SCRIPTS            -> scriptsData
+            ReservedKeys.SCRIPTS            -> scriptsData,
+            ReservedKeys.HELD_ASSETS        -> heldAssetsContext(fiber.fiberId)
           )
         )
 
@@ -173,7 +213,8 @@ object ContextProvider {
             ReservedKeys.LAST_SNAPSHOT_HASH -> StrValue(lastSnapshotHash.value),
             ReservedKeys.EPOCH_PROGRESS     -> IntValue(epochProgress.value.value),
             ReservedKeys.PARENT             -> parentData,
-            ReservedKeys.CHILDREN           -> childrenData
+            ReservedKeys.CHILDREN           -> childrenData,
+            ReservedKeys.HELD_ASSETS        -> heldAssetsContext(fiber.fiberId)
           )
         )
 

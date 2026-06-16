@@ -10,9 +10,13 @@ import cats.{Monad, ~>}
 
 import io.constellationnetwork.metagraph_sdk.json_logic._
 import io.constellationnetwork.metagraph_sdk.json_logic.core.StrValue
+import io.constellationnetwork.schema.address.{Address, DAGAddressRefined}
 
+import xyz.kd5ujc.schema.asset.AssetHolder
 import xyz.kd5ujc.schema.fiber._
 import xyz.kd5ujc.shared_data.fiber.core._
+
+import eu.timepit.refined.refineV
 
 /**
  * Extracts side effects from transition effect results.
@@ -57,10 +61,11 @@ object EffectExtractor {
   /**
    * Extract ALL side effects from a transition's effect result + expression as a single ordered list
    * of typed [[FiberEffect]]s. `_triggers` and `_scriptCall` become `Triggered`; `_spawn` directives
-   * become `Spawned`; `_emit` events become `Emitted`.
+   * become `Spawned`; `_emit` events become `Emitted`; `_transferAsset` directives become `AssetTransferred`.
    *
-   * Order matches the prior per-key extraction (triggers, then script call, then spawns, then emitted),
-   * and gas for payload/args evaluation is charged in that order via [[MeteredEvaluator]].
+   * Order matches the prior per-key extraction (triggers, then script call, then spawns, then emitted, then
+   * asset transfers), and gas for payload/args/directive evaluation is charged in that order via
+   * [[MeteredEvaluator]].
    */
   def extractEffects[F[_]: Async, G[_]: Monad](
     effectResult:  JsonLogicValue,
@@ -69,14 +74,16 @@ object EffectExtractor {
     sourceFiberId: UUID
   )(implicit S: Stateful[G, ExecutionState], A: Ask[G, FiberContext], lift: F ~> G): G[List[FiberEffect]] =
     for {
-      triggers   <- extractTriggerEvents[F, G](effectResult, contextData, sourceFiberId)
-      scriptCall <- extractScriptCall[F, G](effectResult, contextData, sourceFiberId)
+      triggers       <- extractTriggerEvents[F, G](effectResult, contextData, sourceFiberId)
+      scriptCall     <- extractScriptCall[F, G](effectResult, contextData, sourceFiberId)
+      assetTransfers <- extractAssetTransfers[F, G](effectResult, contextData)
     } yield {
       val spawns = extractSpawnDirectivesFromExpression(effectExpr)
       val emitted = extractEmittedEvents(effectResult)
       (triggers ++ scriptCall.toList).map(FiberEffect.Triggered) ++
       spawns.map(FiberEffect.Spawned) ++
-      emitted.map(FiberEffect.Emitted)
+      emitted.map(FiberEffect.Emitted) ++
+      assetTransfers
     }
 
   /**
@@ -161,6 +168,77 @@ object EffectExtractor {
         )).value
 
       case _ => none[FiberTrigger].pure[G]
+    }
+
+  /**
+   * Extract fiber-held asset custody transfers (`_transferAsset`, asset-model.md §10) with gas metering via
+   * StateT. Mirrors [[extractTriggerEvents]] EXACTLY: the directive's `assetId`/`recipient` JSON-Logic
+   * expressions are RESOLVED here (against the transition context), so the resulting [[FiberEffect.AssetTransferred]]
+   * carries values, not logic. Gas is charged under [[GasExhaustionPhase.Morphism]]. A malformed directive
+   * (non-UUID `assetId`, or a `recipient` that resolves to neither a UUID nor a DAG address) is DROPPED —
+   * the same fail-silent mode the other extractors use for malformed items.
+   *
+   * SECURITY: this extractor carries NO authorization. The combiner ([[xyz.kd5ujc.shared_data.lifecycle.combine.AssetCombiner.applyFiberTransfer]])
+   * enforces `holder == AssetHolder.Fiber(emittingFiberId)` before applying any extracted transfer (R1).
+   */
+  def extractAssetTransfers[F[_]: Async, G[_]: Monad](
+    effectResult: JsonLogicValue,
+    contextData:  JsonLogicValue
+  )(implicit
+    S:    Stateful[G, ExecutionState],
+    A:    Ask[G, FiberContext],
+    lift: F ~> G
+  ): G[List[FiberEffect.AssetTransferred]] =
+    extractArrayByKey(effectResult, ReservedKeys.TRANSFER_ASSET)
+      .flatTraverse { item =>
+        parseAssetTransfer[F, G](item, contextData).map(_.toList)
+      }
+
+  private def parseAssetTransfer[F[_]: Async, G[_]: Monad](
+    value:       JsonLogicValue,
+    contextData: JsonLogicValue
+  )(implicit
+    S:    Stateful[G, ExecutionState],
+    A:    Ask[G, FiberContext],
+    lift: F ~> G
+  ): G[Option[FiberEffect.AssetTransferred]] =
+    value match {
+      case MapValue(transferMap) =>
+        (for {
+          assetIdValue <- OptionT.fromOption[G](transferMap.get(ReservedKeys.ASSET_ID))
+          assetIdExpr = ExpressionParser.valueToExpression(assetIdValue)
+          // Charge gas for assetId resolution under the Morphism phase.
+          evaluatedAssetId <- OptionT(
+            MeteredEvaluator.evalOpt[F, G](assetIdExpr, contextData, GasExhaustionPhase.Morphism)
+          )
+          assetIdStr <- OptionT.fromOption[G](evaluatedAssetId match {
+            case StrValue(s) => Some(s); case _ => None
+          })
+          assetId <- OptionT.fromOption[G](scala.util.Try(UUID.fromString(assetIdStr)).toOption)
+
+          recipientValue <- OptionT.fromOption[G](transferMap.get(ReservedKeys.RECIPIENT))
+          recipientExpr = ExpressionParser.valueToExpression(recipientValue)
+          // Charge gas for recipient resolution under the Morphism phase.
+          evaluatedRecipient <- OptionT(
+            MeteredEvaluator.evalOpt[F, G](recipientExpr, contextData, GasExhaustionPhase.Morphism)
+          )
+          recipientStr <- OptionT.fromOption[G](evaluatedRecipient match {
+            case StrValue(s) => Some(s); case _ => None
+          })
+          recipient <- OptionT.fromOption[G](parseRecipient(recipientStr))
+        } yield FiberEffect.AssetTransferred(assetId = assetId, recipient = recipient)).value
+      case _ => none[FiberEffect.AssetTransferred].pure[G]
+    }
+
+  /**
+   * Disambiguate a recipient string into an [[AssetHolder]]: a UUID-shaped string is a fiber custody target
+   * ([[AssetHolder.Fiber]]); otherwise a valid DAG address is a wallet ([[AssetHolder.Wallet]]). Neither →
+   * `None` (malformed, dropped). UUID is tried FIRST so a UUID never accidentally validates as an address.
+   */
+  private def parseRecipient(s: String): Option[AssetHolder] =
+    scala.util.Try(UUID.fromString(s)).toOption match {
+      case Some(uuid) => Some(AssetHolder.Fiber(uuid))
+      case None       => refineV[DAGAddressRefined](s).toOption.map(refined => AssetHolder.Wallet(Address(refined)))
     }
 
   def extractEmittedEvents(effectResult: JsonLogicValue): List[EmittedEvent] =

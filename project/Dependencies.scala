@@ -42,6 +42,8 @@ object Dependencies {
     val weaverDiscipline = "org.typelevel" %% "weaver-discipline" % V.weaver
     val weaverScalaCheck = "org.typelevel" %% "weaver-scalacheck" % V.weaver
 
+    val catsLaws = "org.typelevel" %% "cats-laws" % V.cats
+
   }
 
   object CompilerPlugin {

@@ -189,9 +189,22 @@ class RegistryCombiner[F[_]: Async: SecurityProvider](
                   .raiseError[RegistryEntry](CombineRejected(s"status change rejected for ${ss.name.render}: $e")),
               l => entry.copy(target = RegistryTarget.SchemaPackage(l)).pure[F]
             )
-        case other =>
+        // Asset policies are versioned packages too (asset-model.md §3 lifecycle): Deprecate/Yank an asset
+        // policy version through the same lineage primitive. A Yanked version blocks new MintAsset (mint uses
+        // VersionLineage.resolve, which excludes Yanked) while existing instances — pinned via SchemaBinding
+        // and resolved by a direct versions.get in AssetCombiner — keep functioning (never auto-burned).
+        case RegistryTarget.AssetPolicyPackage(lineage) =>
+          lineage
+            .setStatus(ss.version, ss.status)
+            .fold(
+              e =>
+                Async[F]
+                  .raiseError[RegistryEntry](CombineRejected(s"status change rejected for ${ss.name.render}: $e")),
+              l => entry.copy(target = RegistryTarget.AssetPolicyPackage(l)).pure[F]
+            )
+        case RegistryTarget.InstanceAlias(_) =>
           Async[F].raiseError[RegistryEntry](
-            CombineRejected(s"${ss.name.render} is not a schema package (${other.getClass.getSimpleName})")
+            CombineRejected(s"${ss.name.render} is an instance alias, not a versioned package")
           )
       }
       result <- current.withRegistryEntry[F](ss.name, updated)
@@ -257,6 +270,12 @@ class RegistryCombiner[F[_]: Async: SecurityProvider](
           CombineRejected(
             "cannot register a .package name as a fiber alias (use PublishMachineVersion/PublishScriptVersion)"
           )
+        )
+      // .asset alias dispatch (routing to the `assets` map / policy package) is Phase 4 (asset-model §5c).
+      // Until then a .asset name cannot be registered as a fiber alias.
+      case NameTld.Asset =>
+        Async[F].raiseError[Set[Address]](
+          CombineRejected("cannot register a .asset name as a fiber alias (asset alias dispatch is not yet wired)")
         )
     }
 }

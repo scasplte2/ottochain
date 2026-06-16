@@ -11,7 +11,13 @@ import io.constellationnetwork.security.signature.Signed
 import xyz.kd5ujc.schema.Updates.OttochainMessage
 import xyz.kd5ujc.schema.fiber.{ExecutionLimits, FiberLogEntry}
 import xyz.kd5ujc.schema.{CalculatedState, OnChain, Updates}
-import xyz.kd5ujc.shared_data.lifecycle.combine.{CombineRejected, FiberCombiner, RegistryCombiner, ScriptCombiner}
+import xyz.kd5ujc.shared_data.lifecycle.combine.{
+  AssetCombiner,
+  CombineRejected,
+  FiberCombiner,
+  RegistryCombiner,
+  ScriptCombiner
+}
 import xyz.kd5ujc.shared_data.lifecycle.validate.Limits
 import xyz.kd5ujc.shared_data.syntax.all._
 
@@ -56,6 +62,7 @@ object Combiner {
         val fiberCombiner = FiberCombiner[F](previous, ctx, executionLimits)
         val scriptCombiner = ScriptCombiner[F](previous, ctx, executionLimits)
         val registryCombiner = RegistryCombiner[F](previous, ctx, Limits.MaxRegistryBundleBytes)
+        val assetCombiner = AssetCombiner[F](previous, ctx, Limits.MaxRegistryBundleBytes)
 
         val dispatched: F[DataState[OnChain, CalculatedState]] = update.value match {
           case u: Updates.CreateStateMachine     => fiberCombiner.createStateMachineFiber(Signed(u, update.proofs))
@@ -69,6 +76,10 @@ object Combiner {
           case u: Updates.PublishScriptVersion   => registryCombiner.publishScriptVersion(Signed(u, update.proofs))
           case u: Updates.SetVersionStatus       => registryCombiner.setVersionStatus(Signed(u, update.proofs))
           case u: Updates.RegisterAlias          => registryCombiner.registerAlias(Signed(u, update.proofs))
+          case u: Updates.CreateAssetPolicy      => assetCombiner.createAssetPolicy(Signed(u, update.proofs))
+          case u: Updates.MintAsset              => assetCombiner.mintAsset(Signed(u, update.proofs))
+          case u: Updates.ApplyMorphism          => assetCombiner.applyMorphism(Signed(u, update.proofs))
+          case u: Updates.AuthorizeCompose       => assetCombiner.authorizeCompose(Signed(u, update.proofs))
         }
 
         // Classify & accumulate (no short-circuit): a deterministic business rejection (CombineRejected) must

@@ -21,6 +21,8 @@ import io.constellationnetwork.security.{Hashed, SecurityProvider}
 
 import xyz.kd5ujc.schema.OnChain
 
+import eu.timepit.refined.types.numeric.NonNegLong
+
 import Generators.{genHashedCurrencyIncSnapshot, generateValueWithRetry}
 
 object Mock {
@@ -29,8 +31,28 @@ object Mock {
 
   object MockL0NodeContext {
 
-    def make[F[_]: Sync]: F[MockL0NodeContext[F]] = {
-      val currencySnapshot = generateValueWithRetry(genHashedCurrencyIncSnapshot).some
+    /**
+     * Deterministic "last currency snapshot" ordinal for the mock. `getCurrentOrdinal`
+     * (xyz.kd5ujc.shared_data.syntax.L0NodeContextOps) derives the combiner's current ordinal from
+     * `getLastCurrencySnapshot.signed.value.ordinal.next`, so any combiner check that relates the current
+     * ordinal to an update field (e.g. `AuthorizeCompose.expiresAt`) is seed-dependent if this ordinal is
+     * random. `genHashedCurrencyIncSnapshot` draws a RANDOM `NonNegLong` ordinal (Generators.genSnapshotOrdinal),
+     * whose only failure draw is `Long.MaxValue` — there `.next` WRAPS to 0, flipping `currentOrdinal` to 0 and
+     * intermittently breaking inclusive `currentOrdinal <= expiresAt` assertions. We pin it to a small, fixed,
+     * non-boundary value: `.next` is a small positive ordinal (`> 0` and well below `Long.MaxValue`), so expiry
+     * semantics are deterministic. The rest of `genHashedCurrencyIncSnapshot` (hash, proofs, etc.) stays random.
+     */
+    val fixedOrdinal: SnapshotOrdinal = SnapshotOrdinal(NonNegLong.unsafeFrom(1000L))
+
+    /** Deterministic default: a fixed current ordinal (see [[fixedOrdinal]]). */
+    def make[F[_]: Sync]: F[MockL0NodeContext[F]] = makeAt(fixedOrdinal)
+
+    /** Build a mock L0 context whose `getLastCurrencySnapshot` reports `lastOrdinal` (so `getCurrentOrdinal` is `lastOrdinal.next`). */
+    def makeAt[F[_]: Sync](lastOrdinal: SnapshotOrdinal): F[MockL0NodeContext[F]] = {
+      val base = generateValueWithRetry(genHashedCurrencyIncSnapshot)
+      // Pin ONLY the ordinal; keep the rest of the randomly generated snapshot intact.
+      val pinned = base.signed.value.copy(ordinal = lastOrdinal)
+      val currencySnapshot = Hashed(Signed(pinned, base.signed.proofs), base.hash, base.proofsHash).some
 
       Sync[F].delay(
         new MockL0NodeContext[F] {

@@ -3,6 +3,7 @@ package xyz.kd5ujc.schema.registry
 import scala.collection.immutable.SortedMap
 
 import xyz.kd5ujc.schema.CodecConfiguration._
+import xyz.kd5ujc.schema.asset.{MorphismKind, MorphismSpec, SupplyPolicy, TokenBehavior}
 
 import derevo.circe.magnolia.{customizableDecoder, customizableEncoder}
 import derevo.derive
@@ -84,7 +85,8 @@ object ScriptShape {
 
 /**
  * ADT for the advisory schema projection stored in [[RegisteredVersion]]. Exactly one variant is present:
- * [[RegistryShape.Machine]] for state-machine packages; [[RegistryShape.Script]] for script packages.
+ * [[RegistryShape.Machine]] for state-machine packages; [[RegistryShape.Script]] for script packages;
+ * [[RegistryShape.AssetPolicy]] for asset-policy packages (docs/proposals/asset-model.md §5a).
  */
 sealed trait RegistryShape {
   def allMessages: List[MessageShape]
@@ -102,13 +104,36 @@ object RegistryShape {
     def allMessages: List[MessageShape] = scriptShape.allMessages
   }
 
-  // Machine encodes as {"machineShape":{...}}, Script as {"scriptShape":{...}} — distinct field names
-  // act as a natural discriminator, no explicit type tag needed.
+  /**
+   * The on-chain projection of an asset-policy version: the instance [[TokenBehavior]], the [[SupplyPolicy]]
+   * (mint/burn/cap authority), the per-kind [[MorphismSpec]] table, and the asset-state [[MessageShape]]
+   * (for the strict conformance gate, asset-model.md §5d). `morphisms` is a REQUIRED field (no
+   * `= SortedMap.empty` default — signing-canonical invariant #1: emptiness is meaningful and must be sent
+   * explicitly, never defaulted by the decoder).
+   */
+  @derive(customizableEncoder, customizableDecoder)
+  final case class AssetPolicy(
+    behavior:   TokenBehavior,
+    supply:     SupplyPolicy,
+    morphisms:  SortedMap[MorphismKind, MorphismSpec],
+    stateShape: MessageShape
+  ) extends RegistryShape {
+    def allMessages: List[MessageShape] = List(stateShape)
+  }
+
+  // Machine encodes as {"machineShape":{...}}, Script as {"scriptShape":{...}}, AssetPolicy as
+  // {"behavior":..,"supply":..,"morphisms":..,"stateShape":..} — disjoint field-name sets act as a
+  // natural discriminator, no explicit type tag needed.
   implicit val encoder: io.circe.Encoder[RegistryShape] = io.circe.Encoder.instance {
-    case m: Machine => io.circe.Encoder[Machine].apply(m)
-    case s: Script  => io.circe.Encoder[Script].apply(s)
+    case m: Machine     => io.circe.Encoder[Machine].apply(m)
+    case s: Script      => io.circe.Encoder[Script].apply(s)
+    case a: AssetPolicy => io.circe.Encoder[AssetPolicy].apply(a)
   }
 
   implicit val decoder: io.circe.Decoder[RegistryShape] =
-    io.circe.Decoder[Machine].map[RegistryShape](identity).or(io.circe.Decoder[Script].map[RegistryShape](identity))
+    io.circe
+      .Decoder[Machine]
+      .map[RegistryShape](identity)
+      .or(io.circe.Decoder[Script].map[RegistryShape](identity))
+      .or(io.circe.Decoder[AssetPolicy].map[RegistryShape](identity))
 }

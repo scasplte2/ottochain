@@ -85,7 +85,7 @@ class StateMachineTriggerHandler[F[_]: Async: SecurityProvider, G[_]: Monad](
       ordinal <- ExecutionOps.askOrdinal[G]
       outcome <- FiberEvaluator.make[F, G](calculatedState).evaluate(sm, trigger.input, List.empty)
       result <- outcome match {
-        case FiberResult.Success(newStateData, newStateId, triggers, _, _, emittedEvents) =>
+        case FiberResult.Success(newStateData, newStateId, triggers, _, _, emittedEvents, assetTransfers) =>
           val receipt = EventReceipt.success(
             sm = sm,
             eventName = trigger.input.key,
@@ -112,7 +112,8 @@ class StateMachineTriggerHandler[F[_]: Async: SecurityProvider, G[_]: Monad](
             .as(
               TriggerHandlerResult.Success(
                 updatedState = updatedState,
-                cascadeTriggers = triggers
+                cascadeTriggers = triggers,
+                assetTransfers = assetTransfers
               ): TriggerHandlerResult
             )
 

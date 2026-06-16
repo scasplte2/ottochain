@@ -12,10 +12,11 @@ import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.Signed
 
 import xyz.kd5ujc.schema.fiber.FiberLogEntry.EventReceipt
-import xyz.kd5ujc.schema.fiber.{FiberLogEntry, FiberOrdinal, _}
+import xyz.kd5ujc.schema.fiber.{FiberEffect, FiberLogEntry, FiberOrdinal, _}
 import xyz.kd5ujc.schema.registry._
 import xyz.kd5ujc.schema.{CalculatedState, OnChain, Records, Updates}
 import xyz.kd5ujc.shared_data.fiber.{ConformanceChecker, FiberEngine}
+import xyz.kd5ujc.shared_data.lifecycle.validate.Limits
 import xyz.kd5ujc.shared_data.syntax.all._
 
 /**
@@ -133,8 +134,8 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
     outcome <- orchestrator.process(update.fiberId, input, proofsList)
 
     newState <- outcome match {
-      case TransactionResult.Committed(updatedFibers, updatedScripts, logEntries, _, _, _) =>
-        handleCommittedOutcome(updatedFibers, updatedScripts, logEntries)
+      case TransactionResult.Committed(updatedFibers, updatedScripts, logEntries, _, _, _, assetTransfers) =>
+        handleCommittedOutcome(updatedFibers, updatedScripts, logEntries, assetTransfers)
 
       case TransactionResult.Aborted(reason, gasUsed, _) =>
         handleAbortedOutcome(update.fiberId, update.eventName, reason, gasUsed, currentOrdinal)
@@ -254,8 +255,11 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
     outcome <- orchestrator.migrate(update.fiberId, update.newDefinition, newBinding, update.migration)
 
     newState <- outcome match {
-      case TransactionResult.Committed(updatedFibers, updatedScripts, logEntries, _, _, _) =>
-        handleCommittedOutcome(updatedFibers, updatedScripts, logEntries)
+      // A migration pass MUST NOT fabricate `_transferAsset` of held assets (asset-model.md §10, R34); the
+      // engine's migration path never produces asset transfers, but the same holder-checked entry point is
+      // used here defensively so any future migration-emitted transfer is still gated by R1.
+      case TransactionResult.Committed(updatedFibers, updatedScripts, logEntries, _, _, _, assetTransfers) =>
+        handleCommittedOutcome(updatedFibers, updatedScripts, logEntries, assetTransfers)
 
       case TransactionResult.Aborted(reason, gasUsed, _) =>
         handleAbortedOutcome(update.fiberId, "__upgrade__", reason, gasUsed, currentOrdinal)
@@ -314,14 +318,27 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
   /**
    * Handles a committed transaction outcome.
    *
-   * Applies fiber/script record updates, then appends log entries to OnChain.latestLogs.
+   * Applies fiber/script record updates, appends log entries to OnChain.latestLogs, then — within the SAME
+   * combiner pass — applies any `_transferAsset` effects the transition emitted (the §9/§10 return channel,
+   * R2) through [[AssetCombiner.applyFiberTransfers]], which enforces the holder-ownership defense (R1) and
+   * the no-reentrancy / mutation bound (R20). A rejected transfer raises `CombineRejected`, which
+   * `Combiner.insert` turns into a graceful `RejectionReceipt` for the whole update (#154) — the fiber's state
+   * mutation is discarded along with it (all-or-nothing; never a partial apply).
    */
   private def handleCommittedOutcome(
     updatedFibers:  Map[UUID, Records.StateMachineFiberRecord],
     updatedScripts: Map[UUID, Records.ScriptFiberRecord],
-    logEntries:     List[FiberLogEntry]
+    logEntries:     List[FiberLogEntry],
+    assetTransfers: Map[UUID, List[FiberEffect.AssetTransferred]]
   ): F[DataState[OnChain, CalculatedState]] =
-    current.withFibersAndScripts[F](updatedFibers, updatedScripts).map(_.appendLogs(logEntries))
+    for {
+      withFibers <- current.withFibersAndScripts[F](updatedFibers, updatedScripts).map(_.appendLogs(logEntries))
+      result <-
+        if (assetTransfers.isEmpty) withFibers.pure[F]
+        else
+          AssetCombiner[F](withFibers, ctx, Limits.MaxRegistryBundleBytes)
+            .applyFiberTransfers(withFibers, assetTransfers)
+    } yield result
 
   /**
    * Handles an aborted transaction outcome.
