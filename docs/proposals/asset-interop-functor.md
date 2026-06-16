@@ -402,8 +402,11 @@ metadata (§6).
   structural conservation/identity only" is *exactly* Otto's `AssetCommit`-on-`OnChain` O(1) check;
   conservation-as-structural-invariant (Taproot MS-SUM tree, Charms sum-check).
 - **LOST:** the off-chain client-side-validation / recursive-proof *substrate* (Otto re-implements
-  conservation as a deterministic combiner invariant rather than a zk proof — and the lesson is that
-  this is a *feature*, given the SPL ZK-ElGamal soundness failure of June 2025); the RGB/Charms
+  conservation as a deterministic combiner invariant rather than as client-side recursive proofs — and
+  the lesson is that this is a *feature* for our public-readable thesis; the relevant cautionary tale,
+  the June-2025 SPL break, was a bespoke *ElGamal encryption + custom range/equality proof system*, so
+  the guiding constraint is **"no novel proof-system / encryption,"** which still admits a deterministic
+  combiner invariant — and, where hiding is wanted, a proof routed through metakit's (not-yet-publicly-audited) verifier rather than a hand-rolled transcript); the RGB/Charms
   data-availability model.
 - **Custody:** Charms' chain-agnostic "beaming" is the model to study — "the proof is the bridge." For
   lock-mint into Otto, the custody fiber holds the Bitcoin-side claim; provenance =
@@ -448,8 +451,13 @@ metadata (§6).
   `Governed` morphisms.
 - **LOST:** the **extension-set-frozen-at-mint** limitation (Otto's versionable fibers + `UpgradeFiber`
   *fix* this — a strict improvement, so it's a "loss" only of a misfeature); confidential-transfer ZK
-  (Otto's readable-JLVM-first thesis deliberately omits the novel-ZK-primitive liability that broke
-  SPL in June 2025); interest-bearing UI-amount trick.
+  is **not** lost-because-unbuildable — metakit-sdk already ships a complete SP1 shielded-transfer
+  circuit (Poseidon note commitments + nullifiers + Poseidon-Merkle membership + value conservation +
+  range), verified on-chain by the existing `groth16_verify` opcode, so it is *reachable via the
+  endorsed ZkVerify path* (the SPL June-2025 break was a bespoke ElGamal-encryption + custom range/equality
+  proof system, not this audited-pattern circuit). What Otto's readable-JLVM-first thesis defers is
+  JLVM-*state-in-the-clear* for confidential amounts — a future shielded-`AssetPolicy` subsystem
+  (`docs/proposals/asset-shielded-mode.md`), not a missing primitive; interest-bearing UI-amount trick.
 - **Custody:** **burn-mint** for issuer-controlled; **lock-mint** for bridged (Wormhole-style, with the
   wrapped mint's authorities held by a custody fiber). Provenance `(originChainId, mintAddress)`.
 
