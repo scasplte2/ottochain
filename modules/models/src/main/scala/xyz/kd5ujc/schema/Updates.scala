@@ -7,12 +7,14 @@ import scala.collection.immutable.SortedMap
 
 import io.constellationnetwork.currency.dataApplication.DataUpdate
 import io.constellationnetwork.metagraph_sdk.json_logic.{JsonLogicExpression, JsonLogicValue}
+import io.constellationnetwork.schema.SnapshotOrdinal
 import io.constellationnetwork.schema.address.Address
 import io.constellationnetwork.security.signature.Signed
 
 import xyz.kd5ujc.schema.CodecConfiguration._
+import xyz.kd5ujc.schema.asset.{AssetHolder, MorphismKind, MorphismSpec, OriginProvenance, SupplyPolicy, TokenBehavior}
 import xyz.kd5ujc.schema.fiber.{AccessControlPolicy, FiberOrdinal, StateMachineDefinition}
-import xyz.kd5ujc.schema.registry.{MachineShape, RegistryName, RegistryStatus, SchemaRef, ScriptShape, SemVer}
+import xyz.kd5ujc.schema.registry._
 
 import derevo.circe.magnolia.{customizableDecoder, customizableEncoder}
 import derevo.derive
@@ -226,6 +228,97 @@ object Updates {
     val fiberId: UUID = RegistryOp.routingId(name)
   }
 
+  /**
+   * Signed asset operations (asset-model.md §7). Phase 3 ships the SIGNED message shapes, the L1 STRUCTURAL
+   * gate, and a TOTAL combiner dispatch; the stateful asset engine (meet/codomain/holder transfer/mint into
+   * state/nonce consumption) is Phase 4's `AssetCombiner`.
+   *
+   * Signing-canonical invariant #1 (docs/signing-canonical-and-validation.md): EVERY field below is
+   * `Option[T]` (omit-safe — `None` -> `null` -> dropped by `dropNulls`) or REQUIRED with NO default. There
+   * is NO non-`Option` field with a default (`Boolean = false` / `SortedMap = empty` / `Long = 0`), which
+   * would silently diverge the signed vs verified canonical and reject the message `InvalidSignature`.
+   * `PublishVersionSigningCanonicalSuite` guards every variant here.
+   */
+  sealed trait AssetOp
+
+  /**
+   * Publish an asset-policy PACKAGE version (npm-publish semantics, parallel to [[PublishMachineVersion]]):
+   * the first publish for a `.asset` name claims it and makes the signer the owner. Carries the typed
+   * [[xyz.kd5ujc.schema.registry.RegistryShape.AssetPolicy]] payload spread across its own fields
+   * (`behavior`/`supply`/`morphisms`/`stateShape`), reusing the registry lineage machinery verbatim in the
+   * combiner. `morphisms` is REQUIRED (presence required; emptiness is meaningful, never decoder-defaulted).
+   */
+  @derive(customizableDecoder, customizableEncoder)
+  final case class CreateAssetPolicy(
+    name:       RegistryName,
+    version:    SemVer,
+    behavior:   TokenBehavior,
+    supply:     SupplyPolicy,
+    morphisms:  SortedMap[MorphismKind, MorphismSpec],
+    stateShape: MessageShape,
+    metadata:   Option[SortedMap[String, String]] = None
+  ) extends AssetOp
+      with OttochainMessage {
+    val fiberId: UUID = RegistryOp.routingId(name)
+  }
+
+  /**
+   * Mint a new asset INSTANCE against a resolved policy version. `policyRef` is a [[SchemaRef]] (name +
+   * version requirement) resolved + pinned to a [[xyz.kd5ujc.schema.registry.SchemaBinding]] at combine
+   * (Phase 4). `provenance` is the Phase-6 interop forward-ref (`None` for natively-issued assets).
+   */
+  @derive(customizableDecoder, customizableEncoder)
+  final case class MintAsset(
+    assetId:    UUID,
+    policyRef:  SchemaRef,
+    holder:     AssetHolder,
+    amount:     Long,
+    expiresAt:  Option[SnapshotOrdinal] = None,
+    provenance: Option[OriginProvenance] = None
+  ) extends AssetOp
+      with OttochainMessage {
+    val fiberId: UUID = assetId
+  }
+
+  /**
+   * Apply a typed morphism ([[MorphismKind]]) to an asset instance. `Sequenced` — ordered by
+   * `(assetId, targetSequenceNumber)`. The optional fields carry per-kind directives (recipient for
+   * Transfer/Wrap; otherAssetIds + compositeId for Compose; shardIds for Fractionalize). All optional
+   * fields are `Option` (invariant #1); the stateful application is Phase 4.
+   */
+  @derive(customizableDecoder, customizableEncoder)
+  final case class ApplyMorphism(
+    assetId:              UUID,
+    kind:                 MorphismKind,
+    targetSequenceNumber: FiberOrdinal,
+    recipient:            Option[AssetHolder] = None,
+    otherAssetIds:        Option[List[UUID]] = None,
+    compositeId:          Option[UUID] = None,
+    shardIds:             Option[List[UUID]] = None
+  ) extends AssetOp
+      with OttochainMessage
+      with Sequenced {
+    val fiberId: UUID = assetId
+  }
+
+  /**
+   * Authorize a counter-party policy to Compose with this asset (the commit half of the commit-reveal
+   * symmetric-compose handshake, asset-model.md §5e/§8). `Sequenced`. `nonce` and `expiresAt` are required
+   * (no defaults — a nonce of 0 / an absent expiry are NOT meaningful sentinels here, so they must be sent).
+   */
+  @derive(customizableDecoder, customizableEncoder)
+  final case class AuthorizeCompose(
+    assetId:              UUID,
+    partnerPolicyId:      RegistryName,
+    nonce:                Long,
+    expiresAt:            SnapshotOrdinal,
+    targetSequenceNumber: FiberOrdinal
+  ) extends AssetOp
+      with OttochainMessage
+      with Sequenced {
+    val fiberId: UUID = assetId
+  }
+
   object OttochainMessage {
 
     /**
@@ -269,6 +362,10 @@ object Updates {
       case u: Updates.PublishScriptVersion   => Json.obj(u.messageName -> u.asJson)
       case u: Updates.SetVersionStatus       => Json.obj(u.messageName -> u.asJson)
       case u: Updates.RegisterAlias          => Json.obj(u.messageName -> u.asJson)
+      case u: Updates.CreateAssetPolicy      => Json.obj(u.messageName -> u.asJson)
+      case u: Updates.MintAsset              => Json.obj(u.messageName -> u.asJson)
+      case u: Updates.ApplyMorphism          => Json.obj(u.messageName -> u.asJson)
+      case u: Updates.AuthorizeCompose       => Json.obj(u.messageName -> u.asJson)
     }
 
     implicit val messageDecoder: Decoder[OttochainMessage] =
@@ -284,7 +381,11 @@ object Updates {
           Decoder[Updates.PublishMachineVersion],
           Decoder[Updates.PublishScriptVersion],
           Decoder[Updates.SetVersionStatus],
-          Decoder[Updates.RegisterAlias]
+          Decoder[Updates.RegisterAlias],
+          Decoder[Updates.CreateAssetPolicy],
+          Decoder[Updates.MintAsset],
+          Decoder[Updates.ApplyMorphism],
+          Decoder[Updates.AuthorizeCompose]
         )
 
         c.keys
