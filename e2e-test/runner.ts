@@ -19,7 +19,7 @@ import sendSignedUpdate from './lib/sendDataTransaction.ts';
 import getMetagraphEnv from './lib/metagraphEnv.ts';
 import type { StatesMap, Wallets, GeneratorFn, ValidatorFn } from './lib/types.ts';
 import { HttpClient } from '@ottochain/sdk';
-import { waitForOrdinalConfirmation } from './lib/ordinalConfirmation.ts';
+import { waitForOrdinalConfirmation, waitForOrdinalAdvance } from './lib/ordinalConfirmation.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -36,11 +36,12 @@ function parseArgs() {
     wallets: 'alice',
     waitTime: '5',
     retryDelay: '5',
-    // 40 × retryDelay(5s) ≈ 200s budget per ML0-confirmation / DL1-sync / validation wait.
-    // Sized for COLD START: a CI runner's first run fetches the metakit jar (cold cache) and
-    // pays JVM warmup, slowing first-block production past the old 20-attempt (~100s) window —
-    // an intermittent `DL1 sync timed out ... after N attempts (seqNum=…)` flake (see PR #167).
-    // Returns as soon as the condition holds, so the larger budget only affects worst-case waits.
+    // maxRetries × retryDelay(5s) = per ML0-confirmation / DL1-sync / validation wait budget.
+    // The one-time `waitForOrdinalAdvance` warmup gate (below, #169) pays the cluster cold-start —
+    // a fresh metakit jar (cold cache) + JVM warmup slowing first-block production — BEFORE the
+    // timed flows (on its own wall-clock budget), so this per-flow budget is mostly a cushion for a
+    // slow/contended CI runner. 40 (~200s) keeps that cushion (was 20 ≈ 100s; intermittent
+    // `DL1 sync timed out … (seqNum=…)` flake, #167/#168).
     maxRetries: '40',
     parallel: 'true',
   };
@@ -865,6 +866,16 @@ async function main() {
   console.log(
     `Found ${examples.length} example(s), ${flowPairs.length} flow(s): ${examples.map((e) => e.dir).join(', ')}\n`
   );
+
+  // One-time warmup: wait for ML0 block production to pass the cold-start (fresh-jar / JVM-warmup
+  // first-snapshot lag) ONCE before timing flows, so the per-flow sync budgets aren't each charged it.
+  try {
+    await waitForOrdinalAdvance(ml0Urls[0], 2, { label: 'cluster warmup', maxTotalTimeMs: 300_000 });
+  } catch (err) {
+    console.error(`\x1b[31mCluster failed to warm up: ${(err as Error).message}\x1b[0m`);
+    console.error('Aborting — ML0 is not producing snapshots (consensus not live).');
+    process.exit(1);
+  }
 
   const startTime = Date.now();
   let results: FlowResult[];
