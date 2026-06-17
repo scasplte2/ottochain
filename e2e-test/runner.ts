@@ -36,7 +36,12 @@ function parseArgs() {
     wallets: 'alice',
     waitTime: '5',
     retryDelay: '5',
-    maxRetries: '20',
+    // 40 × retryDelay(5s) ≈ 200s budget per ML0-confirmation / DL1-sync / validation wait.
+    // Sized for COLD START: a CI runner's first run fetches the metakit jar (cold cache) and
+    // pays JVM warmup, slowing first-block production past the old 20-attempt (~100s) window —
+    // an intermittent `DL1 sync timed out ... after N attempts (seqNum=…)` flake (see PR #167).
+    // Returns as soon as the condition holds, so the larger budget only affects worst-case waits.
+    maxRetries: '40',
     parallel: 'true',
   };
 
