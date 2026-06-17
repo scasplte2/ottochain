@@ -19,6 +19,7 @@ import sendSignedUpdate from './lib/sendDataTransaction.ts';
 import getMetagraphEnv from './lib/metagraphEnv.ts';
 import type { StatesMap, Wallets, GeneratorFn, ValidatorFn } from './lib/types.ts';
 import { HttpClient } from '@ottochain/sdk';
+import type { OttochainMessage, CreateStateMachine } from '@ottochain/sdk';
 import { waitForOrdinalConfirmation } from './lib/ordinalConfirmation.ts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -37,6 +38,7 @@ function parseArgs() {
     waitTime: '5',
     retryDelay: '5',
     maxRetries: '20',
+    warmupRetries: '60',
     parallel: 'true',
   };
 
@@ -310,6 +312,49 @@ async function waitForDl1Sync(
     `DL1 sync timed out for ${label} at ${url} after ${maxRetries} attempts ` +
       `(waiting for fiberId=${fiberId} seqNum=${expectedSeqNum ?? 'exists'})`
   );
+}
+
+/**
+ * One-time cluster WARMUP gate, run before the timed flows. Submits a throwaway canary
+ * fiber and waits for it to appear in DL1 OnChain state — driving the full cold path
+ * (submit → ML0 consensus → DL1 sync) ONCE. This amortizes cold-start (a fresh metakit jar
+ * + JVM warmup slows first-block production) so the per-flow sync budgets aren't each charged
+ * it — the structural fix behind the `maxRetries` bump. Uses its own generous `warmupRetries`
+ * budget and fails fast with a clear error if the cluster never produces, subsuming the
+ * standalone `scripts/canary-check.ts` pre-flight.
+ */
+async function warmup(
+  env: ReturnType<typeof getMetagraphEnv>,
+  dl1Urls: string[],
+  warmupRetries: number,
+  retryDelayMs: number
+): Promise<void> {
+  const wallet = generateWallet(env.globalL0Url, 'warmup');
+  const canaryId = `warmup-${crypto.randomUUID()}`;
+  const message: OttochainMessage = {
+    CreateStateMachine: {
+      fiberId: canaryId,
+      definition: { initialState: 'alive', states: { alive: { transitions: {} } } },
+      initialData: {},
+      parentFiberId: null,
+    } as CreateStateMachine,
+  };
+  const budgetS = (warmupRetries * retryDelayMs) / 1000;
+  console.log(
+    `\x1b[36mWarming up cluster\x1b[0m — canary ${canaryId.slice(0, 16)}… ` +
+      `(one-time cold-start, ≤${budgetS}s)`
+  );
+  await sendSignedUpdate(message, { warmup: wallet }, dl1Urls);
+  // `exists` check (seqNum null): the create reaching DL1 OnChain proves the whole pipeline is warm.
+  await waitForDl1Sync(
+    dl1Urls[0],
+    canaryId,
+    null,
+    warmupRetries,
+    retryDelayMs,
+    `warmup canary ${canaryId.slice(0, 8)}`
+  );
+  console.log('\x1b[32mCluster warm — running timed flows.\x1b[0m\n');
 }
 
 // ---------------------------------------------------------------------------
@@ -860,6 +905,17 @@ async function main() {
   console.log(
     `Found ${examples.length} example(s), ${flowPairs.length} flow(s): ${examples.map((e) => e.dir).join(', ')}\n`
   );
+
+  // One-time warmup: pay the cluster cold-start once (a canary round-trip) before timing flows,
+  // so the per-flow sync budgets aren't each charged the fresh-jar/JVM-warmup first-block latency.
+  const warmupRetries = parseInt(opts.warmupRetries);
+  try {
+    await warmup(env, dl1Urls, warmupRetries, retryDelayMs);
+  } catch (err) {
+    console.error(`\x1b[31mCluster failed to warm up: ${(err as Error).message}\x1b[0m`);
+    console.error('Aborting — the metagraph never produced the canary fiber (consensus/DL1 not live).');
+    process.exit(1);
+  }
 
   const startTime = Date.now();
   let results: FlowResult[];
