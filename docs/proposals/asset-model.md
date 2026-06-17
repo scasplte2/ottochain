@@ -826,7 +826,8 @@ A `Governed` morphism's `guard` — and a `mintPolicy` guard — may REQUIRE a z
 Merkle-membership proof carried on the transaction. The signed `ApplyMorphism` / `MintAsset` carries an
 optional `witness: Option[JsonLogicValue]`, which the combiner exposes to the guard under the reserved
 `witness` context key. The guard then calls one of metakit's already-wired, gas-metered verifier opcodes
-(`groth16_verify`, `pmt_verify`, `poseidon`) over that witness:
+(`groth16_verify`, `pmt_verify`, `poseidon`, and — since metakit `1.8.0-rc.5` — the Σ-protocol family
+`prove_dlog_verify` / `prove_dhtuple_verify` / `sigma_verify`) over that witness:
 
 ```json
 { "morphisms": {
@@ -845,6 +846,33 @@ or, for a proof-gated mint ("mint iff this membership/inclusion proof verifies")
                                       {"var": "witness.proof"} ] } }
 ```
 
+Since metakit `1.8.0-rc.5` the **Σ-protocol** verifier opcodes are available too, so a guard can require
+**threshold / ring authorization without revealing which signer(s) participated** — the use case the Σ
+opcodes were built for. A `mintPolicy` "any 2 of these 3 issuer keys may mint, hidden which":
+
+```json
+{ "mintPolicy": { "sigma_verify": [ { "type": "threshold", "k": 2, "children": [
+                                        {"type":"dlog","pk":"<issuerA-64B>"},
+                                        {"type":"dlog","pk":"<issuerB-64B>"},
+                                        {"type":"dlog","pk":"<issuerC-64B>"} ] },
+                                    {"var": "witness.proof"},
+                                    {"var": "witness.message"} ] } }
+```
+
+or a `Governed` morphism authorized by **any one of a ring** of holders (hidden which):
+
+```json
+{ "morphisms": { "Compose": { "visibility": "Governed",
+    "guard": { "sigma_verify": [ {"type":"or","children":[ {"type":"dlog","pk":"<A-64B>"},
+                                                            {"type":"dlog","pk":"<B-64B>"} ]},
+                                 {"var":"witness.proof"}, {"var":"witness.message"} ] } } } }
+```
+
+The proposition (the issuer / holder set) is FIXED in the policy; the prover's per-use `proof` + bound
+`message` ride on the `witness`. Same combiner path, same determinism — `sigma_verify` is just another
+JLVM opcode through `evalGuardOrReject`. (Authorization, not confidential amounts: this is orthogonal to
+the 5-bit behavior model and to the shielded-mode subsystem of `asset-shielded-mode.md`.)
+
 This is **pure wiring, no new cryptography**: the verifier opcodes already exist in metakit and run
 DETERMINISTICALLY in the combiner through the same `JsonLogicEvaluator.evaluateWithGas` path every guard
 uses (`AssetCombiner.evalGuardOrReject`) — one reused verifier, not a hand-rolled per-use check. A false
@@ -852,9 +880,61 @@ or failed verification is a graceful `CombineRejected`, never a snapshot abort (
 combiner-only, stateful gate). Out of scope (intentionally): confidential amounts, homomorphic
 commitments, shielded pools, nullifier sets, range proofs — any new crypto.
 
-**CAVEAT (honest):** metakit's Groth16 / Poseidon-Merkle verifier has **no public security audit**. A
-`ZkVerify`-gated guard is sound only up to the correctness of that verifier, so it **must not protect real
-value** until metakit's verifier is independently audited.
+**CAVEAT (honest):** none of metakit's verifier opcodes — the Groth16 / Poseidon-Merkle verifier, nor the
+Σ-protocol family (`prove_dlog` / `prove_dhtuple` / `sigma_verify`) — has a public security audit yet. The
+Σ family is implemented and live but its strong-Fiat-Shamir + CDS surface is **not yet externally audited**
+(metakit `docs/sigma-verify.md` §0). A `ZkVerify`-gated guard is sound only up to the correctness of the
+underlying verifier, so it **must not protect real value** until that verifier is independently audited.
+
+### Richer dynamics — computed propositions & boolean composition (the Ergo `SigmaProp` / CDS map)
+
+The Σ-gated guard above is the *floor*, not the ceiling. Two composition layers give the guard the same
+expressive range as Ergo's `SigmaProp` and the CDS algebra of Damgård's Σ-protocol theory:
+
+**Layer 1 — the Σ-composition algebra, INSIDE `sigma_verify` (hiding).** The proposition tree IS Ergo's
+`SigmaProp`: `dlog` (≡ `proveDlog`) and `dhtuple` (≡ `proveDHTuple`) leaves under `and` (CAND), `or`
+(COR), `threshold(k)` (CTHRESHOLD ≡ `atLeast`), arbitrarily nested. Ring signatures (a wide `or`), m-of-n,
+and mixed access trees (`and` of `or`s of `threshold`s) verify in one shot with CDS hiding — *which*
+leaf/branch satisfied stays hidden.
+
+**Layer 2 — computed propositions & boolean composition, via JLVM (the "script" layer).** The guard is a
+full JSON-Logic expression and `sigma_verify`'s three arguments are sub-expressions, so:
+
+- the **proposition need not be a literal** — it can be *computed* from the guard context
+  (`amount` / `holder` / `assetId` / `ordinal` / `witness`, plus any committed-state the combiner injects)
+  with `var` / `if` / `get` / `map` / `merge` + object/array construction. E.g. choose the threshold by
+  size — `"k": {"if":[{">":[{"var":"amount"},1000]}, 3, 2]}` ("large mints need 3-of-n, small 2-of-n") —
+  or pull the issuer set from policy state. This is OttoChain's analogue of Ergo computing a `SigmaProp`
+  in ErgoScript: the predicate is *data*, assembled at evaluation time.
+- `sigma_verify` **composes with non-Σ predicates** through boolean `and` / `or` / `if`: e.g.
+  `{"and":[{">":[{"var":"ordinal"},<unlock>]}, {"sigma_verify":[…2-of-3…]}]}` — a time-lock AND a hidden
+  2-of-3. Amount caps, state checks, even `pmt_verify` / `groth16_verify` membership gate *alongside* the
+  Σ proof. (`SigmaGatedMorphismSuite` exercises exactly this `and`(amount-cap, threshold) shape.)
+
+**The one rule (CDS / metakit RFC §1):** hiding-composition lives *inside one* `sigma_verify`
+proposition. Do **not** JSON-Logic-`or` two `sigma_verify` calls to get an OR — that reveals which call
+verified, defeating CDS hiding. So: *which-signer / m-of-n privacy* → inside the tree; *plain boolean
+conditions* → JLVM around it. (Ergo enforces the identical `SigmaProp`-vs-`Boolean` split.)
+
+**Anti-replay:** the `message` a leaf binds should commit to op-specific data (e.g. `assetId` ‖ `amount`
+‖ a snapshot anchor), not a fixed constant, so a valid proof cannot be replayed across mints — the same
+linearity the commit-reveal nonce gives `AuthorizeCompose` (§8.5 below).
+
+**Ergo `SigmaProp` ↔ OttoChain JLVM:**
+
+- `proveDlog(pk)` / `proveDHTuple` ↔ a `sigma_verify` leaf `{"type":"dlog" | "dhtuple", …}`
+- `&&` / `||` / `atLeast(k,…)` ↔ proposition `and` / `or` / `threshold(k)` (CDS hiding, inside one proof)
+- ErgoScript *computes* the SigmaProp ↔ JLVM *computes* the proposition (`var` / `if` / `map` + objects)
+- `sigmaProp(cond) && proveDlog(pk)` ↔ `{"and":[<JLVM predicate>, {"sigma_verify":[…]}]}`
+
+**Boundary (needs a circuit, not a Σ-leaf):** relations beyond dlog/dhtuple — range proofs, Pedersen
+openings, **confidential amounts** — are Groth16 / Bulletproof territory (the shielded-mode subsystem,
+`asset-shielded-mode.md`), not `sigma_verify`. Hiding the signer *set itself* (vs. *which* signer) needs a
+zk accumulator. Weighted / non-k-of-n access structures would need a new metakit connective. The Σ layer
+covers *authorization* richness; *amount privacy* is the orthogonal axis.
+
+> References: I. Damgård, *On Σ-protocols* (the CDS partial-knowledge composition); Ergo `SigmaProp` /
+> `atLeast` (`docs.ergoplatform.com/dev/scs/sigma`); metakit `docs/sigma-verify.md`.
 
 ### Symmetric composition (two holders) — commit-reveal nonce
 

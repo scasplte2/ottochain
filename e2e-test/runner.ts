@@ -37,7 +37,13 @@ function parseArgs() {
     wallets: 'alice',
     waitTime: '5',
     retryDelay: '5',
-    maxRetries: '20',
+    // maxRetries × retryDelay(5s) = per ML0-confirmation / DL1-sync / validation wait budget.
+    // The one-time `warmup` gate (below, #169) now pays the cluster cold-start — a fresh metakit
+    // jar (cold cache) + JVM warmup slowing first-block production — BEFORE the timed flows, so
+    // this per-flow budget is mostly a cushion for a slow/contended CI runner. 40 (~200s) keeps
+    // that cushion (was 20 ≈ 100s; intermittent `DL1 sync timed out … (seqNum=…)` flake, #167/#168);
+    // `warmupRetries` (60 ≈ 300s) is the generous one-time cold-start budget for the canary.
+    maxRetries: '40',
     warmupRetries: '60',
     parallel: 'true',
   };
