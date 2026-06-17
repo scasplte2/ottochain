@@ -180,6 +180,70 @@ export async function waitForOrdinalConfirmation(
   }
 }
 
+export interface OrdinalAdvanceOptions {
+  /** Polling interval in ms (default: 2000) */
+  pollIntervalMs?: number;
+  /** Maximum total time to wait in ms (default: 300000 = 5 min) */
+  maxTotalTimeMs?: number;
+  /** Label for logging */
+  label?: string;
+  /** Optional logger for buffered output */
+  log?: { write: (s: string) => void };
+}
+
+/**
+ * Wait for ML0 to PRODUCE new snapshots — i.e. for the snapshot ordinal to advance by `minAdvance`
+ * from its first reading.
+ *
+ * Unlike `waitForOrdinalConfirmation`, this submits nothing and checks no entity; it is a pure
+ * liveness probe on `/snapshots/latest` (which can answer while the data-application still 500s).
+ * Used as a one-time cluster warmup gate: proving block production is past the cold-start (a fresh
+ * metakit jar + JVM warmup slow the first snapshots) BEFORE the timed flows means the per-flow sync
+ * budgets aren't each charged the cold-start.
+ *
+ * Resolves once the ordinal advances by `minAdvance`; throws if that does not happen within
+ * `maxTotalTimeMs` (ML0 not producing → consensus not live).
+ */
+export async function waitForOrdinalAdvance(
+  ml0BaseUrl: string,
+  minAdvance: number,
+  opts: OrdinalAdvanceOptions = {}
+): Promise<void> {
+  const {
+    pollIntervalMs = 2000,
+    maxTotalTimeMs = 300000,
+    label = 'ordinal advance',
+    log,
+  } = opts;
+
+  const w = log ? (s: string) => log.write(s) : (s: string) => process.stdout.write(s);
+  const startTime = Date.now();
+
+  w(`\x1b[36mWarming up cluster\x1b[0m — waiting for ML0 to produce ${minAdvance} snapshot(s) for ${label}`);
+
+  let startOrdinal: number | null = null;
+  let lastOrdinal: number | null = null;
+  while (Date.now() - startTime <= maxTotalTimeMs) {
+    const snapshot = await getCurrentOrdinal(ml0BaseUrl);
+    if (snapshot) {
+      if (startOrdinal === null) startOrdinal = snapshot.ordinal;
+      lastOrdinal = snapshot.ordinal;
+      if (snapshot.ordinal >= startOrdinal + minAdvance) {
+        w(` ✓ (ordinal ${startOrdinal} → ${snapshot.ordinal})\n`);
+        return;
+      }
+    }
+    w('.');
+    await new Promise((r) => setTimeout(r, pollIntervalMs));
+  }
+
+  w(' ✗\n');
+  throw new Error(
+    `${TAG} ML0 did not produce ${minAdvance} snapshot(s) within ${maxTotalTimeMs}ms for ${label} ` +
+      `(start ordinal ${startOrdinal ?? 'none'}, last ${lastOrdinal ?? 'none'}) — consensus not live`
+  );
+}
+
 /**
  * Simple helper to get current ordinal (for external use).
  */

@@ -19,7 +19,7 @@ import sendSignedUpdate from './lib/sendDataTransaction.ts';
 import getMetagraphEnv from './lib/metagraphEnv.ts';
 import type { StatesMap, Wallets, GeneratorFn, ValidatorFn } from './lib/types.ts';
 import { HttpClient } from '@ottochain/sdk';
-import { waitForOrdinalConfirmation, getML0Ordinal } from './lib/ordinalConfirmation.ts';
+import { waitForOrdinalConfirmation, waitForOrdinalAdvance } from './lib/ordinalConfirmation.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -37,13 +37,12 @@ function parseArgs() {
     waitTime: '5',
     retryDelay: '5',
     // maxRetries × retryDelay(5s) = per ML0-confirmation / DL1-sync / validation wait budget.
-    // The one-time `warmup` gate (below, #169) now pays the cluster cold-start — a fresh metakit
-    // jar (cold cache) + JVM warmup slowing first-block production — BEFORE the timed flows, so
-    // this per-flow budget is mostly a cushion for a slow/contended CI runner. 40 (~200s) keeps
-    // that cushion (was 20 ≈ 100s; intermittent `DL1 sync timed out … (seqNum=…)` flake, #167/#168);
-    // `warmupRetries` (60 ≈ 300s) is the generous one-time cold-start budget for the canary.
+    // The one-time `waitForOrdinalAdvance` warmup gate (below, #169) pays the cluster cold-start —
+    // a fresh metakit jar (cold cache) + JVM warmup slowing first-block production — BEFORE the
+    // timed flows (on its own wall-clock budget), so this per-flow budget is mostly a cushion for a
+    // slow/contended CI runner. 40 (~200s) keeps that cushion (was 20 ≈ 100s; intermittent
+    // `DL1 sync timed out … (seqNum=…)` flake, #167/#168).
     maxRetries: '40',
-    warmupRetries: '60',
     parallel: 'true',
   };
 
@@ -316,47 +315,6 @@ async function waitForDl1Sync(
   throw new Error(
     `DL1 sync timed out for ${label} at ${url} after ${maxRetries} attempts ` +
       `(waiting for fiberId=${fiberId} seqNum=${expectedSeqNum ?? 'exists'})`
-  );
-}
-
-/**
- * One-time cluster WARMUP gate, run before the timed flows. Polls ML0 until it has PRODUCED a
- * few new snapshots (the ordinal advances), proving block production is past the cold-start (a
- * fresh metakit jar + JVM warmup slows the first snapshots) BEFORE the timed flows — so the
- * per-flow sync budgets aren't each charged it. It submits NOTHING (the data-application can
- * return 500 while still warming up); it is a pure read of `/snapshots/latest` via
- * `getML0Ordinal`. Uses its own generous `warmupRetries` budget and fails fast if ML0 never
- * produces, subsuming the standalone `scripts/canary-check.ts` pre-flight.
- */
-async function warmup(
-  ml0BaseUrl: string,
-  minOrdinalAdvance: number,
-  warmupRetries: number,
-  retryDelayMs: number
-): Promise<void> {
-  const budgetS = (warmupRetries * retryDelayMs) / 1000;
-  process.stdout.write(
-    `\x1b[36mWarming up cluster\x1b[0m — waiting for ML0 to produce ${minOrdinalAdvance} snapshot(s) (≤${budgetS}s)`
-  );
-  let startOrdinal: number | null = null;
-  let lastOrdinal: number | null = null;
-  for (let attempt = 1; attempt <= warmupRetries; attempt++) {
-    const ord = await getML0Ordinal(ml0BaseUrl);
-    if (ord !== null) {
-      if (startOrdinal === null) startOrdinal = ord;
-      lastOrdinal = ord;
-      if (ord >= startOrdinal + minOrdinalAdvance) {
-        console.log(` ✓ (ordinal ${startOrdinal} → ${ord})\n`);
-        return;
-      }
-    }
-    process.stdout.write('.');
-    await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
-  }
-  process.stdout.write(' ✗\n');
-  throw new Error(
-    `ML0 did not produce ${minOrdinalAdvance} snapshot(s) within ${budgetS}s ` +
-      `(start ordinal ${startOrdinal ?? 'none'}, last ${lastOrdinal ?? 'none'}) — consensus not live`
   );
 }
 
@@ -911,9 +869,8 @@ async function main() {
 
   // One-time warmup: wait for ML0 block production to pass the cold-start (fresh-jar / JVM-warmup
   // first-snapshot lag) ONCE before timing flows, so the per-flow sync budgets aren't each charged it.
-  const warmupRetries = parseInt(opts.warmupRetries);
   try {
-    await warmup(ml0Urls[0], 2, warmupRetries, retryDelayMs);
+    await waitForOrdinalAdvance(ml0Urls[0], 2, { label: 'cluster warmup', maxTotalTimeMs: 300_000 });
   } catch (err) {
     console.error(`\x1b[31mCluster failed to warm up: ${(err as Error).message}\x1b[0m`);
     console.error('Aborting — ML0 is not producing snapshots (consensus not live).');
