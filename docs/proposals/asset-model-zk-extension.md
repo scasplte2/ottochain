@@ -36,16 +36,19 @@ Companion: `docs/proposals/zk-coin-audit.md`, `docs/proposals/asset-model.md`,
 
 ## 1. The opcode reality (reconciled — one agent was wrong)
 
-metakit `1.8.0-rc.4` (pinned in `project/Dependencies.scala`) **does expose zk-verifier opcodes to the
+metakit `1.8.0-rc.5` (pinned in `project/Dependencies.scala`) **does expose zk-verifier opcodes to the
 JLVM, and they work in the combiner today.** This is not a claim — it is *demonstrated* by the shipped
 `ZkGatedMorphismSuite`, which builds a real `PoseidonMerkleTree` inclusion proof, gates a `Transfer`
 morphism on `{"pmt_verify": [...]}`, and asserts the on-chain opcode agrees with metakit's tree builder
 (valid proof accepted, tampered/absent rejected), plus a `groth16_verify` negative path.
 
-Reachable opcodes (verified against the resolved rc.4 jar via `javap` and by running them):
+Reachable opcodes (verified against the resolved jar via `javap` and by running them):
 `groth16_verify` (SP1-Groth16-BN254, 250k gas), `pmt_verify` (Poseidon-Merkle inclusion),
 `poseidon` (≤4 inputs), `bn254_add/mul/pairing`, `smt_verify`/`mpt_verify`, `bls_verify`,
-`schnorr_verify`, `ecvrf_verify`. They dispatch through the exact `JsonLogicEvaluator.evaluateWithGas`
+`schnorr_verify`, `ecvrf_verify` — **and, new in `1.8.0-rc.5`, the Σ-protocol family**:
+`prove_dlog_verify` (Schnorr / DLog leaf), `prove_dhtuple_verify` (DDH / Diffie–Hellman-tuple leaf),
+and `sigma_verify` (recursive CDS AND/OR/THRESHOLD over BN254 G1 — i.e. threshold + ring authorization,
+hiding which signer(s) participated). They dispatch through the exact `JsonLogicEvaluator.evaluateWithGas`
 path the `AssetCombiner` guard uses.
 
 > **Honesty note (a real cross-agent contradiction, resolved):** the lossy-compose investigation
@@ -72,10 +75,23 @@ Unlocks today: a **proof-gated `mintPolicy`** for bridges ("mint iff this SP1 pr
 verifies" — directly serves `asset-interop-functor.md` Open-Q3), **zk compliance/age gates**, and
 **Merkle-airdrop / allowlist** claims via `pmt_verify`.
 
-> **CAVEAT (load-bearing):** metakit's Groth16 / Poseidon-Merkle verifier has **no public security
-> audit**. A ZkVerify guard is sound only up to that verifier; it **must not protect real value until
-> the verifier is audited**. (We lean on *one reused deterministic verifier* — far better than
-> hand-rolling per use — but "audited" is struck from the pitch.)
+**New in `1.8.0-rc.5` — Σ-protocol guards (threshold / ring authorization).** The same witness →
+`evalGuardOrReject` path now also serves `sigma_verify` / `prove_dlog_verify` / `prove_dhtuple_verify`,
+so a guard can express **k-of-n / ring authorization without revealing which signer(s) participated** —
+e.g. a `mintPolicy` "any 2-of-3 issuers may mint, hidden which" (`sigma_verify` over a
+`threshold(2,[dlog A, dlog B, dlog C])` proposition), or a `Governed` `Compose` authorized by a ring
+`or([dlog A, dlog B])`. This was the **motivating use case** for adding the Σ opcodes to metakit, and it
+is the SAME zero-new-ottochain-crypto win as the Groth16 / Merkle guards (one reused deterministic
+verifier, witness on the tx, graceful `CombineRejected` on failure). It is authorization, **not**
+confidential amounts — orthogonal to the 5-bit behavior model and to the shielded-mode subsystem (§4).
+Policy JSON in `asset-model.md` §8.3; exercised end-to-end by `SigmaGatedMorphismSuite`.
+
+> **CAVEAT (load-bearing):** none of metakit's verifier opcodes — Groth16 / Poseidon-Merkle, nor the
+> Σ-protocol family (`prove_dlog` / `prove_dhtuple` / `sigma_verify`, whose strong-FS + CDS surface is
+> implemented + live but **not yet externally audited**, metakit `docs/sigma-verify.md` §0) — has a
+> public security audit. A ZkVerify guard is sound only up to that verifier; it **must not protect real
+> value until the verifier is audited**. (We lean on *one reused deterministic verifier* — far better
+> than hand-rolling per use — but "audited" is struck from the pitch.)
 
 ---
 
