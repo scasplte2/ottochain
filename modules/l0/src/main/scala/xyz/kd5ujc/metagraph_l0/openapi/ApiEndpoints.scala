@@ -56,7 +56,7 @@ object ApiEndpoints {
     endpoint.post
       .in("data-application" / "v1" / "util" / "hash")
       .in(opaqueJson("Signed[OttochainMessage]"))
-      .out(opaqueJson("""HashResult: { "protocol message hash": <hash>, "protocol message": <message> }"""))
+      .out(opaqueJson("""HashResult: { "messageHash": <hash>, "message": <message> }"""))
       .summary("Canonical hash of a signed message")
       .tag("meta")
 

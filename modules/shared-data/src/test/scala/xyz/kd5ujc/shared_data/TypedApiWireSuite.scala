@@ -44,13 +44,13 @@ object TypedApiWireSuite extends SimpleIOSuite {
     )
   }
 
-  pureTest("HashResult — preserves the space-keys and round-trips") {
+  pureTest("HashResult — wire keys + round-trips") {
     val msg: OttochainMessage =
       ArchiveStateMachine(UUID.fromString("00000000-0000-0000-0000-000000000001"), FiberOrdinal.unsafeApply(1L))
     val dto = HashResult(Hash("0" * 64), msg)
     val j = dto.asJson
     expect.all(
-      keysOf(j) == Set("protocol message hash", "protocol message"),
+      keysOf(j) == Set("messageHash", "message"),
       decode[HashResult](j.noSpaces) == Right(dto)
     )
   }

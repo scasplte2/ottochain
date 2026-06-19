@@ -46,7 +46,7 @@
         },
         "responses" : {
           "200" : {
-            "description" : "HashResult: { \"protocol message hash\": <hash>, \"protocol message\": <message> }",
+            "description" : "HashResult: { \"messageHash\": <hash>, \"message\": <message> }",
             "content" : {
               "application/json" : {
                 "schema" : {
