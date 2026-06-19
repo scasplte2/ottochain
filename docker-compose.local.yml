@@ -16,7 +16,11 @@ services:
       - CL_PASSWORD=${CL_PASSWORD:-password}
       - CL_APP_ENV=dev
       - CL_EXTERNAL_IP=gl0
-      - JAVA_OPTS=-Xmx2g -Xms1g
+      # Right-sized for constrained CI (ubuntu-latest = 2 vCPU / 7 GB shared by ~5 JVMs):
+      # no -Xms pre-commit (heap grows on demand, killing the old 5×1g committed floor that
+      # forced swap → cats-effect "CPU starving"); SerialGC (one GC thread) beats G1's parallel
+      # threads for these small heaps on few cores. Override per-deployment if you need more.
+      - JAVA_OPTS=-Xmx1536m -XX:+UseSerialGC
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -46,7 +50,11 @@ services:
       - CL_L0_PEER_ID=${GL0_PEER_ID}
       - CL_L0_PEER_HOST=gl0
       - CL_L0_PEER_PORT=9000
-      - JAVA_OPTS=-Xmx2g -Xms1g
+      # Right-sized for constrained CI (ubuntu-latest = 2 vCPU / 7 GB shared by ~5 JVMs):
+      # no -Xms pre-commit (heap grows on demand, killing the old 5×1g committed floor that
+      # forced swap → cats-effect "CPU starving"); SerialGC (one GC thread) beats G1's parallel
+      # threads for these small heaps on few cores. Override per-deployment if you need more.
+      - JAVA_OPTS=-Xmx1536m -XX:+UseSerialGC
     ports:
       - "9100:9100"
       - "9101:9101"
@@ -74,7 +82,11 @@ services:
       - CL_GLOBAL_L0_PEER_ID=${GL0_PEER_ID}
       - CL_GLOBAL_L0_PEER_HOST=gl0
       - CL_GLOBAL_L0_PEER_PORT=9000
-      - JAVA_OPTS=-Xmx2g -Xms1g
+      # Right-sized for constrained CI (ubuntu-latest = 2 vCPU / 7 GB shared by ~5 JVMs):
+      # no -Xms pre-commit (heap grows on demand, killing the old 5×1g committed floor that
+      # forced swap → cats-effect "CPU starving"); SerialGC (one GC thread) beats G1's parallel
+      # threads for these small heaps on few cores. Override per-deployment if you need more.
+      - JAVA_OPTS=-Xmx1536m -XX:+UseSerialGC
     ports:
       - "9200:9200"
       - "9201:9201"
@@ -106,7 +118,11 @@ services:
       - CL_L0_PEER_ID=${ML0_PEER_ID}
       - CL_L0_PEER_HOST=ml0
       - CL_L0_PEER_PORT=9200
-      - JAVA_OPTS=-Xmx2g -Xms1g
+      # Right-sized for constrained CI (ubuntu-latest = 2 vCPU / 7 GB shared by ~5 JVMs):
+      # no -Xms pre-commit (heap grows on demand, killing the old 5×1g committed floor that
+      # forced swap → cats-effect "CPU starving"); SerialGC (one GC thread) beats G1's parallel
+      # threads for these small heaps on few cores. Override per-deployment if you need more.
+      - JAVA_OPTS=-Xmx1536m -XX:+UseSerialGC
     ports:
       - "9300:9300"
       - "9301:9301"
@@ -136,7 +152,11 @@ services:
       - CL_L0_PEER_ID=${ML0_PEER_ID}
       - CL_L0_PEER_HOST=ml0
       - CL_L0_PEER_PORT=9200
-      - JAVA_OPTS=-Xmx2g -Xms1g
+      # Right-sized for constrained CI (ubuntu-latest = 2 vCPU / 7 GB shared by ~5 JVMs):
+      # no -Xms pre-commit (heap grows on demand, killing the old 5×1g committed floor that
+      # forced swap → cats-effect "CPU starving"); SerialGC (one GC thread) beats G1's parallel
+      # threads for these small heaps on few cores. Override per-deployment if you need more.
+      - JAVA_OPTS=-Xmx1536m -XX:+UseSerialGC
     ports:
       - "9400:9400"
       - "9401:9401"

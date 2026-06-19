@@ -745,7 +745,10 @@ async function runFlow(
         ordinalThreshold: 5,
         maxResubmits: 3,
         pollIntervalMs: 2000,
-        maxTotalTimeMs: 300000,
+        // No fixed wall-clock cap: a slow-but-advancing chain gets its full ordinal budget
+        // (5 × 4 = 20 ordinals). The stall gate fails fast (120s) only if ML0 stops producing
+        // snapshots entirely — i.e. genuine consensus death, not mere slowness under CI load.
+        stallTimeoutMs: 120000,
         label: `${step.action} on ${activeCid}`,
         log: log ? { write: (s: string) => log.write(s) } : undefined,
       });
