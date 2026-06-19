@@ -30,13 +30,14 @@ object FiberResult {
    *                       messages only). The combiner re-checks holder-ownership before applying any of these.
    */
   final case class Success(
-    newStateData:   JsonLogicValue,
-    newStateId:     Option[StateId],
-    triggers:       List[FiberTrigger],
-    spawns:         List[SpawnDirective],
-    returnValue:    Option[JsonLogicValue],
-    emittedEvents:  List[EmittedEvent] = List.empty,
-    assetTransfers: List[FiberEffect.AssetTransferred] = List.empty
+    newStateData:        JsonLogicValue,
+    newStateId:          Option[StateId],
+    triggers:            List[FiberTrigger],
+    spawns:              List[SpawnDirective],
+    returnValue:         Option[JsonLogicValue],
+    emittedEvents:       List[EmittedEvent] = List.empty,
+    assetTransfers:      List[FiberEffect.AssetTransferred] = List.empty,
+    dependencyMutations: List[FiberEffect.DependencyMutated] = List.empty
   ) extends FiberResult
 
   /**

@@ -59,6 +59,8 @@ sealed trait FailureReason {
       s"Failed to evaluate child ID expression: $error"
     case FailureReason.OwnersEvaluationFailed(error) =>
       s"Failed to evaluate owners expression: $error"
+    case FailureReason.DependencyLimitExceeded(kind, current, max) =>
+      s"Dynamic dependency $kind limit exceeded: $current (max: $max)"
   }
 }
 
@@ -89,4 +91,7 @@ object FailureReason {
   case class InvalidOwnerAddress(address: String, error: String) extends FailureReason
   case class ChildIdEvaluationFailed(error: String) extends FailureReason
   case class OwnersEvaluationFailed(error: String) extends FailureReason
+
+  /** A dynamic-dependency mutation would breach an ExecutionLimits cap (`kind` = "active" | "ledger"). */
+  case class DependencyLimitExceeded(kind: String, current: Int, max: Int) extends FailureReason
 }

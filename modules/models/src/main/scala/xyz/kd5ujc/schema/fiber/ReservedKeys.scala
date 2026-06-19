@@ -14,6 +14,8 @@ object ReservedKeys {
   val SCRIPT_CALL = "_scriptCall"
   val EMIT = "_emit"
   val TRANSFER_ASSET = "_transferAsset" // Fiber-held asset custody transfer (asset-model.md §10)
+  val ADD_DEPENDENCY = "_addDependency" // Runtime-add/re-activate a dynamic cross-fiber dependency (append-only ledger)
+  val SET_DEPENDENCY_ACTIVE = "_setDependencyActive" // Toggle a dynamic dependency's active flag (never removed)
 
   // Script Return Convention Keys - Used in extractStateAndResult for script results
   val SCRIPT_STATE = "_state"
@@ -34,6 +36,10 @@ object ReservedKeys {
   val DEFINITION = "definition"
   val INITIAL_DATA = "initialData"
   val OWNERS = "owners"
+
+  // Dynamic Dependency Directive Keys - Used in extractDependencyMutations
+  // (the target fiber reuses FIBER_ID above; ACTIVE is the on/off flag for _setDependencyActive)
+  val ACTIVE = "active"
 
   // State Machine Definition Keys - Used in parseStateMachineDefinition(FromExpression)
   val STATES = "states"

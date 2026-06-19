@@ -85,7 +85,10 @@ class StateMachineTriggerHandler[F[_]: Async: SecurityProvider, G[_]: Monad](
       ordinal <- ExecutionOps.askOrdinal[G]
       outcome <- FiberEvaluator.make[F, G](calculatedState).evaluate(sm, trigger.input, List.empty)
       result <- outcome match {
-        case FiberResult.Success(newStateData, newStateId, triggers, _, _, emittedEvents, assetTransfers) =>
+        // Cascaded (triggered) transitions do not spawn or mutate dynamic dependencies — those directives
+        // (`spawns`, `dependencyMutations`) are honoured only on the PRIMARY transition (see FiberEngine),
+        // so both are ignored here, as `spawns` already is.
+        case FiberResult.Success(newStateData, newStateId, triggers, _, _, emittedEvents, assetTransfers, _) =>
           val receipt = EventReceipt.success(
             sm = sm,
             eventName = trigger.input.key,
