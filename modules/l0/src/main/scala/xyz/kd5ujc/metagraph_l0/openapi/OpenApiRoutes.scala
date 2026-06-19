@@ -8,9 +8,10 @@ import sttp.tapir.server.http4s.Http4sServerInterpreter
 
 /**
  * Live documentation routes, interpreted from tapir to http4s by `Http4sServerInterpreter` — so the
- * running node publishes the very contract described in [[ApiEndpoints]]:
- *   - `GET /openapi.json` → the OpenAPI 3.1 document
- *   - `GET /docs`         → Swagger-UI (loads `/openapi.json`)
+ * running node publishes the very contract described in [[ApiEndpoints]]. These ride the same
+ * `/data-application` framework mount as the business routes, so the public paths are:
+ *   - `GET /data-application/openapi.json` → the OpenAPI 3.1 document
+ *   - `GET /data-application/docs`         → Swagger-UI (loads `openapi.json` relatively)
  *
  * Mounted additively alongside `ML0Routes` via `extraRoutes`; it touches none of the business endpoints'
  * response semantics. Interpreting those endpoints from `ApiEndpoints` as well (replacing the hand-written
@@ -42,7 +43,7 @@ object OpenApiRoutes {
       |<body>
       |  <div id="swagger-ui"></div>
       |  <script src="https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js" crossorigin></script>
-      |  <script>window.onload = () => { SwaggerUIBundle({ url: '/openapi.json', dom_id: '#swagger-ui' }); };</script>
+      |  <script>window.onload = () => { SwaggerUIBundle({ url: 'openapi.json', dom_id: '#swagger-ui' }); };</script>
       |</body>
       |</html>""".stripMargin
 

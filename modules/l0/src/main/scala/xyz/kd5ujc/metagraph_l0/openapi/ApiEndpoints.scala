@@ -25,6 +25,12 @@ import sttp.tapir.json.circe._
  * an opaque JSON object for now — paths, methods, params and the typed DTOs are exact; tightening the
  * heavy bodies to typed schemas is the follow-up (RFC §3). DL1 serves the {version, util/hash, onchain}
  * subset on port 9400 with these same shapes.
+ *
+ * PATH PREFIX: the framework mounts a data application's custom routes under `/data-application`, and
+ * `ML0Routes` adds `/v1` — so the public path is `/data-application/v1/...` (what the e2e harness and SDK
+ * actually hit). The endpoints below carry the full `data-application/v1/...` path so the contract matches
+ * reality byte-for-byte. The live docs (`OpenApiRoutes`) ride the same mount, i.e. `/data-application/docs`
+ * and `/data-application/openapi.json`.
  */
 object ApiEndpoints {
 
@@ -41,14 +47,14 @@ object ApiEndpoints {
   // ---- service meta ----
   val version: PublicEndpoint[Unit, Unit, VersionInfo, Any] =
     endpoint.get
-      .in("v1" / "version")
+      .in("data-application" / "v1" / "version")
       .out(jsonBody[VersionInfo])
       .summary("Service identity + build metadata")
       .tag("meta")
 
   val utilHash: PublicEndpoint[Json, Unit, Json, Any] =
     endpoint.post
-      .in("v1" / "util" / "hash")
+      .in("data-application" / "v1" / "util" / "hash")
       .in(opaqueJson("Signed[OttochainMessage]"))
       .out(opaqueJson("""HashResult: { "protocol message hash": <hash>, "protocol message": <message> }"""))
       .summary("Canonical hash of a signed message")
@@ -57,14 +63,14 @@ object ApiEndpoints {
   // ---- raw state ----
   val onchain: PublicEndpoint[Unit, Unit, Json, Any] =
     endpoint.get
-      .in("v1" / "onchain")
+      .in("data-application" / "v1" / "onchain")
       .out(opaqueJson("OnChain"))
       .summary("Current on-chain state")
       .tag("state")
 
   val checkpoint: PublicEndpoint[Unit, Unit, Json, Any] =
     endpoint.get
-      .in("v1" / "checkpoint")
+      .in("data-application" / "v1" / "checkpoint")
       .out(opaqueJson("Checkpoint[CalculatedState]"))
       .summary("Current checkpoint (calculated state snapshot)")
       .tag("state")
@@ -72,7 +78,7 @@ object ApiEndpoints {
   // ---- state machines ----
   val stateMachinesList: PublicEndpoint[Option[String], Unit, Json, Any] =
     endpoint.get
-      .in("v1" / "state-machines")
+      .in("data-application" / "v1" / "state-machines")
       .in(statusQuery)
       .out(opaqueJson("SortedMap[UUID, StateMachineFiberRecord]"))
       .summary("List state machines (optionally filtered by status)")
@@ -80,28 +86,28 @@ object ApiEndpoints {
 
   val stateMachineGet: PublicEndpoint[UUID, Unit, Json, Any] =
     endpoint.get
-      .in("v1" / "state-machines" / path[UUID]("id"))
+      .in("data-application" / "v1" / "state-machines" / path[UUID]("id"))
       .out(opaqueJson("Option[StateMachineFiberRecord]"))
       .summary("Get a state machine by id")
       .tag("state-machines")
 
   val stateMachineEvents: PublicEndpoint[UUID, Unit, Json, Any] =
     endpoint.get
-      .in("v1" / "state-machines" / path[UUID]("id") / "events")
+      .in("data-application" / "v1" / "state-machines" / path[UUID]("id") / "events")
       .out(opaqueJson("List[EventReceipt]"))
       .summary("Event receipts for a state machine")
       .tag("state-machines")
 
   val stateMachineAudit: PublicEndpoint[UUID, Unit, Json, Any] =
     endpoint.get
-      .in("v1" / "state-machines" / path[UUID]("id") / "audit")
+      .in("data-application" / "v1" / "state-machines" / path[UUID]("id") / "audit")
       .out(opaqueJson("Rendered audit trail"))
       .summary("Audit trail for a state machine")
       .tag("state-machines")
 
   val stateMachineEstimateFee: PublicEndpoint[(UUID, String), Unit, TransitionFeeEstimate, Any] =
     endpoint.get
-      .in("v1" / "state-machines" / path[UUID]("id") / "estimate-fee")
+      .in("data-application" / "v1" / "state-machines" / path[UUID]("id") / "estimate-fee")
       .in(query[String]("event"))
       .out(jsonBody[TransitionFeeEstimate])
       .summary("Static fee estimate for a transition")
@@ -109,7 +115,7 @@ object ApiEndpoints {
 
   val stateMachineStateProof: PublicEndpoint[(UUID, Option[String]), Unit, Json, Any] =
     endpoint.get
-      .in("v1" / "state-machines" / path[UUID]("id") / "state-proof")
+      .in("data-application" / "v1" / "state-machines" / path[UUID]("id") / "state-proof")
       .in(fieldQuery)
       .out(opaqueJson("StateProofResponse"))
       .summary("Committed-state Merkle proof for a state machine")
@@ -118,7 +124,7 @@ object ApiEndpoints {
   // ---- scripts ----
   val scriptsList: PublicEndpoint[Option[String], Unit, Json, Any] =
     endpoint.get
-      .in("v1" / "scripts")
+      .in("data-application" / "v1" / "scripts")
       .in(statusQuery)
       .out(opaqueJson("SortedMap[UUID, ScriptFiberRecord]"))
       .summary("List scripts (optionally filtered by status)")
@@ -126,28 +132,28 @@ object ApiEndpoints {
 
   val scriptGet: PublicEndpoint[UUID, Unit, Json, Any] =
     endpoint.get
-      .in("v1" / "scripts" / path[UUID]("id"))
+      .in("data-application" / "v1" / "scripts" / path[UUID]("id"))
       .out(opaqueJson("Option[ScriptFiberRecord]"))
       .summary("Get a script by id")
       .tag("scripts")
 
   val scriptInvocations: PublicEndpoint[UUID, Unit, Json, Any] =
     endpoint.get
-      .in("v1" / "scripts" / path[UUID]("id") / "invocations")
+      .in("data-application" / "v1" / "scripts" / path[UUID]("id") / "invocations")
       .out(opaqueJson("List[ScriptInvocation]"))
       .summary("Invocation history for a script")
       .tag("scripts")
 
   val scriptEstimateFee: PublicEndpoint[UUID, Unit, ScriptFeeEstimate, Any] =
     endpoint.get
-      .in("v1" / "scripts" / path[UUID]("id") / "estimate-fee")
+      .in("data-application" / "v1" / "scripts" / path[UUID]("id") / "estimate-fee")
       .out(jsonBody[ScriptFeeEstimate])
       .summary("Static fee estimate for a script invocation")
       .tag("scripts")
 
   val scriptStateProof: PublicEndpoint[(UUID, Option[String]), Unit, Json, Any] =
     endpoint.get
-      .in("v1" / "scripts" / path[UUID]("id") / "state-proof")
+      .in("data-application" / "v1" / "scripts" / path[UUID]("id") / "state-proof")
       .in(fieldQuery)
       .out(opaqueJson("StateProofResponse"))
       .summary("Committed-state Merkle proof for a script")
@@ -156,7 +162,7 @@ object ApiEndpoints {
   // ---- assets ----
   val assetStateProof: PublicEndpoint[(UUID, Option[String]), Unit, Json, Any] =
     endpoint.get
-      .in("v1" / "assets" / path[UUID]("id") / "state-proof")
+      .in("data-application" / "v1" / "assets" / path[UUID]("id") / "state-proof")
       .in(fieldQuery)
       .out(opaqueJson("StateProofResponse"))
       .summary("Custody (committed-state) Merkle proof for an asset")
@@ -165,21 +171,21 @@ object ApiEndpoints {
   // ---- registry ----
   val registryAll: PublicEndpoint[Unit, Unit, Json, Any] =
     endpoint.get
-      .in("v1" / "registry")
+      .in("data-application" / "v1" / "registry")
       .out(opaqueJson("SortedMap[RegistryName, RegistryEntry]"))
       .summary("All registered package versions")
       .tag("registry")
 
   val registryReverse: PublicEndpoint[UUID, Unit, Json, Any] =
     endpoint.get
-      .in("v1" / "registry" / "reverse" / path[UUID]("id"))
+      .in("data-application" / "v1" / "registry" / "reverse" / path[UUID]("id"))
       .out(opaqueJson("Option[RegistryName]"))
       .summary("Reverse-lookup a registry name by id")
       .tag("registry")
 
   val registryByName: PublicEndpoint[String, Unit, Json, Any] =
     endpoint.get
-      .in("v1" / "registry" / path[String]("name"))
+      .in("data-application" / "v1" / "registry" / path[String]("name"))
       .out(opaqueJson("Option[RegistryEntry]"))
       .summary("Resolve a registry entry by name")
       .tag("registry")
@@ -187,7 +193,7 @@ object ApiEndpoints {
   // ---- webhooks ----
   val webhookSubscribe: PublicEndpoint[SubscribeRequest, Unit, SubscribeResponse, Any] =
     endpoint.post
-      .in("v1" / "webhooks" / "subscribe")
+      .in("data-application" / "v1" / "webhooks" / "subscribe")
       .in(jsonBody[SubscribeRequest])
       .out(jsonBody[SubscribeResponse].description("201 Created"))
       .summary("Register a webhook subscriber")
@@ -195,14 +201,14 @@ object ApiEndpoints {
 
   val webhookUnsubscribe: PublicEndpoint[String, Unit, Unit, Any] =
     endpoint.delete
-      .in("v1" / "webhooks" / "subscribe" / path[String]("id"))
+      .in("data-application" / "v1" / "webhooks" / "subscribe" / path[String]("id"))
       .out(statusCode(StatusCode.NoContent))
       .summary("Unregister a webhook subscriber")
       .tag("webhooks")
 
   val webhookSubscribers: PublicEndpoint[Unit, Unit, SubscriberList, Any] =
     endpoint.get
-      .in("v1" / "webhooks" / "subscribers")
+      .in("data-application" / "v1" / "webhooks" / "subscribers")
       .out(jsonBody[SubscriberList])
       .summary("List webhook subscribers (secrets redacted)")
       .tag("webhooks")

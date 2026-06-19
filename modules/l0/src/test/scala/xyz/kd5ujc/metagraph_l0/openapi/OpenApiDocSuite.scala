@@ -17,20 +17,20 @@ object OpenApiDocSuite extends SimpleIOSuite {
 
   pureTest("documents every custom path family") {
     val expectedPaths = List(
-      "/v1/version",
-      "/v1/util/hash",
-      "/v1/onchain",
-      "/v1/checkpoint",
-      "/v1/state-machines",
-      "/v1/state-machines/{id}/estimate-fee",
-      "/v1/state-machines/{id}/state-proof",
-      "/v1/scripts",
-      "/v1/scripts/{id}/invocations",
-      "/v1/assets/{id}/state-proof",
-      "/v1/registry",
-      "/v1/registry/reverse/{id}",
-      "/v1/webhooks/subscribe",
-      "/v1/webhooks/subscribers"
+      "/data-application/v1/version",
+      "/data-application/v1/util/hash",
+      "/data-application/v1/onchain",
+      "/data-application/v1/checkpoint",
+      "/data-application/v1/state-machines",
+      "/data-application/v1/state-machines/{id}/estimate-fee",
+      "/data-application/v1/state-machines/{id}/state-proof",
+      "/data-application/v1/scripts",
+      "/data-application/v1/scripts/{id}/invocations",
+      "/data-application/v1/assets/{id}/state-proof",
+      "/data-application/v1/registry",
+      "/data-application/v1/registry/reverse/{id}",
+      "/data-application/v1/webhooks/subscribe",
+      "/data-application/v1/webhooks/subscribers"
     )
     expectedPaths.map(p => expect(doc.contains(p))).reduce(_ and _)
   }

@@ -21,7 +21,7 @@ object OpenApiRoutesSuite extends SimpleIOSuite {
         expect.all(
           resp.status == Status.Ok,
           body.contains("\"openapi\""),
-          body.contains("/v1/version")
+          body.contains("/data-application/v1/version")
         )
       }
     }
@@ -30,7 +30,7 @@ object OpenApiRoutesSuite extends SimpleIOSuite {
   test("GET /docs serves Swagger-UI") {
     routes.orNotFound.run(Request[IO](Method.GET, uri"/docs")).flatMap { resp =>
       resp.as[String].map { body =>
-        expect.all(resp.status == Status.Ok, body.contains("swagger-ui"), body.contains("/openapi.json"))
+        expect.all(resp.status == Status.Ok, body.contains("swagger-ui"), body.contains("openapi.json"))
       }
     }
   }
