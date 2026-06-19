@@ -113,6 +113,9 @@ lazy val currencyL0 = (project in file("modules/l0"))
     commonSettings,
     commonTestSettings,
     name := "ottochain-currency-l0",
+    // Pin the assembled entrypoint: the openapi GenerateOpenApi object also has a `main`, so without this
+    // sbt-assembly sees two discovered main classes, writes no Main-Class, and ml0.jar won't boot.
+    assembly / mainClass := Some("xyz.kd5ujc.metagraph_l0.Main"),
     libraryDependencies ++= Seq(
       Libraries.tapirCore,
       Libraries.tapirJsonCirce,
