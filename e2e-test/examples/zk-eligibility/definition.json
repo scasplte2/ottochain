@@ -29,6 +29,9 @@
               { "cat": ["0x", { "substr": [{ "var": "event.publicValues" }, 130, 64] }] },
               "0x6273151f959616268004b58dbb21e5c851b7b8d04498b4aabee12291d22fc034"
             ]
+          },
+          {
+            "===": [{ "substr": [{ "var": "event.publicValues" }, 256, 2] }, "01"]
           }
         ]
       },
