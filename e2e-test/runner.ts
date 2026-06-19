@@ -332,6 +332,8 @@ interface TestStep {
   method?: string;
   args?: string;
   expectedResult?: unknown;
+  /** Assert this step is REJECTED: 'dl1' (HTTP 400, structural) or 'ml0' (admitted then combine-denied). */
+  expectRejected?: 'dl1' | 'ml0';
   [key: string]: unknown;
 }
 
@@ -719,6 +721,33 @@ async function runFlow(
 
       if (!sendSuccess) {
         throw new Error(`Failed to send transaction for ${step.action}`);
+      }
+
+      // Combine-rejection path (e.g. a guard-denied processEvent): the update is admitted by DL1 but
+      // rejected at ML0 combine, which leaves the fiber UNMUTATED (Combiner.scala appends a
+      // RejectionReceipt to the snapshot, not the fiber). There is no sequence bump to confirm, so we
+      // let several ordinals pass and assert the fiber's sequence number did NOT advance.
+      if (step.expectRejected === 'ml0') {
+        await waitForOrdinalAdvance(ml0Urls[0], 4, {
+          label: `${step.action} reject settle on ${activeCid}`,
+          log: log ? { write: (s: string) => log.write(s) } : undefined,
+        });
+        let afterSeq = -1;
+        try {
+          const rec = (await new HttpClient(
+            `${ml0Urls[0]}/data-application/v1/${entityPath}`
+          ).get<unknown>('')) as { sequenceNumber?: number } | null;
+          afterSeq = rec?.sequenceNumber ?? -1;
+        } catch {
+          // The fiber may legitimately not exist (e.g. a rejected create) — treat as unchanged.
+        }
+        if (afterSeq > preSendSeqNum) {
+          throw new Error(
+            `expected ML0 to reject ${step.action} on ${activeCid} (guard denied), but the fiber advanced past seq ${preSendSeqNum} to ${afterSeq}`
+          );
+        }
+        l(' \x1b[32mOK (ML0 rejected, state unchanged)\x1b[0m');
+        continue;
       }
 
       // Ordinal-based confirmation with auto-resubmit

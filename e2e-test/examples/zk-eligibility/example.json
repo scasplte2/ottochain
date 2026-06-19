@@ -11,6 +11,13 @@
       "file": "event-prove.ts",
       "from": "pending",
       "to": "eligible"
+    },
+    {
+      "name": "prove (tampered)",
+      "description": "A flipped-nibble proof; groth16_verify fails so the guard denies the transition",
+      "file": "event-prove-bad.ts",
+      "from": "pending",
+      "to": "pending"
     }
   ],
   "testFlows": [
@@ -20,6 +27,14 @@
       "steps": [
         { "action": "create", "definition": "definition.json", "initialData": "initial-data.json" },
         { "action": "processEvent", "event": "event-prove.ts", "expectedState": "eligible" }
+      ]
+    },
+    {
+      "name": "Rejected — a tampered proof is denied, fiber unchanged",
+      "description": "Create the loan fiber, then submit a TAMPERED proof; groth16_verify fails, the guard denies the transition, ML0 records a RejectionReceipt and the fiber stays at pending (sequence number unchanged).",
+      "steps": [
+        { "action": "create", "definition": "definition.json", "initialData": "initial-data.json" },
+        { "action": "processEvent", "event": "event-prove-bad.ts", "expectRejected": "ml0" }
       ]
     }
   ]

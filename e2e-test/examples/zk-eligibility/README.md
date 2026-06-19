@@ -31,18 +31,20 @@ node terminal.js sm process-event --address <CID> --event examples/zk-eligibilit
 ## The reject path (`event-prove-bad.ts`)
 
 `event-prove-bad.ts` is the same bundle with a flipped proof nibble — `groth16_verify` fails → ML0
-`CombineRejected` → a `RejectionReceipt` is logged and the fiber stays `pending`. It is **not** an
-automated `testFlow` step: a rejection leaves the fiber UNMUTATED (`Combiner.scala` appends a receipt
-to the snapshot, not the fiber), but the `processEvent` validator requires the sequence number to
-advance — so it can only be checked manually:
+`CombineRejected` → a `RejectionReceipt` is logged and the fiber stays `pending`. This is an
+**automated `testFlow`** via `expectRejected: "ml0"`: a rejection leaves the fiber UNMUTATED
+(`Combiner.scala` appends a receipt to the snapshot, not the fiber), so instead of confirming a
+sequence bump, the runner lets several ordinals pass and asserts the fiber's sequence number did NOT
+advance — the guard denied the transition.
+
+Manual check:
 
 ```bash
 node terminal.js sm process-event --address <CID> --event examples/zk-eligibility/event-prove-bad.ts
 # observe: state still "pending", a RejectionReceipt in the snapshot logs
 ```
 
-Rejection (garbage proof, wrong `exprHash`, wrong `outputHash`, absent witness, and a valid proof of a
-FALSE evaluation) is exhaustively asserted at the combiner level in the chain's
-`SemiPrivateGuardedTransferSuite`.
+The combiner-level coverage (garbage proof, wrong `exprHash`, wrong `outputHash`, absent witness, and a
+valid proof of a FALSE evaluation) lives in the chain's `SemiPrivateGuardedTransferSuite`.
 
 > **Audit:** metakit's `groth16_verify` is unaudited — a semi-private guard must not protect real value until it is.
