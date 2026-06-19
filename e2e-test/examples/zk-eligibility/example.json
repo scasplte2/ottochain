@@ -1,0 +1,26 @@
+{
+  "name": "ZK Eligibility (semi-private guarded transition)",
+  "description": "A loan fiber whose pending->eligible transition is gated by a SEMI-PRIVATE guard: it verifies a real SP1-Groth16 eligibility proof (groth16_verify) AND binds the proof's committed public values to a pinned public rule (exprHash==logicHash, outputHash==keccak256(\"true\")) parsed with native substr/cat. The borrower proves they qualify without revealing the private data. Pairs with @ottochain/sdk/zk and the chain SemiPrivateGuard.",
+  "type": "state-machine",
+  "definition": "definition.json",
+  "initialData": "initial-data.json",
+  "events": [
+    {
+      "name": "prove",
+      "description": "Carry a valid SP1-Groth16 eligibility proof; the guard verifies + binds it",
+      "file": "event-prove.ts",
+      "from": "pending",
+      "to": "eligible"
+    }
+  ],
+  "testFlows": [
+    {
+      "name": "Eligible — valid proof advances the fiber",
+      "description": "Create the loan fiber, then submit a REAL eligibility proof; the on-chain guard runs groth16_verify + the public-values binding and the fiber transitions pending -> eligible.",
+      "steps": [
+        { "action": "create", "definition": "definition.json", "initialData": "initial-data.json" },
+        { "action": "processEvent", "event": "event-prove.ts", "expectedState": "eligible" }
+      ]
+    }
+  ]
+}

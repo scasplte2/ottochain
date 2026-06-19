@@ -1,0 +1,7 @@
+{
+  "loanId": "LOAN-ZK-001",
+  "borrower": "did:otto:alice",
+  "principal": 1000,
+  "rule": "score >= 700",
+  "status": "awaiting eligibility proof"
+}

@@ -1,0 +1,44 @@
+{
+  "states": {
+    "pending": { "id": "pending", "isFinal": false, "metadata": null },
+    "eligible": { "id": "eligible", "isFinal": true, "metadata": null }
+  },
+  "initialState": "pending",
+  "transitions": [
+    {
+      "from": "pending",
+      "to": "eligible",
+      "eventName": "prove",
+      "guard": {
+        "and": [
+          {
+            "groth16_verify": [
+              "0x00a311c00aaa949133f52d6485167ce2f9b448320db65a94f3dd8876a59fcdd0",
+              { "var": "event.publicValues" },
+              { "var": "event.proof" }
+            ]
+          },
+          {
+            "===": [
+              { "cat": ["0x", { "substr": [{ "var": "event.publicValues" }, 2, 64] }] },
+              "0xccc6c597899c9e0dc76770e4e288fd9796431140c8cd4facc9f01daeaac0bb62"
+            ]
+          },
+          {
+            "===": [
+              { "cat": ["0x", { "substr": [{ "var": "event.publicValues" }, 130, 64] }] },
+              "0x6273151f959616268004b58dbb21e5c851b7b8d04498b4aabee12291d22fc034"
+            ]
+          }
+        ]
+      },
+      "effect": {
+        "merge": [
+          { "var": "state" },
+          { "provenRule": { "cat": ["0x", { "substr": [{ "var": "event.publicValues" }, 2, 64] }] } }
+        ]
+      },
+      "dependencies": []
+    }
+  ]
+}
