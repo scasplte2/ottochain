@@ -24,7 +24,18 @@ export interface OrdinalConfirmationOptions {
   maxResubmits?: number;
   /** Polling interval in ms (default: 2000) */
   pollIntervalMs?: number;
-  /** Maximum total time to wait in ms (default: 300000 = 5 min) */
+  /**
+   * Liveness gate: if the ML0 ordinal does not advance AT ALL for this long, the chain is
+   * considered stalled (consensus not live) and we fail fast. This is the ONLY wall-clock gate
+   * — a chain that keeps producing snapshots is given its full ordinal budget no matter how slow
+   * each ordinal is. Decouples "slow chain" (keep waiting) from "dead chain" (fail). (default: 120000 = 2 min)
+   */
+  stallTimeoutMs?: number;
+  /**
+   * Optional absolute wall-clock ceiling, purely as a runaway backstop. Undefined (the default)
+   * means no absolute cap: termination is guaranteed by the ordinal budget
+   * (`ordinalThreshold` × (`maxResubmits` + 1) ordinals) and the stall gate.
+   */
   maxTotalTimeMs?: number;
   /** Label for logging */
   label: string;
@@ -79,15 +90,26 @@ async function checkEntity(
 /**
  * Wait for ML0 confirmation using ordinal-based tracking with auto-resubmit.
  *
+ * The budget is measured in ML0 *ordinals*, not wall-clock: a chain that keeps producing
+ * snapshots — however slowly — is given its full ordinal budget. Wall-clock only ever fails the
+ * wait through the stall gate, which fires when the ordinal stops advancing entirely (consensus
+ * dead). This decouples "slow chain" (keep waiting) from "dead chain" (fail fast) — the metagraph's
+ * idle snapshot cadence can be tens of seconds per ordinal, so a fixed wall-clock cap used to kill
+ * confirmations that were merely slow, not stuck.
+ *
  * Algorithm:
- * 1. Record start ordinal
- * 2. Poll entity state every pollIntervalMs
- * 3. If predicate satisfied → success
- * 4. If (currentOrdinal - startOrdinal) >= ordinalThreshold:
- *    - Resubmit the transaction
- *    - Reset startOrdinal to currentOrdinal
- *    - Increment resubmit counter
- * 5. If resubmits exhausted or maxTotalTime exceeded → fail
+ * 1. Record start ordinal; remember the last time the ordinal advanced.
+ * 2. Poll entity state every pollIntervalMs.
+ * 3. If predicate satisfied → success.
+ * 4. If the ordinal has not advanced for `stallTimeoutMs` → fail (consensus not live). This also
+ *    covers ML0 being unreachable (ordinal reads return null → no advance).
+ * 5. If (currentOrdinal - startOrdinal) >= ordinalThreshold → resubmit, reset the window, bump the
+ *    resubmit counter.
+ * 6. If resubmits are exhausted and another full threshold passes → fail (ordinal budget spent).
+ * 7. `maxTotalTimeMs`, if set, is an absolute runaway backstop only.
+ *
+ * Termination is guaranteed: while the chain advances, the ordinal budget is consumed; if it stops
+ * advancing, the stall gate fires.
  */
 export async function waitForOrdinalConfirmation(
   opts: OrdinalConfirmationOptions
@@ -100,7 +122,8 @@ export async function waitForOrdinalConfirmation(
     ordinalThreshold = 5,
     maxResubmits = 3,
     pollIntervalMs = 2000,
-    maxTotalTimeMs = 300000,
+    stallTimeoutMs = 120000,
+    maxTotalTimeMs,
     label,
     log,
   } = opts;
@@ -127,13 +150,28 @@ export async function waitForOrdinalConfirmation(
 
   w(`\n      ⏳ ML0 confirm ${label} (ord=${startSnapshot.ordinal})`);
 
+  // Liveness tracking: the highest ordinal we've seen and when we last saw it advance.
+  // The stall gate keys off lack-of-progress, NOT total elapsed time, so a slow-but-live
+  // chain is never killed mid-flight.
+  let lastObservedOrdinal = startSnapshot.ordinal;
+  let lastAdvanceTime = Date.now();
+
   while (true) {
-    // Check timeout
-    if (Date.now() - startTime > maxTotalTimeMs) {
-      w(' ✗ (timeout)\n');
+    // Stall gate (also covers ML0 unreachable: ordinal never advances → fires here).
+    if (Date.now() - lastAdvanceTime > stallTimeoutMs) {
+      w(' ✗ (stalled)\n');
       throw new Error(
-        `${TAG} Confirmation timed out for ${label} after ${maxTotalTimeMs}ms ` +
-          `(${resubmitCount} resubmits)`
+        `${TAG} ML0 ordinal stuck at ${lastObservedOrdinal} for ${stallTimeoutMs}ms for ${label} ` +
+          `— consensus not live (${resubmitCount} resubmits)`
+      );
+    }
+
+    // Absolute runaway backstop (opt-in).
+    if (maxTotalTimeMs !== undefined && Date.now() - startTime > maxTotalTimeMs) {
+      w(' ✗ (abs-timeout)\n');
+      throw new Error(
+        `${TAG} Confirmation hit absolute ceiling for ${label} after ${maxTotalTimeMs}ms ` +
+          `(${resubmitCount} resubmits, ordinal ${lastObservedOrdinal})`
       );
     }
 
@@ -147,12 +185,18 @@ export async function waitForOrdinalConfirmation(
     // Check current ordinal
     const currentSnapshot = await getCurrentOrdinal(ml0BaseUrl);
     if (currentSnapshot) {
+      // Liveness: reset the stall clock whenever the chain makes progress.
+      if (currentSnapshot.ordinal > lastObservedOrdinal) {
+        lastObservedOrdinal = currentSnapshot.ordinal;
+        lastAdvanceTime = Date.now();
+      }
+
       const ordinalDelta = currentSnapshot.ordinal - startSnapshot.ordinal;
 
       if (ordinalDelta >= ordinalThreshold) {
         // Ordinals passed without our tx appearing — resubmit
         if (resubmitCount >= maxResubmits) {
-          w(' ✗ (resubmits exhausted)\n');
+          w(' ✗ (ordinal budget exhausted)\n');
           throw new Error(
             `${TAG} Confirmation failed for ${label}: transaction not included after ` +
               `${ordinalThreshold} ordinals × ${maxResubmits + 1} attempts ` +
