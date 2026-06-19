@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.7.15](https://github.com/scasplte2/ottochain/compare/v0.7.14...v0.7.15) (2026-06-19)
+
+
+### Features
+
+* **api:** type the domain response bodies in the OpenAPI contract ([#174](https://github.com/scasplte2/ottochain/issues/174)) ([69f8328](https://github.com/scasplte2/ottochain/commit/69f8328d09337bddba24d4e8c364066159ab4118))
+* **api:** typed network interface with OpenAPI contract ([#173](https://github.com/scasplte2/ottochain/issues/173)) ([6248b80](https://github.com/scasplte2/ottochain/commit/6248b80a6fb43e85c0ca932107c312ba6e77004e))
+* **asset:** asset model RFCs + interop functor + phase-0 TokenBehavior ([#166](https://github.com/scasplte2/ottochain/issues/166)) ([03712d8](https://github.com/scasplte2/ottochain/commit/03712d8d50c4e07953b6d40581d61d7f0a93a3f5))
+* **asset:** semi-private guarded transition (groth16 + public-values binding) ([#172](https://github.com/scasplte2/ottochain/issues/172)) ([dc2e256](https://github.com/scasplte2/ottochain/commit/dc2e256839d53bf18b52123348b1aed0fb432041))
+* **asset:** sigma-gated morphism guards (metakit rc.5) + docs ([#167](https://github.com/scasplte2/ottochain/issues/167)) ([61fe3b5](https://github.com/scasplte2/ottochain/commit/61fe3b58f1894e18f3d596413058a9a37181e474))
+* **committed:** committed-state migration — verifiable calc-state root into the currency snapshot ([#164](https://github.com/scasplte2/ottochain/issues/164)) ([4f80285](https://github.com/scasplte2/ottochain/commit/4f802853976ad387bcc8f9a8365e71c3e9fd5873))
+* **fiber:** runtime-updatable (dynamic) dependencies ([#24](https://github.com/scasplte2/ottochain/issues/24)) ([#175](https://github.com/scasplte2/ottochain/issues/175)) ([53eb846](https://github.com/scasplte2/ottochain/commit/53eb846ca629e09177653d194a6b03d591e5b57b))
+* **l0:** fee/gas estimation (metakit rc.2) + split ML0 routes into handlers ([#163](https://github.com/scasplte2/ottochain/issues/163)) ([1a3ce87](https://github.com/scasplte2/ottochain/commit/1a3ce8733faf1416ddd219fcaea7312d16dd022a))
+* multi-party fiber signing (clean rebase of [#133](https://github.com/scasplte2/ottochain/issues/133)) ([#161](https://github.com/scasplte2/ottochain/issues/161)) ([9a7fe81](https://github.com/scasplte2/ottochain/commit/9a7fe81c191d917859e34b13cbf0b735c8eebf47))
+* **registry:** versionable scripts + machine/script symmetry + signing invariant fixes ([#162](https://github.com/scasplte2/ottochain/issues/162)) ([1a7717f](https://github.com/scasplte2/ottochain/commit/1a7717f17865c8fe26af9ea7bb8a7f4ca72cd9f3))
+* versionable contracts (registry, verified binding, migration, conformance gate) ([#154](https://github.com/scasplte2/ottochain/issues/154)) ([c939f1a](https://github.com/scasplte2/ottochain/commit/c939f1aab7ee0c0528c32bb988758499f61f5980))
+
+
+### Code Refactoring
+
+* migrate oracle terminology to script (api, engine, docs) ([#165](https://github.com/scasplte2/ottochain/issues/165)) ([b6cb0cd](https://github.com/scasplte2/ottochain/commit/b6cb0cd5040aa7a2e7b6e17012c9de5711d8bb12))
+
+
+### Documentation
+
+* add OttoChain whitepaper v0.4 draft ([#91](https://github.com/scasplte2/ottochain/issues/91)) ([980563d](https://github.com/scasplte2/ottochain/commit/980563de39fc4775ac28e893da5974ce82593a46))
+* add ottochain-new-app skill specification ([#106](https://github.com/scasplte2/ottochain/issues/106)) ([9d63631](https://github.com/scasplte2/ottochain/commit/9d636317ad055ac4041cbf0c936dd38d5ddce60a))
+* authenticated trie integration spec — Phase 1B state-proof API ([#119](https://github.com/scasplte2/ottochain/issues/119)) ([9a9edae](https://github.com/scasplte2/ottochain/commit/9a9edaead553f24509d5f56e37f9ef0b2b39dcce))
+* constellation metagraph integration analysis + Phase 1 spec ([#107](https://github.com/scasplte2/ottochain/issues/107)) ([d0d7765](https://github.com/scasplte2/ottochain/commit/d0d77650c9febc62c3e806dece0b14bec8cd1156))
+* sigma_verify message-binding spec + audit artifact ([#170](https://github.com/scasplte2/ottochain/issues/170)) ([924df6e](https://github.com/scasplte2/ottochain/commit/924df6e30a2de7ff4fcdf74012c503779da7eb4b))
+
 ## [0.7.14](https://github.com/scasplte2/ottochain/compare/v0.7.13...v0.7.14) (2026-03-24)
 
 
