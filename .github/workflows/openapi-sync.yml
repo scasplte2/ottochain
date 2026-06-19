@@ -1,0 +1,67 @@
+name: Sync OpenAPI contract
+
+# Auto-fixes a PR whose code changed the API surface but didn't regenerate docs/openapi.json: it
+# regenerates the contract and, if it drifted, commits the regen straight to the PR's OWN branch — so
+# the spec change is reviewed alongside the code that caused it (atomic), and the blocking
+# 'Check OpenAPI contract is up to date' gate in ci.yml re-runs green on the new commit. No [skip ci]:
+# the push intentionally re-triggers CI so the gate sees the fix; the re-run of this workflow then finds
+# no drift and is a no-op (no loop).
+#
+# Fork PRs get a read-only GITHUB_TOKEN and cannot be pushed to, so they are skipped here and their
+# authors regenerate by hand (the blocking gate still catches them).
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: openapi-sync-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  sync-openapi:
+    name: Sync OpenAPI contract
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Set up sbt
+        uses: sbt/setup-sbt@v1
+
+      - name: Cache sbt
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.sbt
+            ~/.ivy2/cache
+            ~/.cache/coursier
+          key: ${{ runner.os }}-sbt-${{ hashFiles('**/*.sbt', 'project/plugins.sbt', 'project/build.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-sbt-
+
+      - name: Regenerate OpenAPI contract
+        run: sbt "currencyL0/runMain xyz.kd5ujc.metagraph_l0.openapi.GenerateOpenApi docs/openapi.json"
+
+      - name: Commit to the PR branch if the contract drifted
+        run: |
+          if git diff --quiet -- docs/openapi.json; then
+            echo "docs/openapi.json already in sync — nothing to do."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add docs/openapi.json
+            git commit -m "chore: sync docs/openapi.json"
+            git push origin HEAD:${{ github.head_ref }}
+            echo "Committed regenerated docs/openapi.json to the PR branch; CI will re-run and the gate will pass."
+          fi

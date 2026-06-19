@@ -96,11 +96,15 @@ jobs:
       - name: Check linting (scalafix)
         run: sbt "scalafixAll --check"
 
+      # Blocking gate: the committed contract must match the generator output, so the spec change stays
+      # atomic + reviewable inside the PR. The 'Sync OpenAPI contract' workflow auto-commits the regen to
+      # same-repo PR branches (its push re-runs CI green), so an author rarely has to do anything; a fork
+      # PR (read-only token, no auto-push) regenerates manually per the message below.
       - name: Check OpenAPI contract is up to date
         run: |
           sbt "currencyL0/runMain xyz.kd5ujc.metagraph_l0.openapi.GenerateOpenApi docs/openapi.json"
           if ! git diff --exit-code -- docs/openapi.json; then
-            echo "::error::docs/openapi.json is stale. Run: sbt \"currencyL0/runMain xyz.kd5ujc.metagraph_l0.openapi.GenerateOpenApi docs/openapi.json\" and commit the result."
+            echo "::error::docs/openapi.json is stale. The 'Sync OpenAPI contract' workflow auto-commits the regen to same-repo PR branches; for a fork PR run: sbt \"currencyL0/runMain xyz.kd5ujc.metagraph_l0.openapi.GenerateOpenApi docs/openapi.json\" and commit it."
             exit 1
           fi
 
