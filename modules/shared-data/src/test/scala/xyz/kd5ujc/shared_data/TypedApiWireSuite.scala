@@ -126,4 +126,15 @@ object TypedApiWireSuite extends SimpleIOSuite {
     val keys = keysOf(SubscribeResponse("sub_1", "https://x", Instant.EPOCH).asJson)
     expect(keys == Set("id", "callbackUrl", "createdAt"))
   }
+
+  // Locks the OpenAPI DomainSchemas leaf choices to the actual circe wire: a leaf typed as integer/string
+  // in the contract must encode as a number/string here, or the published schema would lie.
+  pureTest("DomainSchemas leaf encodings match the wire") {
+    expect.all(
+      SnapshotOrdinal.MinValue.asJson.isNumber, // schema: integer
+      FiberOrdinal.unsafeApply(1L).asJson.isNumber, // schema: integer
+      Hash("0" * 64).asJson.isString, // schema: string
+      (xyz.kd5ujc.schema.fiber.FiberStatus.Active: xyz.kd5ujc.schema.fiber.FiberStatus).asJson.isString
+    )
+  }
 }

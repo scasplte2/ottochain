@@ -77,11 +77,11 @@
         "operationId" : "getData-applicationV1Onchain",
         "responses" : {
           "200" : {
-            "description" : "OnChain",
+            "description" : "",
             "content" : {
               "application/json" : {
                 "schema" : {
-                  
+                  "$ref" : "#/components/schemas/OnChain"
                 }
               }
             }
@@ -98,11 +98,11 @@
         "operationId" : "getData-applicationV1Checkpoint",
         "responses" : {
           "200" : {
-            "description" : "Checkpoint[CalculatedState]",
+            "description" : "",
             "content" : {
               "application/json" : {
                 "schema" : {
-                  
+                  "$ref" : "#/components/schemas/Checkpoint_CalculatedState"
                 }
               }
             }
@@ -130,11 +130,11 @@
         ],
         "responses" : {
           "200" : {
-            "description" : "SortedMap[UUID, StateMachineFiberRecord]",
+            "description" : "",
             "content" : {
               "application/json" : {
                 "schema" : {
-                  
+                  "$ref" : "#/components/schemas/Map_V"
                 }
               }
             }
@@ -172,11 +172,11 @@
         ],
         "responses" : {
           "200" : {
-            "description" : "Option[StateMachineFiberRecord]",
+            "description" : "",
             "content" : {
               "application/json" : {
                 "schema" : {
-                  
+                  "$ref" : "#/components/schemas/StateMachineFiberRecord"
                 }
               }
             }
@@ -214,11 +214,14 @@
         ],
         "responses" : {
           "200" : {
-            "description" : "List[EventReceipt]",
+            "description" : "",
             "content" : {
               "application/json" : {
                 "schema" : {
-                  
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/EventReceipt"
+                  }
                 }
               }
             }
@@ -357,11 +360,11 @@
         ],
         "responses" : {
           "200" : {
-            "description" : "StateProofResponse",
+            "description" : "",
             "content" : {
               "application/json" : {
                 "schema" : {
-                  
+                  "$ref" : "#/components/schemas/StateProofResponse"
                 }
               }
             }
@@ -399,11 +402,11 @@
         ],
         "responses" : {
           "200" : {
-            "description" : "SortedMap[UUID, ScriptFiberRecord]",
+            "description" : "",
             "content" : {
               "application/json" : {
                 "schema" : {
-                  
+                  "$ref" : "#/components/schemas/Map_V"
                 }
               }
             }
@@ -441,11 +444,11 @@
         ],
         "responses" : {
           "200" : {
-            "description" : "Option[ScriptFiberRecord]",
+            "description" : "",
             "content" : {
               "application/json" : {
                 "schema" : {
-                  
+                  "$ref" : "#/components/schemas/ScriptFiberRecord"
                 }
               }
             }
@@ -483,11 +486,14 @@
         ],
         "responses" : {
           "200" : {
-            "description" : "List[ScriptInvocation]",
+            "description" : "",
             "content" : {
               "application/json" : {
                 "schema" : {
-                  
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/ScriptInvocation"
+                  }
                 }
               }
             }
@@ -576,11 +582,11 @@
         ],
         "responses" : {
           "200" : {
-            "description" : "StateProofResponse",
+            "description" : "",
             "content" : {
               "application/json" : {
                 "schema" : {
-                  
+                  "$ref" : "#/components/schemas/StateProofResponse"
                 }
               }
             }
@@ -627,11 +633,11 @@
         ],
         "responses" : {
           "200" : {
-            "description" : "StateProofResponse",
+            "description" : "",
             "content" : {
               "application/json" : {
                 "schema" : {
-                  
+                  "$ref" : "#/components/schemas/StateProofResponse"
                 }
               }
             }
@@ -658,11 +664,11 @@
         "operationId" : "getData-applicationV1Registry",
         "responses" : {
           "200" : {
-            "description" : "SortedMap[RegistryName, RegistryEntry]",
+            "description" : "",
             "content" : {
               "application/json" : {
                 "schema" : {
-                  
+                  "$ref" : "#/components/schemas/Map_V"
                 }
               }
             }
@@ -690,11 +696,11 @@
         ],
         "responses" : {
           "200" : {
-            "description" : "Option[RegistryName]",
+            "description" : "",
             "content" : {
               "application/json" : {
                 "schema" : {
-                  
+                  "type" : "string"
                 }
               }
             }
@@ -731,11 +737,11 @@
         ],
         "responses" : {
           "200" : {
-            "description" : "Option[RegistryEntry]",
+            "description" : "",
             "content" : {
               "application/json" : {
                 "schema" : {
-                  
+                  "$ref" : "#/components/schemas/RegistryEntry"
                 }
               }
             }
@@ -832,6 +838,355 @@
   },
   "components" : {
     "schemas" : {
+      "AssetCommit" : {
+        "title" : "AssetCommit",
+        "type" : "object",
+        "required" : [
+          "behavior",
+          "sequenceNumber",
+          "recordHash"
+        ],
+        "properties" : {
+          "behavior" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "sequenceNumber" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "recordHash" : {
+            "type" : "string"
+          },
+          "origin" : {
+            "type" : "string"
+          }
+        }
+      },
+      "AssetRecord" : {
+        "title" : "AssetRecord",
+        "type" : "object",
+        "required" : [
+          "assetId",
+          "schemaBinding",
+          "behavior",
+          "holder",
+          "amount",
+          "sequenceNumber",
+          "creationOrdinal",
+          "latestUpdateOrdinal"
+        ],
+        "properties" : {
+          "assetId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "schemaBinding" : {
+            "$ref" : "#/components/schemas/SchemaBinding"
+          },
+          "behavior" : {
+            "$ref" : "#/components/schemas/TokenBehavior"
+          },
+          "holder" : {
+            
+          },
+          "amount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "sequenceNumber" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "creationOrdinal" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "latestUpdateOrdinal" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "expiresAt" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "componentFiberIds" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "format" : "uuid"
+            }
+          },
+          "componentsCommitment" : {
+            "type" : "string"
+          },
+          "parentCompositeId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "provenance" : {
+            "$ref" : "#/components/schemas/OriginProvenance"
+          }
+        }
+      },
+      "CalculatedState" : {
+        "title" : "CalculatedState",
+        "type" : "object",
+        "required" : [
+          "stateMachines",
+          "scripts",
+          "registry",
+          "reverseNames",
+          "assets",
+          "usedNonces"
+        ],
+        "properties" : {
+          "stateMachines" : {
+            "$ref" : "#/components/schemas/Map_V"
+          },
+          "scripts" : {
+            "$ref" : "#/components/schemas/Map_V"
+          },
+          "registry" : {
+            "$ref" : "#/components/schemas/Map_V"
+          },
+          "reverseNames" : {
+            "$ref" : "#/components/schemas/Map_V"
+          },
+          "assets" : {
+            "$ref" : "#/components/schemas/Map_V"
+          },
+          "usedNonces" : {
+            "$ref" : "#/components/schemas/Map_V"
+          }
+        }
+      },
+      "Checkpoint_CalculatedState" : {
+        "title" : "Checkpoint_CalculatedState",
+        "type" : "object",
+        "required" : [
+          "ordinal",
+          "state"
+        ],
+        "properties" : {
+          "ordinal" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "state" : {
+            "$ref" : "#/components/schemas/CalculatedState"
+          }
+        }
+      },
+      "EmittedEvent" : {
+        "title" : "EmittedEvent",
+        "type" : "object",
+        "required" : [
+          "name",
+          "data"
+        ],
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          },
+          "data" : {
+            
+          },
+          "destination" : {
+            "type" : "string"
+          }
+        }
+      },
+      "EventReceipt" : {
+        "title" : "EventReceipt",
+        "type" : "object",
+        "required" : [
+          "fiberId",
+          "sequenceNumber",
+          "eventName",
+          "ordinal",
+          "fromState",
+          "toState",
+          "success",
+          "gasUsed",
+          "triggersFired"
+        ],
+        "properties" : {
+          "fiberId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "sequenceNumber" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "eventName" : {
+            "type" : "string"
+          },
+          "ordinal" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "fromState" : {
+            "type" : "string"
+          },
+          "toState" : {
+            "type" : "string"
+          },
+          "success" : {
+            "type" : "boolean"
+          },
+          "gasUsed" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "triggersFired" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "errorMessage" : {
+            "type" : "string"
+          },
+          "sourceFiberId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "emittedEvents" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/EmittedEvent"
+            }
+          }
+        }
+      },
+      "FiberCommit" : {
+        "title" : "FiberCommit",
+        "type" : "object",
+        "required" : [
+          "recordHash",
+          "sequenceNumber"
+        ],
+        "properties" : {
+          "recordHash" : {
+            "type" : "string"
+          },
+          "stateDataHash" : {
+            "type" : "string"
+          },
+          "sequenceNumber" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "Map_V" : {
+        "title" : "Map_V",
+        "type" : "object",
+        "additionalProperties" : {
+          "$ref" : "#/components/schemas/FiberCommit"
+        }
+      },
+      "OnChain" : {
+        "title" : "OnChain",
+        "type" : "object",
+        "required" : [
+          "fiberCommits",
+          "latestLogs",
+          "registryCommits",
+          "assetCommits"
+        ],
+        "properties" : {
+          "fiberCommits" : {
+            "$ref" : "#/components/schemas/Map_V"
+          },
+          "latestLogs" : {
+            "$ref" : "#/components/schemas/Map_V"
+          },
+          "registryCommits" : {
+            "$ref" : "#/components/schemas/Map_V"
+          },
+          "assetCommits" : {
+            "$ref" : "#/components/schemas/Map_V"
+          }
+        }
+      },
+      "OriginProvenance" : {
+        "title" : "OriginProvenance",
+        "type" : "object",
+        "required" : [
+          "originChainId",
+          "originAssetRef",
+          "attestationHash"
+        ],
+        "properties" : {
+          "originChainId" : {
+            "type" : "string"
+          },
+          "originAssetRef" : {
+            "type" : "string"
+          },
+          "fullPath" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "attestationHash" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RegistryEntry" : {
+        "title" : "RegistryEntry",
+        "type" : "object",
+        "required" : [
+          "name",
+          "target",
+          "metadata"
+        ],
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          },
+          "owner" : {
+            "type" : "array",
+            "uniqueItems" : true,
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "target" : {
+            
+          },
+          "metadata" : {
+            "$ref" : "#/components/schemas/Map_V"
+          }
+        }
+      },
+      "SchemaBinding" : {
+        "title" : "SchemaBinding",
+        "type" : "object",
+        "required" : [
+          "name",
+          "version",
+          "schemaHash",
+          "logicHash"
+        ],
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          },
+          "version" : {
+            "type" : "string"
+          },
+          "schemaHash" : {
+            "type" : "string"
+          },
+          "logicHash" : {
+            "type" : "string"
+          }
+        }
+      },
       "ScriptFeeEstimate" : {
         "title" : "ScriptFeeEstimate",
         "type" : "object",
@@ -861,6 +1216,228 @@
           },
           "note" : {
             "type" : "string"
+          }
+        }
+      },
+      "ScriptFiberRecord" : {
+        "title" : "ScriptFiberRecord",
+        "type" : "object",
+        "required" : [
+          "fiberId",
+          "creationOrdinal",
+          "latestUpdateOrdinal",
+          "scriptProgram",
+          "accessControl",
+          "sequenceNumber",
+          "status"
+        ],
+        "properties" : {
+          "fiberId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "creationOrdinal" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "latestUpdateOrdinal" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "scriptProgram" : {
+            
+          },
+          "stateData" : {
+            
+          },
+          "stateDataHash" : {
+            "type" : "string"
+          },
+          "accessControl" : {
+            
+          },
+          "sequenceNumber" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "owners" : {
+            "type" : "array",
+            "uniqueItems" : true,
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "lastInvocation" : {
+            "$ref" : "#/components/schemas/ScriptInvocation"
+          },
+          "schemaBinding" : {
+            "$ref" : "#/components/schemas/SchemaBinding"
+          }
+        }
+      },
+      "ScriptInvocation" : {
+        "title" : "ScriptInvocation",
+        "type" : "object",
+        "required" : [
+          "fiberId",
+          "method",
+          "args",
+          "result",
+          "gasUsed",
+          "invokedAt",
+          "invokedBy"
+        ],
+        "properties" : {
+          "fiberId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "method" : {
+            "type" : "string"
+          },
+          "args" : {
+            
+          },
+          "result" : {
+            
+          },
+          "gasUsed" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "invokedAt" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "invokedBy" : {
+            "type" : "string"
+          }
+        }
+      },
+      "StateMachineFiberRecord" : {
+        "title" : "StateMachineFiberRecord",
+        "type" : "object",
+        "required" : [
+          "fiberId",
+          "creationOrdinal",
+          "previousUpdateOrdinal",
+          "latestUpdateOrdinal",
+          "definition",
+          "currentState",
+          "stateData",
+          "stateDataHash",
+          "sequenceNumber",
+          "status"
+        ],
+        "properties" : {
+          "fiberId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "creationOrdinal" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "previousUpdateOrdinal" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "latestUpdateOrdinal" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "definition" : {
+            
+          },
+          "currentState" : {
+            "type" : "string"
+          },
+          "stateData" : {
+            
+          },
+          "stateDataHash" : {
+            "type" : "string"
+          },
+          "sequenceNumber" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "owners" : {
+            "type" : "array",
+            "uniqueItems" : true,
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "lastReceipt" : {
+            "$ref" : "#/components/schemas/EventReceipt"
+          },
+          "parentFiberId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "childFiberIds" : {
+            "type" : "array",
+            "uniqueItems" : true,
+            "items" : {
+              "type" : "string",
+              "format" : "uuid"
+            }
+          },
+          "schemaBinding" : {
+            "$ref" : "#/components/schemas/SchemaBinding"
+          },
+          "authorizedSigners" : {
+            "type" : "array",
+            "uniqueItems" : true,
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "StateProofResponse" : {
+        "title" : "StateProofResponse",
+        "type" : "object",
+        "required" : [
+          "key",
+          "ordinal",
+          "committedRoot",
+          "mptRoot",
+          "record",
+          "proof"
+        ],
+        "properties" : {
+          "key" : {
+            "type" : "string"
+          },
+          "ordinal" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "committedRoot" : {
+            
+          },
+          "mptRoot" : {
+            
+          },
+          "record" : {
+            
+          },
+          "proof" : {
+            
+          },
+          "field" : {
+            "type" : "string"
+          },
+          "fieldValue" : {
+            
           }
         }
       },
@@ -946,6 +1523,34 @@
             "items" : {
               "$ref" : "#/components/schemas/Subscriber"
             }
+          }
+        }
+      },
+      "TokenBehavior" : {
+        "title" : "TokenBehavior",
+        "type" : "object",
+        "required" : [
+          "transferable",
+          "splittable",
+          "combinable",
+          "expirable",
+          "governable"
+        ],
+        "properties" : {
+          "transferable" : {
+            "type" : "boolean"
+          },
+          "splittable" : {
+            "type" : "boolean"
+          },
+          "combinable" : {
+            "type" : "boolean"
+          },
+          "expirable" : {
+            "type" : "boolean"
+          },
+          "governable" : {
+            "type" : "boolean"
           }
         }
       },
