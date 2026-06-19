@@ -1,0 +1,9 @@
+{
+  "swapId": "HTLC-001",
+  "sender": "did:otto:alice",
+  "recipient": "did:otto:bob",
+  "amount": 1000,
+  "hashLock": "0x0fb849f7cf35865c838cef48782e803b2c38263e2f467799c87eff168eb4d897",
+  "timeoutOrdinal": 9999999999,
+  "status": "locked"
+}

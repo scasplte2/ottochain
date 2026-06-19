@@ -1,0 +1,50 @@
+{
+  "states": {
+    "LOCKED": { "id": "LOCKED", "isFinal": false, "metadata": null },
+    "CLAIMED": { "id": "CLAIMED", "isFinal": true, "metadata": null },
+    "REFUNDED": { "id": "REFUNDED", "isFinal": true, "metadata": null }
+  },
+  "initialState": "LOCKED",
+  "transitions": [
+    {
+      "from": "LOCKED",
+      "to": "CLAIMED",
+      "eventName": "claim",
+      "guard": {
+        "and": [
+          {
+            "===": [
+              { "poseidon": [[{ "var": "event.secret" }]] },
+              { "var": "state.hashLock" }
+            ]
+          },
+          { "<=": [{ "var": "$ordinal" }, { "var": "state.timeoutOrdinal" }] }
+        ]
+      },
+      "effect": {
+        "merge": [
+          { "var": "state" },
+          {
+            "status": "claimed",
+            "preimage": { "var": "event.secret" },
+            "claimedAt": { "var": "$ordinal" }
+          }
+        ]
+      },
+      "dependencies": []
+    },
+    {
+      "from": "LOCKED",
+      "to": "REFUNDED",
+      "eventName": "refund",
+      "guard": { ">": [{ "var": "$ordinal" }, { "var": "state.timeoutOrdinal" }] },
+      "effect": {
+        "merge": [
+          { "var": "state" },
+          { "status": "refunded", "refundedAt": { "var": "$ordinal" } }
+        ]
+      },
+      "dependencies": []
+    }
+  ]
+}
