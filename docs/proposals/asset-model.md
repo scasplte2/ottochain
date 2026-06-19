@@ -856,7 +856,7 @@ opcodes were built for. A `mintPolicy` "any 2 of these 3 issuer keys may mint, h
                                         {"type":"dlog","pk":"<issuerB-64B>"},
                                         {"type":"dlog","pk":"<issuerC-64B>"} ] },
                                     {"var": "witness.proof"},
-                                    {"var": "witness.message"} ] } }
+                                    {"var": "sigmaMessage"} ] } }
 ```
 
 or a `Governed` morphism authorized by **any one of a ring** of holders (hidden which):
@@ -865,13 +865,17 @@ or a `Governed` morphism authorized by **any one of a ring** of holders (hidden 
 { "morphisms": { "Compose": { "visibility": "Governed",
     "guard": { "sigma_verify": [ {"type":"or","children":[ {"type":"dlog","pk":"<A-64B>"},
                                                             {"type":"dlog","pk":"<B-64B>"} ]},
-                                 {"var":"witness.proof"}, {"var":"witness.message"} ] } } } }
+                                 {"var":"witness.proof"}, {"var":"sigmaMessage"} ] } } } }
 ```
 
-The proposition (the issuer / holder set) is FIXED in the policy; the prover's per-use `proof` + bound
-`message` ride on the `witness`. Same combiner path, same determinism — `sigma_verify` is just another
-JLVM opcode through `evalGuardOrReject`. (Authorization, not confidential amounts: this is orthogonal to
-the 5-bit behavior model and to the shielded-mode subsystem of `asset-shielded-mode.md`.)
+The proposition (the issuer / holder set) is FIXED in the policy; the per-use `proof` rides on the
+`witness`, but the **bound `message` is computed by the chain**, NOT taken from the witness — the
+combiner injects it as the reserved `sigmaMessage` context var: a domain-separated digest over the
+operation plus a chain-held single-use **expirable nonce**. A witness-supplied message is REPLAYABLE
+across actions / assets and is forbidden — see `docs/design/sigma-message-binding-spec.md`. Same
+combiner path, same determinism — `sigma_verify` is just another JLVM opcode through
+`evalGuardOrReject`. (Authorization, not confidential amounts: this is orthogonal to the 5-bit
+behavior model and to the shielded-mode subsystem of `asset-shielded-mode.md`.)
 
 This is **pure wiring, no new cryptography**: the verifier opcodes already exist in metakit and run
 DETERMINISTICALLY in the combiner through the same `JsonLogicEvaluator.evaluateWithGas` path every guard
