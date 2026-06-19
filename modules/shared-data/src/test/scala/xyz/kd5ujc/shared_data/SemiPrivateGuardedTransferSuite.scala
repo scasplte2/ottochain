@@ -229,6 +229,77 @@ object SemiPrivateGuardedTransferSuite extends SimpleIOSuite {
   }
 
   // ════════════════════════════════════════════════════════════════════════════════════════════════
+  // (C) REAL PROOF — a GPU-generated SP1-Groth16 proof flows through the FULL guard end-to-end
+  // ════════════════════════════════════════════════════════════════════════════════════════════════
+
+  private def realWitness(pv: String, proof: String): JsonLogicValue =
+    MapValue(Map("publicValues" -> StrValue(pv), "proof" -> StrValue(proof)))
+
+  // The guard pins the REAL program vkey (same program => the same vkey verifies both proofs).
+  private val realGuard: JsonLogicExpression =
+    SemiPrivateGuard.guard(SemiPrivateRealProof.vkey, logicHash, keccakTrue)
+
+  test("full semi-private guard: a REAL SP1 proof (rule true) is accepted and the Transfer SUCCEEDS") {
+    TestFixture.resource(Set(Alice, Bob)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val aliceHolder = AssetHolder.Wallet(fixture.registry.addresses(Alice))
+      val bobHolder = AssetHolder.Wallet(fixture.registry.addresses(Bob))
+
+      val policy = transferGovernedBy("semiprivreal", realGuard)
+      val mint = MintAsset(a1, SchemaRef(asset("semiprivreal"), VersionReq.Latest), aliceHolder, 100L)
+      val transfer = ApplyMorphism(
+        a1,
+        MorphismKind.Transfer,
+        FiberOrdinal.MinValue,
+        recipient = Some(bobHolder),
+        witness = Some(realWitness(SemiPrivateRealProof.truePublicValues, SemiPrivateRealProof.trueProof))
+      )
+      for {
+        prP <- fixture.registry.generateProofs(policy, Set(Alice))
+        s1  <- combiner.insert(genesis, Signed(policy, prP))
+        prM <- fixture.registry.generateProofs(mint, Set(Alice))
+        s2  <- combiner.insert(s1, Signed(mint, prM))
+        prT <- fixture.registry.generateProofs(transfer, Set(Alice))
+        s3  <- combiner.insert(s2, Signed(transfer, prT))
+      } yield expect(!wasRejected(s3)) and
+      expect(assetOf(s3, a1).map(_.holder).contains(bobHolder))
+    }
+  }
+
+  test("full semi-private guard: a REAL proof whose rule returned FALSE is rejected (output binding)") {
+    TestFixture.resource(Set(Alice, Bob)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val aliceHolder = AssetHolder.Wallet(fixture.registry.addresses(Alice))
+      val bobHolder = AssetHolder.Wallet(fixture.registry.addresses(Bob))
+
+      val policy = transferGovernedBy("semiprivrealf", realGuard)
+      val mint = MintAsset(a1, SchemaRef(asset("semiprivrealf"), VersionReq.Latest), aliceHolder, 100L)
+      // groth16_verify passes (a valid proof) but the rule evaluated FALSE => outputHash != keccak("true")
+      // => the output binding fails => graceful rejection. The guard enforces the OUTCOME, not just validity.
+      val transfer = ApplyMorphism(
+        a1,
+        MorphismKind.Transfer,
+        FiberOrdinal.MinValue,
+        recipient = Some(bobHolder),
+        witness = Some(realWitness(SemiPrivateRealProof.falsePublicValues, SemiPrivateRealProof.falseProof))
+      )
+      for {
+        prP <- fixture.registry.generateProofs(policy, Set(Alice))
+        s1  <- combiner.insert(genesis, Signed(policy, prP))
+        prM <- fixture.registry.generateProofs(mint, Set(Alice))
+        s2  <- combiner.insert(s1, Signed(mint, prM))
+        prT <- fixture.registry.generateProofs(transfer, Set(Alice))
+        s3  <- combiner.insert(s2, Signed(transfer, prT))
+      } yield expect(wasRejected(s3)) and
+      expect(assetOf(s3, a1).map(_.holder).contains(aliceHolder))
+    }
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════════════════════════
   // The word offsets are the SDK<->chain contract (0x|exprHash|dataHash|outputHash|ok, 64-hex words).
   // ════════════════════════════════════════════════════════════════════════════════════════════════
 
