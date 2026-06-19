@@ -978,6 +978,28 @@
           }
         }
       },
+      "DynamicDependency" : {
+        "title" : "DynamicDependency",
+        "type" : "object",
+        "required" : [
+          "fiberId",
+          "active",
+          "addedAt"
+        ],
+        "properties" : {
+          "fiberId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "active" : {
+            "type" : "boolean"
+          },
+          "addedAt" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
       "EmittedEvent" : {
         "title" : "EmittedEvent",
         "type" : "object",
@@ -1398,6 +1420,12 @@
             "uniqueItems" : true,
             "items" : {
               "type" : "string"
+            }
+          },
+          "dynamicDependencies" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/DynamicDependency"
             }
           }
         }
