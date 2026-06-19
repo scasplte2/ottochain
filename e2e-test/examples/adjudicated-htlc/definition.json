@@ -1,0 +1,95 @@
+{
+  "states": {
+    "LOCKED": { "id": "LOCKED", "isFinal": false, "metadata": null },
+    "DISPUTED": { "id": "DISPUTED", "isFinal": false, "metadata": null },
+    "CLAIMED": { "id": "CLAIMED", "isFinal": true, "metadata": null },
+    "REFUNDED": { "id": "REFUNDED", "isFinal": true, "metadata": null }
+  },
+  "initialState": "LOCKED",
+  "transitions": [
+    {
+      "from": "LOCKED",
+      "to": "CLAIMED",
+      "eventName": "claim",
+      "guard": {
+        "and": [
+          {
+            "===": [
+              { "poseidon": [[{ "var": "event.secret" }]] },
+              { "var": "state.hashLock" }
+            ]
+          },
+          { "<=": [{ "var": "$ordinal" }, { "var": "state.timeoutOrdinal" }] }
+        ]
+      },
+      "effect": {
+        "merge": [
+          { "var": "state" },
+          { "status": "claimed", "preimage": { "var": "event.secret" }, "claimedAt": { "var": "$ordinal" } }
+        ]
+      },
+      "dependencies": []
+    },
+    {
+      "from": "LOCKED",
+      "to": "REFUNDED",
+      "eventName": "refund",
+      "guard": { ">": [{ "var": "$ordinal" }, { "var": "state.timeoutOrdinal" }] },
+      "effect": {
+        "merge": [{ "var": "state" }, { "status": "refunded", "refundedAt": { "var": "$ordinal" } }]
+      },
+      "dependencies": []
+    },
+    {
+      "from": "LOCKED",
+      "to": "DISPUTED",
+      "eventName": "dispute",
+      "guard": { "!!": [{ "var": "event.reason" }] },
+      "effect": {
+        "merge": [
+          { "var": "state" },
+          { "status": "disputed", "disputeReason": { "var": "event.reason" }, "disputedAt": { "var": "$ordinal" } }
+        ]
+      },
+      "dependencies": []
+    },
+    {
+      "from": "DISPUTED",
+      "to": "CLAIMED",
+      "eventName": "adjudicate_release",
+      "guard": {
+        "schnorr_verify": [
+          { "var": "state.adjudicatorPubKey" },
+          "0x72656c656173653a48544c432d41444a2d303031",
+          { "var": "event.ruling" }
+        ]
+      },
+      "effect": {
+        "merge": [
+          { "var": "state" },
+          { "status": "adjudicated_release", "resolution": "release", "resolvedAt": { "var": "$ordinal" } }
+        ]
+      },
+      "dependencies": []
+    },
+    {
+      "from": "DISPUTED",
+      "to": "REFUNDED",
+      "eventName": "adjudicate_refund",
+      "guard": {
+        "schnorr_verify": [
+          { "var": "state.adjudicatorPubKey" },
+          "0x726566756e643a48544c432d41444a2d303031",
+          { "var": "event.ruling" }
+        ]
+      },
+      "effect": {
+        "merge": [
+          { "var": "state" },
+          { "status": "adjudicated_refund", "resolution": "refund", "resolvedAt": { "var": "$ordinal" } }
+        ]
+      },
+      "dependencies": []
+    }
+  ]
+}

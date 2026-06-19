@@ -1,0 +1,50 @@
+{
+  "name": "Adjudicated HTLC (griefing-resistant hash-time-lock)",
+  "description": "Extends the atomic-swap HTLC with an adjudication path that defeats the griefing / free-option attack — where a counterparty withholds the preimage to hold funds hostage until the timeout. When a swap stalls, either party can `dispute`, and a trusted high-reputation adjudicator resolves it before timeout by signing a ruling (BN254 Schnorr, schnorr_verify) that releases to the recipient or refunds the sender. Exercises both poseidon (hash-lock) and schnorr_verify (adjudicator authority).",
+  "type": "state-machine",
+  "definition": "definition.json",
+  "initialData": "initial-data.json",
+  "events": [
+    { "name": "claim", "description": "Reveal the correct preimage; poseidon([secret]) === hashLock", "file": "event-claim.ts", "from": "LOCKED", "to": "CLAIMED" },
+    { "name": "claim (wrong preimage)", "description": "Wrong secret; poseidon mismatch denies the claim", "file": "event-claim-bad.ts", "from": "LOCKED", "to": "LOCKED" },
+    { "name": "dispute", "description": "Flag the swap as stalled/griefed; opens it for adjudication", "file": "event-dispute.ts", "from": "LOCKED", "to": "DISPUTED" },
+    { "name": "adjudicate_release", "description": "Adjudicator's valid Schnorr-signed RELEASE ruling", "file": "event-adjudicate-release.ts", "from": "DISPUTED", "to": "CLAIMED" },
+    { "name": "adjudicate_release (forged ruling)", "description": "A tampered signature; schnorr_verify fails", "file": "event-adjudicate-bad.ts", "from": "DISPUTED", "to": "DISPUTED" }
+  ],
+  "testFlows": [
+    {
+      "name": "Honest claim — correct preimage opens the lock",
+      "description": "The cooperative path is unchanged: reveal the true preimage and the fiber goes LOCKED -> CLAIMED.",
+      "steps": [
+        { "action": "create", "definition": "definition.json", "initialData": "initial-data.json" },
+        { "action": "processEvent", "event": "event-claim.ts", "expectedState": "CLAIMED" }
+      ]
+    },
+    {
+      "name": "Rejected — wrong preimage cannot claim",
+      "description": "poseidon([secret]) != hashLock, the guard denies the claim, the fiber stays at LOCKED.",
+      "steps": [
+        { "action": "create", "definition": "definition.json", "initialData": "initial-data.json" },
+        { "action": "processEvent", "event": "event-claim-bad.ts", "expectRejected": "ml0" }
+      ]
+    },
+    {
+      "name": "Griefing resolved — dispute, then the adjudicator releases",
+      "description": "The anti-griefing path: a stalled swap is disputed (LOCKED -> DISPUTED), then the trusted adjudicator's valid Schnorr RELEASE ruling is verified (schnorr_verify against the pinned adjudicatorPubKey) and the funds are released to the recipient (DISPUTED -> CLAIMED) — without waiting for the timeout.",
+      "steps": [
+        { "action": "create", "definition": "definition.json", "initialData": "initial-data.json" },
+        { "action": "processEvent", "event": "event-dispute.ts", "expectedState": "DISPUTED" },
+        { "action": "processEvent", "event": "event-adjudicate-release.ts", "expectedState": "CLAIMED" }
+      ]
+    },
+    {
+      "name": "Rejected — a forged ruling cannot resolve",
+      "description": "Security of the adjudication path: after a dispute, a TAMPERED ruling fails schnorr_verify, so no one can steal the funds by faking the adjudicator — the fiber stays at DISPUTED.",
+      "steps": [
+        { "action": "create", "definition": "definition.json", "initialData": "initial-data.json" },
+        { "action": "processEvent", "event": "event-dispute.ts", "expectedState": "DISPUTED" },
+        { "action": "processEvent", "event": "event-adjudicate-bad.ts", "expectRejected": "ml0" }
+      ]
+    }
+  ]
+}
