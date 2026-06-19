@@ -36,7 +36,7 @@ Companion: `docs/proposals/zk-coin-audit.md`, `docs/proposals/asset-model.md`,
 
 ## 1. The opcode reality (reconciled — one agent was wrong)
 
-metakit `1.8.0-rc.5` (pinned in `project/Dependencies.scala`) **does expose zk-verifier opcodes to the
+metakit `1.8.0-rc.7` (pinned in `project/Dependencies.scala`) **does expose zk-verifier opcodes to the
 JLVM, and they work in the combiner today.** This is not a claim — it is *demonstrated* by the shipped
 `ZkGatedMorphismSuite`, which builds a real `PoseidonMerkleTree` inclusion proof, gates a `Transfer`
 morphism on `{"pmt_verify": [...]}`, and asserts the on-chain opcode agrees with metakit's tree builder
