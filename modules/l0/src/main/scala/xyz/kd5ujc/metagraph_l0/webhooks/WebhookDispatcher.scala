@@ -16,6 +16,7 @@ import io.constellationnetwork.security.Hashed
 import io.constellationnetwork.security.signature.Signed
 
 import xyz.kd5ujc.schema.Updates._
+import xyz.kd5ujc.schema.api.webhooks._
 
 import io.circe.syntax._
 import org.http4s.client.Client

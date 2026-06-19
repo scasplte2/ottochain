@@ -112,7 +112,14 @@ lazy val currencyL0 = (project in file("modules/l0"))
     buildInfoSettings,
     commonSettings,
     commonTestSettings,
-    name := "ottochain-currency-l0"
+    name := "ottochain-currency-l0",
+    libraryDependencies ++= Seq(
+      Libraries.tapirCore,
+      Libraries.tapirJsonCirce,
+      Libraries.tapirHttp4sServer,
+      Libraries.tapirOpenApiDocs,
+      Libraries.sttpOpenApiCirce
+    )
   )
 
 lazy val currencyL1 = (project in file("modules/l1"))

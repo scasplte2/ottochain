@@ -16,8 +16,9 @@ import io.constellationnetwork.metagraph_sdk.std.Checkpoint
 import io.constellationnetwork.security.signature.Signed
 import io.constellationnetwork.security.{Hashed, SecurityProvider}
 
-import xyz.kd5ujc.metagraph_l0.webhooks.{NotificationStats, SubscriberRegistry, WebhookDispatcher}
+import xyz.kd5ujc.metagraph_l0.webhooks.{SubscriberRegistry, WebhookDispatcher}
 import xyz.kd5ujc.schema.Updates.OttochainMessage
+import xyz.kd5ujc.schema.api.webhooks.NotificationStats
 import xyz.kd5ujc.schema.fiber.FiberStatus
 import xyz.kd5ujc.schema.{CalculatedState, OnChain}
 import xyz.kd5ujc.shared_data.genesis.GenesisLoader
@@ -189,5 +190,5 @@ object ML0Service {
       new handlers.WebhookHandler[F](subscriberRegistry),
       new handlers.EstimateHandler[F](checkpointService),
       new handlers.StateProofHandler[F](reader)
-    ).public
+    ).public <+> openapi.OpenApiRoutes.routes[F]
 }

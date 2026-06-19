@@ -10,11 +10,9 @@ import io.constellationnetwork.metagraph_sdk.lifecycle.CheckpointService
 import io.constellationnetwork.metagraph_sdk.std.Checkpoint
 
 import xyz.kd5ujc.schema.CalculatedState
+import xyz.kd5ujc.schema.api.{FeeNotes, ScriptFeeEstimate, TransitionFeeEstimate}
 import xyz.kd5ujc.shared_data.fiber.FiberGasEstimator
 import xyz.kd5ujc.shared_data.lifecycle.validate.rules.FiberRules
-
-import io.circe.Json
-import io.circe.syntax.EncoderOps
 
 /**
  * Static, execution-free fee/gas estimate logic, backed by [[FiberGasEstimator]] (no JLVM run):
@@ -26,45 +24,41 @@ class EstimateHandler[F[_]: Async](
 ) {
 
   // worst executed path = sum(candidate guards) + max(candidate effect)
-  def transition(fiberId: UUID, eventName: String): F[Either[DataApplicationValidationError, Json]] =
+  def transition(fiberId: UUID, eventName: String): F[Either[DataApplicationValidationError, TransitionFeeEstimate]] =
     checkpointService.get.map { case Checkpoint(_, state) =>
       state.stateMachines.get(fiberId) match {
         case None =>
-          (FiberRules.Errors.FiberNotFound(fiberId): DataApplicationValidationError).asLeft[Json]
+          (FiberRules.Errors.FiberNotFound(fiberId): DataApplicationValidationError).asLeft[TransitionFeeEstimate]
         case Some(fiber) =>
           val est = FiberGasEstimator.estimateTransition(fiber.definition, fiber.currentState, eventName)
           val candidates = fiber.definition.transitionMap.getOrElse((fiber.currentState, eventName), Nil).size
-          Json
-            .obj(
-              "fiberId"              -> fiberId.asJson,
-              "currentState"         -> fiber.currentState.value.asJson,
-              "event"                -> eventName.asJson,
-              "gasEstimate"          -> est.cost.amount.asJson,
-              "opCount"              -> est.opCount.asJson,
-              "maxDepth"             -> est.depth.asJson,
-              "candidateTransitions" -> candidates.asJson,
-              "note" -> "static gas estimate (exact for non-scaling ops, floor where ops scale); authoritative charge is metered at execution".asJson
-            )
-            .asRight[DataApplicationValidationError]
+          TransitionFeeEstimate(
+            fiberId = fiberId,
+            currentState = fiber.currentState.value,
+            event = eventName,
+            gasEstimate = est.cost.amount,
+            opCount = est.opCount,
+            maxDepth = est.depth,
+            candidateTransitions = candidates,
+            note = FeeNotes.transition
+          ).asRight[DataApplicationValidationError]
       }
     }
 
-  def script(scriptId: UUID): F[Either[DataApplicationValidationError, Json]] =
+  def script(scriptId: UUID): F[Either[DataApplicationValidationError, ScriptFeeEstimate]] =
     checkpointService.get.map { case Checkpoint(_, state) =>
       state.scripts.get(scriptId) match {
         case None =>
-          (FiberRules.Errors.FiberNotFound(scriptId): DataApplicationValidationError).asLeft[Json]
+          (FiberRules.Errors.FiberNotFound(scriptId): DataApplicationValidationError).asLeft[ScriptFeeEstimate]
         case Some(script) =>
           val est = FiberGasEstimator.estimateScript(script.scriptProgram)
-          Json
-            .obj(
-              "scriptId"    -> scriptId.asJson,
-              "gasEstimate" -> est.cost.amount.asJson,
-              "opCount"     -> est.opCount.asJson,
-              "maxDepth"    -> est.depth.asJson,
-              "note"        -> "static gas estimate; authoritative charge is metered at execution".asJson
-            )
-            .asRight[DataApplicationValidationError]
+          ScriptFeeEstimate(
+            scriptId = scriptId,
+            gasEstimate = est.cost.amount,
+            opCount = est.opCount,
+            maxDepth = est.depth,
+            note = FeeNotes.script
+          ).asRight[DataApplicationValidationError]
       }
     }
 }

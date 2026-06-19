@@ -1,0 +1,1039 @@
+{
+  "openapi" : "3.1.0",
+  "info" : {
+    "title" : "OttoChain Metagraph API",
+    "version" : "1.0.0"
+  },
+  "paths" : {
+    "/v1/version" : {
+      "get" : {
+        "tags" : [
+          "meta"
+        ],
+        "summary" : "Service identity + build metadata",
+        "operationId" : "getV1Version",
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/VersionInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/util/hash" : {
+      "post" : {
+        "tags" : [
+          "meta"
+        ],
+        "summary" : "Canonical hash of a signed message",
+        "operationId" : "postV1UtilHash",
+        "requestBody" : {
+          "description" : "Signed[OttochainMessage]",
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "HashResult: { \"protocol message hash\": <hash>, \"protocol message\": <message> }",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/onchain" : {
+      "get" : {
+        "tags" : [
+          "state"
+        ],
+        "summary" : "Current on-chain state",
+        "operationId" : "getV1Onchain",
+        "responses" : {
+          "200" : {
+            "description" : "OnChain",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/checkpoint" : {
+      "get" : {
+        "tags" : [
+          "state"
+        ],
+        "summary" : "Current checkpoint (calculated state snapshot)",
+        "operationId" : "getV1Checkpoint",
+        "responses" : {
+          "200" : {
+            "description" : "Checkpoint[CalculatedState]",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/state-machines" : {
+      "get" : {
+        "tags" : [
+          "state-machines"
+        ],
+        "summary" : "List state machines (optionally filtered by status)",
+        "operationId" : "getV1State-machines",
+        "parameters" : [
+          {
+            "name" : "status",
+            "in" : "query",
+            "description" : "Filter by fiber status: ACTIVE | ARCHIVED | FAILED",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "SortedMap[UUID, StateMachineFiberRecord]",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: query parameter status",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/state-machines/{id}" : {
+      "get" : {
+        "tags" : [
+          "state-machines"
+        ],
+        "summary" : "Get a state machine by id",
+        "operationId" : "getV1State-machinesId",
+        "parameters" : [
+          {
+            "name" : "id",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string",
+              "format" : "uuid"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "Option[StateMachineFiberRecord]",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: path parameter id",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/state-machines/{id}/events" : {
+      "get" : {
+        "tags" : [
+          "state-machines"
+        ],
+        "summary" : "Event receipts for a state machine",
+        "operationId" : "getV1State-machinesIdEvents",
+        "parameters" : [
+          {
+            "name" : "id",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string",
+              "format" : "uuid"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "List[EventReceipt]",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: path parameter id",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/state-machines/{id}/audit" : {
+      "get" : {
+        "tags" : [
+          "state-machines"
+        ],
+        "summary" : "Audit trail for a state machine",
+        "operationId" : "getV1State-machinesIdAudit",
+        "parameters" : [
+          {
+            "name" : "id",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string",
+              "format" : "uuid"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "Rendered audit trail",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: path parameter id",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/state-machines/{id}/estimate-fee" : {
+      "get" : {
+        "tags" : [
+          "state-machines"
+        ],
+        "summary" : "Static fee estimate for a transition",
+        "operationId" : "getV1State-machinesIdEstimate-fee",
+        "parameters" : [
+          {
+            "name" : "id",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string",
+              "format" : "uuid"
+            }
+          },
+          {
+            "name" : "event",
+            "in" : "query",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TransitionFeeEstimate"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: path parameter id, Invalid value for: query parameter event",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/state-machines/{id}/state-proof" : {
+      "get" : {
+        "tags" : [
+          "proofs"
+        ],
+        "summary" : "Committed-state Merkle proof for a state machine",
+        "operationId" : "getV1State-machinesIdState-proof",
+        "parameters" : [
+          {
+            "name" : "id",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string",
+              "format" : "uuid"
+            }
+          },
+          {
+            "name" : "field",
+            "in" : "query",
+            "description" : "Optional: also surface this named `stateData` field of the proven record",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "StateProofResponse",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: path parameter id, Invalid value for: query parameter field",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/scripts" : {
+      "get" : {
+        "tags" : [
+          "scripts"
+        ],
+        "summary" : "List scripts (optionally filtered by status)",
+        "operationId" : "getV1Scripts",
+        "parameters" : [
+          {
+            "name" : "status",
+            "in" : "query",
+            "description" : "Filter by fiber status: ACTIVE | ARCHIVED | FAILED",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "SortedMap[UUID, ScriptFiberRecord]",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: query parameter status",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/scripts/{id}" : {
+      "get" : {
+        "tags" : [
+          "scripts"
+        ],
+        "summary" : "Get a script by id",
+        "operationId" : "getV1ScriptsId",
+        "parameters" : [
+          {
+            "name" : "id",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string",
+              "format" : "uuid"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "Option[ScriptFiberRecord]",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: path parameter id",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/scripts/{id}/invocations" : {
+      "get" : {
+        "tags" : [
+          "scripts"
+        ],
+        "summary" : "Invocation history for a script",
+        "operationId" : "getV1ScriptsIdInvocations",
+        "parameters" : [
+          {
+            "name" : "id",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string",
+              "format" : "uuid"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "List[ScriptInvocation]",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: path parameter id",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/scripts/{id}/estimate-fee" : {
+      "get" : {
+        "tags" : [
+          "scripts"
+        ],
+        "summary" : "Static fee estimate for a script invocation",
+        "operationId" : "getV1ScriptsIdEstimate-fee",
+        "parameters" : [
+          {
+            "name" : "id",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string",
+              "format" : "uuid"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ScriptFeeEstimate"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: path parameter id",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/scripts/{id}/state-proof" : {
+      "get" : {
+        "tags" : [
+          "proofs"
+        ],
+        "summary" : "Committed-state Merkle proof for a script",
+        "operationId" : "getV1ScriptsIdState-proof",
+        "parameters" : [
+          {
+            "name" : "id",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string",
+              "format" : "uuid"
+            }
+          },
+          {
+            "name" : "field",
+            "in" : "query",
+            "description" : "Optional: also surface this named `stateData` field of the proven record",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "StateProofResponse",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: path parameter id, Invalid value for: query parameter field",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/assets/{id}/state-proof" : {
+      "get" : {
+        "tags" : [
+          "proofs"
+        ],
+        "summary" : "Custody (committed-state) Merkle proof for an asset",
+        "operationId" : "getV1AssetsIdState-proof",
+        "parameters" : [
+          {
+            "name" : "id",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string",
+              "format" : "uuid"
+            }
+          },
+          {
+            "name" : "field",
+            "in" : "query",
+            "description" : "Optional: also surface this named `stateData` field of the proven record",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "StateProofResponse",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: path parameter id, Invalid value for: query parameter field",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/registry" : {
+      "get" : {
+        "tags" : [
+          "registry"
+        ],
+        "summary" : "All registered package versions",
+        "operationId" : "getV1Registry",
+        "responses" : {
+          "200" : {
+            "description" : "SortedMap[RegistryName, RegistryEntry]",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/registry/reverse/{id}" : {
+      "get" : {
+        "tags" : [
+          "registry"
+        ],
+        "summary" : "Reverse-lookup a registry name by id",
+        "operationId" : "getV1RegistryReverseId",
+        "parameters" : [
+          {
+            "name" : "id",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string",
+              "format" : "uuid"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "Option[RegistryName]",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: path parameter id",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/registry/{name}" : {
+      "get" : {
+        "tags" : [
+          "registry"
+        ],
+        "summary" : "Resolve a registry entry by name",
+        "operationId" : "getV1RegistryName",
+        "parameters" : [
+          {
+            "name" : "name",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "Option[RegistryEntry]",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/webhooks/subscribe" : {
+      "post" : {
+        "tags" : [
+          "webhooks"
+        ],
+        "summary" : "Register a webhook subscriber",
+        "operationId" : "postV1WebhooksSubscribe",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SubscribeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "201 Created",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SubscribeResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/webhooks/subscribe/{id}" : {
+      "delete" : {
+        "tags" : [
+          "webhooks"
+        ],
+        "summary" : "Unregister a webhook subscriber",
+        "operationId" : "deleteV1WebhooksSubscribeId",
+        "parameters" : [
+          {
+            "name" : "id",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "204" : {
+            "description" : ""
+          }
+        }
+      }
+    },
+    "/v1/webhooks/subscribers" : {
+      "get" : {
+        "tags" : [
+          "webhooks"
+        ],
+        "summary" : "List webhook subscribers (secrets redacted)",
+        "operationId" : "getV1WebhooksSubscribers",
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SubscriberList"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "ScriptFeeEstimate" : {
+        "title" : "ScriptFeeEstimate",
+        "type" : "object",
+        "required" : [
+          "scriptId",
+          "gasEstimate",
+          "opCount",
+          "maxDepth",
+          "note"
+        ],
+        "properties" : {
+          "scriptId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "gasEstimate" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "opCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "maxDepth" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "note" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SubscribeRequest" : {
+        "title" : "SubscribeRequest",
+        "type" : "object",
+        "required" : [
+          "callbackUrl"
+        ],
+        "properties" : {
+          "callbackUrl" : {
+            "type" : "string"
+          },
+          "secret" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SubscribeResponse" : {
+        "title" : "SubscribeResponse",
+        "type" : "object",
+        "required" : [
+          "id",
+          "callbackUrl",
+          "createdAt"
+        ],
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "callbackUrl" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
+      "Subscriber" : {
+        "title" : "Subscriber",
+        "type" : "object",
+        "required" : [
+          "id",
+          "callbackUrl",
+          "active",
+          "createdAt",
+          "failCount"
+        ],
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "callbackUrl" : {
+            "type" : "string"
+          },
+          "secret" : {
+            "type" : "string"
+          },
+          "active" : {
+            "type" : "boolean"
+          },
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "lastDeliveryAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "failCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "SubscriberList" : {
+        "title" : "SubscriberList",
+        "type" : "object",
+        "properties" : {
+          "subscribers" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Subscriber"
+            }
+          }
+        }
+      },
+      "TransitionFeeEstimate" : {
+        "title" : "TransitionFeeEstimate",
+        "type" : "object",
+        "required" : [
+          "fiberId",
+          "currentState",
+          "event",
+          "gasEstimate",
+          "opCount",
+          "maxDepth",
+          "candidateTransitions",
+          "note"
+        ],
+        "properties" : {
+          "fiberId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "currentState" : {
+            "type" : "string"
+          },
+          "event" : {
+            "type" : "string"
+          },
+          "gasEstimate" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "opCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "maxDepth" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "candidateTransitions" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "note" : {
+            "type" : "string"
+          }
+        }
+      },
+      "VersionInfo" : {
+        "title" : "VersionInfo",
+        "type" : "object",
+        "required" : [
+          "service",
+          "version",
+          "name",
+          "scalaVersion",
+          "sbtVersion",
+          "gitCommit",
+          "buildTime",
+          "tessellationVersion"
+        ],
+        "properties" : {
+          "service" : {
+            "type" : "string"
+          },
+          "version" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "scalaVersion" : {
+            "type" : "string"
+          },
+          "sbtVersion" : {
+            "type" : "string"
+          },
+          "gitCommit" : {
+            "type" : "string"
+          },
+          "buildTime" : {
+            "type" : "string"
+          },
+          "tessellationVersion" : {
+            "type" : "string"
+          }
+        }
+      }
+    }
+  }
+}

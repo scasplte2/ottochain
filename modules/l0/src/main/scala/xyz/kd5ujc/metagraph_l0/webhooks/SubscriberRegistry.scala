@@ -3,6 +3,8 @@ package xyz.kd5ujc.metagraph_l0.webhooks
 import cats.effect.kernel.{Async, Ref}
 import cats.implicits._
 
+import xyz.kd5ujc.schema.api.webhooks.Subscriber
+
 /**
  * Registry for webhook subscribers.
  *

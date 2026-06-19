@@ -15,12 +15,10 @@ import io.constellationnetwork.security.signature.Signed
 import xyz.kd5ujc.buildinfo.BuildInfo
 import xyz.kd5ujc.schema.OnChain
 import xyz.kd5ujc.schema.Updates.OttochainMessage
+import xyz.kd5ujc.schema.api.{HashResult, VersionInfo}
 
-import io.circe.Json
-import io.circe.syntax.EncoderOps
 import org.http4s.HttpRoutes
-import org.http4s.circe.CirceEntityCodec.circeEntityDecoder
-import org.http4s.circe.jsonEncoder
+import org.http4s.circe.CirceEntityCodec.{circeEntityDecoder, circeEntityEncoder}
 import org.http4s.server.Router
 
 class DataL1CustomRoutes[F[_]: Async](implicit
@@ -31,23 +29,21 @@ class DataL1CustomRoutes[F[_]: Async](implicit
     // Version endpoint for monitoring integration
     case GET -> Root / "version" =>
       Ok(
-        Json.obj(
-          "service"             -> "ottochain-dl1".asJson,
-          "version"             -> BuildInfo.version.asJson,
-          "name"                -> BuildInfo.name.asJson,
-          "scalaVersion"        -> BuildInfo.scalaVersion.asJson,
-          "sbtVersion"          -> BuildInfo.sbtVersion.asJson,
-          "gitCommit"           -> BuildInfo.gitCommit.asJson,
-          "buildTime"           -> BuildInfo.buildTime.asJson,
-          "tessellationVersion" -> io.constellationnetwork.BuildInfo.version.asJson
+        VersionInfo(
+          service = "ottochain-dl1",
+          version = BuildInfo.version,
+          name = BuildInfo.name,
+          scalaVersion = BuildInfo.scalaVersion,
+          sbtVersion = BuildInfo.sbtVersion,
+          gitCommit = BuildInfo.gitCommit,
+          buildTime = BuildInfo.buildTime,
+          tessellationVersion = io.constellationnetwork.BuildInfo.version
         )
       )
 
     case req @ POST -> Root / "util" / "hash" =>
       req.asR[Signed[OttochainMessage]] { msg =>
-        msg.value.computeDigest.flatMap { digest =>
-          Ok(Json.obj("protocol message hash" -> digest.asJson, "protocol message" -> msg.value.asJson))
-        }
+        msg.value.computeDigest.flatMap(digest => Ok(HashResult(digest, msg.value)))
       }
 
     case GET -> Root / "onchain" =>

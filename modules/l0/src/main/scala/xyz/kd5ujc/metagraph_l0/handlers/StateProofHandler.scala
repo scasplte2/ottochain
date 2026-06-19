@@ -8,6 +8,7 @@ import cats.syntax.all._
 import io.constellationnetwork.metagraph_sdk.lifecycle.committed.{CommitKey, CommittedReader}
 
 import xyz.kd5ujc.schema.CalculatedState
+import xyz.kd5ujc.schema.api.{ErrorResponse, StateProofResponse}
 
 import io.circe.Json
 import io.circe.syntax.EncoderOps
@@ -43,27 +44,26 @@ class StateProofHandler[F[_]: Async](reader: CommittedReader[F, CalculatedState]
     reader.committed.flatMap { c =>
       recordOf(c.state) match {
         case None =>
-          Response[F](Status.NotFound).withEntity(Json.obj("error" -> s"no committed record at $keyStr".asJson)).pure[F]
+          Response[F](Status.NotFound).withEntity(ErrorResponse(s"no committed record at $keyStr")).pure[F]
 
         case Some(record) =>
           c.proveKey(key).map {
             case Left(err) =>
-              Response[F](Status.InternalServerError).withEntity(Json.obj("error" -> err.getMessage.asJson))
+              Response[F](Status.InternalServerError).withEntity(ErrorResponse(err.getMessage))
 
             case Right(proof) =>
-              val base = Json.obj(
-                "key"           -> key.value.asJson,
-                "ordinal"       -> c.ordinal.asJson,
-                "committedRoot" -> c.roots.combinedHash.asJson,
-                "mptRoot"       -> c.roots.mptRoot.asJson,
-                "record"        -> record,
-                "proof"         -> proof.asJson
+              val resp = StateProofResponse(
+                key = key.value,
+                ordinal = c.ordinal,
+                committedRoot = c.roots.combinedHash.asJson,
+                mptRoot = c.roots.mptRoot.asJson,
+                record = record,
+                proof = proof.asJson,
+                field = field,
+                fieldValue =
+                  field.map(f => record.hcursor.downField("stateData").downField(f).focus.getOrElse(Json.Null))
               )
-              val body = field.fold(base) { f =>
-                val fieldValue = record.hcursor.downField("stateData").downField(f).focus.getOrElse(Json.Null)
-                base.deepMerge(Json.obj("field" -> f.asJson, "fieldValue" -> fieldValue))
-              }
-              Response[F](Status.Ok).withEntity(body)
+              Response[F](Status.Ok).withEntity(resp)
           }
       }
     }
