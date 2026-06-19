@@ -353,7 +353,8 @@ object FiberEngine {
                   spawns,
                   returnValue,
                   emittedEvents,
-                  assetTransfers
+                  assetTransfers,
+                  dependencyMutations
                 ) =>
               fiber match {
                 case sm: Records.StateMachineFiberRecord =>
@@ -365,7 +366,8 @@ object FiberEngine {
                     fiberTriggers,
                     spawns,
                     emittedEvents,
-                    assetTransfers
+                    assetTransfers,
+                    dependencyMutations
                   )
 
                 case script: Records.ScriptFiberRecord =>
@@ -406,14 +408,15 @@ object FiberEngine {
         }
 
       private def processStateMachineSuccess(
-        sm:             Records.StateMachineFiberRecord,
-        input:          FiberInput,
-        newStateData:   JsonLogicValue,
-        newStateId:     Option[StateId],
-        triggers:       List[FiberTrigger],
-        spawns:         List[SpawnDirective],
-        emittedEvents:  List[EmittedEvent],
-        assetTransfers: List[FiberEffect.AssetTransferred]
+        sm:                  Records.StateMachineFiberRecord,
+        input:               FiberInput,
+        newStateData:        JsonLogicValue,
+        newStateId:          Option[StateId],
+        triggers:            List[FiberTrigger],
+        spawns:              List[SpawnDirective],
+        emittedEvents:       List[EmittedEvent],
+        assetTransfers:      List[FiberEffect.AssetTransferred],
+        dependencyMutations: List[FiberEffect.DependencyMutated]
       ): FiberT[F, TransactionResult] =
         // #33 runtime conformance gate: a strict-bound fiber's produced state must conform, else abort.
         ConformanceChecker.violationsFor(sm.schemaBinding, calculatedState, newStateData) match {
@@ -428,56 +431,75 @@ object FiberEngine {
               triggers,
               spawns,
               emittedEvents,
-              assetTransfers
+              assetTransfers,
+              dependencyMutations
             )
         }
 
       private def commitStateMachineSuccess(
-        sm:             Records.StateMachineFiberRecord,
-        input:          FiberInput,
-        newStateData:   JsonLogicValue,
-        newStateId:     Option[StateId],
-        triggers:       List[FiberTrigger],
-        spawns:         List[SpawnDirective],
-        emittedEvents:  List[EmittedEvent],
-        assetTransfers: List[FiberEffect.AssetTransferred]
+        sm:                  Records.StateMachineFiberRecord,
+        input:               FiberInput,
+        newStateData:        JsonLogicValue,
+        newStateId:          Option[StateId],
+        triggers:            List[FiberTrigger],
+        spawns:              List[SpawnDirective],
+        emittedEvents:       List[EmittedEvent],
+        assetTransfers:      List[FiberEffect.AssetTransferred],
+        dependencyMutations: List[FiberEffect.DependencyMutated]
       ): FiberT[F, TransactionResult] =
         for {
-          hash    <- newStateData.computeDigest.liftFiber
-          gasUsed <- ExecutionOps.getGasUsed[FiberT[F, *]]
+          limits <- ExecutionOps.askLimits[FiberT[F, *]]
+          // Apply the append-only dynamic-dependency ledger mutations FIRST: a bounds breach aborts the
+          // transition (fail-closed) before any state or log is committed.
+          result <- DependencyLedger.applyMutations(
+            sm.dynamicDependencies,
+            dependencyMutations,
+            ordinal,
+            limits
+          ) match {
+            case Left(reason) =>
+              ExecutionOps.getGasUsed[FiberT[F, *]].map(g => TransactionResult.Aborted(reason, g): TransactionResult)
 
-          receipt = EventReceipt.success(
-            sm = sm,
-            eventName = input.key,
-            ordinal = ordinal,
-            gasUsed = gasUsed,
-            newStateId = newStateId,
-            triggers = triggers,
-            emittedEvents = emittedEvents
-          )
-
-          _ <- ExecutionOps.appendLog[FiberT[F, *]](receipt)
-
-          updatedFiber = sm.copy(
-            previousUpdateOrdinal = sm.latestUpdateOrdinal,
-            latestUpdateOrdinal = ordinal,
-            currentState = newStateId.getOrElse(sm.currentState),
-            stateData = newStateData,
-            stateDataHash = hash,
-            sequenceNumber = sm.sequenceNumber.next,
-            lastReceipt = Some(receipt)
-          )
-
-          spawnResult <- processSpawnsValidated(spawns, updatedFiber, input)
-
-          result <- spawnResult match {
-            case Left(errors) =>
+            case Right(newLedger) =>
               for {
-                currentGas <- ExecutionOps.getGasUsed[FiberT[F, *]]
-              } yield TransactionResult.Aborted(errors.head, currentGas): TransactionResult
+                hash    <- newStateData.computeDigest.liftFiber
+                gasUsed <- ExecutionOps.getGasUsed[FiberT[F, *]]
 
-            case Right(spawnedFibers) =>
-              completeStateMachineTransaction(sm, updatedFiber, spawnedFibers, triggers, assetTransfers)
+                receipt = EventReceipt.success(
+                  sm = sm,
+                  eventName = input.key,
+                  ordinal = ordinal,
+                  gasUsed = gasUsed,
+                  newStateId = newStateId,
+                  triggers = triggers,
+                  emittedEvents = emittedEvents
+                )
+
+                _ <- ExecutionOps.appendLog[FiberT[F, *]](receipt)
+
+                updatedFiber = sm.copy(
+                  previousUpdateOrdinal = sm.latestUpdateOrdinal,
+                  latestUpdateOrdinal = ordinal,
+                  currentState = newStateId.getOrElse(sm.currentState),
+                  stateData = newStateData,
+                  stateDataHash = hash,
+                  sequenceNumber = sm.sequenceNumber.next,
+                  lastReceipt = Some(receipt),
+                  dynamicDependencies = newLedger
+                )
+
+                spawnResult <- processSpawnsValidated(spawns, updatedFiber, input)
+
+                r <- spawnResult match {
+                  case Left(errors) =>
+                    ExecutionOps
+                      .getGasUsed[FiberT[F, *]]
+                      .map(g => TransactionResult.Aborted(errors.head, g): TransactionResult)
+
+                  case Right(spawnedFibers) =>
+                    completeStateMachineTransaction(sm, updatedFiber, spawnedFibers, triggers, assetTransfers)
+                }
+              } yield r
           }
         } yield result
 

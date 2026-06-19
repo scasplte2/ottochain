@@ -43,4 +43,17 @@ object FiberEffect {
    */
   @derive(customizableEncoder, customizableDecoder)
   final case class AssetTransferred(assetId: UUID, recipient: AssetHolder) extends FiberEffect
+
+  /**
+   * A mutation to the SOURCE fiber's append-only dynamic-dependency ledger (`_addDependency` /
+   * `_setDependencyActive`). Carries a RESOLVED `fiberId` (the directive's `fiberId` expression is
+   * evaluated against the transition context DURING extraction, like `Triggered`/`AssetTransferred`)
+   * and the desired `active` flag (`_addDependency` ⇒ true). Applied to
+   * `StateMachineFiberRecord.dynamicDependencies` by the engine as a bounded upsert — it carries NO
+   * authorization on its own; the only gate is that the transition's guard ran. Unknown target ids are
+   * permitted (they simply resolve to nothing in `machines` until/unless the fiber exists), matching the
+   * silently-excluded behaviour of static `Transition.dependencies`.
+   */
+  @derive(customizableEncoder, customizableDecoder)
+  final case class DependencyMutated(fiberId: UUID, active: Boolean) extends FiberEffect
 }

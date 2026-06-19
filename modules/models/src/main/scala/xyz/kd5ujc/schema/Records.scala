@@ -44,7 +44,8 @@ object Records {
     parentFiberId:         Option[UUID] = None,
     childFiberIds:         Set[UUID] = Set.empty,
     schemaBinding:         Option[SchemaBinding] = None,
-    authorizedSigners:     Set[Address] = Set.empty
+    authorizedSigners:     Set[Address] = Set.empty,
+    dynamicDependencies:   List[DynamicDependency] = List.empty
   ) extends FiberRecord
 
   @derive(customizableEncoder, customizableDecoder)

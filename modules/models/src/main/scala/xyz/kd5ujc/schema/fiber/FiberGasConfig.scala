@@ -12,11 +12,13 @@ import io.constellationnetwork.metagraph_sdk.json_logic.gas.GasCost
  * @param triggerEvent Cost to dispatch a trigger to another fiber
  * @param spawnDirective Cost to spawn a new child fiber
  * @param contextBuild Cost to build trigger/spawn context
+ * @param dependencyMutation Cost per `_addDependency` / `_setDependencyActive` directive applied
  */
 final case class FiberGasConfig(
-  triggerEvent:   GasCost = GasCost(5),
-  spawnDirective: GasCost = GasCost(50),
-  contextBuild:   GasCost = GasCost(10)
+  triggerEvent:       GasCost = GasCost(5),
+  spawnDirective:     GasCost = GasCost(50),
+  contextBuild:       GasCost = GasCost(10),
+  dependencyMutation: GasCost = GasCost(20)
 )
 
 object FiberGasConfig {
@@ -28,13 +30,15 @@ object FiberGasConfig {
   val Mainnet: FiberGasConfig = FiberGasConfig(
     triggerEvent = GasCost(10),
     spawnDirective = GasCost(100),
-    contextBuild = GasCost(20)
+    contextBuild = GasCost(20),
+    dependencyMutation = GasCost(40)
   )
 
   /** Minimal costs for testing gas exhaustion scenarios */
   val Minimal: FiberGasConfig = FiberGasConfig(
     triggerEvent = GasCost(1),
     spawnDirective = GasCost(1),
-    contextBuild = GasCost(1)
+    contextBuild = GasCost(1),
+    dependencyMutation = GasCost(1)
   )
 }

@@ -16,4 +16,5 @@ object GasExhaustionPhase extends Enum[GasExhaustionPhase] with CirceEnum[GasExh
   case object Spawn extends GasExhaustionPhase
   case object Migration extends GasExhaustionPhase
   case object Morphism extends GasExhaustionPhase // asset-model.md §10: _transferAsset directive evaluation
+  case object DependencyMutation extends GasExhaustionPhase // _addDependency / _setDependencyActive fiberId resolution
 }

@@ -120,7 +120,9 @@ object FiberEvaluator {
                   fiber,
                   input,
                   proofs,
-                  transition.dependencies
+                  // machines context = this transition's STATIC dependencies ∪ the fiber's ACTIVE
+                  // runtime (dynamic) dependencies. (#24)
+                  transition.dependencies ++ DependencyLedger.activeIds(fiber.dynamicDependencies)
                 )
                 .liftTo[G]
               result <- evaluateGuardAndApply(
@@ -245,11 +247,13 @@ object FiberEvaluator {
           spawnMachines = effects.collect { case FiberEffect.Spawned(d) => d }
           emittedEvents = effects.collect { case FiberEffect.Emitted(ev) => ev }
           assetTransfers = effects.collect { case t: FiberEffect.AssetTransferred => t }
+          depMutations = effects.collect { case d: FiberEffect.DependencyMutated => d }
 
           // Charge orchestration overhead
           _ <- ExecutionOps.chargeGas[G](fiberGasConfig.contextBuild.amount)
           _ <- ExecutionOps.chargeGas[G](allTriggers.size.toLong * fiberGasConfig.triggerEvent.amount)
           _ <- ExecutionOps.chargeGas[G](spawnMachines.size.toLong * fiberGasConfig.spawnDirective.amount)
+          _ <- ExecutionOps.chargeGas[G](depMutations.size.toLong * fiberGasConfig.dependencyMutation.amount)
 
           // Get total gas for result
           totalGasUsed <- ExecutionOps.getGasUsed[G]
@@ -270,7 +274,8 @@ object FiberEvaluator {
                     spawns = spawnMachines,
                     returnValue = None,
                     emittedEvents = emittedEvents,
-                    assetTransfers = assetTransfers
+                    assetTransfers = assetTransfers,
+                    dependencyMutations = depMutations
                   )
                 case Left(reason) => reason.asOutcome
               }

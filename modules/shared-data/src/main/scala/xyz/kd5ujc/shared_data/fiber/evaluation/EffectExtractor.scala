@@ -9,7 +9,7 @@ import cats.syntax.all._
 import cats.{Monad, ~>}
 
 import io.constellationnetwork.metagraph_sdk.json_logic._
-import io.constellationnetwork.metagraph_sdk.json_logic.core.StrValue
+import io.constellationnetwork.metagraph_sdk.json_logic.core.{BoolValue, StrValue}
 import io.constellationnetwork.schema.address.{Address, DAGAddressRefined}
 
 import xyz.kd5ujc.schema.asset.AssetHolder
@@ -77,13 +77,15 @@ object EffectExtractor {
       triggers       <- extractTriggerEvents[F, G](effectResult, contextData, sourceFiberId)
       scriptCall     <- extractScriptCall[F, G](effectResult, contextData, sourceFiberId)
       assetTransfers <- extractAssetTransfers[F, G](effectResult, contextData)
+      depMutations   <- extractDependencyMutations[F, G](effectResult, contextData)
     } yield {
       val spawns = extractSpawnDirectivesFromExpression(effectExpr)
       val emitted = extractEmittedEvents(effectResult)
       (triggers ++ scriptCall.toList).map(FiberEffect.Triggered) ++
       spawns.map(FiberEffect.Spawned) ++
       emitted.map(FiberEffect.Emitted) ++
-      assetTransfers
+      assetTransfers ++
+      depMutations
     }
 
   /**
@@ -239,6 +241,58 @@ object EffectExtractor {
     scala.util.Try(UUID.fromString(s)).toOption match {
       case Some(uuid) => Some(AssetHolder.Fiber(uuid))
       case None       => refineV[DAGAddressRefined](s).toOption.map(refined => AssetHolder.Wallet(Address(refined)))
+    }
+
+  /**
+   * Extract dynamic-dependency mutations (`_addDependency` / `_setDependencyActive`) with gas metering.
+   * Mirrors [[extractAssetTransfers]]: each directive's `fiberId` JSON-Logic expression is RESOLVED here
+   * against the transition context (gas charged under [[GasExhaustionPhase.DependencyMutation]]), so the
+   * resulting [[FiberEffect.DependencyMutated]] carries a value, not logic. `_addDependency` forces
+   * `active = true`; `_setDependencyActive` reads the directive's `active` boolean. A malformed directive
+   * (missing/non-UUID `fiberId`, or a `_setDependencyActive` lacking a boolean `active`) is DROPPED — the
+   * same fail-silent mode the other extractors use. The append-only ledger + DoS bounds are applied later,
+   * by the engine ([[xyz.kd5ujc.shared_data.fiber.core.DependencyLedger]]).
+   */
+  def extractDependencyMutations[F[_]: Async, G[_]: Monad](
+    effectResult: JsonLogicValue,
+    contextData:  JsonLogicValue
+  )(implicit
+    S:    Stateful[G, ExecutionState],
+    A:    Ask[G, FiberContext],
+    lift: F ~> G
+  ): G[List[FiberEffect.DependencyMutated]] =
+    for {
+      adds <- extractArrayByKey(effectResult, ReservedKeys.ADD_DEPENDENCY)
+        .flatTraverse(item => parseDependencyMutation[F, G](item, contextData, forcedActive = Some(true)).map(_.toList))
+      sets <- extractArrayByKey(effectResult, ReservedKeys.SET_DEPENDENCY_ACTIVE)
+        .flatTraverse(item => parseDependencyMutation[F, G](item, contextData, forcedActive = None).map(_.toList))
+    } yield adds ++ sets
+
+  private def parseDependencyMutation[F[_]: Async, G[_]: Monad](
+    value:        JsonLogicValue,
+    contextData:  JsonLogicValue,
+    forcedActive: Option[Boolean]
+  )(implicit
+    S:    Stateful[G, ExecutionState],
+    A:    Ask[G, FiberContext],
+    lift: F ~> G
+  ): G[Option[FiberEffect.DependencyMutated]] =
+    value match {
+      case MapValue(depMap) =>
+        (for {
+          fiberIdValue <- OptionT.fromOption[G](depMap.get(ReservedKeys.FIBER_ID))
+          fiberIdExpr = ExpressionParser.valueToExpression(fiberIdValue)
+          // Charge gas for fiberId resolution under the DependencyMutation phase.
+          evaluatedFiberId <- OptionT(
+            MeteredEvaluator.evalOpt[F, G](fiberIdExpr, contextData, GasExhaustionPhase.DependencyMutation)
+          )
+          fiberIdStr <- OptionT.fromOption[G](evaluatedFiberId match { case StrValue(s) => Some(s); case _ => None })
+          fiberId    <- OptionT.fromOption[G](scala.util.Try(UUID.fromString(fiberIdStr)).toOption)
+          active <- OptionT.fromOption[G](
+            forcedActive.orElse(depMap.get(ReservedKeys.ACTIVE).collect { case BoolValue(b) => b })
+          )
+        } yield FiberEffect.DependencyMutated(fiberId, active)).value
+      case _ => none[FiberEffect.DependencyMutated].pure[G]
     }
 
   def extractEmittedEvents(effectResult: JsonLogicValue): List[EmittedEvent] =
