@@ -62,6 +62,9 @@ jobs:
   code-quality:
     name: Code Quality
     runs-on: ubuntu-latest
+    # contents: write lets the OpenAPI gate auto-commit a regenerated contract to a same-repo PR branch.
+    permissions:
+      contents: write
     if: >
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'pull_request' && github.base_ref == 'main')
@@ -96,15 +99,35 @@ jobs:
       - name: Check linting (scalafix)
         run: sbt "scalafixAll --check"
 
-      # Blocking gate: the committed contract must match the generator output, so the spec change stays
-      # atomic + reviewable inside the PR. The 'Sync OpenAPI contract' workflow auto-commits the regen to
-      # same-repo PR branches (its push re-runs CI green), so an author rarely has to do anything; a fork
-      # PR (read-only token, no auto-push) regenerates manually per the message below.
-      - name: Check OpenAPI contract is up to date
+      # OpenAPI contract gate + auto-fix in a single regen. The committed contract must match the
+      # generator output. On a SAME-REPO pull request, drift is auto-committed to the PR branch — that
+      # push re-runs CI and this gate then passes on the synced commit (no drift => no further commit =>
+      # no loop). A fork PR (read-only token) or a push to main fails with a manual-regen message.
+      - name: Check / sync OpenAPI contract
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REF: ${{ github.head_ref }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPO: ${{ github.repository }}
         run: |
           sbt "currencyL0/runMain xyz.kd5ujc.metagraph_l0.openapi.GenerateOpenApi docs/openapi.json"
-          if ! git diff --exit-code -- docs/openapi.json; then
-            echo "::error::docs/openapi.json is stale. The 'Sync OpenAPI contract' workflow auto-commits the regen to same-repo PR branches; for a fork PR run: sbt \"currencyL0/runMain xyz.kd5ujc.metagraph_l0.openapi.GenerateOpenApi docs/openapi.json\" and commit it."
+          if git diff --quiet -- docs/openapi.json; then
+            echo "docs/openapi.json is in sync."
+            exit 0
+          fi
+          if [ "$EVENT_NAME" = "pull_request" ] && [ "$PR_HEAD_REPO" = "$REPO" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add docs/openapi.json
+            git commit -m "chore: sync docs/openapi.json"
+            if git push origin "HEAD:$HEAD_REF"; then
+              echo "::notice::docs/openapi.json drifted; regenerated + committed to the PR branch. CI will re-run and pass."
+            else
+              echo "::error::docs/openapi.json is stale and the auto-commit push failed (branch protection or a read-only Actions token). Run: sbt \"currencyL0/runMain xyz.kd5ujc.metagraph_l0.openapi.GenerateOpenApi docs/openapi.json\" and commit it."
+              exit 1
+            fi
+          else
+            echo "::error::docs/openapi.json is stale. Run: sbt \"currencyL0/runMain xyz.kd5ujc.metagraph_l0.openapi.GenerateOpenApi docs/openapi.json\" and commit it."
             exit 1
           fi
 

@@ -1,0 +1,12 @@
+{
+  "swapId": "HTLC-ADJ-001",
+  "sender": "did:otto:alice",
+  "recipient": "did:otto:bob",
+  "amount": 1000,
+  "hashLock": "0x0fb849f7cf35865c838cef48782e803b2c38263e2f467799c87eff168eb4d897",
+  "timeoutOrdinal": 9999999999,
+  "adjudicatorPubKey": "0x1a4e18a2389557014461e89e5649009152e13a277dd4e3d0367d95bddfbb27be17c1744e8d859835e2a18e2effefe14c83f1366ab61f769c82dcdb659353b3ee",
+  "adjudicatorReputation": 95,
+  "minAdjudicatorReputation": 90,
+  "status": "locked"
+}

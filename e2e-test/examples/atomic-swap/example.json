@@ -1,0 +1,56 @@
+{
+  "name": "Atomic Swap (HTLC hash-time-lock)",
+  "description": "A hash-time-locked contract (HTLC) — the building block of trustless atomic swaps. Funds are LOCKED behind poseidon(secret) and a timeout. The recipient CLAIMS by revealing a preimage the on-chain `poseidon` opcode re-hashes and checks against state.hashLock; the sender can REFUND only after the timeout ($ordinal > timeoutOrdinal). First live-metagraph exercise of the `poseidon` opcode as a cryptographic gate, alongside the zk-eligibility groth16 example.",
+  "type": "state-machine",
+  "definition": "definition.json",
+  "initialData": "initial-data.json",
+  "events": [
+    {
+      "name": "claim",
+      "description": "Reveal the correct preimage; poseidon([secret]) == hashLock so the lock opens",
+      "file": "event-claim.ts",
+      "from": "LOCKED",
+      "to": "CLAIMED"
+    },
+    {
+      "name": "claim (wrong preimage)",
+      "description": "A wrong secret; poseidon mismatch so the guard denies the claim",
+      "file": "event-claim-bad.ts",
+      "from": "LOCKED",
+      "to": "LOCKED"
+    },
+    {
+      "name": "refund (before timeout)",
+      "description": "Refund attempted early; the $ordinal > timeoutOrdinal gate is false so it is denied",
+      "file": "event-refund.ts",
+      "from": "LOCKED",
+      "to": "LOCKED"
+    }
+  ],
+  "testFlows": [
+    {
+      "name": "Claim — the correct preimage opens the lock",
+      "description": "Create the locked HTLC, then submit the true 32-byte preimage. The on-chain guard runs `poseidon([secret]) === state.hashLock` and the timeout check, and the fiber transitions LOCKED -> CLAIMED, recording the revealed preimage in state.",
+      "steps": [
+        { "action": "create", "definition": "definition.json", "initialData": "initial-data.json" },
+        { "action": "processEvent", "event": "event-claim.ts", "expectedState": "CLAIMED" }
+      ]
+    },
+    {
+      "name": "Rejected — a wrong preimage cannot claim",
+      "description": "Create the locked HTLC, then submit a WRONG secret. poseidon([secret]) != hashLock, the guard denies the transition, ML0 records a RejectionReceipt and the fiber stays at LOCKED (sequence number unchanged).",
+      "steps": [
+        { "action": "create", "definition": "definition.json", "initialData": "initial-data.json" },
+        { "action": "processEvent", "event": "event-claim-bad.ts", "expectRejected": "ml0" }
+      ]
+    },
+    {
+      "name": "Rejected — refund is denied before the timeout",
+      "description": "Create the locked HTLC, then attempt a refund while still within the timeout window. The refund guard requires $ordinal > timeoutOrdinal, which is false, so the sender cannot reclaim early — the time-lock holds and the claim path stays open.",
+      "steps": [
+        { "action": "create", "definition": "definition.json", "initialData": "initial-data.json" },
+        { "action": "processEvent", "event": "event-refund.ts", "expectRejected": "ml0" }
+      ]
+    }
+  ]
+}
