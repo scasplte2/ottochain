@@ -11,10 +11,8 @@ import io.constellationnetwork.metagraph_sdk.syntax.all.L0ContextOps
 
 import xyz.kd5ujc.buildinfo.BuildInfo
 import xyz.kd5ujc.schema.Updates.OttochainMessage
+import xyz.kd5ujc.schema.api.{HashResult, VersionInfo}
 import xyz.kd5ujc.schema.{CalculatedState, OnChain}
-
-import io.circe.Json
-import io.circe.syntax.EncoderOps
 
 /** Service meta + raw-state logic: version info, message hashing, on-chain + calculated state. */
 class MetaHandler[F[_]: Async](
@@ -23,22 +21,20 @@ class MetaHandler[F[_]: Async](
   context: L0NodeContext[F]
 ) {
 
-  val version: Json =
-    Json.obj(
-      "service"             -> "ottochain-ml0".asJson,
-      "version"             -> BuildInfo.version.asJson,
-      "name"                -> BuildInfo.name.asJson,
-      "scalaVersion"        -> BuildInfo.scalaVersion.asJson,
-      "sbtVersion"          -> BuildInfo.sbtVersion.asJson,
-      "gitCommit"           -> BuildInfo.gitCommit.asJson,
-      "buildTime"           -> BuildInfo.buildTime.asJson,
-      "tessellationVersion" -> io.constellationnetwork.BuildInfo.version.asJson
+  val version: VersionInfo =
+    VersionInfo(
+      service = "ottochain-ml0",
+      version = BuildInfo.version,
+      name = BuildInfo.name,
+      scalaVersion = BuildInfo.scalaVersion,
+      sbtVersion = BuildInfo.sbtVersion,
+      gitCommit = BuildInfo.gitCommit,
+      buildTime = BuildInfo.buildTime,
+      tessellationVersion = io.constellationnetwork.BuildInfo.version
     )
 
-  def hash(message: OttochainMessage): F[Json] =
-    message.computeDigest.map { digest =>
-      Json.obj("protocol message hash" -> digest.asJson, "protocol message" -> message.asJson)
-    }
+  def hash(message: OttochainMessage): F[HashResult] =
+    message.computeDigest.map(digest => HashResult(digest, message))
 
   def onChain: F[Either[DataApplicationValidationError, OnChain]] =
     context.getOnChainState[OnChain]

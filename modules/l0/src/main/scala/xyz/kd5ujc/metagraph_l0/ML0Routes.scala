@@ -8,8 +8,8 @@ import io.constellationnetwork.metagraph_sdk.MetagraphPublicRoutes
 import io.constellationnetwork.security.signature.Signed
 
 import xyz.kd5ujc.metagraph_l0.handlers._
-import xyz.kd5ujc.metagraph_l0.webhooks.SubscribeRequest
 import xyz.kd5ujc.schema.Updates.OttochainMessage
+import xyz.kd5ujc.schema.api.webhooks.SubscribeRequest
 import xyz.kd5ujc.schema.fiber.FiberStatus
 
 import org.http4s.circe.CirceEntityCodec.{circeEntityDecoder, circeEntityEncoder}

@@ -1,4 +1,4 @@
-package xyz.kd5ujc.metagraph_l0.webhooks
+package xyz.kd5ujc.schema.api.webhooks
 
 import java.time.Instant
 import java.util.UUID

@@ -96,6 +96,14 @@ jobs:
       - name: Check linting (scalafix)
         run: sbt "scalafixAll --check"
 
+      - name: Check OpenAPI contract is up to date
+        run: |
+          sbt "currencyL0/runMain xyz.kd5ujc.metagraph_l0.openapi.GenerateOpenApi docs/openapi.json"
+          if ! git diff --exit-code -- docs/openapi.json; then
+            echo "::error::docs/openapi.json is stale. Run: sbt \"currencyL0/runMain xyz.kd5ujc.metagraph_l0.openapi.GenerateOpenApi docs/openapi.json\" and commit the result."
+            exit 1
+          fi
+
   # Unit tests with coverage (PRs targeting main and pushes to main only)
   test:
     name: Unit Tests & Coverage

@@ -243,8 +243,8 @@ All custom routes are prefixed with `/v1/`.
 **Response:**
 ```json
 {
-  "protocol message hash": "abc123...",
-  "protocol message": { ... }
+  "messageHash": "abc123...",
+  "message": { ... }
 }
 ```
 

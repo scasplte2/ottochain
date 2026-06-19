@@ -11,6 +11,8 @@ object Dependencies {
     val metakit = "1.8.0-rc.5"
     val pureConfig = "0.17.5"
     val weaver = "0.10.1"
+    val tapir = "1.11.10"
+    val sttpApiSpec = "0.11.7"
 
     val betterMonadicFor = "0.3.1"
     val kindProjector = "0.13.4"
@@ -43,6 +45,12 @@ object Dependencies {
     val weaverScalaCheck = "org.typelevel" %% "weaver-scalacheck" % V.weaver
 
     val catsLaws = "org.typelevel" %% "cats-laws" % V.cats
+
+    val tapirCore = "com.softwaremill.sttp.tapir" %% "tapir-core" % V.tapir
+    val tapirJsonCirce = "com.softwaremill.sttp.tapir" %% "tapir-json-circe" % V.tapir
+    val tapirHttp4sServer = "com.softwaremill.sttp.tapir" %% "tapir-http4s-server" % V.tapir
+    val tapirOpenApiDocs = "com.softwaremill.sttp.tapir" %% "tapir-openapi-docs" % V.tapir
+    val sttpOpenApiCirce = "com.softwaremill.sttp.apispec" %% "openapi-circe" % V.sttpApiSpec
 
   }
 

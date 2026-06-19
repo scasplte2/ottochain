@@ -1,4 +1,4 @@
-package xyz.kd5ujc.metagraph_l0.webhooks
+package xyz.kd5ujc.schema.api.webhooks
 
 import java.time.Instant
 import java.util.UUID
@@ -7,7 +7,9 @@ import io.circe.generic.semiauto._
 import io.circe.{Decoder, Encoder}
 
 /**
- * Webhook subscriber for snapshot notifications
+ * Webhook subscriber for snapshot notifications.
+ *
+ * Static network DTO — lives in `models` so the chain and the SDK share one definition of the wire shape.
  */
 case class Subscriber(
   id:             String,
@@ -36,21 +38,18 @@ object Subscriber {
   implicit val decoder: Decoder[Subscriber] = deriveDecoder[Subscriber]
 }
 
-/**
- * Request to subscribe to webhook notifications
- */
+/** Request to subscribe to webhook notifications. */
 case class SubscribeRequest(
   callbackUrl: String,
   secret:      Option[String]
 )
 
 object SubscribeRequest {
+  implicit val encoder: Encoder[SubscribeRequest] = deriveEncoder[SubscribeRequest]
   implicit val decoder: Decoder[SubscribeRequest] = deriveDecoder[SubscribeRequest]
 }
 
-/**
- * Response for successful subscription
- */
+/** Response for a successful subscription. */
 case class SubscribeResponse(
   id:          String,
   callbackUrl: String,
@@ -59,14 +58,21 @@ case class SubscribeResponse(
 
 object SubscribeResponse {
   implicit val encoder: Encoder[SubscribeResponse] = deriveEncoder[SubscribeResponse]
+  implicit val decoder: Decoder[SubscribeResponse] = deriveDecoder[SubscribeResponse]
 
   def fromSubscriber(s: Subscriber): SubscribeResponse =
     SubscribeResponse(s.id, s.callbackUrl, s.createdAt)
 }
 
-/**
- * Snapshot notification payload sent to subscribers
- */
+/** Response of `GET /v1/webhooks/subscribers` — the subscriber list (secrets redacted by the handler). */
+case class SubscriberList(subscribers: List[Subscriber])
+
+object SubscriberList {
+  implicit val encoder: Encoder[SubscriberList] = deriveEncoder[SubscriberList]
+  implicit val decoder: Decoder[SubscriberList] = deriveDecoder[SubscriberList]
+}
+
+/** Snapshot notification payload POSTed to subscribers. */
 case class SnapshotNotification(
   event:       String,
   ordinal:     Long,
