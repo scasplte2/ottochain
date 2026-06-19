@@ -89,13 +89,15 @@ object TypedApiWireSuite extends SimpleIOSuite {
   }
 
   pureTest("StateProofResponse — includes field/fieldValue when a field is requested") {
+    // committedRoot/mptRoot/record/proof are never null in production (hash strings / objects), which is
+    // why the derived encoder's top-level null-drop only ever omits the optional field/fieldValue.
     val dto = StateProofResponse(
       "fiber/x",
       SnapshotOrdinal.MinValue,
-      Json.Null,
-      Json.Null,
-      Json.Null,
-      Json.Null,
+      Json.fromString("c"),
+      Json.fromString("m"),
+      Json.obj("a" -> 1.asJson),
+      Json.arr(),
       Some("balance"),
       Some(Json.fromInt(5))
     )

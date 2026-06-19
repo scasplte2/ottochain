@@ -3,7 +3,6 @@ package xyz.kd5ujc.schema.api
 import io.constellationnetwork.schema.SnapshotOrdinal
 
 import io.circe.generic.semiauto._
-import io.circe.syntax.EncoderOps
 import io.circe.{Decoder, Encoder, Json}
 
 /**
@@ -30,17 +29,10 @@ final case class StateProofResponse(
 object StateProofResponse {
   implicit val decoder: Decoder[StateProofResponse] = deriveDecoder[StateProofResponse]
 
-  implicit val encoder: Encoder[StateProofResponse] = Encoder.instance { r =>
-    val base = Json.obj(
-      "key"           -> r.key.asJson,
-      "ordinal"       -> r.ordinal.asJson,
-      "committedRoot" -> r.committedRoot,
-      "mptRoot"       -> r.mptRoot,
-      "record"        -> r.record,
-      "proof"         -> r.proof
-    )
-    r.field.fold(base) { f =>
-      base.deepMerge(Json.obj("field" -> f.asJson, "fieldValue" -> r.fieldValue.getOrElse(Json.Null)))
-    }
-  }
+  // Derived encoder. `field`/`fieldValue` are omitted from the wire when absent (the prior conditional
+  // shape) via the standard top-level null-drop — not a hand-built Json.obj. The other six fields are
+  // always non-null in production (hash strings / objects / proof), so the drop only ever removes the two
+  // optionals. (Edge: a requested field whose value is JSON null also drops `fieldValue`, acceptable.)
+  implicit val encoder: Encoder[StateProofResponse] =
+    deriveEncoder[StateProofResponse].mapJson(_.dropNullValues)
 }
