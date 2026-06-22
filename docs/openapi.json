@@ -1005,7 +1005,9 @@
         "type" : "object",
         "required" : [
           "name",
-          "data"
+          "data",
+          "emitterFiberId",
+          "emissionIndex"
         ],
         "properties" : {
           "name" : {
@@ -1016,6 +1018,14 @@
           },
           "destination" : {
             "type" : "string"
+          },
+          "emitterFiberId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "emissionIndex" : {
+            "type" : "integer",
+            "format" : "int32"
           }
         }
       },
