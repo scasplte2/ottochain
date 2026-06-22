@@ -1,0 +1,11 @@
+{
+  "mixerId": "MIX-DDH-001",
+  "denomination": 1000,
+  "nullifierBaseH": "0x039c846e3a79217fd140d094eec09fe4f398085d01dee70506edde1eb6a9d81608922722cc3a6c3a7ae4929e78e82dc5f25e91598a69f7f8b9b3adb95badb3d0",
+  "anonymityTarget": 4,
+  "depositCount": 0,
+  "points": [],
+  "spentNullifiers": {},
+  "withdrawCount": 0,
+  "status": "filling"
+}
