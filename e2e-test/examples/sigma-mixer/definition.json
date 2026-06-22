@@ -72,7 +72,7 @@
               { "var": "event.message" }
             ]
           },
-          { "!": { "has": [{ "var": "state.spentNullifiers" }, { "var": "event.nullifier" }] } },
+          { "!": [{ "has": [{ "var": "state.spentNullifiers" }, { "var": "event.nullifier" }] }] },
           {
             "===": [
               { "var": "event.message" },
@@ -115,7 +115,7 @@
               { "var": "event.message" }
             ]
           },
-          { "!": { "has": [{ "var": "state.spentNullifiers" }, { "var": "event.nullifier" }] } },
+          { "!": [{ "has": [{ "var": "state.spentNullifiers" }, { "var": "event.nullifier" }] }] },
           {
             "===": [
               { "var": "event.message" },

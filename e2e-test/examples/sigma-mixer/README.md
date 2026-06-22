@@ -37,7 +37,7 @@ injective, so the nullifier is cryptographically bound to the witness: the same 
 
 1. **Witness-bound ring membership in ZK** — `sigma_verify(OR(dhtuple(G,H,P_i,Nf)))`. The `u` points read from the
    FROZEN on-chain `state.points`, so the ring is not attacker-supplied; `v = event.nullifier` in every branch.
-2. **No double-withdraw** — `{"!":{"has":[state.spentNullifiers, event.nullifier]}}`. Because `Nf` is witness-bound,
+2. **No double-withdraw** — `{"!":[{"has":[state.spentNullifiers, event.nullifier]}]}`. Because `Nf` is witness-bound,
    the same secret cannot produce a second distinct nullifier.
 3. **Recipient binding (anti-front-run)** — `message == Nf ‖ recipientHex`. Strong Fiat–Shamir folds the message into
    the root challenge, so the proof is a signature over `(Nf, recipient)`; a mempool front-runner swapping the
