@@ -62,7 +62,8 @@ trait FiberEngine[F[_]] {
     fiberId:       UUID,
     newDefinition: StateMachineDefinition,
     newBinding:    SchemaBinding,
-    migration:     Option[JsonLogicExpression]
+    migration:     Option[JsonLogicExpression],
+    addrs:         Set[Address] = Set.empty
   ): F[TransactionResult]
 
   /**
@@ -111,9 +112,10 @@ object FiberEngine {
         fiberId:       UUID,
         newDefinition: StateMachineDefinition,
         newBinding:    SchemaBinding,
-        migration:     Option[JsonLogicExpression]
+        migration:     Option[JsonLogicExpression],
+        addrs:         Set[Address]
       ): F[TransactionResult] =
-        migrateInternal(fiberId, newDefinition, newBinding, migration)
+        migrateInternal(fiberId, newDefinition, newBinding, migration, addrs)
           .run(FiberContext(ordinal, lastSnapshotHash, epochProgress, limits, gasConfig, fiberGasConfig))
           .runA(ExecutionState.initial)
 
@@ -131,7 +133,8 @@ object FiberEngine {
         fiberId:       UUID,
         newDefinition: StateMachineDefinition,
         newBinding:    SchemaBinding,
-        migration:     Option[JsonLogicExpression]
+        migration:     Option[JsonLogicExpression],
+        addrs:         Set[Address]
       ): FiberT[F, TransactionResult] =
         calculatedState.getFiber(fiberId) match {
           case None =>
@@ -141,7 +144,7 @@ object FiberEngine {
             abortWithReason(FailureReason.FiberNotActive(fiberId, fiber.status.toString))
 
           case Some(sm: Records.StateMachineFiberRecord) =>
-            migrateStateMachine(sm, newDefinition, newBinding, migration)
+            migrateStateMachine(sm, newDefinition, newBinding, migration, addrs)
 
           case Some(other) =>
             abortWithReason(FailureReason.FiberInputMismatch(other.fiberId, FiberKind.Script, InputKind.Transition))
@@ -246,7 +249,44 @@ object FiberEngine {
       private def aborted(reason: FailureReason): FiberT[F, TransactionResult] =
         ExecutionOps.getGasUsed[FiberT[F, *]].map(TransactionResult.Aborted(reason, _): TransactionResult)
 
+      /**
+       * version-compat-family §6: the stricter upgrade tiers (AppendOnly, Governed) carry an off-chain
+       * ASSERTED commute-law obligation; `Arbitrary`/absent imply none. Read from the OLD (hash-pinned)
+       * policy of the migrating fiber.
+       */
+      private def commuteObligationFor(policy: Option[FiberPolicy]): Boolean =
+        policy.map(_.effectiveUpgradePolicy) match {
+          case Some(UpgradePolicy.AppendOnly) | Some(UpgradePolicy.Governed(_)) => true
+          case _                                                                => false
+        }
+
       private def migrateStateMachine(
+        sm:            Records.StateMachineFiberRecord,
+        newDefinition: StateMachineDefinition,
+        newBinding:    SchemaBinding,
+        migration:     Option[JsonLogicExpression],
+        addrs:         Set[Address]
+      ): FiberT[F, TransactionResult] =
+        // THE VERSION & COMPATIBILITY GATE (fiber-policy.md `version-compat-family`). Consulted FIRST — BEFORE
+        // any migration gas is metered — so a doomed migration burns no gas. It bundles, in order:
+        //   1. gateByUpgradePolicy against the OLD (hash-pinned) policy: Immutable rejects ALL migrations;
+        //      Governed requires the migrationAuthority's verified consent (`addrs` = verified signer
+        //      addresses); AppendOnly asserts the schema delta is additive over the per-version MachineShape;
+        //      Arbitrary/absent = unconstrained (today's behaviour).
+        //   2. TIGHTEN-ONLY (the trust anchor): the policy lattice may only become MORE restrictive (an absent
+        //      old policy is fully-unconstrained, so the first policy a fiber adopts is always a valid
+        //      tightening). This is what makes the observer's "read one hash-pinned field" guarantee sound — a
+        //      later upgrade cannot quietly re-grant a surrendered capability NOR launder a stricter
+        //      upgradePolicy tier (e.g. Governed) down to a looser one (Arbitrary).
+        //   3. compatBridge: the OLD definition's declared `compatibleWith` window must contain the new version.
+        // FAIL-CLOSED: any denial ⇒ abort (total discard). Immutable denies first, so it blocks EVERY migration
+        // path that flows through here, and `migrate` is the ONLY entry that reaches this site.
+        UpgradeGate.check(sm, newDefinition, newBinding, calculatedState, addrs) match {
+          case Some(reason) => aborted(reason)
+          case None         => migrateStateMachineGated(sm, newDefinition, newBinding, migration)
+        }
+
+      private def migrateStateMachineGated(
         sm:            Records.StateMachineFiberRecord,
         newDefinition: StateMachineDefinition,
         newBinding:    SchemaBinding,
@@ -263,21 +303,6 @@ object FiberEngine {
         evalMigration.flatMap {
           case Left(reason) => aborted(reason)
 
-          // TIGHTEN-ONLY (the trust anchor): a policy may only ever become MORE restrictive across a migration.
-          // Checked at the gas-metered re-bind boundary, BEFORE the conformance gate, with both the OLD
-          // (sm.definition.policy) and NEW (newDefinition.policy) policies in scope. An absent old policy is
-          // fully-unconstrained, so the first policy a fiber adopts is always a valid tightening. On any
-          // loosening: abort (total discard). This is what makes the observer's "read one hash-pinned field"
-          // guarantee sound — a later upgrade cannot quietly re-grant a surrendered capability.
-          case Right(_) if FiberPolicy.tightens(sm.definition.policy, newDefinition.policy).isLeft =>
-            val dial = FiberPolicy.tightens(sm.definition.policy, newDefinition.policy).swap.getOrElse("policy")
-            aborted(
-              FailureReason.PolicyViolation(
-                "tighten",
-                s"dial '$dial' may only tighten, never loosen, across a migration"
-              )
-            )
-
           case Right(migrated) =>
             (migrated, newDefinition.states.contains(sm.currentState)) match {
               case (m: MapValue, true)
@@ -291,7 +316,11 @@ object FiberEngine {
                     fromBinding = sm.schemaBinding,
                     toBinding = newBinding,
                     gasUsed = gasUsed,
-                    migrated = migration.isDefined
+                    migrated = migration.isDefined,
+                    // version-compat-family §6: the OLD upgradePolicy's stricter tiers (AppendOnly/Governed)
+                    // carry an off-chain ASSERTED commute-law obligation, made auditable here. The commute
+                    // law itself cannot be verified on-chain — see UpgradeReceipt scaladoc + the test-kit.
+                    commuteObligation = commuteObligationFor(sm.definition.policy)
                   )
                   _ <- ExecutionOps.appendLog[FiberT[F, *]](receipt)
                   updated = sm.copy(

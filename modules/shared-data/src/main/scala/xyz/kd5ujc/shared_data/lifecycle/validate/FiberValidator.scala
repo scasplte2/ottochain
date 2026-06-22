@@ -134,7 +134,10 @@ object FiberValidator {
         signedByOwner <- FiberRules.L0.updateSignedByOwners(update.fiberId, proofs, state.calculated)
         bindingOk     <- FiberRules.L0.bindingNameMatches(update.fiberId, update.targetRef.name, state.calculated)
         stateOk       <- FiberRules.L0.currentStateInDefinition(update.fiberId, update.newDefinition, state.calculated)
-      } yield List(fiberActive, signedByOwner, bindingOk, stateOk).combineAll
+        // version-compat-family §3.5: fail-fast mirror of the cheap, signer-independent UpgradeGate checks
+        // (Immutable rejection + tighten-only). The engine UpgradeGate stays the authority and re-runs all.
+        policyOk <- FiberRules.L0.upgradePolicyPermits(update.fiberId, update.newDefinition, state.calculated)
+      } yield List(fiberActive, signedByOwner, bindingOk, stateOk, policyOk).combineAll
   }
 
   /**

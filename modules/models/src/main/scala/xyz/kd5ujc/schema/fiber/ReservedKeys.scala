@@ -82,6 +82,18 @@ object ReservedKeys {
   val PARENT = "parent"
   val CHILDREN = "children"
   val SCRIPTS = "scripts"
+
+  // FiberPolicy version & compatibility family (fiber-policy.md `version-compat-family`): the read-only
+  // projection of a depended-on fiber's policy surfaced into machines.<id>._policy, so a consumer guard can
+  // assert a VERIFIED version floor (`depVersionAtLeast`) or an advertised interface (`depSupportsInterface`).
+  // ALWAYS present + well-typed (fail-closed): `version` is a MAP {major,minor,patch} (D2 — JLVM has no
+  // integer-indexed `get`), empty {} when the producer is unbound; `interfaces` is ALWAYS an Array.
+  val POLICY = "_policy"
+  val POLICY_VERSION = "version"
+  val POLICY_INTERFACES = "interfaces"
+  val POLICY_MAJOR = "major"
+  val POLICY_MINOR = "minor"
+  val POLICY_PATCH = "patch"
   val HELD_ASSETS = "heldAssets" // Assets held by this fiber (asset-model.md §10), injected into eval context
 
   // Asset Transfer Directive Keys - Used in extractAssetTransfers for _transferAsset

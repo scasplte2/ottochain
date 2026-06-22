@@ -6,6 +6,7 @@ import cats.syntax.all._
 import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
 
 import xyz.kd5ujc.schema.fiber._
+import xyz.kd5ujc.schema.registry.SemVer
 
 import io.circe.parser._
 import io.circe.syntax._
@@ -67,6 +68,32 @@ object FiberPolicyHashStabilitySuite extends SimpleIOSuite {
       reDecoded  <- IO.fromEither(decode[StateMachineDefinition](withPolicy.asJson.noSpaces))
     } yield expect(baseHash =!= policyHash) and
     expect(reDecoded.policy.flatMap(_.selfReproducing).contains(true))
+  }
+
+  test("the version-compat family round-trips through circe (ADT codecs) and stays hash-distinct") {
+    val vcPolicy = FiberPolicy(
+      upgradePolicy = Some(UpgradePolicy.Governed(MigrationAuthority.Role(new java.util.UUID(0L, 7L), "admins"))),
+      version = Some(SemVer(1, 2, 3)),
+      compatibleWith = Some(VersionRange(min = Some(SemVer(2, 0, 0)), max = Some(SemVer(3, 0, 0)))),
+      interfaces = Some(Set("ITransfer", "IPause"))
+    )
+    val withVc = baseDef.copy(policy = Some(vcPolicy))
+    for {
+      baseHash  <- baseDef.computeDigest
+      vcHash    <- withVc.computeDigest
+      reDecoded <- IO.fromEither(decode[StateMachineDefinition](withVc.asJson.noSpaces))
+    } yield expect(baseHash =!= vcHash) and
+    expect(reDecoded.policy.flatMap(_.version).contains(SemVer(1, 2, 3))) and
+    expect(reDecoded.policy.flatMap(_.upgradePolicy).contains(vcPolicy.upgradePolicy.get)) and
+    expect(reDecoded.policy.flatMap(_.interfaces).contains(Set("ITransfer", "IPause"))) and
+    expect(reDecoded.policy.flatMap(_.compatibleWith) == vcPolicy.compatibleWith)
+  }
+
+  test("a bare-tag upgradePolicy (immutable/appendOnly/arbitrary) round-trips as a string") {
+    val immutable = baseDef.copy(policy = Some(FiberPolicy(upgradePolicy = Some(UpgradePolicy.Immutable))))
+    for {
+      reDecoded <- IO.fromEither(decode[StateMachineDefinition](immutable.asJson.noSpaces))
+    } yield expect(reDecoded.policy.flatMap(_.upgradePolicy).contains(UpgradePolicy.Immutable))
   }
 
   test("encoder normalizes Some(empty) away: the policy field is absent-or-null ⇒ dropNulls-stable") {

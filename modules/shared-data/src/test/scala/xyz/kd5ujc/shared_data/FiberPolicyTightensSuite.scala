@@ -3,6 +3,7 @@ package xyz.kd5ujc.shared_data
 import java.util.UUID
 
 import xyz.kd5ujc.schema.fiber._
+import xyz.kd5ujc.schema.registry.SemVer
 
 import weaver.FunSuite
 
@@ -172,6 +173,62 @@ object FiberPolicyTightensSuite extends FunSuite {
       FiberPolicy(dependencyPolicy = Some(DependencyPolicy(DependencyMode.Allowlist, Some(Set(a, b))))),
       "dependencyPolicy.allowed"
     )
+  }
+
+  // ── upgradePolicy (lattice rank up only; absent ≡ Arbitrary) ─────────────────────────────────────
+
+  test("upgradePolicy: rank may only INCREASE; absent is Arbitrary (rank 0)") {
+    // Arbitrary→AppendOnly→Governed→Immutable all tighten (rank up)
+    ok(
+      FiberPolicy(upgradePolicy = Some(UpgradePolicy.Arbitrary)),
+      FiberPolicy(upgradePolicy = Some(UpgradePolicy.AppendOnly))
+    ) and
+    ok(
+      FiberPolicy(upgradePolicy = Some(UpgradePolicy.AppendOnly)),
+      FiberPolicy(upgradePolicy = Some(UpgradePolicy.Immutable))
+    ) and
+    // None (≡ Arbitrary)→AppendOnly OK
+    ok(FiberPolicy(), FiberPolicy(upgradePolicy = Some(UpgradePolicy.AppendOnly))) and
+    // Immutable→Governed LOOSENS (rank 3→2) ⇒ rejected. Authority is identified by a registry-fiber Role here
+    // (no Address needed in this pure suite); contents are irrelevant to the rank lattice.
+    rejected(
+      FiberPolicy(upgradePolicy = Some(UpgradePolicy.Immutable)),
+      FiberPolicy(upgradePolicy = Some(UpgradePolicy.Governed(MigrationAuthority.Role(a, "admins")))),
+      "upgradePolicy"
+    ) and
+    // AppendOnly→None (≡ Arbitrary, rank 1→0) LOOSENS ⇒ rejected
+    rejected(FiberPolicy(upgradePolicy = Some(UpgradePolicy.AppendOnly)), FiberPolicy(), "upgradePolicy") and
+    // Governed→Governed (same rank, different authority) is a valid same-rank move (rotation gated at UpgradeGate)
+    ok(
+      FiberPolicy(upgradePolicy = Some(UpgradePolicy.Governed(MigrationAuthority.Role(a, "admins")))),
+      FiberPolicy(upgradePolicy = Some(UpgradePolicy.Governed(MigrationAuthority.Role(b, "admins"))))
+    )
+  }
+
+  // ── version (must advance) ───────────────────────────────────────────────────────────────────────
+
+  test("version: may only ADVANCE; None→Some OK; Some→None rejected; regress rejected") {
+    ok(FiberPolicy(version = Some(SemVer(1, 0, 0))), FiberPolicy(version = Some(SemVer(1, 0, 1)))) and
+    ok(FiberPolicy(version = Some(SemVer(1, 2, 3))), FiberPolicy(version = Some(SemVer(1, 2, 3)))) and
+    ok(FiberPolicy(), FiberPolicy(version = Some(SemVer(1, 0, 0)))) and
+    rejected(FiberPolicy(version = Some(SemVer(2, 0, 0))), FiberPolicy(version = Some(SemVer(1, 9, 9))), "version") and
+    rejected(FiberPolicy(version = Some(SemVer(1, 0, 0))), FiberPolicy(), "version")
+  }
+
+  // ── interfaces (set GROWS — a consumer must not lose an advertised capability) ───────────────────
+
+  test("interfaces: the advertised set may only GROW; shrinking/dropping is rejected") {
+    ok(
+      FiberPolicy(interfaces = Some(Set("ITransfer"))),
+      FiberPolicy(interfaces = Some(Set("ITransfer", "IPause")))
+    ) and
+    ok(FiberPolicy(), FiberPolicy(interfaces = Some(Set("ITransfer")))) and
+    rejected(
+      FiberPolicy(interfaces = Some(Set("ITransfer", "IPause"))),
+      FiberPolicy(interfaces = Some(Set("ITransfer"))),
+      "interfaces"
+    ) and
+    rejected(FiberPolicy(interfaces = Some(Set("ITransfer"))), FiberPolicy(), "interfaces")
   }
 
   // ── enum wire strings (cross-language contract with the SDK builder) ─────────────────────────────

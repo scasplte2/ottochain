@@ -450,7 +450,90 @@ object FiberPolicyEnforcementSuite extends SimpleIOSuite {
     }
   }
 
+  // ── version & compatibility family at migration ──────────────────────────────────────────────────
+
+  test("upgradePolicy=Immutable: EVERY migration ABORTS, even an identity re-bind with verified signers") {
+    TestFixture.resource().use { fixture =>
+      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      for {
+        fid  <- UUIDGen.randomUUID[IO]
+        base <- parseDef("""{"states":{"init":{"id":"init","isFinal":false}},"initialState":"init","transitions":[]}""")
+        pol = Some(FiberPolicy(upgradePolicy = Some(UpgradePolicy.Immutable)))
+        fdef = base.copy(policy = pol)
+        data = MapValue(Map.empty)
+        h <- (data: JsonLogicValue).computeDigest
+        rec = fiber(fid, fdef, data, h, fixture.ordinal, state = StateId("init"))
+        st = CalculatedState(SortedMap(fid -> rec), SortedMap.empty)
+        res <- FiberEngine.make[IO](st, fixture.ordinal).migrate(fid, fdef, anyBinding, None, Set(anyAddr))
+      } yield expect(isPolicyViolation(res, "upgradePolicy"))
+    }
+  }
+
+  test("upgradePolicy=Governed: an authorized signer COMMITS with commuteObligation=true; an outsider ABORTS") {
+    TestFixture.resource().use { fixture =>
+      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      for {
+        fid  <- UUIDGen.randomUUID[IO]
+        base <- parseDef("""{"states":{"init":{"id":"init","isFinal":false}},"initialState":"init","transitions":[]}""")
+        // Governed by `anyAddr`; the NEW policy keeps the SAME Governed tier (tighten-only same-rank rotation OK).
+        gov = UpgradePolicy.Governed(MigrationAuthority.Signers(Set(anyAddr)))
+        pol = Some(FiberPolicy(upgradePolicy = Some(gov)))
+        fdef = base.copy(policy = pol)
+        data = MapValue(Map.empty)
+        h <- (data: JsonLogicValue).computeDigest
+        rec = fiber(fid, fdef, data, h, fixture.ordinal, state = StateId("init"))
+        st = CalculatedState(SortedMap(fid -> rec), SortedMap.empty)
+        okRes <- FiberEngine.make[IO](st, fixture.ordinal).migrate(fid, fdef, anyBinding, None, Set(anyAddr))
+        noRes <- FiberEngine.make[IO](st, fixture.ordinal).migrate(fid, fdef, anyBinding, None, Set(otherAddr))
+      } yield expect(commuteObligationOf(okRes).contains(true)) and expect(isPolicyViolation(noRes, "upgradePolicy"))
+    }
+  }
+
+  test("upgradePolicy=Arbitrary (absent): migration COMMITS with commuteObligation=false") {
+    TestFixture.resource().use { fixture =>
+      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      for {
+        fid  <- UUIDGen.randomUUID[IO]
+        base <- parseDef("""{"states":{"init":{"id":"init","isFinal":false}},"initialState":"init","transitions":[]}""")
+        data = MapValue(Map.empty)
+        h <- (data: JsonLogicValue).computeDigest
+        rec = fiber(fid, base, data, h, fixture.ordinal, state = StateId("init"))
+        st = CalculatedState(SortedMap(fid -> rec), SortedMap.empty)
+        res <- FiberEngine.make[IO](st, fixture.ordinal).migrate(fid, base, anyBinding, None, Set(anyAddr))
+      } yield expect(commuteObligationOf(res).contains(false))
+    }
+  }
+
   // ── helpers ──────────────────────────────────────────────────────────────────────────────────────
+
+  private val anyAddr: io.constellationnetwork.schema.address.Address = mkAddr(
+    "DAG2BAUcXKujRhzk4XZ6RDYL2ifXWMgfw1v7YxZu"
+  )
+
+  private val otherAddr: io.constellationnetwork.schema.address.Address = mkAddr(
+    "DAG5VpYPJCqdv4K3VnpNrpTABvC8RjqrfZN8rUvE"
+  )
+
+  private val anyBinding: xyz.kd5ujc.schema.registry.SchemaBinding =
+    xyz.kd5ujc.schema.registry.SchemaBinding(
+      xyz.kd5ujc.schema.registry.RegistryName.unsafe("x.package"),
+      xyz.kd5ujc.schema.registry.SemVer(2, 0, 0),
+      io.constellationnetwork.security.hash.Hash("sh"),
+      io.constellationnetwork.security.hash.Hash("lh")
+    )
+
+  private def mkAddr(str: String): io.constellationnetwork.schema.address.Address =
+    eu.timepit.refined.refineV[io.constellationnetwork.schema.address.DAGAddressRefined].apply[String](str) match {
+      case Right(v) => io.constellationnetwork.schema.address.Address(v)
+      case Left(e)  => sys.error(s"bad test address: $e")
+    }
+
+  /** The commuteObligation flag of the single UpgradeReceipt in a committed migration (None if not committed). */
+  private def commuteObligationOf(r: TransactionResult): Option[Boolean] = r match {
+    case TransactionResult.Committed(_, _, logs, _, _, _, _) =>
+      logs.collectFirst { case u: FiberLogEntry.UpgradeReceipt => u.commuteObligation }
+    case _ => None
+  }
 
   private def isCommitted(r: TransactionResult): Boolean = r match {
     case _: TransactionResult.Committed => true

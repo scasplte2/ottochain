@@ -5,11 +5,13 @@ import java.util.UUID
 import io.constellationnetwork.schema.address.Address
 
 import xyz.kd5ujc.schema.CodecConfiguration._
+import xyz.kd5ujc.schema.registry.SemVer
 
 import derevo.circe.magnolia.{customizableDecoder, customizableEncoder}
 import derevo.derive
 import enumeratum.EnumEntry.Uppercase
 import enumeratum.{CirceEnum, Enum, EnumEntry}
+import io.circe.{Decoder, Encoder}
 
 /**
  * The 5 directive families [[xyz.kd5ujc.shared_data.fiber.evaluation.EffectExtractor]] scrapes from a
@@ -78,6 +80,111 @@ final case class DependencyPolicy(
   allowed: Option[Set[UUID]] = None
 )
 
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// VERSION & COMPATIBILITY FAMILY (fiber-policy.md `version-compat-family` stream)
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Who may authorize a migration when [[UpgradePolicy.Governed]] is in force. Read from the OLD (hash-pinned)
+ * definition's policy at the version being upgraded FROM — NEVER re-suppliable in `newDefinition` — which
+ * closes the self-authorizing `Role(registryFiberId = attacker-fiber)` hole (spec §3.2 / I3).
+ *
+ * Prior art: cw2 `ensure_from_older_version` + migrate-admin; OZ proxy admin / `Ownable`; SPL freeze authority.
+ */
+sealed trait MigrationAuthority
+
+object MigrationAuthority {
+
+  /** Permit iff at least one VERIFIED signer address of the UpgradeFiber update is in `addresses`. */
+  @derive(customizableEncoder, customizableDecoder)
+  final case class Signers(addresses: Set[Address]) extends MigrationAuthority
+
+  /**
+   * Permit iff any VERIFIED signer address is a key of the flat per-role map at `roleField` in the registry
+   * fiber `registryFiberId`'s state (`{<address>: true}`, the `signerHasRoleVia` shape). `registryFiberId` is
+   * pinned to the OLD metadata only; total/fail-closed — a missing fiber / missing map / non-map ⇒ DENY.
+   */
+  @derive(customizableEncoder, customizableDecoder)
+  final case class Role(registryFiberId: UUID, roleField: String) extends MigrationAuthority
+
+  // Signers encodes as {"addresses":[...]}, Role as {"registryFiberId":..,"roleField":..} — disjoint field
+  // sets act as a natural discriminator (same pattern as RegistryShape).
+  implicit val encoder: Encoder[MigrationAuthority] = Encoder.instance {
+    case s: Signers => Encoder[Signers].apply(s)
+    case r: Role    => Encoder[Role].apply(r)
+  }
+
+  implicit val decoder: Decoder[MigrationAuthority] =
+    Decoder[Signers].map[MigrationAuthority](identity).or(Decoder[Role].map[MigrationAuthority](identity))
+}
+
+/**
+ * The upgrade-path constitution: how (if at all) the fiber's hash-pinned definition may change. Ordered by
+ * `rank` so the tighten-only lattice may only move UP (Immutable > Governed > AppendOnly > Arbitrary); a
+ * migration can never launder a stricter tier down to a looser one. `None` on [[FiberPolicy.upgradePolicy]]
+ * is exactly [[Arbitrary]] (rank 0, today's behaviour) at every site.
+ *
+ * Prior art: Aptos `upgrade_policy` (immutable / compatible / arbitrary); Sui `UpgradeCap`; CosmWasm cw2
+ * migrate-admin; Substrate additive `StorageVersion`; protobuf additive+reserved.
+ */
+sealed trait UpgradePolicy { def rank: Int }
+
+object UpgradePolicy {
+
+  /** Aptos `immutable` / frozen Sui `UpgradeCap`: reject ALL migrations. Terminal — tighten-only cannot leave. */
+  case object Immutable extends UpgradePolicy { val rank = 3 }
+
+  /** Aptos `compatible` + signer / cw2 migrate-admin: migrate only with the `migrationAuthority`'s consent. */
+  @derive(customizableEncoder, customizableDecoder)
+  final case class Governed(authority: MigrationAuthority) extends UpgradePolicy { val rank = 2 }
+
+  /** Substrate additive `StorageVersion` / protobuf additive: the schema delta must be additive-only. */
+  case object AppendOnly extends UpgradePolicy { val rank = 1 }
+
+  /** Aptos `arbitrary`: today's unconstrained migrate. Identical to an absent `upgradePolicy`. */
+  case object Arbitrary extends UpgradePolicy { val rank = 0 }
+
+  /** The default tier for an absent dial — `Arbitrary`. Use everywhere `upgradePolicy` is `None`. */
+  val default: UpgradePolicy = Arbitrary
+
+  // Governed encodes as {"authority":{...}}; the bare objects encode as their tag string so the SDK's
+  // exact-string contract holds. A bare-string OR a Governed object both decode total/fail-closed.
+  implicit val encoder: Encoder[UpgradePolicy] = Encoder.instance {
+    case Immutable   => Encoder.encodeString("immutable")
+    case AppendOnly  => Encoder.encodeString("appendOnly")
+    case Arbitrary   => Encoder.encodeString("arbitrary")
+    case g: Governed => Encoder[Governed].apply(g)
+  }
+
+  implicit val decoder: Decoder[UpgradePolicy] =
+    Decoder[Governed]
+      .map[UpgradePolicy](identity)
+      .or(Decoder.decodeString.emap {
+        case "immutable"  => Right(Immutable)
+        case "appendOnly" => Right(AppendOnly)
+        case "arbitrary"  => Right(Arbitrary)
+        case other        => Left(s"unknown upgradePolicy '$other'")
+      })
+}
+
+/**
+ * An inclusive-min / exclusive-max SemVer window: the successor versions THIS definition declares it will
+ * bridge a migration TO (spec §5.3 — the bridge direction is the ONLY meaning; the consumer's compat
+ * assertion is the runtime `depVersionAtLeast` guard, never a second decorative field meaning). `min`/`max`
+ * are each optional; an unset bound is unconstrained on that side. Prior art: protobuf-semver compat window;
+ * Cargo/npm `^`/`~`.
+ */
+@derive(customizableEncoder, customizableDecoder)
+final case class VersionRange(
+  min: Option[SemVer] = None,
+  max: Option[SemVer] = None // exclusive
+) {
+
+  /** `min <= v < max`, treating an unset bound as unconstrained. */
+  def contains(v: SemVer): Boolean =
+    min.forall(lo => SemVer.ordering.lteq(lo, v)) && max.forall(hi => SemVer.ordering.lt(v, hi))
+}
+
 /**
  * The fiber's hash-pinned, opt-in constitution (fiber-policy.md, `fiberpolicy-dials` stream).
  *
@@ -92,8 +199,9 @@ final case class DependencyPolicy(
  * the update via [[FailureReason.PolicyViolation]] / `CombineRejected` — no dial ever silently strips a
  * directive. Across a migration a policy may only TIGHTEN (see [[FiberPolicy.tightens]]).
  *
- * SCOPE: the version/compatibility family (`upgradePolicy`/`version`/`compatibleWith`/`interfaces`) and the
- * pause/freeze runtime ops are DEFERRED to later waves and intentionally absent here.
+ * SCOPE: the version/compatibility family (`upgradePolicy`/`version`/`compatibleWith`/`interfaces`/
+ * `migrationAuthority`) is enforced at the migrate boundary by [[xyz.kd5ujc.shared_data.fiber.UpgradeGate]].
+ * The pause/freeze runtime ops remain DEFERRED to a later wave and are intentionally absent here.
  */
 @derive(customizableEncoder, customizableDecoder)
 final case class FiberPolicy(
@@ -105,17 +213,28 @@ final case class FiberPolicy(
   acceptedCallers:  Option[Set[UUID]] = None, // fiber-origin ($caller) allowlist; user/wallet origin unaffected
   sealedStates:     Option[Set[StateId]] = None, // states from which NO transition may fire (terminal/halted)
   transferPolicy:   Option[TransferPolicy] = None,
-  dependencyPolicy: Option[DependencyPolicy] = None
+  dependencyPolicy: Option[DependencyPolicy] = None,
+  // ── version & compatibility family ──
+  upgradePolicy:      Option[UpgradePolicy] = None, // None ⇒ Arbitrary (legacy); gates migrate at UpgradeGate
+  version:            Option[SemVer] = None, // self-declared semantic version (TRUST-LAYER; gate uses schemaBinding)
+  compatibleWith:     Option[VersionRange] = None, // bridge window: which successor versions migrate may target
+  interfaces:         Option[Set[String]] = None, // ERC-165 interface ids the fiber advertises (self-declared)
+  migrationAuthority: Option[MigrationAuthority] = None // who may authorize a Governed migration
 ) {
 
   /** An all-default policy is semantically equivalent to no policy at all. */
   def isEmpty: Boolean =
     selfReproducing.isEmpty && allowedEffects.isEmpty && spawnOwnerPolicy.isEmpty &&
     maxGenerations.isEmpty && maxSpawnFanout.isEmpty && acceptedCallers.isEmpty &&
-    sealedStates.isEmpty && transferPolicy.isEmpty && dependencyPolicy.isEmpty
+    sealedStates.isEmpty && transferPolicy.isEmpty && dependencyPolicy.isEmpty &&
+    upgradePolicy.isEmpty && version.isEmpty && compatibleWith.isEmpty &&
+    interfaces.isEmpty && migrationAuthority.isEmpty
 
   /** Convenience: this dial is ON only when explicitly set to `true`. */
   def isSelfReproducing: Boolean = selfReproducing.contains(true)
+
+  /** The effective upgrade tier — an absent dial is [[UpgradePolicy.Arbitrary]] (legacy/unconstrained). */
+  def effectiveUpgradePolicy: UpgradePolicy = upgradePolicy.getOrElse(UpgradePolicy.default)
 }
 
 object FiberPolicy {
@@ -149,6 +268,18 @@ object FiberPolicy {
    *   - sealedStates:   the sealed set may only GROW (`neu ⊇ old`) — opposite direction (more states locked).
    *   - transferPolicy: each recipient allowlist may only SHRINK (`neu ⊆ old`); `None`→`Some` OK.
    *   - dependencyPolicy: mode may only tighten (rank up: Open ⊐ Allowlist ⊐ Frozen); an Allowlist may only shrink.
+   *   - upgradePolicy:   tier rank may only INCREASE (Immutable 3 > Governed 2 > AppendOnly 1 > Arbitrary 0);
+   *                      an absent dial is Arbitrary (rank 0). You can never launder a stricter tier downward.
+   *   - version:         the self-declared version may only ADVANCE (`neu.version >= old.version`); `None`→`Some`
+   *                      OK, `Some`→`None` rejected (a published version may not be retracted).
+   *   - interfaces:      the advertised interface set may only GROW (`neu ⊇ old`) — a consumer that relied on
+   *                      an advertised capability must not have it silently dropped. `None`→`Some` OK.
+   *
+   * NOTE: `compatibleWith` (the migration bridge window) is intentionally NOT part of the tighten lattice —
+   * it is enforced directionally at the migrate boundary by [[xyz.kd5ujc.shared_data.fiber.UpgradeGate]]
+   * (the OLD definition's window must contain the NEW version), not as a monotone successor constraint.
+   * `migrationAuthority` is likewise consulted at the gate (rotation under the same Governed rank is allowed,
+   * matching cw2 admin-rotation), so it is not constrained here either.
    */
   def tightens(old: Option[FiberPolicy], neu: Option[FiberPolicy]): Either[String, Unit] =
     normalize(old) match {
@@ -165,7 +296,32 @@ object FiberPolicy {
           _ <- superset("sealedStates", o.sealedStates, n.sealedStates)
           _ <- transferTightens(o.transferPolicy, n.transferPolicy)
           _ <- dependencyTightens(o.dependencyPolicy, n.dependencyPolicy)
+          // version & compatibility family
+          _ <- upgradeTierUp(o.upgradePolicy, n.upgradePolicy)
+          _ <- versionAdvances(o.version, n.version)
+          _ <- superset("interfaces", o.interfaces, n.interfaces)
         } yield ()
+    }
+
+  /**
+   * The upgrade tier may only become STRICTER (rank may only increase). An absent dial is `Arbitrary` (rank
+   * 0), so `None`→`Some(stricter)` is a valid tightening and a stricter-old→`None`(neu) LOOSENS (rejected).
+   * Governed→Governed (same rank) is permitted here — authority rotation is gated at [[UpgradeGate]] instead.
+   */
+  private def upgradeTierUp(old: Option[UpgradePolicy], neu: Option[UpgradePolicy]): Either[String, Unit] = {
+    val oldRank = old.getOrElse(UpgradePolicy.default).rank
+    val newRank = neu.getOrElse(UpgradePolicy.default).rank
+    if (newRank >= oldRank) Right(()) else Left("upgradePolicy")
+  }
+
+  /** A published `version` may only ADVANCE: `neu >= old`; `None`(old) ⇒ any OK; `Some`(old)→`None`(neu) loosens. */
+  private def versionAdvances(old: Option[SemVer], neu: Option[SemVer]): Either[String, Unit] =
+    old match {
+      case None => Right(())
+      case Some(o) =>
+        neu.fold[Either[String, Unit]](Left("version"))(n =>
+          if (SemVer.ordering.gteq(n, o)) Right(()) else Left("version")
+        )
     }
 
   /** A boolean latch: once `old == Some(true)`, `neu` must also be `Some(true)`. */

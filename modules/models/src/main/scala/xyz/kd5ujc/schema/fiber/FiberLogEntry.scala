@@ -125,15 +125,23 @@ object FiberLogEntry {
    * — that is a handed-off, off-chain authoring-time expectation, backed by the trust layer
    * (reputation / reserved `std.*` namespace). See docs/proposals/trust-and-verification-handoff.md and
    * the commute-law test-kit.
+   *
+   * `commuteObligation` (version-compat-family §6) makes that unproven assumption AUDITABLE per-upgrade:
+   * `true` records that — because the OLD `upgradePolicy` is the stricter `AppendOnly` or `Governed` tier —
+   * the publisher has ASSERTED (off-chain, via the SDK commute test-kit) that migrate∘step = step∘migrate.
+   * `Arbitrary`/absent ⇒ `false` (no such assertion is implied). It is a documented CONFORMANCE OBLIGATION,
+   * not an on-chain proof; the commute law cannot be verified on-chain (∀-inputs). The default `= false`
+   * keeps legacy receipts hash-stable via `dropNulls`-equivalent default omission.
    */
   @derive(customizableEncoder, customizableDecoder)
   final case class UpgradeReceipt(
-    fiberId:     UUID,
-    ordinal:     SnapshotOrdinal,
-    fromBinding: Option[SchemaBinding],
-    toBinding:   SchemaBinding,
-    gasUsed:     Long,
-    migrated:    Boolean
+    fiberId:           UUID,
+    ordinal:           SnapshotOrdinal,
+    fromBinding:       Option[SchemaBinding],
+    toBinding:         SchemaBinding,
+    gasUsed:           Long,
+    migrated:          Boolean,
+    commuteObligation: Boolean = false
   ) extends FiberLogEntry
 
   /**

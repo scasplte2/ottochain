@@ -296,12 +296,46 @@ object ContextProvider {
         val baseMap = Map(
           ReservedKeys.STATE            -> fiber.stateData,
           ReservedKeys.CURRENT_STATE_ID -> StrValue(fiber.currentState.value),
-          ReservedKeys.SEQUENCE_NUMBER  -> IntValue(fiber.sequenceNumber.value.value)
+          ReservedKeys.SEQUENCE_NUMBER  -> IntValue(fiber.sequenceNumber.value.value),
+          // FiberPolicy version & compatibility family: ALWAYS-present, well-typed `_policy` projection (H1 —
+          // never absent, never wrong-typed) so a consumer's `depVersionAtLeast` / `depSupportsInterface` guard
+          // reads totally and fails closed. `version` is the VERIFIED `schemaBinding.version` (#37-pinned, a
+          // producer cannot lie about it), projected as a MAP {major,minor,patch} (D2 — JLVM has no
+          // integer-indexed `get`); `{}` when the producer is unbound. `interfaces` is the self-declared set
+          // (ERC-165 — TRUST-LAYER only; consumers MUST NOT gate funds/authority on it), ALWAYS an Array.
+          ReservedKeys.POLICY -> policySummary(fiber)
         )
         val fullMap =
           if (includeId) baseMap + (ReservedKeys.MACHINE_ID -> StrValue(fiber.fiberId.toString))
           else baseMap
         MapValue(fullMap)
+      }
+
+      /** The `_policy` projection: VERIFIED version map (from schemaBinding) + self-declared interfaces array. */
+      private def policySummary(fiber: Records.StateMachineFiberRecord): MapValue = {
+        val versionValue: JsonLogicValue =
+          fiber.schemaBinding.fold(MapValue(Map.empty): JsonLogicValue) { b =>
+            MapValue(
+              Map(
+                ReservedKeys.POLICY_MAJOR -> IntValue(b.version.major),
+                ReservedKeys.POLICY_MINOR -> IntValue(b.version.minor),
+                ReservedKeys.POLICY_PATCH -> IntValue(b.version.patch)
+              )
+            )
+          }
+        val interfaces: List[JsonLogicValue] =
+          fiber.definition.policy
+            .flatMap(_.interfaces)
+            .getOrElse(Set.empty)
+            .toList
+            .sorted
+            .map(StrValue(_))
+        MapValue(
+          Map(
+            ReservedKeys.POLICY_VERSION    -> versionValue,
+            ReservedKeys.POLICY_INTERFACES -> ArrayValue(interfaces)
+          )
+        )
       }
 
       private def buildScriptSummary(script: Records.ScriptFiberRecord): MapValue =
