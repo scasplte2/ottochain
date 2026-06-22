@@ -100,13 +100,50 @@ object FiberEvaluator {
       ): G[FiberResult] = {
         val input = FiberInput.Transition(eventName, payload)
 
-        fiber.definition.transitionMap
-          .get((fiber.currentState, eventName))
-          .fold(
-            FailureReason.NoTransitionFound(fiber.currentState, eventName).pureOutcome[G]
-          )(
-            tryTransitions(fiber, input, proofs, _, attemptedGuards = 0, caller)
-          )
+        policyShortCircuit(fiber, caller) match {
+          case Some(reason) => reason.pureOutcome[G]
+          case None =>
+            fiber.definition.transitionMap
+              .get((fiber.currentState, eventName))
+              .fold(
+                FailureReason.NoTransitionFound(fiber.currentState, eventName).pureOutcome[G]
+              )(
+                tryTransitions(fiber, input, proofs, _, attemptedGuards = 0, caller)
+              )
+        }
+      }
+
+      /**
+       * FiberPolicy short-circuits checked BEFORE the transition lookup / guard runs, so a sealed/unauthorized
+       * call burns no guard gas or effects. Both FAIL-CLOSED (abort the transition via PolicyViolation).
+       *
+       *   - `sealedStates`: if the fiber's CURRENT state is in the policy's sealed set, NO transition may fire
+       *     from it (a terminal/halted machine). On a cascade this still aborts; TriggerHandler routes a
+       *     PolicyViolation to the fatal path (not the soft cascade-fail), so a sealed-state hit aborts the
+       *     whole originating transaction rather than silently soft-failing the branch.
+       *   - `acceptedCallers`: a FIBER-ORIGIN trigger (`caller = Some(id)`, the engine-stamped, non-spoofable
+       *     `$caller`) whose id is not in the allowlist is rejected before the guard. A user/wallet-origin
+       *     transition (`caller = None`) is governed by the existing `proofs`/`authorizedSigners` path, NOT by
+       *     `acceptedCallers`, so it is intentionally unaffected here.
+       */
+      private def policyShortCircuit(
+        fiber:  Records.StateMachineFiberRecord,
+        caller: Option[UUID]
+      ): Option[FailureReason] = {
+        val policy = fiber.definition.policy
+        val sealedHit =
+          policy.flatMap(_.sealedStates).filter(_.contains(fiber.currentState)).map { _ =>
+            FailureReason.PolicyViolation("sealedStates", s"state '${fiber.currentState.value}' is sealed")
+          }
+        lazy val callerHit =
+          (policy.flatMap(_.acceptedCallers), caller) match {
+            case (Some(allowed), Some(c)) if !allowed.contains(c) =>
+              Some(
+                FailureReason.PolicyViolation("acceptedCallers", s"caller $c is not in the accepted-callers allowlist")
+              )
+            case _ => None
+          }
+        sealedHit.orElse(callerHit)
       }
 
       private def tryTransitions(
@@ -203,7 +240,14 @@ object FiberEvaluator {
             evaluateEffectExpression(transition, contextData).flatMap {
               case Left(reason) => reason.pureOutcome[G]
               case Right(effectResult) =>
-                processEffectResult(fiber.fiberId, currentMap, transition, effectResult, contextData)
+                processEffectResult(
+                  fiber.fiberId,
+                  currentMap,
+                  transition,
+                  effectResult,
+                  contextData,
+                  fiber.definition.policy.flatMap(_.allowedEffects)
+                )
             }
 
           case _ =>
@@ -217,11 +261,12 @@ object FiberEvaluator {
         MeteredEvaluator.eval[F, G](transition.effect, contextData, GasExhaustionPhase.Effect)
 
       private def processEffectResult(
-        fiberId:      UUID,
-        currentMap:   MapValue,
-        transition:   Transition,
-        effectResult: JsonLogicValue,
-        contextData:  JsonLogicValue
+        fiberId:        UUID,
+        currentMap:     MapValue,
+        transition:     Transition,
+        effectResult:   JsonLogicValue,
+        contextData:    JsonLogicValue,
+        allowedEffects: Option[Set[EffectKind]]
       ): G[FiberResult] =
         for {
           limits    <- ExecutionOps.askLimits[G]
@@ -229,7 +274,7 @@ object FiberEvaluator {
           result <- sizeCheck match {
             case Left(reason) => reason.pureOutcome[G]
             case Right(_) =>
-              buildSuccessOutcome(fiberId, currentMap, transition, effectResult, contextData)
+              buildSuccessOutcome(fiberId, currentMap, transition, effectResult, contextData, allowedEffects)
           }
         } yield result
 
@@ -246,11 +291,12 @@ object FiberEvaluator {
           }
 
       private def buildSuccessOutcome(
-        fiberId:      UUID,
-        currentMap:   MapValue,
-        transition:   Transition,
-        effectResult: JsonLogicValue,
-        contextData:  JsonLogicValue
+        fiberId:        UUID,
+        currentMap:     MapValue,
+        transition:     Transition,
+        effectResult:   JsonLogicValue,
+        contextData:    JsonLogicValue,
+        allowedEffects: Option[Set[EffectKind]]
       ): G[FiberResult] =
         for {
           fiberGasConfig <- A.reader(_.fiberGasConfig)
@@ -263,6 +309,24 @@ object FiberEvaluator {
           assetTransfers = effects.collect { case t: FiberEffect.AssetTransferred => t }
           depMutations = effects.collect { case d: FiberEffect.DependencyMutated => d }
 
+          // FiberPolicy dial `allowedEffects`: FAIL-CLOSED gate on which directive families this transition may
+          // produce. A non-empty family NOT in the allowlist aborts the WHOLE transition (total discard) — it
+          // does NOT use the fail-silent extraction path that would merely strip a directive. `None` ⇒ legacy
+          // (all families permitted). CASCADE COVERAGE: Spawn/Dependency are structurally empty on a cascade
+          // (honoured only on the primary transition), so this gate enforces them on the primary; Trigger/Emit/
+          // Transfer are produced on both primary and cascade and this gate (running in buildSuccessOutcome,
+          // which executes for both) enforces those on both.
+          violatedFamily = allowedEffects.flatMap { allowed =>
+            val present: List[(EffectKind, Boolean)] = List(
+              EffectKind.Trigger    -> allTriggers.nonEmpty,
+              EffectKind.Spawn      -> spawnMachines.nonEmpty,
+              EffectKind.Emit       -> emittedEvents.nonEmpty,
+              EffectKind.Transfer   -> assetTransfers.nonEmpty,
+              EffectKind.Dependency -> depMutations.nonEmpty
+            )
+            present.collectFirst { case (k, true) if !allowed.contains(k) => k }
+          }
+
           // Charge orchestration overhead
           _ <- ExecutionOps.chargeGas[G](fiberGasConfig.contextBuild.amount)
           _ <- ExecutionOps.chargeGas[G](allTriggers.size.toLong * fiberGasConfig.triggerEvent.amount)
@@ -274,25 +338,32 @@ object FiberEvaluator {
 
           // Check if we exceeded limits
           result <-
-            if (totalGasUsed > limits.maxGas)
-              FailureReason
-                .GasExhaustedFailure(totalGasUsed, limits.maxGas, GasExhaustionPhase.Effect)
-                .pureOutcome[G]
-            else
-              StateMerger.make[F].mergeEffectIntoState(currentMap, effectResult).liftTo[G].map[FiberResult] {
-                case Right(newStateData) =>
-                  FiberResult.Success(
-                    newStateData = newStateData,
-                    newStateId = Some(transition.to),
-                    triggers = allTriggers,
-                    spawns = spawnMachines,
-                    returnValue = None,
-                    emittedEvents = emittedEvents,
-                    assetTransfers = assetTransfers,
-                    dependencyMutations = depMutations
-                  )
-                case Left(reason) => reason.asOutcome
-              }
+            violatedFamily match {
+              case Some(k) =>
+                FailureReason
+                  .PolicyViolation("allowedEffects", s"effect family ${k.entryName} is not permitted by policy")
+                  .pureOutcome[G]
+              case None =>
+                if (totalGasUsed > limits.maxGas)
+                  FailureReason
+                    .GasExhaustedFailure(totalGasUsed, limits.maxGas, GasExhaustionPhase.Effect)
+                    .pureOutcome[G]
+                else
+                  StateMerger.make[F].mergeEffectIntoState(currentMap, effectResult).liftTo[G].map[FiberResult] {
+                    case Right(newStateData) =>
+                      FiberResult.Success(
+                        newStateData = newStateData,
+                        newStateId = Some(transition.to),
+                        triggers = allTriggers,
+                        spawns = spawnMachines,
+                        returnValue = None,
+                        emittedEvents = emittedEvents,
+                        assetTransfers = assetTransfers,
+                        dependencyMutations = depMutations
+                      )
+                    case Left(reason) => reason.asOutcome
+                  }
+            }
         } yield result
 
       // ──────────────────────────────────────────────────────────────────────────

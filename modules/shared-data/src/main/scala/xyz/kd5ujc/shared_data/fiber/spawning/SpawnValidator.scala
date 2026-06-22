@@ -12,10 +12,19 @@ import io.constellationnetwork.metagraph_sdk.json_logic.JsonLogicValue
 import io.constellationnetwork.metagraph_sdk.json_logic.core.{ArrayValue, StrValue}
 import io.constellationnetwork.metagraph_sdk.json_logic.gas.GasLimit
 import io.constellationnetwork.metagraph_sdk.json_logic.runtime.JsonLogicEvaluator
+import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
 import io.constellationnetwork.schema.address.{Address, DAGAddressRefined}
+import io.constellationnetwork.security.hash.Hash
 
 import xyz.kd5ujc.schema.Records
-import xyz.kd5ujc.schema.fiber.{ExecutionLimits, FailureReason, FiberContext, GasExhaustionPhase, SpawnDirective}
+import xyz.kd5ujc.schema.fiber.{
+  ExecutionLimits,
+  FailureReason,
+  FiberContext,
+  GasExhaustionPhase,
+  SpawnDirective,
+  SpawnOwnerPolicy
+}
 import xyz.kd5ujc.shared_data.fiber.core._
 import xyz.kd5ujc.shared_data.syntax.all._
 
@@ -88,21 +97,62 @@ object SpawnValidator {
         // pure validateBatchConstraints) and pass it down. Reading it here keeps the trait signature and the
         // entire SpawnProcessor call chain unchanged.
         ExecutionOps.askLimits[G].flatMap { limits =>
-          directives
-            .traverse(directive => validateSingle(directive, parent, contextData))
-            .map(_.sequence.andThen(validateBatchConstraints(_, knownFibers, limits)))
+          // FiberPolicy dial #1 (selfReproducing): hoist the parent's definition digest ONCE per transition
+          // (the parent definition is invariant across the directive list; do NOT re-hash it per spawn — B5).
+          // Only computed when the parent has actually opted in, so non-self-reproducing parents pay nothing.
+          maybeSelfHash(parent).flatMap { selfHash =>
+            directives
+              .traverse(directive => validateSingle(directive, parent, contextData, selfHash))
+              .map(_.sequence.andThen(validateBatchConstraints(_, knownFibers, limits, parent)))
+          }
         }
+
+      /** `Some(digest)` iff the parent has opted into self-reproduction; `None` otherwise (no hashing cost). */
+      private def maybeSelfHash(parent: Records.StateMachineFiberRecord): G[Option[Hash]] =
+        if (parent.definition.policy.exists(_.isSelfReproducing))
+          parent.definition.computeDigest.liftTo[G].map(_.some)
+        else none[Hash].pure[G]
 
       private def validateSingle(
         directive:   SpawnDirective,
         parent:      Records.StateMachineFiberRecord,
-        contextData: JsonLogicValue
+        contextData: JsonLogicValue,
+        selfHash:    Option[Hash]
       ): G[ValidatedNel[FailureReason, ValidatedSpawn]] =
         for {
           childIdResult <- evaluateChildId(directive, contextData)
           ownersResult  <- evaluateOwners(directive, parent, contextData)
-        } yield (childIdResult, ownersResult).mapN { case (childId, owners) =>
+          selfRepResult <- validateSelfReproduction(directive, selfHash)
+        } yield (childIdResult, ownersResult, selfRepResult).mapN { case (childId, owners, _) =>
           ValidatedSpawn(directive, childId, owners)
+        }
+
+      /**
+       * FiberPolicy dial #1 — selfReproducing (code-preservation invariant, engine-hardening Part A). When the
+       * parent has opted in (`selfHash = Some`), a `_spawn` child's `definition` MUST hash-equal the parent's
+       * (compared via canonical digest, never structural equality — Map key order is canonicalized by the
+       * codec). FAIL-CLOSED: a non-copy spawn aborts the whole transition. The invariant is TRANSITIVE: the
+       * child's definition is byte-equal to the parent's, so it carries the same `policy.selfReproducing = true`
+       * and can itself only spawn copies — the property holds for the entire lineage. The upgrade-latch in
+       * `FiberPolicy.tightens` keeps it from being cleared by a migration, so a fiber cannot graduate out.
+       */
+      private def validateSelfReproduction(
+        directive: SpawnDirective,
+        selfHash:  Option[Hash]
+      ): G[ValidatedNel[FailureReason, Unit]] =
+        selfHash match {
+          case None => Validated.validNel[FailureReason, Unit](()).pure[G] // opt-out default: untouched
+          case Some(expected) =>
+            directive.definition.computeDigest.liftTo[G].map { childHash =>
+              if (childHash === expected) Validated.validNel[FailureReason, Unit](())
+              else
+                Validated.invalidNel[FailureReason, Unit](
+                  FailureReason.PolicyViolation(
+                    "selfReproducing",
+                    s"spawned child definition digest ${childHash.value} != self digest ${expected.value}"
+                  )
+                )
+            }
         }
 
       private def evaluateChildId(
@@ -145,6 +195,39 @@ object SpawnValidator {
         } yield validated
 
       private def evaluateOwners(
+        directive:   SpawnDirective,
+        parent:      Records.StateMachineFiberRecord,
+        contextData: JsonLogicValue
+      ): G[ValidatedNel[FailureReason, Set[Address]]] =
+        resolveOwners(directive, parent, contextData).map(applySpawnOwnerPolicy(parent, _))
+
+      /**
+       * FiberPolicy dial `spawnOwnerPolicy` — constrain a child's resolved owners against the parent's.
+       * `InheritParent` FORCES the child owners to the parent's (ignoring any expr); `SubsetOfParent` REJECTS
+       * (fail-closed abort) a child whose owners are not ⊆ the parent's; `Explicit`/absent is today's behaviour
+       * (unchanged). Applied AFTER resolution so it governs whatever the owners expression produced.
+       */
+      private def applySpawnOwnerPolicy(
+        parent:   Records.StateMachineFiberRecord,
+        resolved: ValidatedNel[FailureReason, Set[Address]]
+      ): ValidatedNel[FailureReason, Set[Address]] =
+        parent.definition.policy.flatMap(_.spawnOwnerPolicy) match {
+          case None | Some(SpawnOwnerPolicy.Explicit) => resolved
+          case Some(SpawnOwnerPolicy.InheritParent)   => resolved.map(_ => parent.owners)
+          case Some(SpawnOwnerPolicy.SubsetOfParent) =>
+            resolved.andThen { owners =>
+              if (owners.subsetOf(parent.owners)) Validated.validNel(owners)
+              else
+                Validated.invalidNel(
+                  FailureReason.PolicyViolation(
+                    "spawnOwnerPolicy",
+                    s"child owners $owners are not a subset of parent owners ${parent.owners}"
+                  )
+                )
+            }
+        }
+
+      private def resolveOwners(
         directive:   SpawnDirective,
         parent:      Records.StateMachineFiberRecord,
         contextData: JsonLogicValue
@@ -203,7 +286,8 @@ object SpawnValidator {
       private def validateBatchConstraints(
         spawns:      List[ValidatedSpawn],
         knownFibers: Set[UUID],
-        limits:      ExecutionLimits
+        limits:      ExecutionLimits,
+        parent:      Records.StateMachineFiberRecord
       ): ValidatedNel[FailureReason, SpawnPlan] = {
         val childIds = spawns.map(_.childId)
 
@@ -215,6 +299,18 @@ object SpawnValidator {
           if (spawns.size > limits.maxSpawnsPerTransition)
             List(FailureReason.SpawnLimitExceeded(spawns.size, limits.maxSpawnsPerTransition))
           else Nil
+
+        // FiberPolicy dial `maxSpawnFanout`: a per-fiber cap STRICTER than (or equal to) the engine-default
+        // maxSpawnsPerTransition. Same fail-closed abort path. Distinct FailureReason (PolicyViolation) so an
+        // observer/test can tell a policy breach from the engine bound.
+        val fanoutErrors: List[FailureReason] =
+          parent.definition.policy.flatMap(_.maxSpawnFanout) match {
+            case Some(cap) if spawns.size > cap =>
+              List(
+                FailureReason.PolicyViolation("maxSpawnFanout", s"transition emitted ${spawns.size} spawns (max: $cap)")
+              )
+            case _ => Nil
+          }
 
         val duplicateErrors: List[FailureReason] = childIds
           .groupBy(identity)
@@ -229,7 +325,7 @@ object SpawnValidator {
           .distinct
           .map(FailureReason.ChildIdCollision)
 
-        val allErrors = countErrors ++ duplicateErrors ++ collisionErrors
+        val allErrors = countErrors ++ fanoutErrors ++ duplicateErrors ++ collisionErrors
 
         NonEmptyList.fromList(allErrors) match {
           case Some(errors) => Validated.invalid(errors)
