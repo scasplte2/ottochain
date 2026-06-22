@@ -8,7 +8,42 @@ export interface ProcessEventOptions {
   event?: string;
   eventData?: { eventName?: string; payload?: unknown; eventType?: string; [key: string]: unknown };
   expectedState?: string;
+  /** When set, assert the fiber's post-transition `stateData` deep-equals this object. */
+  expectedStateData?: Record<string, unknown>;
   targetSequenceNumber?: number;
+}
+
+/**
+ * Recursive, key-order-independent structural equality. Used to assert
+ * `expectedStateData` against the fiber's post-transition `stateData` (a plain
+ * JSON object/array tree of primitives) without depending on key ordering or on
+ * the chain's canonical serialization. `bigint`/`number` compare by numeric value
+ * so an int that decodes to a BigInt still matches a JSON literal.
+ */
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a === 'bigint' || typeof b === 'bigint') {
+    if (
+      (typeof a === 'bigint' || typeof a === 'number') &&
+      (typeof b === 'bigint' || typeof b === 'number')
+    ) {
+      return BigInt(a as never) === BigInt(b as never);
+    }
+    return false;
+  }
+  if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') {
+    return false;
+  }
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    return a.every((v, i) => deepEqual(v, b[i]));
+  }
+  const ao = a as Record<string, unknown>;
+  const bo = b as Record<string, unknown>;
+  const ak = Object.keys(ao);
+  const bk = Object.keys(bo);
+  if (ak.length !== bk.length) return false;
+  return ak.every((k) => Object.prototype.hasOwnProperty.call(bo, k) && deepEqual(ao[k], bo[k]));
 }
 
 export const generator = ({ cid, options }: { cid: string; wallets?: unknown; options: ProcessEventOptions }): OttochainMessage => {
@@ -90,6 +125,16 @@ export const validator = async ({ cid, statesMap, options, ml0Urls }: { cid: str
       if (finalRecord.currentState !== options.expectedState) {
         throw new Error(
           `\x1b[33m[processEvent.validator]\x1b[0m Expected state "${options.expectedState}" but found "${finalRecord.currentState}" for fiberId = ${cid} at ${url}.`
+        );
+      }
+    }
+
+    if (options.expectedStateData) {
+      const got = finalRecord.stateData;
+      if (!deepEqual(got, options.expectedStateData)) {
+        throw new Error(
+          `\x1b[33m[processEvent.validator]\x1b[0m expectedStateData mismatch for fiberId = ${cid} at ${url}: ` +
+            `got ${JSON.stringify(got)} want ${JSON.stringify(options.expectedStateData)}.`
         );
       }
     }

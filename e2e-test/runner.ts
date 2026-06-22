@@ -329,6 +329,8 @@ interface TestStep {
   event?: string;
   eventData?: Record<string, unknown>;
   expectedState?: string;
+  /** Assert the fiber's `stateData` deep-equals this object after a processEvent step. */
+  expectedStateData?: Record<string, unknown>;
   method?: string;
   args?: string;
   expectedResult?: unknown;
@@ -584,6 +586,7 @@ async function runFlow(
           stepOptions = {
             eventData,
             expectedState: step.expectedState,
+            expectedStateData: step.expectedStateData,
             targetSequenceNumber: preSendSeqNum >= 0 ? preSendSeqNum : 0,
           };
 

@@ -1,0 +1,452 @@
+{
+  "name": "Rule-110 cellular automaton (Turing-complete substrate)",
+  "description": "Each `step` event advances one generation in place: next[i]=R110(tape[i-1],tape[i],tape[i+1]) with fixed-0 boundaries, computed as a JLVM map over a stored index array — no bitwise, no spawn, no zip. The fractal flow asserts the EXACT tape after every generation via expectedStateData.",
+  "type": "state-machine",
+  "definition": "definition.json",
+  "initialData": "initial-data.json",
+  "events": [
+    {
+      "name": "step",
+      "description": "Advance one generation",
+      "file": "event-step.ts",
+      "from": "RUNNING",
+      "to": "RUNNING"
+    },
+    {
+      "name": "halt",
+      "description": "Terminate after maxGen reached",
+      "file": "event-halt.ts",
+      "from": "RUNNING",
+      "to": "HALTED"
+    }
+  ],
+  "testFlows": [
+    {
+      "name": "Rule-110 fractal — 8 generations, tape asserted",
+      "description": "Evolve the canonical single-1 seed; assert the EXACT tape (and idx/gen/maxGen) after each generation via expectedStateData, not just the state id.",
+      "steps": [
+        {
+          "action": "create",
+          "definition": "definition.json",
+          "initialData": "initial-data.json"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-step.ts",
+          "expectedState": "RUNNING",
+          "expectedStateData": {
+            "tape": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "idx": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14
+            ],
+            "gen": 1,
+            "maxGen": 8
+          }
+        },
+        {
+          "action": "processEvent",
+          "event": "event-step.ts",
+          "expectedState": "RUNNING",
+          "expectedStateData": {
+            "tape": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              1,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "idx": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14
+            ],
+            "gen": 2,
+            "maxGen": 8
+          }
+        },
+        {
+          "action": "processEvent",
+          "event": "event-step.ts",
+          "expectedState": "RUNNING",
+          "expectedStateData": {
+            "tape": [
+              0,
+              0,
+              0,
+              0,
+              1,
+              1,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "idx": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14
+            ],
+            "gen": 3,
+            "maxGen": 8
+          }
+        },
+        {
+          "action": "processEvent",
+          "event": "event-step.ts",
+          "expectedState": "RUNNING",
+          "expectedStateData": {
+            "tape": [
+              0,
+              0,
+              0,
+              1,
+              1,
+              1,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "idx": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14
+            ],
+            "gen": 4,
+            "maxGen": 8
+          }
+        },
+        {
+          "action": "processEvent",
+          "event": "event-step.ts",
+          "expectedState": "RUNNING",
+          "expectedStateData": {
+            "tape": [
+              0,
+              0,
+              1,
+              1,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "idx": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14
+            ],
+            "gen": 5,
+            "maxGen": 8
+          }
+        },
+        {
+          "action": "processEvent",
+          "event": "event-step.ts",
+          "expectedState": "RUNNING",
+          "expectedStateData": {
+            "tape": [
+              0,
+              1,
+              1,
+              1,
+              0,
+              0,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "idx": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14
+            ],
+            "gen": 6,
+            "maxGen": 8
+          }
+        },
+        {
+          "action": "processEvent",
+          "event": "event-step.ts",
+          "expectedState": "RUNNING",
+          "expectedStateData": {
+            "tape": [
+              1,
+              1,
+              0,
+              1,
+              0,
+              1,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "idx": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14
+            ],
+            "gen": 7,
+            "maxGen": 8
+          }
+        },
+        {
+          "action": "processEvent",
+          "event": "event-step.ts",
+          "expectedState": "RUNNING",
+          "expectedStateData": {
+            "tape": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "idx": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14
+            ],
+            "gen": 8,
+            "maxGen": 8
+          }
+        }
+      ]
+    },
+    {
+      "name": "Halt is gated until exhaustion",
+      "description": "halt at gen 0 (< maxGen 8) is rejected by the >= guard (combine-denied at ml0).",
+      "steps": [
+        {
+          "action": "create",
+          "definition": "definition.json",
+          "initialData": "initial-data.json"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-halt.ts",
+          "expectRejected": "ml0"
+        }
+      ]
+    },
+    {
+      "name": "Halt after exhaustion",
+      "description": "After 8 steps gen==maxGen; halt now succeeds → HALTED.",
+      "steps": [
+        {
+          "action": "create",
+          "definition": "definition.json",
+          "initialData": "initial-data.json"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-step.ts",
+          "expectedState": "RUNNING"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-step.ts",
+          "expectedState": "RUNNING"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-step.ts",
+          "expectedState": "RUNNING"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-step.ts",
+          "expectedState": "RUNNING"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-step.ts",
+          "expectedState": "RUNNING"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-step.ts",
+          "expectedState": "RUNNING"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-step.ts",
+          "expectedState": "RUNNING"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-step.ts",
+          "expectedState": "RUNNING"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-halt.ts",
+          "expectedState": "HALTED"
+        }
+      ]
+    }
+  ]
+}
