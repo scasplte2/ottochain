@@ -34,10 +34,17 @@ import xyz.kd5ujc.shared_data.syntax.all._
  */
 trait FiberEvaluator[G[_]] {
 
+  /**
+   * @param caller Engine-stamped cross-fiber caller (engine-default-fixes Fix 2), surfaced to the guard as
+   *               `$caller`. `Some(id)` on the cascaded fiber→fiber (or self) path; `None` for primary/external
+   *               (wallet) triggers. A side-channel evaluation param — NOT part of the content-addressed
+   *               `FiberInput` ADT, so it never enters the input/definition hash.
+   */
   def evaluate(
     fiber:  Records.FiberRecord,
     input:  FiberInput,
-    proofs: List[SignatureProof]
+    proofs: List[SignatureProof],
+    caller: Option[UUID] = None
   ): G[FiberResult]
 }
 
@@ -60,10 +67,11 @@ object FiberEvaluator {
       def evaluate(
         fiber:  Records.FiberRecord,
         input:  FiberInput,
-        proofs: List[SignatureProof]
+        proofs: List[SignatureProof],
+        caller: Option[UUID]
       ): G[FiberResult] = (fiber, input) match {
         case (sm: Records.StateMachineFiberRecord, FiberInput.Transition(eventType, payload)) =>
-          evaluateStateMachine(sm, eventType, payload, proofs)
+          evaluateStateMachine(sm, eventType, payload, proofs, caller)
 
         case (script: Records.ScriptFiberRecord, FiberInput.MethodCall(method, args, caller)) =>
           evaluateScript(script, method, args, caller)
@@ -87,7 +95,8 @@ object FiberEvaluator {
         fiber:     Records.StateMachineFiberRecord,
         eventName: String,
         payload:   JsonLogicValue,
-        proofs:    List[SignatureProof]
+        proofs:    List[SignatureProof],
+        caller:    Option[UUID]
       ): G[FiberResult] = {
         val input = FiberInput.Transition(eventName, payload)
 
@@ -96,7 +105,7 @@ object FiberEvaluator {
           .fold(
             FailureReason.NoTransitionFound(fiber.currentState, eventName).pureOutcome[G]
           )(
-            tryTransitions(fiber, input, proofs, _, attemptedGuards = 0)
+            tryTransitions(fiber, input, proofs, _, attemptedGuards = 0, caller)
           )
       }
 
@@ -105,16 +114,19 @@ object FiberEvaluator {
         input:           FiberInput.Transition,
         proofs:          List[SignatureProof],
         transitions:     List[Transition],
-        attemptedGuards: Int
+        attemptedGuards: Int,
+        caller:          Option[UUID]
       ): G[FiberResult] =
         transitions match {
           case Nil => (FiberResult.GuardFailed(attemptedGuards): FiberResult).pure[G]
           case transition :: rest =>
             for {
-              ordinal         <- ExecutionOps.askOrdinal[G]
-              snapshotHash    <- ExecutionOps.askSnapshotHash[G]
-              epochProgress   <- ExecutionOps.askEpochProgress[G]
-              contextProvider <- ContextProvider.make[F](calculatedState, ordinal, snapshotHash, epochProgress).pure[G]
+              ordinal       <- ExecutionOps.askOrdinal[G]
+              snapshotHash  <- ExecutionOps.askSnapshotHash[G]
+              epochProgress <- ExecutionOps.askEpochProgress[G]
+              contextProvider <- ContextProvider
+                .make[F](calculatedState, ordinal, snapshotHash, epochProgress, caller)
+                .pure[G]
               contextData <- contextProvider
                 .buildContext(
                   fiber,
@@ -132,7 +144,8 @@ object FiberEvaluator {
                 contextData,
                 proofs,
                 rest,
-                attemptedGuards
+                attemptedGuards,
+                caller
               )
             } yield result
         }
@@ -144,7 +157,8 @@ object FiberEvaluator {
         contextData:     JsonLogicValue,
         proofs:          List[SignatureProof],
         rest:            List[Transition],
-        attemptedGuards: Int
+        attemptedGuards: Int,
+        caller:          Option[UUID]
       ): G[FiberResult] =
         for {
           remainingGas <- ExecutionOps.remainingGas[G]
@@ -160,7 +174,7 @@ object FiberEvaluator {
 
             case Right(EvaluationResult(BoolValue(false), guardGasUsed, _, _)) =>
               ExecutionOps.chargeGas[G](guardGasUsed.amount) >>
-              tryTransitions(fiber, input, proofs, rest, attemptedGuards + 1)
+              tryTransitions(fiber, input, proofs, rest, attemptedGuards + 1, caller)
 
             case Right(EvaluationResult(other, _, _, _)) =>
               FailureReason

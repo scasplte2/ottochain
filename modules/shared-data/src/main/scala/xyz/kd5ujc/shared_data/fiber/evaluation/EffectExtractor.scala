@@ -80,7 +80,9 @@ object EffectExtractor {
       depMutations   <- extractDependencyMutations[F, G](effectResult, contextData)
     } yield {
       val spawns = extractSpawnDirectivesFromExpression(effectExpr)
-      val emitted = extractEmittedEvents(effectResult)
+      // Fix (1): stamp the EMITTING fiber id into every emitted event at extraction. `sourceFiberId` is the
+      // fiber whose transition produced this effect result — the emitter (distinct from any cross-fiber caller).
+      val emitted = extractEmittedEvents(effectResult, sourceFiberId)
       (triggers ++ scriptCall.toList).map(FiberEffect.Triggered) ++
       spawns.map(FiberEffect.Spawned) ++
       emitted.map(FiberEffect.Emitted) ++
@@ -295,17 +297,26 @@ object EffectExtractor {
       case _ => none[FiberEffect.DependencyMutated].pure[G]
     }
 
-  def extractEmittedEvents(effectResult: JsonLogicValue): List[EmittedEvent] =
-    extractArrayByKey(effectResult, ReservedKeys.EMIT).flatMap(parseEmittedEvent)
+  /**
+   * Fix (1) — `_emit` emitter-stamping. `.zipWithIndex` runs over the RAW `_emit` array BEFORE the
+   * `flatMap`-drop, so `emissionIndex` is the true authoring-time position; a malformed sibling that
+   * `parseEmittedEvent` drops leaves a SPARSE gap (survivors keep their original positions). `emitterFiberId`
+   * is the engine-supplied id of the fiber whose transition ran `_emit` — never user-supplied, so the stamp
+   * cannot be forged from inside a guard/effect expression.
+   */
+  def extractEmittedEvents(effectResult: JsonLogicValue, emitterFiberId: UUID): List[EmittedEvent] =
+    extractArrayByKey(effectResult, ReservedKeys.EMIT).zipWithIndex.flatMap { case (v, i) =>
+      parseEmittedEvent(v, emitterFiberId, i)
+    }
 
-  private def parseEmittedEvent(value: JsonLogicValue): Option[EmittedEvent] =
+  private def parseEmittedEvent(value: JsonLogicValue, emitterFiberId: UUID, emissionIndex: Int): Option[EmittedEvent] =
     value match {
       case MapValue(m) =>
         for {
           name <- m.get(ReservedKeys.NAME).collect { case StrValue(n) => n }
           data <- m.get(ReservedKeys.DATA)
           destination = m.get(ReservedKeys.DESTINATION).collect { case StrValue(d) => d }
-        } yield EmittedEvent(name, data, destination)
+        } yield EmittedEvent(name, data, destination, emitterFiberId, emissionIndex)
       case _ => None
     }
 

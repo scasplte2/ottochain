@@ -344,7 +344,9 @@ object FiberEngine {
       ): FiberT[F, TransactionResult] =
         FiberEvaluator
           .make[F, FiberT[F, *]](calculatedState)
-          .evaluate(fiber, input, proofs)
+          // Fix (2): primary/external (wallet) path — there is no fiber caller, so $caller resolves to null.
+          // External authentication is the `proofs` channel, NOT $caller (which only distinguishes fiber callers).
+          .evaluate(fiber, input, proofs, caller = None)
           .flatMap {
             case FiberResult.Success(
                   newStateData,
@@ -522,7 +524,10 @@ object FiberEngine {
                 snapshotHash   <- ExecutionOps.askSnapshotHash[FiberT[F, *]]
                 epochProgress  <- ExecutionOps.askEpochProgress[FiberT[F, *]]
                 contextData <- ContextProvider
-                  .make[F](calculatedState, currentOrdinal, snapshotHash, epochProgress)
+                  // Spawn directives are honoured only on the PRIMARY transition (external/wallet origin), so
+                  // there is no fiber caller here. buildTriggerContext does not inject $caller anyway (Fix 2
+                  // surfaces $caller only in the guard context), so None is the correct semantic value.
+                  .make[F](calculatedState, currentOrdinal, snapshotHash, epochProgress, caller = None)
                   .buildTriggerContext(updatedFiber, input)
                   .liftFiber
                 knownFibers = calculatedState.stateMachines.keySet ++ calculatedState.scripts.keySet

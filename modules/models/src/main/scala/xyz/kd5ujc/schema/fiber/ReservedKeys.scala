@@ -68,6 +68,12 @@ object ReservedKeys {
   val ORDINAL = "$ordinal" // Current snapshot ordinal - use for deadline comparisons
   val LAST_SNAPSHOT_HASH = "$lastSnapshotHash" // Hash of parent snapshot - use for randomness, verification
   val EPOCH_PROGRESS = "$epochProgress" // Current epoch progress
+  // engine-stamped cross-fiber caller (engine-default-fixes Fix 2): the EMITTING fiber id of the cross-fiber
+  // trigger, surfaced to the guard context; NullValue for external/primary (wallet) triggers. Non-spoofable —
+  // a fiber cannot forge being another fiber; the engine writes the id at EffectExtractor (:136/:169). A
+  // self-trigger naturally yields $caller == $machineId. External-wallet authorization stays the `proofs`
+  // channel, NOT $caller ($caller=null only says "some non-fiber", it cannot say WHICH wallet).
+  val CALLER = "$caller"
   val PROOFS = "proofs"
   val ADDRESS = "address"
   val ID = "id"

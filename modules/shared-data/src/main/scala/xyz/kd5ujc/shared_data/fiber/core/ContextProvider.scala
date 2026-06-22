@@ -73,12 +73,16 @@ object ContextProvider {
    * @param ordinal Current snapshot ordinal, exposed as $ordinal in context
    * @param lastSnapshotHash Parent snapshot hash, exposed as $lastSnapshotHash for randomness
    * @param epochProgress Current epoch progress, exposed as $epochProgress
+   * @param caller Engine-stamped cross-fiber caller (engine-default-fixes Fix 2), exposed as $caller. `Some(id)`
+   *               for a cascaded fiber→fiber (or self) trigger; `None` for a primary/external (wallet) trigger.
+   *               Non-spoofable: the engine writes `sourceFiberId` at extraction, a fiber cannot forge it.
    */
   def make[F[_]: Async: SecurityProvider](
     calculatedState:  CalculatedState,
     ordinal:          SnapshotOrdinal,
     lastSnapshotHash: Hash,
-    epochProgress:    EpochProgress
+    epochProgress:    EpochProgress,
+    caller:           Option[UUID]
   ): ContextProvider[F] =
     new ContextProvider[F] {
 
@@ -168,12 +172,16 @@ object ContextProvider {
             ReservedKeys.ORDINAL            -> IntValue(ordinal.value.value),
             ReservedKeys.LAST_SNAPSHOT_HASH -> StrValue(lastSnapshotHash.value),
             ReservedKeys.EPOCH_PROGRESS     -> IntValue(epochProgress.value.value),
-            ReservedKeys.PROOFS             -> ArrayValue(proofsData),
-            ReservedKeys.MACHINES           -> machinesData,
-            ReservedKeys.PARENT             -> parentData,
-            ReservedKeys.CHILDREN           -> childrenData,
-            ReservedKeys.SCRIPTS            -> scriptsData,
-            ReservedKeys.HELD_ASSETS        -> heldAssetsContext(fiber.fiberId)
+            // Fix (2): the engine-stamped cross-fiber caller. StrValue(id) for a cascaded fiber→fiber (or self)
+            // trigger; NullValue for primary/external (wallet) triggers. A self-trigger yields $caller ==
+            // $machineId. This binds ONLY the fiber emitter (non-spoofable); external-wallet auth stays `proofs`.
+            ReservedKeys.CALLER      -> caller.fold[JsonLogicValue](NullValue)(id => StrValue(id.toString)),
+            ReservedKeys.PROOFS      -> ArrayValue(proofsData),
+            ReservedKeys.MACHINES    -> machinesData,
+            ReservedKeys.PARENT      -> parentData,
+            ReservedKeys.CHILDREN    -> childrenData,
+            ReservedKeys.SCRIPTS     -> scriptsData,
+            ReservedKeys.HELD_ASSETS -> heldAssetsContext(fiber.fiberId)
           )
         )
 

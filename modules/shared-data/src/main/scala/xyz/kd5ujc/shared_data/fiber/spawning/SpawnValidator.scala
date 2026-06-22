@@ -15,7 +15,7 @@ import io.constellationnetwork.metagraph_sdk.json_logic.runtime.JsonLogicEvaluat
 import io.constellationnetwork.schema.address.{Address, DAGAddressRefined}
 
 import xyz.kd5ujc.schema.Records
-import xyz.kd5ujc.schema.fiber.{FailureReason, FiberContext, GasExhaustionPhase, SpawnDirective}
+import xyz.kd5ujc.schema.fiber.{ExecutionLimits, FailureReason, FiberContext, GasExhaustionPhase, SpawnDirective}
 import xyz.kd5ujc.shared_data.fiber.core._
 import xyz.kd5ujc.shared_data.syntax.all._
 
@@ -84,9 +84,14 @@ object SpawnValidator {
         knownFibers: Set[UUID],
         contextData: JsonLogicValue
       ): G[ValidatedNel[FailureReason, SpawnPlan]] =
-        directives
-          .traverse(directive => validateSingle(directive, parent, contextData))
-          .map(_.sequence.andThen(validateBatchConstraints(_, knownFibers)))
+        // Fix (3): read the spawn fan-out cap from runtime config (Ask is in scope here, but NOT inside the
+        // pure validateBatchConstraints) and pass it down. Reading it here keeps the trait signature and the
+        // entire SpawnProcessor call chain unchanged.
+        ExecutionOps.askLimits[G].flatMap { limits =>
+          directives
+            .traverse(directive => validateSingle(directive, parent, contextData))
+            .map(_.sequence.andThen(validateBatchConstraints(_, knownFibers, limits)))
+        }
 
       private def validateSingle(
         directive:   SpawnDirective,
@@ -197,9 +202,19 @@ object SpawnValidator {
 
       private def validateBatchConstraints(
         spawns:      List[ValidatedSpawn],
-        knownFibers: Set[UUID]
+        knownFibers: Set[UUID],
+        limits:      ExecutionLimits
       ): ValidatedNel[FailureReason, SpawnPlan] = {
         val childIds = spawns.map(_.childId)
+
+        // Fix (3): fail-closed spawn fan-out bound. An over-limit batch yields an Invalid here, which
+        // propagates Left(NonEmptyList[FailureReason]) → TransactionResult.Aborted (total discard) BEFORE any
+        // child record is constructed (createFibersFromPlan runs only on a valid SpawnPlan) and before the
+        // per-spawn initialData gas burn. This is an abort, not a silent drop of the excess.
+        val countErrors: List[FailureReason] =
+          if (spawns.size > limits.maxSpawnsPerTransition)
+            List(FailureReason.SpawnLimitExceeded(spawns.size, limits.maxSpawnsPerTransition))
+          else Nil
 
         val duplicateErrors: List[FailureReason] = childIds
           .groupBy(identity)
@@ -214,7 +229,7 @@ object SpawnValidator {
           .distinct
           .map(FailureReason.ChildIdCollision)
 
-        val allErrors = duplicateErrors ++ collisionErrors
+        val allErrors = countErrors ++ duplicateErrors ++ collisionErrors
 
         NonEmptyList.fromList(allErrors) match {
           case Some(errors) => Validated.invalid(errors)

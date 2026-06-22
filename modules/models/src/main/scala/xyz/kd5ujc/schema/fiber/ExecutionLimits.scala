@@ -17,12 +17,27 @@ package xyz.kd5ujc.schema.fiber
  * @param maxDependencyLedger Maximum number of DISTINCT fibers in the append-only dynamic-dependency ledger
  *                          (active + inactive). Because the ledger is never pruned (deactivation only flips a
  *                          flag), this bounds its growth; once full, no NEW dependency may be added.
+ * @param maxSpawnsPerTransition Maximum number of `_spawn` directives a single PRIMARY transition may emit
+ *                          (engine-default-fixes Fix 3). Bounds storage-amplification DoS: each spawn inflates
+ *                          `calculatedState.stateMachines`, and gas on cheap `initialData` is too weak a
+ *                          backstop to stop a fiber minting hundreds of children in one transition. Enforced
+ *                          fail-closed in `SpawnValidator.validateBatchConstraints`: an over-limit batch aborts
+ *                          the whole transition (total discard) BEFORE any child record is constructed and
+ *                          before per-spawn `initialData` gas is burned. Cascaded transitions ignore `_spawn`,
+ *                          so the primary path is the only enforcement site needed.
+ *
+ *                          CONSENSUS-CONSTANT: this value decides abort-vs-commit, so every validator MUST use
+ *                          the identical default or the chain forks. Ship as this hard-coded chain constant
+ *                          (the same source-of-truth pattern `maxAssetMutations` etc. use), NOT per-operator
+ *                          config. Value chosen: 16 (greenfield — no live pinned-constitution fibers to brick;
+ *                          ordered between maxAssetMutations=32 and maxActiveDependencies=64).
  */
 final case class ExecutionLimits(
-  maxDepth:              Int = 10,
-  maxGas:                Long = 10_000_000L,
-  maxStateSizeBytes:     Int = 1_048_576, // 1MB
-  maxAssetMutations:     Int = 32,
-  maxActiveDependencies: Int = 64,
-  maxDependencyLedger:   Int = 256
+  maxDepth:               Int = 10,
+  maxGas:                 Long = 10_000_000L,
+  maxStateSizeBytes:      Int = 1_048_576, // 1MB
+  maxAssetMutations:      Int = 32,
+  maxActiveDependencies:  Int = 64,
+  maxDependencyLedger:    Int = 256,
+  maxSpawnsPerTransition: Int = 16
 )
