@@ -919,9 +919,10 @@ async function main() {
     // -----------------------------------------------------------------------
     // Parallel mode: run all flows concurrently with buffered output
     // -----------------------------------------------------------------------
-    console.log(`Launching ${flowPairs.length} flows in parallel…\n`);
+    const CONCURRENCY = Number(process.env.E2E_CONCURRENCY) || 6;
+    console.log(`Launching ${flowPairs.length} flows, ${CONCURRENCY} at a time…\n`);
 
-    const promises = flowPairs.map(async ({ example, flow }) => {
+    const runOne = async ({ example, flow }: (typeof flowPairs)[number]): Promise<FlowResult> => {
       const tag = `${example.dir}/${flow.name}`;
       const logger = new FlowLogger(tag);
       logger.log(
@@ -963,9 +964,24 @@ async function main() {
         durationMs,
         ...result,
       } satisfies FlowResult;
-    });
+    };
 
-    results = await Promise.all(promises);
+    // Bounded-concurrency pool: keep at most CONCURRENCY flows in flight. A heavy
+    // guard (e.g. sigma_verify) on a resource-limited CI cluster slows ML0 snapshot
+    // production; capping in-flight flows stops that from starving every other flow's
+    // transactions of their ordinal-confirmation budget. Result order is preserved.
+    results = new Array<FlowResult>(flowPairs.length);
+    let cursor = 0;
+    const worker = async (): Promise<void> => {
+      for (;;) {
+        const i = cursor++;
+        if (i >= flowPairs.length) return;
+        results[i] = await runOne(flowPairs[i]);
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, flowPairs.length) }, () => worker())
+    );
   } else {
     // -----------------------------------------------------------------------
     // Sequential mode: same as original behavior (no buffering needed)
