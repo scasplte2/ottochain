@@ -5,7 +5,7 @@
   "stakePolicy": "staked-pool-stake-v1.asset",
   "stakeAmount": 1000,
   "quorum": 3,
-  "epochLength": 100,
+  "epochLength": 20,
   "outlierBound": 10,
   "rewardPerEpoch": 4,
   "rewardPolicy": "staked-pool-reward-v1.asset",

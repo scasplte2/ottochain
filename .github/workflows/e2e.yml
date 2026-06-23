@@ -34,13 +34,13 @@ jobs:
           - name: heavy
             filter: '--only sigma-mixer,rule110,staked-oracle-pool'
             concurrency: '3'
-            # DIAGNOSTIC (temporary): a tiny ordinal budget makes the stuck ZK flows give up in a
-            # few minutes so the job FAILS within the timeout. A timed-out job is *cancelled*, which
-            # skips failure()-gated log collection — fast-fail keeps that path alive. Revert after
-            # the ML0 stuck-confirm is root-caused.
-            ordinalThreshold: '5'
-            maxResubmits: '1'
-            timeout: 30
+            # Heavy ZK/stateful examples run low-concurrency with a large ordinal-confirmation
+            # budget: the staked-oracle `finalize` legitimately waits ~epochLength ordinals for the
+            # collection window to close, and the sigma_verify / rule110 effects are gas-heavy, so
+            # the shared CI cluster needs slack. Each example is ONE self-contained sequential flow.
+            ordinalThreshold: '12'
+            maxResubmits: '6'
+            timeout: 60
 
     steps:
       - uses: actions/checkout@v7

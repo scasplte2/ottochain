@@ -16,46 +16,17 @@
   ],
   "testFlows": [
     {
-      "name": "B1 — drive the fill: 4 deposits flip filling -> open",
-      "description": "Create with status 'filling' and an empty ring, then process 4 deposit events against ONE fiber instance. The first three keep it 'filling' (guard B: depositCount+1 < target); the 4th flips it to 'open' (guard A: depositCount+1 == target, declared FIRST). This exercises the mutually-exclusive open-first deposit ordering — the regression the original design omitted (it pinned 'open' and never tested the flip).",
+      "name": "Sigma-mixer lifecycle — fill, honest withdraw, replay/B2/H2 rejections",
+      "description": "ONE fiber driven through its whole lifecycle in a single sequential flow. Each e2e flow runs on its own freshly-created fiber (session.cid = randomUUID) and flows fan out in parallel with no ordering, so a stateful machine MUST be exercised as one sequential flow — the earlier per-scenario split created independent fibers that each tried to `withdraw` straight out of the FSM initial state `filling` (create sets currentState from definition.initialState, NOT from the data's `status` field), which is NoTransitionForEvent(filling, withdraw). Here we drive the 4 deposits to flip filling->open (B1 boundary; first three keep 'filling' via guard B depositCount+1<target, the 4th flips to 'open' via the open-first guard A depositCount+1==target). The deposit points rebuild EXACTLY the pinned ring the proofs were generated against, so the honest CDS OR-of-dhtuple proof verifies (payout advances, stays 'open' as withdrawCount 0+1<4), the same-Nf replay is denied by has(spentNullifiers,Nf) (INV-2), the forged Nf' is rejected at the proof layer because H has unknown dlog w.r.t. G so the shared-z dhtuple cannot hold (B2/INV-1), and the swapped recipient breaks the bound message Nf‖recipient so sigma_verify fails (H2/INV-4).",
       "steps": [
         { "action": "create", "definition": "definition.json", "initialData": "initial-data-filling.json" },
         { "action": "processEvent", "event": "event-deposit-0.ts", "expectedState": "filling" },
         { "action": "processEvent", "event": "event-deposit-1.ts", "expectedState": "filling" },
         { "action": "processEvent", "event": "event-deposit-2.ts", "expectedState": "filling" },
-        { "action": "processEvent", "event": "event-deposit-3.ts", "expectedState": "open" }
-      ]
-    },
-    {
-      "name": "Honest withdraw — ring proof verifies, payout advances",
-      "description": "Create with the pinned 4-point ring (status 'open'). A real CDS OR-of-dhtuple withdrawal proves membership in the ring while hiding which branch, reveals the witness-bound nullifier, and binds the recipient into the Fiat-Shamir message. withdrawCount 0+1 < 4, so the fiber stays 'open' (the ->open variant fires).",
-      "steps": [
-        { "action": "create", "definition": "definition.json", "initialData": "initial-data.json" },
-        { "action": "processEvent", "event": "event-withdraw.ts", "expectedState": "open" }
-      ]
-    },
-    {
-      "name": "Double-spend (same Nf) — replay after spend is denied",
-      "description": "An honest withdraw records its nullifier; the IDENTICAL withdraw replayed cannot spend again because has(spentNullifiers, Nf) is now true and the `!has` clause denies it. INV-2.",
-      "steps": [
-        { "action": "create", "definition": "definition.json", "initialData": "initial-data.json" },
+        { "action": "processEvent", "event": "event-deposit-3.ts", "expectedState": "open" },
         { "action": "processEvent", "event": "event-withdraw.ts", "expectedState": "open" },
-        { "action": "processEvent", "event": "event-withdraw-replay.ts", "expectRejected": "ml0" }
-      ]
-    },
-    {
-      "name": "B2 — forged nullifier rejected at the PROOF layer",
-      "description": "The core B2 regression: a SECOND spend of the same branch under an ATTACKER-CHOSEN nullifier Nf' != x_j·H. Because H has unknown dlog w.r.t. G, the shared-z dhtuple equality cannot hold for Nf', so sigma_verify returns false and the guard denies — WITHOUT any custody/value movement, proving the e2e detects the original drain-the-ring flaw. INV-1.",
-      "steps": [
-        { "action": "create", "definition": "definition.json", "initialData": "initial-data.json" },
-        { "action": "processEvent", "event": "event-withdraw-doublespend.ts", "expectRejected": "ml0" }
-      ]
-    },
-    {
-      "name": "H2 — front-run (swapped recipient) rejected",
-      "description": "A mempool front-runner replays the proof with a DIFFERENT recipientHex. The message-binding clause (message == Nf ‖ recipient) fails, AND the strong-FS root challenge folded the original message, so sigma_verify also fails. The payout destination is effectively a signed field. INV-4.",
-      "steps": [
-        { "action": "create", "definition": "definition.json", "initialData": "initial-data.json" },
+        { "action": "processEvent", "event": "event-withdraw-replay.ts", "expectRejected": "ml0" },
+        { "action": "processEvent", "event": "event-withdraw-doublespend.ts", "expectRejected": "ml0" },
         { "action": "processEvent", "event": "event-withdraw-bad.ts", "expectRejected": "ml0" }
       ]
     }
