@@ -20,6 +20,7 @@ import getMetagraphEnv from './lib/metagraphEnv.ts';
 import type { StatesMap, Wallets, GeneratorFn, ValidatorFn } from './lib/types.ts';
 import { HttpClient } from '@ottochain/sdk';
 import { waitForOrdinalConfirmation, waitForOrdinalAdvance } from './lib/ordinalConfirmation.ts';
+import { WebhookListener } from './lib/webhookListener.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -397,7 +398,8 @@ async function runFlow(
   maxRetries: number,
   retryDelayMs: number,
   waitTimeMs: number,
-  log?: FlowLogger
+  log?: FlowLogger,
+  webhook?: WebhookListener
 ): Promise<{ passed: boolean; error?: string; failedStep?: number }> {
   const w = log ? (s: string) => log.write(s) : (s: string) => process.stdout.write(s);
   const l = log ? (...a: unknown[]) => log.log(...a) : (...a: unknown[]) => console.log(...a);
@@ -753,7 +755,9 @@ async function runFlow(
         continue;
       }
 
-      // Ordinal-based confirmation with auto-resubmit
+      // Ordinal-based confirmation with auto-resubmit. Capture the ordinal at send time so the
+      // webhook rejection match ignores any stale rejection carried over from an earlier step.
+      const sentOrdinal = webhook?.latestOrdinal ?? 0;
       await waitForOrdinalConfirmation({
         ml0BaseUrl: ml0Urls[0],
         entityPath,
@@ -784,6 +788,19 @@ async function runFlow(
         stallTimeoutMs: 120000,
         label: `${step.action} on ${activeCid}`,
         log: log ? { write: (s: string) => log.write(s) } : undefined,
+        // Webhook-driven: re-check the instant a snapshot finalizes (read state is fresh then), and
+        // fail fast with the chain's reason if this exact update is rejected.
+        waitNextSnapshot: webhook?.active ? (ms) => webhook!.waitNextSnapshot(ms) : undefined,
+        checkRejection: webhook?.active
+          ? () => {
+              const r = webhook!.findRejection({
+                fiberId: activeCid,
+                targetSeq: isCreateStep ? null : preSendSeqNum,
+                sinceOrdinal: sentOrdinal,
+              });
+              return r ? { ordinal: r.ordinal, errors: r.errors } : undefined;
+            }
+          : undefined,
       });
 
       // Wait for DL1 OnChain state to catch up with ML0.
@@ -920,6 +937,18 @@ async function main() {
     process.exit(1);
   }
 
+  // Subscribe to ML0 snapshot/rejection webhooks so confirmations are driven by PUSHES — the chain
+  // commits the read state before dispatching `snapshot.finalized`, so a re-check on each push sees
+  // fresh state — instead of blind-polling a lagging read. Falls back to polling automatically if the
+  // ML0 build doesn't expose webhooks or the callback isn't reachable.
+  const webhook = new WebhookListener();
+  await webhook.start(ml0Urls);
+  console.log(
+    webhook.active
+      ? '\x1b[36m[webhook]\x1b[0m subscribed — confirmations are push-driven\n'
+      : '\x1b[33m[webhook]\x1b[0m not available — falling back to ordinal polling\n'
+  );
+
   const startTime = Date.now();
   let results: FlowResult[];
 
@@ -949,7 +978,8 @@ async function main() {
         maxRetries,
         retryDelayMs,
         waitTimeMs,
-        logger
+        logger,
+        webhook
       );
       const durationMs = Date.now() - flowStart;
 
@@ -1012,7 +1042,9 @@ async function main() {
         dl1Urls,
         maxRetries,
         retryDelayMs,
-        waitTimeMs
+        waitTimeMs,
+        undefined,
+        webhook
       );
       const durationMs = Date.now() - flowStart;
 
@@ -1058,6 +1090,7 @@ async function main() {
   }
 
   console.log(`\nExit code: ${failed > 0 ? 1 : 0}`);
+  await webhook.stop();
   process.exit(failed > 0 ? 1 : 0);
 }
 

@@ -41,6 +41,15 @@ export interface OrdinalConfirmationOptions {
   label: string;
   /** Optional logger for buffered output */
   log?: { write: (s: string) => void };
+  /**
+   * Push-driven confirmation (webhook). When provided, the loop re-checks the entity the instant a
+   * `snapshot.finalized` arrives (the chain commits read state BEFORE dispatching the webhook, so the
+   * read is fresh) instead of blind-polling — and a matching `transaction.rejected` fails fast with
+   * the on-chain reason instead of timing out as "not included".
+   */
+  waitNextSnapshot?: (timeoutMs: number) => Promise<void>;
+  /** Returns the on-chain rejection for this update if one has arrived, else undefined. */
+  checkRejection?: () => { ordinal: number; errors: { code: string; message: string }[] } | undefined;
 }
 
 interface OrdinalSnapshot {
@@ -126,6 +135,8 @@ export async function waitForOrdinalConfirmation(
     maxTotalTimeMs,
     label,
     log,
+    waitNextSnapshot,
+    checkRejection,
   } = opts;
 
   const w = log ? (s: string) => log.write(s) : (s: string) => process.stdout.write(s);
@@ -182,6 +193,17 @@ export async function waitForOrdinalConfirmation(
       return;
     }
 
+    // Explicit on-chain rejection (webhook): fail fast with the reason instead of timing out as
+    // "not included". This is the deterministic signal the blind poll never had.
+    const rejection = checkRejection?.();
+    if (rejection) {
+      w(' ✗ (rejected)\n');
+      throw new Error(
+        `${TAG} ${label} was REJECTED at ML0 (ordinal ${rejection.ordinal}): ` +
+          rejection.errors.map((e) => `${e.code}: ${e.message}`).join('; ')
+      );
+    }
+
     // Check current ordinal
     const currentSnapshot = await getCurrentOrdinal(ml0BaseUrl);
     if (currentSnapshot) {
@@ -220,7 +242,13 @@ export async function waitForOrdinalConfirmation(
     }
 
     w('.');
-    await new Promise((r) => setTimeout(r, pollIntervalMs));
+    // Wake on the next `snapshot.finalized` push — read state is committed before the webhook fires,
+    // so the next checkEntity sees fresh state — or fall back to the poll interval if no webhook.
+    if (waitNextSnapshot) {
+      await waitNextSnapshot(pollIntervalMs);
+    } else {
+      await new Promise((r) => setTimeout(r, pollIntervalMs));
+    }
   }
 }
 
