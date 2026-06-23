@@ -35,13 +35,14 @@ jobs:
             filter: '--only sigma-mixer,rule110,staked-oracle-pool'
             # Serialized (concurrency 1): DL1 data-block formation chokes when several gas-heavy flows
             # flood its mempool at once — valid updates pile up and ML0 snapshots go out empty (the
-            # candidates=Set() stall), so we run ONE flow at a time to keep the mempool small. Examples
-            # are trimmed (rule110 maxGen 3, oracle quorum-only no claim/reset, sigma 1 reject) to fit
-            # a 30m wall-clock at this serial pace.
+            # candidates=Set() stall). At concurrency 1 the chain stays healthy (blocks finalize
+            # steadily), so the lane is throughput-bound, not stalled. Examples are trimmed (rule110
+            # maxGen 3, oracle quorum-only, sigma 1 reject); 45m covers the serial pace + the oracle
+            # finalize epoch-window wait.
             concurrency: '1'
             ordinalThreshold: '10'
-            maxResubmits: '3'
-            timeout: 30
+            maxResubmits: '4'
+            timeout: 45
 
     steps:
       - uses: actions/checkout@v7
