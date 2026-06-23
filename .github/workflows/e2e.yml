@@ -14,12 +14,29 @@ on:
 
 jobs:
   e2e:
-    name: E2E Tests
+    name: E2E Tests (${{ matrix.lane.name }})
     runs-on: ubuntu-latest
-    # The runner caps in-flight flows (E2E_CONCURRENCY, default 3) so a heavy ZK-guard example can't
-    # starve other flows' ordinal-confirmation budget on the shared CI cluster. That serialises the
-    # ~35 flows into batches, so the suite needs more wall-clock than the old all-parallel launch.
-    timeout-minutes: 50
+    timeout-minutes: ${{ matrix.lane.timeout }}
+    strategy:
+      # Two independent lanes. "core" (light examples, full parallelism) is the primary green signal;
+      # "heavy" (sigma-mixer/rule110/staked-oracle-pool — expensive sigma_verify / cellular-automaton /
+      # trimmed-mean guards) runs low-concurrency with a much larger ordinal-confirmation budget so the
+      # shared CI cluster can keep up. A heavy-lane fail doesn't block core (fail-fast: false).
+      fail-fast: false
+      matrix:
+        lane:
+          - name: core
+            filter: '--exclude sigma-mixer,rule110,staked-oracle-pool'
+            concurrency: ''
+            ordinalThreshold: ''
+            maxResubmits: ''
+            timeout: 30
+          - name: heavy
+            filter: '--only sigma-mixer,rule110,staked-oracle-pool'
+            concurrency: '3'
+            ordinalThreshold: '12'
+            maxResubmits: '6'
+            timeout: 60
 
     steps:
       - uses: actions/checkout@v7
@@ -241,7 +258,11 @@ jobs:
 
       - name: Run E2E tests
         working-directory: e2e-test
-        run: npm test
+        env:
+          E2E_CONCURRENCY: ${{ matrix.lane.concurrency }}
+          E2E_ORDINAL_THRESHOLD: ${{ matrix.lane.ordinalThreshold }}
+          E2E_MAX_RESUBMITS: ${{ matrix.lane.maxResubmits }}
+        run: npm test -- ${{ matrix.lane.filter }}
 
       - name: Collect logs and diagnostics on failure
         if: failure()

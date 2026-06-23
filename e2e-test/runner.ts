@@ -774,11 +774,12 @@ async function runFlow(
           const freshMessage = await regenerateMessage();
           await sendToNodes(freshMessage);
         },
-        ordinalThreshold: 8,
-        maxResubmits: 4,
+        ordinalThreshold: Number(process.env.E2E_ORDINAL_THRESHOLD) || 5,
+        maxResubmits: Number(process.env.E2E_MAX_RESUBMITS) || 3,
         pollIntervalMs: 2000,
-        // No fixed wall-clock cap: a slow-but-advancing chain gets its full ordinal budget
-        // (8 × 5 = 40 ordinals). The stall gate fails fast (120s) only if ML0 stops producing
+        // No fixed wall-clock cap: a slow-but-advancing chain gets its full ordinal budget (default
+        // 5 × 4 = 20 ordinals; the heavy CI lane raises it via E2E_ORDINAL_THRESHOLD/E2E_MAX_RESUBMITS).
+        // The stall gate fails fast (120s) only if ML0 stops producing
         // snapshots entirely — i.e. genuine consensus death, not mere slowness under CI load.
         stallTimeoutMs: 120000,
         label: `${step.action} on ${activeCid}`,
@@ -883,7 +884,14 @@ async function main() {
   const waitTimeMs = parseInt(opts.waitTime) * 1000;
 
   // Discover examples
-  const examples = await discoverExamples();
+  let examples = await discoverExamples();
+
+  // Lane filters: --only / --exclude (comma-separated example dir names) let CI split the suite into a
+  // fast "core" lane and a slow "heavy" lane (sigma-mixer/rule110/staked-oracle-pool). Unset = all.
+  const only = (opts.only ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  const exclude = (opts.exclude ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  if (only.length) examples = examples.filter((e) => only.includes(e.dir));
+  if (exclude.length) examples = examples.filter((e) => !exclude.includes(e.dir));
 
   if (examples.length === 0) {
     console.error('\x1b[31mNo examples with test flows found\x1b[0m');
@@ -919,7 +927,7 @@ async function main() {
     // -----------------------------------------------------------------------
     // Parallel mode: run all flows concurrently with buffered output
     // -----------------------------------------------------------------------
-    const CONCURRENCY = Number(process.env.E2E_CONCURRENCY) || 3;
+    const CONCURRENCY = Number(process.env.E2E_CONCURRENCY) || flowPairs.length;
     console.log(`Launching ${flowPairs.length} flows, ${CONCURRENCY} at a time…\n`);
 
     const runOne = async ({ example, flow }: (typeof flowPairs)[number]): Promise<FlowResult> => {
