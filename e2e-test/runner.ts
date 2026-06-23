@@ -774,11 +774,11 @@ async function runFlow(
           const freshMessage = await regenerateMessage();
           await sendToNodes(freshMessage);
         },
-        ordinalThreshold: 5,
-        maxResubmits: 3,
+        ordinalThreshold: 8,
+        maxResubmits: 4,
         pollIntervalMs: 2000,
         // No fixed wall-clock cap: a slow-but-advancing chain gets its full ordinal budget
-        // (5 × 4 = 20 ordinals). The stall gate fails fast (120s) only if ML0 stops producing
+        // (8 × 5 = 40 ordinals). The stall gate fails fast (120s) only if ML0 stops producing
         // snapshots entirely — i.e. genuine consensus death, not mere slowness under CI load.
         stallTimeoutMs: 120000,
         label: `${step.action} on ${activeCid}`,
@@ -919,7 +919,7 @@ async function main() {
     // -----------------------------------------------------------------------
     // Parallel mode: run all flows concurrently with buffered output
     // -----------------------------------------------------------------------
-    const CONCURRENCY = Number(process.env.E2E_CONCURRENCY) || 6;
+    const CONCURRENCY = Number(process.env.E2E_CONCURRENCY) || 3;
     console.log(`Launching ${flowPairs.length} flows, ${CONCURRENCY} at a time…\n`);
 
     const runOne = async ({ example, flow }: (typeof flowPairs)[number]): Promise<FlowResult> => {
