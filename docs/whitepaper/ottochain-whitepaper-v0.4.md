@@ -62,7 +62,7 @@ The claim is not that agents can trust blindly. It is that they can trust *less 
 
 ## 4. The Substrate: A Language Agents Can Read
 
-The thesis needs machinery, and much of that machinery exists today. OttoChain runs as a metagraph on Constellation's Tessellation framework, which is what lets it ship a complete custom virtual machine instead of inheriting a fixed contract model. The substrate has four requirements: legible rules, bounded execution, composable workflow state, and proofs that can travel.
+The thesis needs machinery, and much of that machinery exists today. OttoChain runs as a metagraph on Constellation's Tessellation framework, which is what lets it ship a complete custom virtual machine instead of inheriting a fixed contract model. The substrate has four requirements: legible rules, bounded execution, composable workflow and value, and proofs that can travel.
 
 ### 4.1 Readable: contracts as data, not code
 
@@ -74,7 +74,7 @@ OttoChain contracts are state machines written in JSON Logic: states, transition
           "deny" ] }
 ```
 
-JSON is already a working medium for LLM-based agents. They can parse it, compare it, explain it, and generate it without decompiling bytecode or trusting a separate source map. An agent weighing a contract can read the rule, simulate it on its own inputs, and understand the move before committing. The expressive power given up against a Turing-complete language buys something agents value more here: rules that are legible, deterministic, and bounded enough to reason about. Underneath sits the **JLVM**, the JSON Logic Virtual Machine, built as the open-source `metakit` library, which extends standard JSON Logic with the operators a trust platform needs while keeping exact, arbitrary-precision arithmetic and fully deterministic evaluation. It is published today (`io.constellationnetwork:metakit_2.13:1.8.0-rc.4`, Maven Central).
+JSON is already a working medium for LLM-based agents. They can parse it, compare it, explain it, and generate it without decompiling bytecode or trusting a separate source map. An agent weighing a contract can read the rule, simulate it on its own inputs, and understand the move before committing. The expressive power given up against a Turing-complete language buys something agents value more here: rules that are legible, deterministic, and bounded enough to reason about. Underneath sits the **JLVM**, the JSON Logic Virtual Machine, built as the open-source `metakit` library, which extends standard JSON Logic with the operators a trust platform needs while keeping exact, arbitrary-precision arithmetic and fully deterministic evaluation. It is published today (`io.constellationnetwork:metakit_2.13:1.8.0-rc.7`, Maven Central).
 
 ### 4.2 Verifiable: metered, portable, provable
 
@@ -82,7 +82,7 @@ Finite and deterministic buys three practical guarantees for agents.
 
 **Metered, with a knowable bound.** Every operation has a fixed cost; a comparison is a few units of gas, a Groth16 proof verification is 250,000, the heaviest in the VM, under a default budget of one million, and a transition either finishes within budget or rolls back with no partial state. Because the cost model is static, an upper bound is computable without running the contract, and the exact cost falls out of simulating it on the real inputs. An agent can price an interaction before entering it.
 
-**Portable, so the agent can run the contract itself.** The JLVM is reimplemented across languages and held in lockstep by shared cross-language test vectors, so a client gets the same canonical result the chain will. The Rust implementation carries the full cryptographic and zero-knowledge opcode set; the TypeScript implementation covers the base language for in-browser pre-execution. Either way an agent can simulate an interaction locally and verify the outcome before sending a transaction. The chain proposes; the client checks.
+**Portable, so the agent can run the contract itself.** The JLVM is reimplemented across languages and held in lockstep by shared cross-language test vectors, so a client gets the same canonical result the chain will. The Rust path carries SP1 proving and the full cryptographic surface; the TypeScript SDK now embeds the JLVM evaluator for browser and client-side simulation, including the guard and proof-check paths applications use before submission. An agent can simulate an interaction locally, reject a bad witness or bad transition before paying for it, and then verify the chain's result. The chain proposes; the client checks.
 
 **Provable.** The JLVM has native opcodes that verify cryptographic proofs from inside a contract: Poseidon hashing, Merkle, sparse-Merkle, and Merkle-Patricia membership proofs, Groth16 zero-knowledge proofs, BLS and Schnorr signatures, ECVRF. The evaluation itself can be proven too: an off-chain SP1 program can run JSON Logic over its inputs and emit a compact Groth16 proof that this program, on this data, produced this output. The verifier lives in `metakit`, and OttoChain inherits it through the JLVM: a chain can check the proof through the metered `groth16_verify` path without trusting the prover. OttoChain still needs the surrounding workflow: when proofs are generated, how they are submitted, and how proof-backed execution appears to applications.
 
@@ -93,6 +93,14 @@ A point of emphasis, because it is the heart of the design: readable JLVM is alr
 The unit of computation is the **fiber**: a lightweight, addressable instance of a state machine, or of a *script*, a stateful on-chain computation that is the verifiable analog of a microservice. Fibers coordinate by emitting **effects as data**. A transition's result can trigger an event on another fiber, spawn a child, call a script, or emit an external event (`_triggers`, `_spawn`, `_scriptCall`, `_emit`). Emitted events and transition receipts are recorded per-snapshot in the chain's logs as the deterministic signalling surface that off-chain watchers read (this is the foundation for the SaaS integration in §8). Coordination is itself readable data, not hidden control flow, and every step either succeeds or the whole transaction rolls back.
 
 Contracts are versioned, named, and hash-bound rather than anonymous. OttoChain ships a **schema registry that works like a package manager for on-chain logic**, npm for contracts. Machines and scripts have the same standing in the registry: each is a named package with owners, semantic versions, an append-only version lineage, and a lifecycle (active, deprecated, or *yanked*). Every published version carries a cryptographic **logic hash**, and when a fiber is created the chain checks that the logic it will run hashes to exactly what the registry published, so a fiber provably runs the contract it claims to. A fiber can be **upgraded** to a newer version along a signature-verified path that may carry a JSON Logic *migration* to transform its state, and an opt-in *strict* mode rejects any state that does not match the version's declared shape. Agents get what an economy needs: contracts discoverable by name, reasoned about by shape, trusted by hash, and evolved without breaking their dependents.
+
+**Value composes the same way.** The business promise is simple: when assets are bundled,
+they cannot accidentally gain rights the originals did not have. OttoChain enforces that
+at the type level. An asset carries five capability bits — transfer, split, combine,
+expire, govern — and those bits form a bounded **semilattice**. A basket takes the *meet*,
+the greatest lower bound, of its parts. Transfer and split powers survive only if every
+component carries them; expiry and governance constraints propagate to the whole. You
+cannot assemble your way into a permission you did not already hold.
 
 ### 4.4 Federable: proofs that can leave the chain
 
@@ -159,7 +167,7 @@ Today, the readable, metered JLVM is built. Fibers, receipts, emitted events, we
 
 We are deliberate about where this stands, because a credible vision is a sequenced one.
 
-1. **Built and published, today.** The JLVM is live and fully metered, its cryptographic and zero-knowledge opcode suite (Poseidon, Merkle/SMT/MPT verification, Groth16, BLS, Schnorr, ECVRF) published on Maven Central as `metakit 1.8.0-rc.4`. The schema registry, machine and script versioning with hash-bound logic and migrations, the fiber engine with effects-as-data, committed state roots, state-proof endpoints, and the cross-language client evaluators are shipped and held to shared test vectors. The Groth16 verifier is inherited from `metakit`; SP1 provides an off-chain proving path, and its Groth16 outputs can be verified natively through the JLVM when an application chooses to use that workflow.
+1. **Built and published, today.** The JLVM is live and fully metered, its cryptographic and zero-knowledge opcode suite (Poseidon, Merkle/SMT/MPT verification, Groth16, BLS, Schnorr, ECVRF) published on Maven Central as `metakit 1.8.0-rc.7`. The schema registry, machine and script versioning with hash-bound logic and migrations, the fiber engine with effects-as-data, committed state roots, state-proof endpoints, and the cross-language client evaluators are shipped and held to shared test vectors. The Groth16 verifier is inherited from `metakit`; SP1 provides an off-chain proving path, and its Groth16 outputs can be verified natively through the JLVM when an application chooses to use that workflow.
 2. **Tessellation testnet, next.** Stand the metagraph up on Constellation's testnet as it matures into a stable deployment target.
 3. **Fees and state rent, the gating hurdle.** Execution and coordination are already metered and quotable, but *charging* is not yet built: there is no balance accounting, state rent, or validator reward in the metagraph today. The mechanism is designed (pull-based rent drawn from a fiber owner's pre-authorized spend on Tessellation, with a deposit-for-exemption alternative), and wiring it up is the principal milestone before public use, the step that turns metered computation into a sustainable economy.
 4. **Proof of utility, the real test.** Bring independent, non-coordinated agents together to transact and show genuine value, the moment the trust commons stops being an architecture and becomes a market.
@@ -183,3 +191,222 @@ There is a sixth discipline underneath the five: **simplicity.** Most people do 
 The conviction underneath the engineering is finally civic, not technical. Participants should be able to ask what happened. They should be able to inspect the rule, check the record, and challenge a claim without becoming inventory inside a platform or a ticket in its queue. The agent economy will run on someone's trust layer. OttoChain is an attempt to make that layer legible, decentralized, and open enough for the honest majority to coordinate without asking a private intermediary to be the final judge.
 
 *We invite developers, platforms, enterprises, and agent builders to join us.*
+
+---
+
+## Appendix A. Capabilities Demonstrated on a Live Cluster
+
+Appendix A is the evidence table behind the claims above. These are not mockups or slide
+architecture. Unless explicitly marked otherwise, each capability below has run
+end-to-end on a live metagraph: Global L0, Metagraph L0, Data L1 nodes, and advancing
+snapshots, exercised through the `e2e-test` harness.
+
+### A.1 Public — fully legible, replayable
+
+| Capability | What it demonstrates | Live e2e |
+|---|---|---|
+| State machines (order, approval, voting) | Multi-step readable transitions, transparent state | ✓ |
+| Versionable-contract lifecycle | Registry publish → schema-bind → fiber upgrade → state migration → archive, with both accept and reject paths | ✓ |
+| Scripts (counter, calculator, tic-tac-toe) | Stateful on-chain computation; a game engine as a script | ✓ |
+| Typed asset model | 5-bit behavior + typed morphisms with ledger-enforced conservation | ✓ |
+
+This is the base commercial promise: two parties can point to the same rule, the same
+event, and the same resulting state. No privacy system is required because the whole
+interaction is meant to be inspectable.
+
+### A.2 Semi-private — public rules, shielded values (proof-carrying)
+
+This is the enterprise path: prove that a rule was followed without exposing the bid,
+score, preimage, or customer record that made the rule pass. The contract stays readable;
+selected values become proof-carrying. The chain checks the predicate. The participant
+keeps the witness.
+
+| Capability | Mechanism | What stays hidden | Live e2e |
+|---|---|---|---|
+| Atomic-swap HTLC | `poseidon` hashlock + ordinal-timeout guard | the preimage until claim | ✓ (first live use of `poseidon` as a cryptographic gate) |
+| Adjudicated HTLC | `poseidon` + `schnorr_verify` (BN254-G1) adjudicator authority | preimage; the adjudicator signs rulings | ✓ (first live use of `schnorr_verify`; anti-griefing dispute path) |
+| ZK eligibility | `groth16_verify` over an off-chain SP1 proof + public-values binding | the private witness — a borrower proves `score ≥ 700` without revealing it | ✓ |
+
+Failure is tested too: wrong preimage, early refund, and forged ruling all reject
+deterministically. ZkVerify-gated asset *morphisms* are shipped but not yet in the e2e
+runner. A Transfer or Mint guard can carry Poseidon-Merkle membership plus
+`groth16_verify`; the witness is supplied on update, and proof failure rejects cleanly in
+the combiner. Coverage is unit-level today.
+
+### A.3 Private — fully shielded app execution (proven circuit; not yet chain-wired)
+
+Private execution is the frontier, but it is not vapor. It has a working SDK proof
+artifact; it is not a chain feature yet. In the `metakit-sdk` zk crates, a **general
+private state-transition circuit** proves that arbitrary JLVM app logic advanced hidden
+state by one step without revealing the state, the input, or the logic itself. The
+1-input/1-output transition takes the old state, the driving event, the JSON Logic
+effect, the owner's secret key, and the old state's Poseidon-Merkle membership path as
+private witness. It reveals four field elements: the tree root, a double-spend nullifier,
+the new note commitment, and a keccak hash binding the logic that ran. Inside the circuit,
+the same `jlvm-core` evaluator used by the chain produces the new state, canonicalizes it,
+hashes it, and commits it. The public record is a state-hash transition between
+commitments.
+
+The constraint system is implemented. Tests cover adversarial paths: wrong hidden old
+state, tampered Merkle path, non-canonical field element, and failing effect. The circuit
+has executed in the SP1 zkVM, produced a Groth16 proof over BN254 on GPU, and committed a
+verifying-key, public-values, and proof fixture. The production boundary is explicit: no
+OttoChain verifier integration, no combiner handling for notes and nullifiers, no
+application API, no multi-input shielded pool, no confidential amount commitments, and no
+independent audit. The claim is narrow: the SDK proves hidden JLVM state transitions; the
+chain does not yet settle them.
+
+### A.4 Security status
+
+We do not sell unaudited cryptography as production security. The metakit verifier opcodes
+that back the semi-private and private tiers (`groth16_verify`, `pmt_verify`,
+`schnorr_verify`, `poseidon`, the Σ-protocol family) **have no public third-party security
+audit yet.** The tests above validate expected behavior and integration, not
+cryptographic soundness. Real-value deployments should wait for independent review.
+
+## Appendix B. Recent Protocol Additions
+
+**Typed assets on a capability semilattice.** OttoChain makes asset composition safer for
+ordinary products: baskets, receipts, claims, credits, and governed instruments cannot
+gain powers by being wrapped together. Asset behavior is protocol structure, not a custom
+contract per token. Each asset carries five behavior bits — **transfer, split, combine,
+expire, govern** — that form a bounded **meet-semilattice**, declared in the code as a
+`BoundedSemilattice`.
+
+The bits are not a flat cube. Transfer, split, and combine are powers; they meet with
+AND, so a composite keeps a power only when every part has it. Expire and govern are
+restrictions; they meet with OR, so one constraint binds the whole. The order is the
+product `(𝔹,≤)³ × (𝔹,≥)²`, with top as the most capable fungible behavior and bottom as
+the most restricted expiring-and-governed behavior. Composition takes the **meet**, the
+greatest lower bound of the parts.
+
+The invariant is simple: **a basket is never more permissive than its contents.** You
+cannot compose your way into a capability you did not hold. The formal machinery backs
+that product rule. The combiner recomputes a composite's behavior as a strict
+homomorphism, `behavior(compose) = foldMeet(parts)`. Property tests cover the
+greatest-lower-bound law, identities, and the `Decompose ∘ Compose` retraction across all
+behaviors.
+
+This is a commutative aggregation monoid plus a behavior homomorphism, **not** a
+"monoidal category": there are no morphism identities, and `Decompose ∘ Compose` is a
+retraction, not an inverse. Supply policy is separate from behavior. Transfer with no
+asset-specific code is a structural L1 fast path, with value conservation doing the
+accounting after Cardano's ledger-native `Value`. Stateful checks live in the combiner as
+graceful rejections. Morphism guards can require Σ-protocol propositions, such as
+threshold mint or ring authorization, through `sigma_verify` without adding new
+cryptography.
+
+**A zero-knowledge opcode suite.** Privacy is not bolted on as a separate product. It is
+available inside the same readable contract language, as guard predicates an application
+can call. The JLVM exposes the metakit cryptographic and zero-knowledge opcode set:
+Poseidon hashing; Merkle, sparse-Merkle, and Merkle-Patricia inclusion, non-inclusion,
+and complete-prefix proofs; `groth16_verify` (SP1-Groth16 over BN254); BLS and Schnorr
+signatures; ECVRF; and the Σ-protocol family (`prove_dlog`, `prove_dhtuple`,
+`sigma_verify`) with AND/OR/THRESHOLD composition. Provers run off-chain, including
+through the GPU path. The chain verifies only the proof, on a metered path, without
+trusting the prover.
+
+**Cross-domain fiber-app patterns.** The point is not a better demo contract. The point is
+a path from single contracts to workflows: swaps, disputes, approvals, and attestations
+that move across fibers while remaining readable. Effects-as-data lets one state machine
+coordinate with another without hidden control flow. The HTLC family — atomic-swap and
+adjudicated — is the first cross-domain app set to combine application state,
+cryptographic predicates, and dispute handling as readable JLVM. The next protocol work
+is practical: dynamic-key map writes, cross-fiber reads, and identity binding, so
+multi-party workflows remain expressible without escaping into opaque code.
+
+## Acknowledgments
+
+OttoChain stands on proven systems. Its readable-contract and asset model draw from
+Bitcoin's value conservation, Ergo's Σ-protocol scripting and storage rent, and Cardano's
+extended-UTXO ledger. Its privacy spectrum descends from Zerocash and Zcash, the Kachina
+model behind Midnight, and Penumbra. Its cross-chain provenance borrows Cosmos IBC's
+denom-trace discipline. It runs as a metagraph on Constellation's Tessellation framework
+and commits state after Ethereum's Merkle-Patricia trie. Its naming and identity layer
+follows ENS, BIP39, Proquint, and petname-system theory. The cryptography is consumed,
+not invented: Groth16, Poseidon, Pedersen commitments, Schnorr and Σ-protocol
+composition, BLS, and ECVRF, with proving by SP1. The complete lineage and primary
+sources follow.
+
+## References
+
+*Primary sources preferred. Living specifications are cited by name and
+version/date accessed rather than a fixed year; project documentation is cited as such
+where no peer-reviewed paper exists.*
+
+### Privacy and zero-knowledge
+
+- Ben-Sasson, Chiesa, Garman, Green, Miers, Tromer, Virza. "Zerocash: Decentralized Anonymous Payments from Bitcoin." IEEE S&P 2014. https://eprint.iacr.org/2014/349
+- Hopwood, Bowe, Hornby, Wilcox et al. (Electric Coin Company). "Zcash Protocol Specification" (living spec). https://zips.z.cash/protocol/protocol.pdf — Sapling activated 2018-10-28 (NU1); Orchard 2022-05-31 (NU5); ZSA = ZIP-226/227 (specified, not yet mainnet).
+- Kerber, Kiayias, Kohlweiss. "Kachina — Foundations of Private Smart Contracts." IEEE CSF 2021. https://eprint.iacr.org/2020/543
+- Engelmann, Kerber, Kohlweiss, Volkhov. "Zswap: zk-SNARK Based Non-Interactive Multi-Asset Swaps." PoPETs 2022(4). https://eprint.iacr.org/2022/1002
+- Midnight (Input Output), built on Kachina + Zswap. https://docs.midnight.network/
+- Penumbra Labs. "The Penumbra Protocol" (living spec). https://protocol.penumbra.zone/
+- van Saberhagen [pseudonym]. "CryptoNote v2.0" (2013). https://www.getmonero.org/resources/research-lab/pubs/whitepaper_annotated.pdf
+- Noether [pseudonym], Monero Research Lab. "Ring Confidential Transactions" (MRL-0005, 2016); preprint "Ring Signature Confidential Transactions for Monero," ePrint 2015/1098. https://eprint.iacr.org/2015/1098
+- Bünz, Bootle, Boneh, Poelstra, Wuille, Maxwell. "Bulletproofs." IEEE S&P 2018. https://eprint.iacr.org/2017/1066
+- Chung, Han, Ju, Kim, Seo. "Bulletproofs+" (2020). https://eprint.iacr.org/2020/735
+- Gabizon, Williamson, Ciobotaru. "PLONK" (2019). https://eprint.iacr.org/2019/953 — the proof system behind Aztec (Noir / UltraHonk). https://aztec.network/
+- Bowe, Chiesa, Green, Miers, Mishra, Wu. "Zexe: Enabling Decentralized Private Computation" (2018; S&P 2020). https://eprint.iacr.org/2018/962 — the foundation of Aleo (snarkVM / Varuna / Leo).
+- Ben-Sasson, Bentov, Horesh, Riabzev. "Scalable, transparent, and post-quantum secure computational integrity" (STARKs, 2018). https://eprint.iacr.org/2018/046 — the proof system behind Starknet. https://www.starknet.io/
+
+### Cryptographic primitives and proving stacks
+
+- Groth. "On the Size of Pairing-based Non-interactive Arguments." EUROCRYPT 2016. https://eprint.iacr.org/2016/260
+- Succinct Labs. SP1 zkVM (RISC-V; STARK wrapped to Groth16/PLONK over BN254). https://github.com/succinctlabs/sp1
+- Grassi, Khovratovich, Rechberger, Roy, Schofnegger. "Poseidon." USENIX Security 2021. https://eprint.iacr.org/2019/458 — and Poseidon2 (AFRICACRYPT 2023). https://eprint.iacr.org/2023/323
+- Pedersen. "Non-Interactive and Information-Theoretic Secure Verifiable Secret Sharing." CRYPTO '91. DOI 10.1007/3-540-46766-1_9
+- Fiat, Shamir. "How to Prove Yourself." CRYPTO '86. DOI 10.1007/3-540-47721-7_12
+- Schnorr. "Efficient Signature Generation by Smart Cards." Journal of Cryptology 4(3), 1991. DOI 10.1007/BF00196725
+- Cramer, Damgård, Schoenmakers. "Proofs of Partial Knowledge and Simplified Design of Witness Hiding Protocols." CRYPTO '94. DOI 10.1007/3-540-48658-5_19
+- Maurer. "Unifying Zero-Knowledge Proofs of Knowledge." AFRICACRYPT 2009. DOI 10.1007/978-3-642-02384-2_17
+- Boneh, Lynn, Shacham. "Short Signatures from the Weil Pairing." ASIACRYPT 2001. DOI 10.1007/3-540-45682-1_30
+- Goldberg, Reyzin, Papadopoulos, Včelák. "Verifiable Random Functions (VRFs)." RFC 9381, 2023. https://www.rfc-editor.org/rfc/rfc9381.html — origin: Micali, Rabin, Vadhan, FOCS '99.
+- Merkle. "A Digital Signature Based on a Conventional Encryption Function." CRYPTO '87 (Stanford Ph.D. thesis, 1979). DOI 10.1007/3-540-48184-2_32
+- Dahlberg, Pulls, Peeters. "Efficient Sparse Merkle Trees." NordSec 2016. https://eprint.iacr.org/2016/683 — origin: Laurie, Kasper, "Revocation Transparency" (Google, 2012).
+- Barreto, Naehrig. "Pairing-Friendly Elliptic Curves of Prime Order." SAC 2005. DOI 10.1007/11693383_22 — Ethereum instantiation: EIP-196 / EIP-197 (2017).
+
+### Programming model and contract lineage
+
+- JSON Logic (Jeremy Wadhams) — the declarative rule format the JLVM extends. https://jsonlogic.com/
+- Nakamoto. "Bitcoin: A Peer-to-Peer Electronic Cash System" (2008). https://bitcoin.org/bitcoin.pdf — UTXO/Script model (Antonopoulos, "Mastering Bitcoin," 2nd ed., 2017).
+- Poon, Dryja. "The Bitcoin Lightning Network" (2016). https://lightning.network/lightning-network-paper.pdf — HTLCs; BIP-199 (2017); Tier Nolan atomic swap (2013). https://en.bitcoin.it/wiki/Atomic_swap
+- Ergo Developers. "Ergo: A Resilient Platform For Contractual Money" (2019) and "ErgoScript … Supporting Noninteractive Zero-Knowledge Proofs" (2019; attr. Chepurnoy, Kharin, Meshkov). https://docs.ergoplatform.com/documents/ — ZeroJoin (Chepurnoy, Saxena, 2020, https://eprint.iacr.org/2020/560); storage rent (ErgoDocs + EIP-39).
+- Chakravarty, Chapman, MacKenzie, Melkonian, Peyton Jones, Wadler. "The Extended UTXO Model." FC 2020 (WTSC). DOI 10.1007/978-3-030-54455-3_37 — and "Native Custom Tokens in the Extended UTXO Model" / "UTXOma" (ISoLA 2020).
+- Plutus / Plutus Core (IOG): "Functional Blockchain Contracts" (2019). https://github.com/IntersectMBO/plutus — CIP-68 datum metadata standard (Konrad, Vellekoop, 2022). https://cips.cardano.org/cip/CIP-68
+- Bitcoin metaprotocols: Runes (Rodarmor, 2023; https://docs.ordinals.com/runes.html), RGB (https://rgb.tech), Taproot Assets (Lightning Labs; https://github.com/lightninglabs/taproot-assets), CHARMS (https://charms.dev/).
+
+### Token standards and asset models
+
+- Ethereum ERC standards (eips.ethereum.org): ERC-20 (Vogelsteller, Buterin, 2015); ERC-721 (2018); ERC-1155 (2018); ERC-6909 (2023); ERC-165 (2018); EIP-2612 permit (2020); ERC-3643 T-REX (2021); ERC-4626 vaults (2021).
+- Solana Labs. Token-2022 / SPL Token Extensions. https://solana.com/docs/tokens/extensions
+- Mishura, Mondet. "TZIP-012: FA2 — Multi-Asset Interface" (Tezos, 2020). https://gitlab.com/tezos/tzip/-/blob/master/proposals/tzip-12/tzip-12.md
+- Algorand: Algorand Standard Assets (ASA); Smart ASA ARC-20 (Bassi, Di Luzio, Jannotti, 2022); ARC-62 (Bassi, 2024). https://arc.algorand.foundation/
+- Blackshear et al. "Move: A Language With Programmable Resources" (Libra/Diem, 2020). Aptos Fungible Asset standard + AIP-73 (Zhou, 2024); Sui object model + `TreasuryCap` (Mysten Labs).
+
+### Cross-chain provenance
+
+- Goes (Interchain). "The Interblockchain Communication Protocol: An Overview" (2020). arXiv:2006.15918
+- Cosmos Interchain Standards. "ICS-20: Fungible Token Transfer" — the denom-trace provenance mechanism. https://github.com/cosmos/ibc/blob/main/spec/app/ics-020-fungible-token-transfer/README.md
+- Axelar Interchain Token Service. https://docs.axelar.dev/dev/send-tokens/interchain-tokens/intro/
+- LayerZero OFT. https://docs.layerzero.network/v2/concepts/technical-reference/oft-reference — Wormhole NTT. https://wormhole.com/docs/products/token-transfers/native-token-transfers/overview/ — Chainlink CCIP. https://docs.chain.link/ccip — Hyperlane Warp Routes. https://docs.hyperlane.xyz/docs/protocol/warp-routes/warp-routes-overview
+
+### Platform and state commitment
+
+- Constellation Network. Hypergraph Transfer Protocol (HGTP). https://docs.constellationnetwork.io/ — Tessellation framework (open source). https://github.com/Constellation-Labs/tessellation *(official docs/repo; no peer-reviewed paper)*
+- Wood. "Ethereum: A Secure Decentralised Generalised Transaction Ledger" (Yellow Paper, App. D — modified Merkle-Patricia trie). https://ethereum.github.io/yellowpaper/paper.pdf
+- Nakamoto. "Bitcoin: A Peer-to-Peer Electronic Cash System" (2008). https://bitcoin.org/bitcoin.pdf
+
+### Naming, identity, and theoretical foundations
+
+- Johnson. "EIP-137: Ethereum Domain Name Service — Specification" (2016). https://eips.ethereum.org/EIPS/eip-137
+- Palatinus, Rusnak, Voisine, Bowe. "BIP-0039: Mnemonic code for generating deterministic keys" (2013). https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki
+- Wilkerson. "A Proposal for Proquints" (2009). arXiv:0901.4016
+- Stiegler. "An Introduction to Petname Systems" (2005). http://www.skyhunter.com/marcs/petnames/IntroPetNames.html — Wilcox-O'Hearn, "Names: Decentralized, Secure, Human-Meaningful: Choose Two" (Zooko's Triangle, 2001).
+- FS2 — Functional Streams for Scala (Typelevel). https://fs2.io/
+- Caspi, Pilaud, Halbwachs, Plaice. "LUSTRE: a declarative language for real-time programming." POPL 1987 — and Berry, Gonthier, "The Esterel synchronous programming language." Sci. Comput. Program. 19(2), 1992.
+- Kahn. "The Semantics of a Simple Language for Parallel Programming." IFIP Congress 74, 1974.
+- Milner. "Communicating and Mobile Systems: the π-Calculus" (Cambridge UP, 1999) — and "A Calculus of Communicating Systems" (LNCS 92, 1980).
+- Davey, Priestley. "Introduction to Lattices and Order" (2nd ed., Cambridge UP, 2002).
+- Preston-Werner. "Semantic Versioning 2.0.0." https://semver.org/
+- CosmWasm cw2 contract-version stamping; OpenZeppelin `Pausable`.
