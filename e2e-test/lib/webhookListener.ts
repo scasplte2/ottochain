@@ -92,6 +92,7 @@ export class WebhookListener {
     const addr = this.server?.address();
     if (!addr || typeof addr === 'string') return;
     this.callbackUrl = `http://${host}:${addr.port}/`;
+    console.log(`\x1b[36m[webhook]\x1b[0m callback = ${this.callbackUrl} (container→host)`);
 
     const uniqueMl0 = [...new Set(ml0Urls)];
     for (const ml0Url of uniqueMl0) {
@@ -112,7 +113,16 @@ export class WebhookListener {
     }
   }
 
+  /** Count of pushes received, for the one-time delivery-confirmation log. */
+  private recvCount = 0;
+
   private handle(msg: { event?: string; ordinal?: number; rejection?: RejectionInfo }): void {
+    // Prove delivery: the first push that lands tells us the container→host callback actually works
+    // (vs. a silent fallback to polling). Subsequent pushes are summarised, not spammed.
+    this.recvCount++;
+    if (this.recvCount === 1) {
+      console.log(`\x1b[36m[webhook]\x1b[0m first push received (${msg.event} ord=${msg.ordinal}) — delivery OK`);
+    }
     if (msg.event === 'snapshot.finalized') {
       if (typeof msg.ordinal === 'number' && msg.ordinal > this.latestOrdinal) {
         this.latestOrdinal = msg.ordinal;
