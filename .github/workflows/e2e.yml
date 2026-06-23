@@ -16,7 +16,10 @@ jobs:
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # The runner caps in-flight flows (E2E_CONCURRENCY, default 3) so a heavy ZK-guard example can't
+    # starve other flows' ordinal-confirmation budget on the shared CI cluster. That serialises the
+    # ~35 flows into batches, so the suite needs more wall-clock than the old all-parallel launch.
+    timeout-minutes: 50
 
     steps:
       - uses: actions/checkout@v7
