@@ -34,9 +34,13 @@ jobs:
           - name: heavy
             filter: '--only sigma-mixer,rule110,staked-oracle-pool'
             concurrency: '3'
-            ordinalThreshold: '12'
-            maxResubmits: '6'
-            timeout: 60
+            # DIAGNOSTIC (temporary): a tiny ordinal budget makes the stuck ZK flows give up in a
+            # few minutes so the job FAILS within the timeout. A timed-out job is *cancelled*, which
+            # skips failure()-gated log collection — fast-fail keeps that path alive. Revert after
+            # the ML0 stuck-confirm is root-caused.
+            ordinalThreshold: '5'
+            maxResubmits: '1'
+            timeout: 30
 
     steps:
       - uses: actions/checkout@v7
@@ -265,7 +269,7 @@ jobs:
         run: npm test -- ${{ matrix.lane.filter }}
 
       - name: Collect logs and diagnostics on failure
-        if: failure()
+        if: failure() || cancelled()
         run: |
           echo "## 🔍 Failure Diagnostics" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -299,11 +303,21 @@ jobs:
             docker logs "$container" 2>&1 > /tmp/ci-logs/${container}.log || true
           done
 
+          # Inline ML0 rejection scan so the stuck-confirm reason shows up directly in the run
+          # summary (no artifact download needed). The chain logs FailureReason / policy / effect
+          # rejections at WARN/ERROR; these are why a DL1-accepted update never confirms at ML0.
+          echo "### ML0 rejection scan (last 80 matches)" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          docker logs ml0-0 2>&1 \
+            | grep -iE "reject|invalid|policy|failure|fiber|effect|exhaust|denied|unauthor|spawn|nullifier|verify|sigma|gas|guard" \
+            | tail -80 >> $GITHUB_STEP_SUMMARY 2>&1 || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
       - name: Upload node logs
         if: failure() || cancelled()
         uses: actions/upload-artifact@v7
         with:
-          name: e2e-logs-${{ github.run_number }}
+          name: e2e-logs-${{ matrix.lane.name }}-${{ github.run_number }}
           path: /tmp/ci-logs/
           retention-days: 14
 
