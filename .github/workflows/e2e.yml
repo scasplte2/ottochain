@@ -18,10 +18,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: ${{ matrix.lane.timeout }}
     strategy:
-      # Two independent lanes. "core" (light examples, full parallelism) is the primary green signal;
-      # "heavy" (sigma-mixer/rule110/staked-oracle-pool — expensive sigma_verify / cellular-automaton /
-      # trimmed-mean guards) runs low-concurrency with a much larger ordinal-confirmation budget so the
-      # shared CI cluster can keep up. A heavy-lane fail doesn't block core (fail-fast: false).
+      # Independent lanes, each its own job/cluster. "core" (light examples, full parallelism) is the
+      # primary green signal; the three heavy examples (sigma-mixer/rule110/staked-oracle-pool —
+      # expensive sigma_verify / cellular-automaton / trimmed-mean) get one serial job each so they
+      # run in parallel without sharing a mempool. fail-fast: false so one lane's failure isn't fatal.
       fail-fast: false
       matrix:
         lane:
@@ -31,19 +31,32 @@ jobs:
             ordinalThreshold: ''
             maxResubmits: ''
             timeout: 30
-          - name: heavy
-            filter: '--only sigma-mixer,rule110,staked-oracle-pool'
-            # Serialized (concurrency 1): DL1 data-block formation chokes when several gas-heavy flows
-            # flood its mempool at once — valid updates pile up and ML0 snapshots go out empty (the
-            # candidates=Set() stall). At concurrency 1 the chain stays healthy (blocks finalize
-            # steadily), so the lane is throughput-bound, not stalled. Examples are trimmed (rule110
-            # maxGen 3, oracle quorum-only, sigma 1 reject; oracle submit-window guard removed so
-            # finalize succeeds on the first try instead of idling for the epoch to elapse). 50m
-            # covers the serial confirmation pace across all 6 flows.
+          # Heavy examples each get their OWN job/cluster, run in PARALLEL. Two facts forced this:
+          # (1) concurrency>1 chokes DL1 data-block formation when gas-heavy flows flood one mempool
+          #     (valid updates pile up, ML0 snapshots go out empty — the candidates=Set() stall), and
+          # (2) at concurrency 1 the chain is healthy but serializing ALL examples on one cluster is
+          #     ~40-50m of confirmation latency. Per-example isolation keeps each mempool small (no
+          #     choke) AND parallelises across examples, so wall-clock = the slowest single example,
+          #     not the sum. Each example is still trimmed (rule110 maxGen 3, oracle quorum-only +
+          #     submit-window removed, sigma 1 reject) and runs its flows serially (concurrency 1).
+          - name: sigma-mixer
+            filter: '--only sigma-mixer'
             concurrency: '1'
             ordinalThreshold: '10'
             maxResubmits: '4'
-            timeout: 50
+            timeout: 25
+          - name: rule110
+            filter: '--only rule110'
+            concurrency: '1'
+            ordinalThreshold: '10'
+            maxResubmits: '4'
+            timeout: 30
+          - name: staked-oracle
+            filter: '--only staked-oracle-pool'
+            concurrency: '1'
+            ordinalThreshold: '10'
+            maxResubmits: '4'
+            timeout: 35
 
     steps:
       - uses: actions/checkout@v7
