@@ -70,12 +70,7 @@
         {
           "action": "create",
           "definition": "definition.json",
-          "initialData": "initial-data.json",
-          "expectedState": "FORMING"
-        },
-        {
-          "action": "processEvent",
-          "event": "event-bind-registry.ts",
+          "initialData": "initial-data.ts",
           "expectedState": "FORMING"
         },
         {
@@ -151,12 +146,7 @@
         {
           "action": "create",
           "definition": "definition.json",
-          "initialData": "initial-data.json"
-        },
-        {
-          "action": "processEvent",
-          "event": "event-bind-registry.ts",
-          "expectedState": "FORMING"
+          "initialData": "initial-data.ts"
         },
         {
           "action": "processEvent",

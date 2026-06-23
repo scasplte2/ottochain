@@ -126,42 +126,6 @@
             ]
           },
           {
-            "and": [
-              {
-                "has": [
-                  {
-                    "var": "heldAssets"
-                  },
-                  {
-                    "var": "event.stakeAssetId"
-                  }
-                ]
-              },
-              {
-                ">=": [
-                  {
-                    "get": [
-                      {
-                        "get": [
-                          {
-                            "var": "heldAssets"
-                          },
-                          {
-                            "var": "event.stakeAssetId"
-                          }
-                        ]
-                      },
-                      "amount"
-                    ]
-                  },
-                  {
-                    "var": "state.stakeAmount"
-                  }
-                ]
-              }
-            ]
-          },
-          {
             "if": [
               {
                 "has": [
@@ -316,42 +280,6 @@
                   },
                   {
                     "var": "event.agent"
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "and": [
-              {
-                "has": [
-                  {
-                    "var": "heldAssets"
-                  },
-                  {
-                    "var": "event.stakeAssetId"
-                  }
-                ]
-              },
-              {
-                ">=": [
-                  {
-                    "get": [
-                      {
-                        "get": [
-                          {
-                            "var": "heldAssets"
-                          },
-                          {
-                            "var": "event.stakeAssetId"
-                          }
-                        ]
-                      },
-                      "amount"
-                    ]
-                  },
-                  {
-                    "var": "state.stakeAmount"
                   }
                 ]
               }
