@@ -593,23 +593,6 @@
             ]
           },
           {
-            "<=": [
-              {
-                "var": "$ordinal"
-              },
-              {
-                "+": [
-                  {
-                    "var": "state.epochStartedAt"
-                  },
-                  {
-                    "var": "state.epochLength"
-                  }
-                ]
-              }
-            ]
-          },
-          {
             "none": [
               {
                 "var": "state.submissions"
