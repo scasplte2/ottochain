@@ -5,15 +5,13 @@
   "stakePolicy": "staked-pool-stake-v1.asset",
   "stakeAmount": 1000,
   "quorum": 3,
-  "epochLength": 20,
+  "epochLength": 6,
   "outlierBound": 10,
   "rewardPerEpoch": 4,
   "rewardPolicy": "staked-pool-reward-v1.asset",
-
   "status": "FORMING",
   "epoch": 0,
   "epochStartedAt": 0,
-
   "participants": {},
   "stakes": {},
   "stakeAssetIds": {},

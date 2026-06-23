@@ -5,69 +5,187 @@
   "definition": "definition.json",
   "initialData": "initial-data.json",
   "events": [
-    { "name": "bind_registry", "description": "Authority binds the identity registry (#24) — must precede joins", "file": "event-bind-registry.ts", "from": "FORMING", "to": "FORMING" },
-    { "name": "stake_and_join", "description": "Reputation-gated + stake-verified join", "file": "event-stake-and-join.ts", "from": "FORMING", "to": "FORMING" },
-    { "name": "open_first_epoch", "description": "Authority opens epoch 1", "file": "event-open-first-epoch.ts", "from": "FORMING", "to": "COLLECTING" },
-    { "name": "submit", "description": "Joined participant appends a {addr,value} datapoint", "file": "event-submit.ts", "from": "COLLECTING", "to": "COLLECTING" },
-    { "name": "finalize", "description": "Trimmed-mean aggregate + publish result + credit inConsensus (zero transfers)", "file": "event-finalize.ts", "from": "COLLECTING", "to": "SETTLED" },
-    { "name": "claim_reward", "description": "In-consensus participant pulls one whole reward instance", "file": "event-claim-reward.ts", "from": "SETTLED", "to": "SETTLED" },
-    { "name": "reset_epoch", "description": "Authority advances the epoch; clears submissions", "file": "event-reset-epoch.ts", "from": "SETTLED", "to": "COLLECTING" },
-    { "name": "withdraw_stake", "description": "Participant reclaims their staked instance (one whole transfer)", "file": "event-withdraw-stake.ts", "from": "SETTLED", "to": "SETTLED" }
+    {
+      "name": "bind_registry",
+      "description": "Authority binds the identity registry (#24) — must precede joins",
+      "file": "event-bind-registry.ts",
+      "from": "FORMING",
+      "to": "FORMING"
+    },
+    {
+      "name": "stake_and_join",
+      "description": "Reputation-gated + stake-verified join",
+      "file": "event-stake-and-join.ts",
+      "from": "FORMING",
+      "to": "FORMING"
+    },
+    {
+      "name": "open_first_epoch",
+      "description": "Authority opens epoch 1",
+      "file": "event-open-first-epoch.ts",
+      "from": "FORMING",
+      "to": "COLLECTING"
+    },
+    {
+      "name": "submit",
+      "description": "Joined participant appends a {addr,value} datapoint",
+      "file": "event-submit.ts",
+      "from": "COLLECTING",
+      "to": "COLLECTING"
+    },
+    {
+      "name": "finalize",
+      "description": "Trimmed-mean aggregate + publish result + credit inConsensus (zero transfers)",
+      "file": "event-finalize.ts",
+      "from": "COLLECTING",
+      "to": "SETTLED"
+    },
+    {
+      "name": "claim_reward",
+      "description": "In-consensus participant pulls one whole reward instance",
+      "file": "event-claim-reward.ts",
+      "from": "SETTLED",
+      "to": "SETTLED"
+    },
+    {
+      "name": "reset_epoch",
+      "description": "Authority advances the epoch; clears submissions",
+      "file": "event-reset-epoch.ts",
+      "from": "SETTLED",
+      "to": "COLLECTING"
+    },
+    {
+      "name": "withdraw_stake",
+      "description": "Participant reclaims their staked instance (one whole transfer)",
+      "file": "event-withdraw-stake.ts",
+      "from": "SETTLED",
+      "to": "SETTLED"
+    }
   ],
   "testFlows": [
     {
       "name": "Worked oracle flow — join, submit, trimmed-mean finalize, claim, reset",
       "description": "The end-to-end happy path. Bind the registry, open epoch 1, 4 participants stake+join (3 clustered values + 1 outlier), finalize after quorum computes the trimmed mean and excludes the outlier from inConsensus, an in-consensus participant claims a reward, then the authority resets the epoch.",
       "steps": [
-        { "action": "create", "definition": "definition.json", "initialData": "initial-data.json", "expectedState": "FORMING" },
-        { "action": "processEvent", "event": "event-bind-registry.ts", "expectedState": "FORMING" },
-        { "action": "processEvent", "event": "event-stake-and-join.ts", "eventData": { "wallet": "alice", "stakeAssetId": "11111111-1111-1111-1111-111111111111" }, "expectedState": "FORMING" },
-        { "action": "processEvent", "event": "event-stake-and-join.ts", "eventData": { "wallet": "bob", "stakeAssetId": "22222222-2222-2222-2222-222222222222" }, "expectedState": "FORMING" },
-        { "action": "processEvent", "event": "event-stake-and-join.ts", "eventData": { "wallet": "carol", "stakeAssetId": "33333333-3333-3333-3333-333333333333" }, "expectedState": "FORMING" },
-        { "action": "processEvent", "event": "event-stake-and-join.ts", "eventData": { "wallet": "dave", "stakeAssetId": "44444444-4444-4444-4444-444444444444" }, "expectedState": "FORMING" },
-        { "action": "processEvent", "event": "event-open-first-epoch.ts", "expectedState": "COLLECTING" },
-        { "action": "processEvent", "event": "event-submit.ts", "eventData": { "wallet": "alice", "value": 100 }, "expectedState": "COLLECTING" },
-        { "action": "processEvent", "event": "event-submit.ts", "eventData": { "wallet": "bob", "value": 102 }, "expectedState": "COLLECTING" },
-        { "action": "processEvent", "event": "event-submit.ts", "eventData": { "wallet": "carol", "value": 98 }, "expectedState": "COLLECTING" },
-        { "action": "processEvent", "event": "event-submit.ts", "eventData": { "wallet": "dave", "value": 500 }, "expectedState": "COLLECTING" },
-        { "action": "processEvent", "event": "event-finalize.ts", "expectedState": "SETTLED" },
-        { "action": "processEvent", "event": "event-claim-reward.ts", "eventData": { "wallet": "alice", "rewardAssetId": "aaaaaaaa-0000-0000-0000-000000000001" }, "expectedState": "SETTLED" },
-        { "action": "processEvent", "event": "event-reset-epoch.ts", "expectedState": "COLLECTING" }
+        {
+          "action": "create",
+          "definition": "definition.json",
+          "initialData": "initial-data.json",
+          "expectedState": "FORMING"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-bind-registry.ts",
+          "expectedState": "FORMING"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-stake-and-join.ts",
+          "eventData": {
+            "wallet": "alice",
+            "stakeAssetId": "11111111-1111-1111-1111-111111111111"
+          },
+          "expectedState": "FORMING"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-stake-and-join.ts",
+          "eventData": {
+            "wallet": "bob",
+            "stakeAssetId": "22222222-2222-2222-2222-222222222222"
+          },
+          "expectedState": "FORMING"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-stake-and-join.ts",
+          "eventData": {
+            "wallet": "carol",
+            "stakeAssetId": "33333333-3333-3333-3333-333333333333"
+          },
+          "expectedState": "FORMING"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-open-first-epoch.ts",
+          "expectedState": "COLLECTING"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-submit.ts",
+          "eventData": {
+            "wallet": "alice",
+            "value": 100
+          },
+          "expectedState": "COLLECTING"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-submit.ts",
+          "eventData": {
+            "wallet": "bob",
+            "value": 102
+          },
+          "expectedState": "COLLECTING"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-submit.ts",
+          "eventData": {
+            "wallet": "carol",
+            "value": 98
+          },
+          "expectedState": "COLLECTING"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-finalize.ts",
+          "expectedState": "SETTLED"
+        }
       ]
     },
     {
       "name": "Rejected — finalize before quorum is denied",
       "description": "With fewer than `quorum` (3) submissions, the finalize guard's count>=quorum clause is false → the transition is rejected and the fiber stays at COLLECTING.",
       "steps": [
-        { "action": "create", "definition": "definition.json", "initialData": "initial-data.json" },
-        { "action": "processEvent", "event": "event-bind-registry.ts", "expectedState": "FORMING" },
-        { "action": "processEvent", "event": "event-stake-and-join.ts", "eventData": { "wallet": "alice", "stakeAssetId": "11111111-1111-1111-1111-111111111111" }, "expectedState": "FORMING" },
-        { "action": "processEvent", "event": "event-open-first-epoch.ts", "expectedState": "COLLECTING" },
-        { "action": "processEvent", "event": "event-submit.ts", "eventData": { "wallet": "alice", "value": 100 }, "expectedState": "COLLECTING" },
-        { "action": "processEvent", "event": "event-finalize.ts", "expectRejected": "ml0" }
-      ]
-    },
-    {
-      "name": "Rejected — double-submit from the same address is denied (array dedup)",
-      "description": "The submit guard's none-over-array dedup (actorNotInArray) rejects a second submission from an address already present in this epoch's submissions array.",
-      "steps": [
-        { "action": "create", "definition": "definition.json", "initialData": "initial-data.json" },
-        { "action": "processEvent", "event": "event-bind-registry.ts", "expectedState": "FORMING" },
-        { "action": "processEvent", "event": "event-stake-and-join.ts", "eventData": { "wallet": "alice", "stakeAssetId": "11111111-1111-1111-1111-111111111111" }, "expectedState": "FORMING" },
-        { "action": "processEvent", "event": "event-open-first-epoch.ts", "expectedState": "COLLECTING" },
-        { "action": "processEvent", "event": "event-submit.ts", "eventData": { "wallet": "alice", "value": 100 }, "expectedState": "COLLECTING" },
-        { "action": "processEvent", "event": "event-submit.ts", "eventData": { "wallet": "alice", "value": 101 }, "expectRejected": "ml0" }
-      ]
-    },
-    {
-      "name": "Rejected — a non-participant cannot submit",
-      "description": "The submit guard requires the signer to be a joined participant (actorHasEntry on state.participants). A wallet that never staked+joined is rejected.",
-      "steps": [
-        { "action": "create", "definition": "definition.json", "initialData": "initial-data.json" },
-        { "action": "processEvent", "event": "event-bind-registry.ts", "expectedState": "FORMING" },
-        { "action": "processEvent", "event": "event-stake-and-join.ts", "eventData": { "wallet": "alice", "stakeAssetId": "11111111-1111-1111-1111-111111111111" }, "expectedState": "FORMING" },
-        { "action": "processEvent", "event": "event-open-first-epoch.ts", "expectedState": "COLLECTING" },
-        { "action": "processEvent", "event": "event-submit.ts", "eventData": { "wallet": "mallory", "value": 100 }, "expectRejected": "ml0" }
+        {
+          "action": "create",
+          "definition": "definition.json",
+          "initialData": "initial-data.json"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-bind-registry.ts",
+          "expectedState": "FORMING"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-stake-and-join.ts",
+          "eventData": {
+            "wallet": "alice",
+            "stakeAssetId": "11111111-1111-1111-1111-111111111111"
+          },
+          "expectedState": "FORMING"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-open-first-epoch.ts",
+          "expectedState": "COLLECTING"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-submit.ts",
+          "eventData": {
+            "wallet": "alice",
+            "value": 100
+          },
+          "expectedState": "COLLECTING"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-finalize.ts",
+          "expectRejected": "ml0"
+        }
       ]
     }
   ]

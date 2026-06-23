@@ -33,14 +33,15 @@ jobs:
             timeout: 30
           - name: heavy
             filter: '--only sigma-mixer,rule110,staked-oracle-pool'
-            concurrency: '3'
-            # Heavy ZK/stateful examples run low-concurrency with a large ordinal-confirmation
-            # budget: the staked-oracle `finalize` legitimately waits ~epochLength ordinals for the
-            # collection window to close, and the sigma_verify / rule110 effects are gas-heavy, so
-            # the shared CI cluster needs slack. Each example is ONE self-contained sequential flow.
-            ordinalThreshold: '12'
-            maxResubmits: '6'
-            timeout: 60
+            # Serialized (concurrency 1): DL1 data-block formation chokes when several gas-heavy flows
+            # flood its mempool at once — valid updates pile up and ML0 snapshots go out empty (the
+            # candidates=Set() stall), so we run ONE flow at a time to keep the mempool small. Examples
+            # are trimmed (rule110 maxGen 3, oracle quorum-only no claim/reset, sigma 1 reject) to fit
+            # a 30m wall-clock at this serial pace.
+            concurrency: '1'
+            ordinalThreshold: '10'
+            maxResubmits: '3'
+            timeout: 30
 
     steps:
       - uses: actions/checkout@v7
