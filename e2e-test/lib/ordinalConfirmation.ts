@@ -216,45 +216,32 @@ export async function waitForOrdinalConfirmation(
       const ordinalDelta = currentSnapshot.ordinal - startSnapshot.ordinal;
 
       if (ordinalDelta >= ordinalThreshold) {
-        if (waitNextSnapshot) {
-          // Webhook-driven: do NOT resubmit. A resubmit re-reads the (lagging) seq and re-sends the
-          // SAME transition, which the DL1 then bundles into a block as a DUPLICATE sequence number →
-          // SequenceNumberMismatch → the all-or-nothing block is poisoned (and the original it carries
-          // with it). The in-order original is valid and already in the mempool; the snapshot push
-          // confirms it the instant its block commits. So just keep waiting, up to the full budget.
-          const totalBudget = ordinalThreshold * (maxResubmits + 1);
-          if (ordinalDelta >= totalBudget) {
-            w(' ✗ (no push-confirm within budget)\n');
-            throw new Error(
-              `${TAG} Confirmation failed for ${label}: not confirmed after ${totalBudget} ordinals ` +
-                `(push-driven, no resubmit; final ordinal ${currentSnapshot.ordinal})`
-            );
-          }
-          // else: keep re-checking on each push without resubmitting (no duplicate-seq block).
-        } else {
-          // Polling fallback (no webhook): resubmit on each threshold window.
-          if (resubmitCount >= maxResubmits) {
-            w(' ✗ (ordinal budget exhausted)\n');
-            throw new Error(
-              `${TAG} Confirmation failed for ${label}: transaction not included after ` +
-                `${ordinalThreshold} ordinals × ${maxResubmits + 1} attempts ` +
-                `(final ordinal: ${currentSnapshot.ordinal})`
-            );
-          }
-
-          resubmitCount++;
-          w(` [resubmit #${resubmitCount} at ord=${currentSnapshot.ordinal}]`);
-
-          try {
-            await resubmit();
-          } catch (err) {
-            // Resubmit failed — log but continue polling in case original tx lands
-            w(` (resubmit err: ${(err as Error).message.slice(0, 50)})`);
-          }
-
-          // Reset start ordinal for next threshold window
-          startSnapshot = currentSnapshot;
+        // Ordinals passed without our tx surfacing — resubmit (a re-attempt for a genuinely-unlanded
+        // update). The DUPLICATE-seq hazard (resubmitting an already-applied update → DL1 block with a
+        // duplicate seq → SequenceNumberMismatch) is handled inside `resubmit()` itself: it re-reads
+        // the fiber and skips the send if it already advanced. By now the lagging read has had a full
+        // threshold window to catch up, so that check is reliable.
+        if (resubmitCount >= maxResubmits) {
+          w(' ✗ (ordinal budget exhausted)\n');
+          throw new Error(
+            `${TAG} Confirmation failed for ${label}: transaction not included after ` +
+              `${ordinalThreshold} ordinals × ${maxResubmits + 1} attempts ` +
+              `(final ordinal: ${currentSnapshot.ordinal})`
+          );
         }
+
+        resubmitCount++;
+        w(` [resubmit #${resubmitCount} at ord=${currentSnapshot.ordinal}]`);
+
+        try {
+          await resubmit();
+        } catch (err) {
+          // Resubmit failed — log but continue polling in case original tx lands
+          w(` (resubmit err: ${(err as Error).message.slice(0, 50)})`);
+        }
+
+        // Reset start ordinal for next threshold window
+        startSnapshot = currentSnapshot;
       }
     }
 

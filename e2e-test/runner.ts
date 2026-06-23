@@ -775,6 +775,22 @@ async function runFlow(
           return (record.sequenceNumber ?? -1) > preSendSeqNum;
         },
         resubmit: async () => {
+          // Skip the resubmit if the original already landed — re-sending it would put a DUPLICATE
+          // into a DL1 block (CidAlreadyExists for creates, SequenceNumberMismatch for transitions)
+          // and poison the all-or-nothing block. By now the lagging read has had a full threshold
+          // window to catch up, so this check reliably distinguishes "applied but slow to surface"
+          // (skip — the loop will confirm it) from "genuinely never landed" (re-attempt).
+          try {
+            const rec = (await new HttpClient(
+              `${ml0Urls[0]}/data-application/v1/${entityPath}`
+            ).get<unknown>('')) as { sequenceNumber?: number; status?: string } | null;
+            const landed = isCreateStep
+              ? rec?.status === 'ACTIVE'
+              : (rec?.sequenceNumber ?? -1) > preSendSeqNum;
+            if (landed) return;
+          } catch {
+            // entity not found / read error → fall through and resubmit
+          }
           const freshMessage = await regenerateMessage();
           await sendToNodes(freshMessage);
         },
