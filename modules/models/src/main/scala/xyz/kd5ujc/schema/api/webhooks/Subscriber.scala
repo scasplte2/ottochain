@@ -79,7 +79,8 @@ case class SnapshotNotification(
   hash:        String,
   timestamp:   Instant,
   metagraphId: String,
-  stats:       NotificationStats
+  stats:       NotificationStats,
+  rejections:  List[SnapshotRejection]
 )
 
 object SnapshotNotification {
@@ -89,9 +90,25 @@ object SnapshotNotification {
 case class NotificationStats(
   updatesProcessed:    Int,
   stateMachinesActive: Int,
-  scriptsActive:       Int
+  scriptsActive:       Int,
+  rejectedCount:       Int
 )
 
 object NotificationStats {
   implicit val encoder: Encoder[NotificationStats] = deriveEncoder[NotificationStats]
+}
+
+/** A single post-finalization rejection, batched onto the `snapshot.finalized` notification. */
+case class SnapshotRejection(
+  updateType:           String,
+  fiberId:              UUID,
+  targetSequenceNumber: Option[Long],
+  actualSequenceNumber: Option[Long],
+  reason:               String,
+  updateHash:           String
+)
+
+object SnapshotRejection {
+  implicit val encoder: Encoder[SnapshotRejection] = deriveEncoder[SnapshotRejection]
+  implicit val decoder: Decoder[SnapshotRejection] = deriveDecoder[SnapshotRejection]
 }

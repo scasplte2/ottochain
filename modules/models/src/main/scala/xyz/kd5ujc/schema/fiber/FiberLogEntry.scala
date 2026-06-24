@@ -155,9 +155,12 @@ object FiberLogEntry {
    */
   @derive(customizableEncoder, customizableDecoder)
   final case class RejectionReceipt(
-    fiberId:    UUID,
-    ordinal:    SnapshotOrdinal,
-    updateType: String,
-    reason:     String
+    fiberId:              UUID,
+    ordinal:              SnapshotOrdinal,
+    updateType:           String,
+    reason:               String,
+    targetSequenceNumber: Option[Long],
+    actualSequenceNumber: Option[Long],
+    updateHash:           String
   ) extends FiberLogEntry
 }

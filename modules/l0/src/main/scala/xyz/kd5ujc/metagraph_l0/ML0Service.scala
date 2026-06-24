@@ -1,7 +1,7 @@
 package xyz.kd5ujc.metagraph_l0
 
 import cats.Parallel
-import cats.data.{NonEmptyList, Validated}
+import cats.data.NonEmptyList
 import cats.effect.Async
 import cats.syntax.all._
 
@@ -10,16 +10,22 @@ import scala.collection.immutable.SortedMap
 import io.constellationnetwork.currency.dataApplication._
 import io.constellationnetwork.currency.dataApplication.dataApplication.DataApplicationValidationErrorOr
 import io.constellationnetwork.currency.schema.currency.CurrencyIncrementalSnapshot
-import io.constellationnetwork.metagraph_sdk.lifecycle.committed.{CatalogJournal, CommittedApp, CommittedReader}
+import io.constellationnetwork.metagraph_sdk.lifecycle.committed.{
+  CatalogJournal,
+  CommittedApp,
+  CommittedOnChain,
+  CommittedReader
+}
 import io.constellationnetwork.metagraph_sdk.lifecycle.{CheckpointService, CombinerService, ValidationService}
 import io.constellationnetwork.metagraph_sdk.std.Checkpoint
+import io.constellationnetwork.metagraph_sdk.std.JsonBinaryCodec.JsonBinaryDecodeOps
 import io.constellationnetwork.security.signature.Signed
 import io.constellationnetwork.security.{Hashed, SecurityProvider}
 
 import xyz.kd5ujc.metagraph_l0.webhooks.{SubscriberRegistry, WebhookDispatcher}
 import xyz.kd5ujc.schema.Updates.OttochainMessage
-import xyz.kd5ujc.schema.api.webhooks.NotificationStats
-import xyz.kd5ujc.schema.fiber.FiberStatus
+import xyz.kd5ujc.schema.api.webhooks.{NotificationStats, SnapshotRejection}
+import xyz.kd5ujc.schema.fiber.{FiberLogEntry, FiberStatus}
 import xyz.kd5ujc.schema.{CalculatedState, OnChain}
 import xyz.kd5ujc.shared_data.genesis.GenesisLoader
 import xyz.kd5ujc.shared_data.lifecycle.{Combiner, Validator}
@@ -133,17 +139,6 @@ object ML0Service {
         current: DataState[OnChain, CalculatedState],
         batch:   NonEmptyList[Signed[OttochainMessage]]
       )(implicit ctx: L0NodeContext[F]): F[DataApplicationValidationErrorOr[Unit]] =
-        for {
-          ordinal <- checkpointService.get.map(_.ordinal)
-          results <- batch.toList.traverse(su => inner.validateSignedUpdate(current, su).map(su -> _))
-          _ <- webhookDispatcher match {
-            case Some(dispatcher) =>
-              results.collect { case (su, Validated.Invalid(errors)) =>
-                Async[F].start(dispatcher.dispatchRejection(ordinal, su, errors)).void
-              }.sequence_
-            case None => Async[F].unit
-          }
-        } yield
         // PARTIAL BLOCK ACCEPTANCE — the framework fix the Validator.scala TOCTOU notes defer to (#154).
         // `combineAll` would make ONE invalid update void the ENTIRE data block (all-or-nothing),
         // dropping every VALID sibling batched with it; those fibers' runners then resubmit and
@@ -153,8 +148,9 @@ object ML0Service {
         // gracefully (CombineRejected -> RejectionReceipt, unmutated state) while applying the valid
         // ones; a genuine non-deterministic error still propagates and aborts. Returning Valid is
         // therefore consensus-safe (every node computes the same skip set) and keeps committed state
-        // correct. Per-update rejections are still dispatched above, so clients learn the exact reason.
-        ().validNec[DataApplicationValidationError]
+        // correct. Rejections are batched onto the post-finalization `snapshot.finalized` webhook,
+        // drained from the committed snapshot's RejectionReceipts in `onConsensus`.
+        Async[F].pure(().validNec[DataApplicationValidationError])
     }
 
   /**
@@ -177,13 +173,46 @@ object ML0Service {
       _ <- logger.info(s"Snapshot ordinal ${snapshot.ordinal.value}: $updatesProcessed updates")
       _ <- webhookDispatcher match {
         case Some(dispatcher) =>
-          val stats = NotificationStats(
-            updatesProcessed = updatesProcessed,
-            stateMachinesActive =
-              committed.state.stateMachines.count { case (_, fiber) => fiber.status == FiberStatus.Active },
-            scriptsActive = committed.state.scripts.count { case (_, script) => script.status == FiberStatus.Active }
-          )
-          Async[F].start(dispatcher.dispatch(snapshot, stats)).void
+          for {
+            // Drain the committed snapshot's RejectionReceipts. `CommittedApp.makeL0` registers the
+            // on-chain state as `CommittedOnChain[OnChain]` (the dev's `OnChain` + the consensus
+            // breadcrumb), so the signed snapshot's on-chain bytes decode to that wrapper — mirror the
+            // framework's own `contextBreadcrumb` decode and read `.inner`. A decode failure yields an
+            // empty list (logged, never crashing the hook) so a malformed/absent part still finalizes.
+            part <- Async[F]
+              .fromOption(
+                snapshot.signed.value.dataApplication,
+                new RuntimeException("snapshot has no data-application part")
+              )
+            onChain <- part.onChainState
+              .fromBinary[CommittedOnChain[OnChain]]
+              .flatMap(Async[F].fromEither)
+              .map(_.inner)
+              .handleErrorWith { err =>
+                logger.warn(err)("Failed to decode OnChain for rejection drain; using empty list") *>
+                Async[F].pure(OnChain.genesis)
+              }
+            rejections = onChain.latestLogs.toList.flatMap { case (_, entries) =>
+              entries.collect { case r: FiberLogEntry.RejectionReceipt =>
+                SnapshotRejection(
+                  updateType = r.updateType,
+                  fiberId = r.fiberId,
+                  targetSequenceNumber = r.targetSequenceNumber,
+                  actualSequenceNumber = r.actualSequenceNumber,
+                  reason = r.reason,
+                  updateHash = r.updateHash
+                )
+              }
+            }
+            stats = NotificationStats(
+              updatesProcessed = updatesProcessed,
+              stateMachinesActive =
+                committed.state.stateMachines.count { case (_, fiber) => fiber.status == FiberStatus.Active },
+              scriptsActive = committed.state.scripts.count { case (_, script) => script.status == FiberStatus.Active },
+              rejectedCount = rejections.size
+            )
+            _ <- Async[F].start(dispatcher.dispatch(snapshot, stats, rejections)).void
+          } yield ()
         case None => Async[F].unit
       }
     } yield ()).handleErrorWith(logger.error(_)("Error during onSnapshotConsensusResult"))

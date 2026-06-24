@@ -8,16 +8,20 @@ import { execSync } from 'child_process';
  * (`onConsensus` in ML0Service.scala). Crucially the chain commits the read state FIRST
  * (`checkpointService.set(...)`) and THEN dispatches the webhook — so when `snapshot.finalized`
  * arrives, the HTTP read routes already reflect that ordinal. This lets us re-check fiber state
- * exactly when it becomes current instead of blind-polling a lagging read, and it surfaces explicit
- * `transaction.rejected` events (fiberId + targetSequenceNumber + errors) so a denied/poisoned update
- * is known immediately rather than via a "not included" timeout.
+ * exactly when it becomes current instead of blind-polling a lagging read.
+ *
+ * Rejections are no longer a separate speculative `transaction.rejected` event. They are now drained
+ * post-finalization from the committed snapshot's RejectionReceipts and batched onto the
+ * `snapshot.finalized` push as a `rejections[]` array — so a denied/poisoned update is known the
+ * moment the snapshot that rejected it finalizes (still ahead of a "not included" timeout, but now
+ * deterministic: it reflects committed state, not a pre-combine guess).
  *
  * Webhook API (modules/l0 ML0Routes + WebhookDispatcher):
  *   POST   /data-application/v1/webhooks/subscribe      { callbackUrl, secret? }
  *   DELETE /data-application/v1/webhooks/subscribe/{id}
- *   push:  { event: "snapshot.finalized",   ordinal, hash, stats:{updatesProcessed,...} }
- *   push:  { event: "transaction.rejected",  ordinal, rejection:{ updateType, fiberId,
- *                                                                  targetSequenceNumber, errors[], updateHash } }
+ *   push:  { event: "snapshot.finalized", ordinal, hash, stats:{updatesProcessed,...,rejectedCount},
+ *           rejections:[{ updateType, fiberId, targetSequenceNumber, actualSequenceNumber,
+ *                         reason, updateHash }] }
  */
 
 export interface RejectionInfo {
@@ -25,8 +29,21 @@ export interface RejectionInfo {
   updateType: string;
   fiberId: string;
   targetSequenceNumber: number | null;
+  actualSequenceNumber: number | null;
   updateHash: string;
+  reason: string;
+  /** Back-compat shim for readers that expect structured errors: [{ code: updateType, message: reason }]. */
   errors: { code: string; message: string }[];
+}
+
+/** Wire shape of a single rejection batched onto the `snapshot.finalized` push. */
+interface RejectionPayload {
+  updateType: string;
+  fiberId: string;
+  targetSequenceNumber: number | null;
+  actualSequenceNumber: number | null;
+  reason: string;
+  updateHash: string;
 }
 
 /**
@@ -116,7 +133,7 @@ export class WebhookListener {
   /** Count of pushes received, for the one-time delivery-confirmation log. */
   private recvCount = 0;
 
-  private handle(msg: { event?: string; ordinal?: number; rejection?: RejectionInfo }): void {
+  private handle(msg: { event?: string; ordinal?: number; rejections?: RejectionPayload[] }): void {
     // Prove delivery: the first push that lands tells us the container→host callback actually works
     // (vs. a silent fallback to polling). Subsequent pushes are summarised, not spammed.
     this.recvCount++;
@@ -124,14 +141,29 @@ export class WebhookListener {
       console.log(`\x1b[36m[webhook]\x1b[0m first push received (${msg.event} ord=${msg.ordinal}) — delivery OK`);
     }
     if (msg.event === 'snapshot.finalized') {
-      if (typeof msg.ordinal === 'number' && msg.ordinal > this.latestOrdinal) {
-        this.latestOrdinal = msg.ordinal;
+      const ordinal = typeof msg.ordinal === 'number' ? msg.ordinal : this.latestOrdinal;
+      if (ordinal > this.latestOrdinal) {
+        this.latestOrdinal = ordinal;
+      }
+      // Rejections now ride the finalized snapshot (drained from its committed RejectionReceipts).
+      if (Array.isArray(msg.rejections)) {
+        for (const r of msg.rejections) {
+          this.rejections.push({
+            ordinal,
+            updateType: r.updateType,
+            fiberId: r.fiberId,
+            targetSequenceNumber: r.targetSequenceNumber ?? null,
+            actualSequenceNumber: r.actualSequenceNumber ?? null,
+            updateHash: r.updateHash,
+            reason: r.reason,
+            // Back-compat shim for `findRejection` consumers that read structured `errors`.
+            errors: [{ code: r.updateType, message: r.reason }],
+          });
+        }
       }
       const waiters = this.snapshotWaiters;
       this.snapshotWaiters = [];
       waiters.forEach((w) => w());
-    } else if (msg.event === 'transaction.rejected' && msg.rejection) {
-      this.rejections.push({ ...msg.rejection, ordinal: msg.ordinal ?? this.latestOrdinal });
     }
   }
 

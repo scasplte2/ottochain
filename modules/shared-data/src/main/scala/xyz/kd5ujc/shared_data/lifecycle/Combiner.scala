@@ -5,6 +5,7 @@ import cats.syntax.all._
 
 import io.constellationnetwork.currency.dataApplication.{DataState, L0NodeContext}
 import io.constellationnetwork.metagraph_sdk.lifecycle.CombinerService
+import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
 import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.Signed
 
@@ -87,19 +88,41 @@ object Combiner {
         // `previous` state. Any other failure (non-deterministic / infrastructure) propagates and aborts — by
         // design, so a transient local error never becomes divergent committed state across nodes.
         dispatched.recoverWith { case CombineRejected(reason) =>
-          Slf4jLogger
-            .getLogger[F]
-            .warn(
-              s"[combine-reject] ${update.value.getClass.getSimpleName} fiberId=${update.value.fiberId} reason=$reason"
-            ) >>
-          ctx.getCurrentOrdinal.map { ordinal =>
+          for {
+            _ <- Slf4jLogger
+              .getLogger[F]
+              .warn(
+                s"[combine-reject] ${update.value.getClass.getSimpleName} fiberId=${update.value.fiberId} reason=$reason"
+              )
+            ordinal    <- ctx.getCurrentOrdinal
+            updateHash <- update.value.computeDigest
+          } yield {
+            val fid = update.value.fiberId
+            val targetSeq: Option[Long] = update.value match {
+              case u: Updates.TransitionStateMachine => Some(u.targetSequenceNumber.value.value)
+              case u: Updates.ArchiveStateMachine    => Some(u.targetSequenceNumber.value.value)
+              case u: Updates.UpgradeFiber           => Some(u.targetSequenceNumber.value.value)
+              case u: Updates.UpgradeScript          => Some(u.targetSequenceNumber.value.value)
+              case u: Updates.InvokeScript           => Some(u.targetSequenceNumber.value.value)
+              case u: Updates.ApplyMorphism          => Some(u.targetSequenceNumber.value.value)
+              case u: Updates.AuthorizeCompose       => Some(u.targetSequenceNumber.value.value)
+              case _                                 => None
+            }
+            val actualSeq: Option[Long] =
+              previous.calculated.stateMachines
+                .get(fid)
+                .map(_.sequenceNumber.value.value)
+                .orElse(previous.calculated.scripts.get(fid).map(_.sequenceNumber.value.value))
             previous.appendLogs(
               List(
                 FiberLogEntry.RejectionReceipt(
-                  fiberId = update.value.fiberId,
+                  fiberId = fid,
                   ordinal = ordinal,
                   updateType = update.value.getClass.getSimpleName,
-                  reason = reason
+                  reason = reason,
+                  targetSequenceNumber = targetSeq,
+                  actualSequenceNumber = actualSeq,
+                  updateHash = updateHash.value
                 )
               )
             )
