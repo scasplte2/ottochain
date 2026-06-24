@@ -21,6 +21,7 @@ import type { StatesMap, Wallets, GeneratorFn, ValidatorFn } from './lib/types.t
 import { HttpClient } from '@ottochain/sdk';
 import { waitForOrdinalConfirmation, waitForOrdinalAdvance } from './lib/ordinalConfirmation.ts';
 import { WebhookListener } from './lib/webhookListener.ts';
+import { ChainKeepalive } from './lib/keepalive.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1036,6 +1037,21 @@ async function main() {
       : '\x1b[33m[webhook]\x1b[0m not available — falling back to ordinal polling\n'
   );
 
+  // Keep the chain fed so it never idles into the data-L1 deadlock (see lib/keepalive.ts): once every
+  // flow pauses to wait on a confirmation, the data pipeline stalls permanently and any in-flight
+  // update is stranded uncombined. A steady trickle of throwaway fiber-creates keeps the data-L1
+  // forming blocks for the whole run, so stuck flow updates ride along and get combined. rule110's
+  // definition is a known-good, dependency-free create (no schemaRef binding).
+  const keepalive = new ChainKeepalive(wallets, dl1Urls, {
+    definition: JSON.parse(
+      fs.readFileSync(path.join(examplesDir, 'rule110', 'definition.json'), 'utf8')
+    ),
+    initialData: JSON.parse(
+      fs.readFileSync(path.join(examplesDir, 'rule110', 'initial-data.json'), 'utf8')
+    ),
+  });
+  keepalive.start();
+
   const startTime = Date.now();
   let results: FlowResult[];
 
@@ -1153,6 +1169,8 @@ async function main() {
       }
     }
   }
+
+  keepalive.stop();
 
   const totalDurationMs = Date.now() - startTime;
 

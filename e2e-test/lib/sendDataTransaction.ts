@@ -55,7 +55,8 @@ type NodeOutcome =
 export default async function sendSignedUpdate(
   message: unknown,
   wallets: Record<string, KeyPair>,
-  dl1Urls: string[]
+  dl1Urls: string[],
+  opts: { quiet?: boolean } = {}
 ): Promise<{ hash: string }[]> {
   const privateKeys = Object.values(wallets).map((w) => w.privateKey);
 
@@ -99,7 +100,10 @@ export default async function sendSignedUpdate(
   const hashes = new Set(ok.map((o) => o.hash));
   const consensus = ok.length === dl1Urls.length && hashes.size === 1;
 
-  if (consensus) {
+  if (opts.quiet) {
+    // Keepalive / background traffic: suppress the per-send line so ~hundreds of throwaway
+    // creates don't bury the flow output. The outcome is still returned to the caller.
+  } else if (consensus) {
     console.log(
       `${tag} ${what} → \x1b[32m${ok.length}/${dl1Urls.length}\x1b[0m ✓ ${[...hashes][0].slice(0, 8)}`
     );
