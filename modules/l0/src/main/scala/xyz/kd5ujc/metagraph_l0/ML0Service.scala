@@ -143,7 +143,18 @@ object ML0Service {
               }.sequence_
             case None => Async[F].unit
           }
-        } yield results.map(_._2).combineAll
+        } yield
+        // PARTIAL BLOCK ACCEPTANCE — the framework fix the Validator.scala TOCTOU notes defer to (#154).
+        // `combineAll` would make ONE invalid update void the ENTIRE data block (all-or-nothing),
+        // dropping every VALID sibling batched with it; those fibers' runners then resubmit and
+        // re-poison — the parallel-flow cascade. The per-update failures that hit here under load are
+        // stateful/TOCTOU (stale-seq resubmit, already-applied create, now-redundant transition), NOT
+        // structural — DL1 already gated structure, and the combiner re-checks each rule and skips
+        // gracefully (CombineRejected -> RejectionReceipt, unmutated state) while applying the valid
+        // ones; a genuine non-deterministic error still propagates and aborts. Returning Valid is
+        // therefore consensus-safe (every node computes the same skip set) and keeps committed state
+        // correct. Per-update rejections are still dispatched above, so clients learn the exact reason.
+        ().validNec[DataApplicationValidationError]
     }
 
   /**
