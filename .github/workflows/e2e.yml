@@ -208,8 +208,12 @@ jobs:
           # parallel load. Inject via the compose-runner's --env passthrough; the
           # dag-l1.conf ${?DATA_PEERS_COUNT} HOCON override reads it.
           printf 'DATA_PEERS_COUNT=2\n' > "${RUNNER_TEMP}/dl1-extra.env"
+          # --cl1 (not --data): run the FULL metagraph topology (ML0 + CL1 + DL1) so a background
+          # currency-tx drip can push transactions into CL1 and keep ML0 snapshot consensus on the
+          # fast EventTrigger (~5s) instead of the idle TimeTrigger (~40s). The data-application (DL1)
+          # is unaffected — DATA_ONLY_METAGRAPH only zeroed the CL1 node count.
           just up --hypergraph-release="v${{ steps.versions.outputs.tessellation }}" \
-            --skip-assembly --metagraph="${GITHUB_WORKSPACE}" --dl1 --data \
+            --skip-assembly --metagraph="${GITHUB_WORKSPACE}" --dl1 --cl1 \
             --env="${RUNNER_TEMP}/dl1-extra.env"
 
       - name: Wait for cluster health

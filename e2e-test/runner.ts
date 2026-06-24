@@ -21,6 +21,7 @@ import type { StatesMap, Wallets, GeneratorFn, ValidatorFn } from './lib/types.t
 import { HttpClient } from '@ottochain/sdk';
 import { waitForOrdinalConfirmation, waitForOrdinalAdvance } from './lib/ordinalConfirmation.ts';
 import { WebhookListener } from './lib/webhookListener.ts';
+import { CurrencyTxPressure } from './lib/txSender.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -965,6 +966,11 @@ async function main() {
       : '\x1b[33m[webhook]\x1b[0m not available — falling back to ordinal polling\n'
   );
 
+  // Background currency-tx pressure: drip token txs into CL1 so ML0 snapshot consensus fires on
+  // EventTrigger (~5s) instead of the idle TimeTrigger (~40s), making every confirmation faster.
+  const txPressure = new CurrencyTxPressure();
+  await txPressure.start(process.env.E2E_CL1_URL || 'http://127.0.0.1:9300');
+
   const startTime = Date.now();
   let results: FlowResult[];
 
@@ -1106,6 +1112,7 @@ async function main() {
   }
 
   console.log(`\nExit code: ${failed > 0 ? 1 : 0}`);
+  await txPressure.stop();
   await webhook.stop();
   process.exit(failed > 0 ? 1 : 0);
 }
