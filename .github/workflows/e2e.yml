@@ -26,11 +26,26 @@ jobs:
       matrix:
         lane:
           - name: core
-            filter: '--exclude sigma-mixer,rule110,staked-oracle-pool'
+            filter: '--exclude sigma-mixer,rule110,staked-oracle-pool,tictactoe'
             concurrency: ''
             ordinalThreshold: ''
             maxResubmits: ''
             timeout: 30
+          # tictactoe runs as its OWN parallel lane (own cluster). It is the read-lag canary: its
+          # flows are the longest (~9 sequential moves each), so under the shared core lane's full
+          # concurrency (~27 fibers) the GL0-FINALIZED confirmation read trails the live combine far
+          # enough that a step's 20-ordinal budget exhausts AFTER the move actually committed
+          # (partial-block-acceptance means the move applies — the combine sees the fiber advance —
+          # the runner's read just can't keep up). Isolated on its own near-empty cluster, GL0
+          # finalization keeps pace and the reads confirm. (Robust complement, deferred: treat a
+          # SequenceNumberMismatch with actual>target as success — the non-lagging "already advanced"
+          # signal — which makes confirmation contention-independent for every lane.)
+          - name: tictactoe
+            filter: '--only tictactoe'
+            concurrency: ''
+            ordinalThreshold: ''
+            maxResubmits: ''
+            timeout: 20
           # Heavy examples each get their OWN job/cluster, run in PARALLEL. Two facts forced this:
           # (1) concurrency>1 chokes DL1 data-block formation when gas-heavy flows flood one mempool
           #     (valid updates pile up, ML0 snapshots go out empty — the candidates=Set() stall), and
