@@ -1,6 +1,6 @@
 package xyz.kd5ujc.shared_data.lifecycle
 
-import cats.effect.{Async, Ref}
+import cats.effect.Async
 import cats.syntax.all._
 
 import io.constellationnetwork.currency.dataApplication.{DataState, L0NodeContext}
@@ -52,7 +52,6 @@ object Combiner {
    * @return A CombinerService that combines OttochainMessage updates into state
    */
   def make[F[_]: Async: SecurityProvider](
-    rejectionSink:   Ref[F, Map[Long, List[FiberLogEntry.RejectionReceipt]]],
     executionLimits: ExecutionLimits = ExecutionLimits()
   ): CombinerService[F, OttochainMessage, OnChain, CalculatedState] =
     new CombinerService[F, OttochainMessage, OnChain, CalculatedState] {
@@ -89,49 +88,45 @@ object Combiner {
         // `previous` state. Any other failure (non-deterministic / infrastructure) propagates and aborts — by
         // design, so a transient local error never becomes divergent committed state across nodes.
         dispatched.recoverWith { case CombineRejected(reason) =>
-          val fid = update.value.fiberId
-          val targetSeq: Option[Long] = update.value match {
-            case u: Updates.TransitionStateMachine => Some(u.targetSequenceNumber.value.value)
-            case u: Updates.ArchiveStateMachine    => Some(u.targetSequenceNumber.value.value)
-            case u: Updates.UpgradeFiber           => Some(u.targetSequenceNumber.value.value)
-            case u: Updates.UpgradeScript          => Some(u.targetSequenceNumber.value.value)
-            case u: Updates.InvokeScript           => Some(u.targetSequenceNumber.value.value)
-            case u: Updates.ApplyMorphism          => Some(u.targetSequenceNumber.value.value)
-            case u: Updates.AuthorizeCompose       => Some(u.targetSequenceNumber.value.value)
-            case _                                 => None
-          }
-          val actualSeq: Option[Long] =
-            previous.calculated.stateMachines
-              .get(fid)
-              .map(_.sequenceNumber.value.value)
-              .orElse(previous.calculated.scripts.get(fid).map(_.sequenceNumber.value.value))
           for {
             _ <- Slf4jLogger
               .getLogger[F]
-              .warn(s"[combine-reject] ${update.value.getClass.getSimpleName} fiberId=$fid reason=$reason")
+              .warn(
+                s"[combine-reject] ${update.value.getClass.getSimpleName} fiberId=${update.value.fiberId} reason=$reason"
+              )
             ordinal    <- ctx.getCurrentOrdinal
             updateHash <- update.value.computeDigest
-            receipt = FiberLogEntry.RejectionReceipt(
-              fiberId = fid,
-              ordinal = ordinal,
-              updateType = update.value.getClass.getSimpleName,
-              reason = reason,
-              targetSequenceNumber = targetSeq,
-              actualSequenceNumber = actualSeq,
-              updateHash = updateHash.value
+          } yield {
+            val fid = update.value.fiberId
+            val targetSeq: Option[Long] = update.value match {
+              case u: Updates.TransitionStateMachine => Some(u.targetSequenceNumber.value.value)
+              case u: Updates.ArchiveStateMachine    => Some(u.targetSequenceNumber.value.value)
+              case u: Updates.UpgradeFiber           => Some(u.targetSequenceNumber.value.value)
+              case u: Updates.UpgradeScript          => Some(u.targetSequenceNumber.value.value)
+              case u: Updates.InvokeScript           => Some(u.targetSequenceNumber.value.value)
+              case u: Updates.ApplyMorphism          => Some(u.targetSequenceNumber.value.value)
+              case u: Updates.AuthorizeCompose       => Some(u.targetSequenceNumber.value.value)
+              case _                                 => None
+            }
+            val actualSeq: Option[Long] =
+              previous.calculated.stateMachines
+                .get(fid)
+                .map(_.sequenceNumber.value.value)
+                .orElse(previous.calculated.scripts.get(fid).map(_.sequenceNumber.value.value))
+            previous.appendLogs(
+              List(
+                FiberLogEntry.RejectionReceipt(
+                  fiberId = fid,
+                  ordinal = ordinal,
+                  updateType = update.value.getClass.getSimpleName,
+                  reason = reason,
+                  targetSequenceNumber = targetSeq,
+                  actualSequenceNumber = actualSeq,
+                  updateHash = updateHash.value
+                )
+              )
             )
-            // RELIABLE delivery channel for the post-finalization batched webhook. Draining the
-            // snapshot's serialized `latestLogs` in onConsensus is unreliable: pending updates are
-            // re-combined every snapshot until GL0-finalizes (latestLogs is cleared + repopulated each
-            // combine), so the FINALIZED snapshot the hook reads usually shows an empty/partial copy
-            // (measured: 64 combine-rejects, only ~8 surfaced). Capture the receipt HERE, at combine
-            // time, keyed by ordinal, for onConsensus to drain. This does NOT change the combine's
-            // returned DataState, so consensus is unaffected; the on-chain RejectionReceipt below is
-            // still appended for audit.
-            _ <- rejectionSink.update(
-              _.updatedWith(ordinal.value.value)(es => Some(es.getOrElse(List.empty) :+ receipt))
-            )
-          } yield previous.appendLogs(List(receipt))
+          }
         }
       }
     }

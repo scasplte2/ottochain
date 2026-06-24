@@ -61,14 +61,14 @@ object ML0Service {
     checkpointService  <- CheckpointService.make[F, CalculatedState](genesisState.calculated)
     subscriberRegistry <- SubscriberRegistry.make[F]
     rejectionSink      <- Ref.of[F, Map[Long, List[FiberLogEntry.RejectionReceipt]]](Map.empty)
-    combiner = Combiner.make[F](rejectionSink)
+    combiner = Combiner.make[F]()
     validator <- Validator.make[F]
 
     webhookDispatcher = httpClient.map(client => WebhookDispatcher.make[F](client, subscriberRegistry, metagraphId))
 
     service <- CommittedApp.makeL0[F, OttochainMessage, OnChain, CalculatedState](
       genesisState,
-      orderedCombiner(combiner),
+      orderedCombiner(combiner, rejectionSink),
       rejectionNotifyingValidator(validator, checkpointService, webhookDispatcher),
       journal,
       extraRoutes = Some { (reader: CommittedReader[F, CalculatedState], context: L0NodeContext[F]) =>
@@ -87,7 +87,8 @@ object ML0Service {
    * registry/fiber combiner. No Hasher in the combine path now that the ordering is total.
    */
   private def orderedCombiner[F[+_]: Async](
-    inner: CombinerService[F, OttochainMessage, OnChain, CalculatedState]
+    inner:         CombinerService[F, OttochainMessage, OnChain, CalculatedState],
+    rejectionSink: Ref[F, Map[Long, List[FiberLogEntry.RejectionReceipt]]]
   ): CombinerService[F, OttochainMessage, OnChain, CalculatedState] =
     new CombinerService[F, OttochainMessage, OnChain, CalculatedState] {
 
@@ -95,7 +96,21 @@ object ML0Service {
         previous: DataState[OnChain, CalculatedState],
         update:   Signed[OttochainMessage]
       )(implicit ctx: L0NodeContext[F]): F[DataState[OnChain, CalculatedState]] =
-        inner.insert(previous, update)
+        inner.insert(previous, update).flatTap { result =>
+          // The inner combiner appends a RejectionReceipt to latestLogs for every CombineRejected update.
+          // Capture each NEWLY-appended reject into the reliable notification sink, keyed by ordinal, for
+          // onConsensus to drain — the serialized snapshot's latestLogs is re-combined away and unreliable
+          // to read post-finalization. `flatTap` leaves `result` untouched, so consensus is unaffected.
+          result.onChain.latestLogs.toList
+            .flatMap { case (fid, after) =>
+              after.drop(previous.onChain.latestLogs.getOrElse(fid, List.empty).size).collect {
+                case r: FiberLogEntry.RejectionReceipt => r
+              }
+            }
+            .traverse_ { r =>
+              rejectionSink.update(_.updatedWith(r.ordinal.value.value)(es => Some(es.getOrElse(List.empty) :+ r)))
+            }
+        }
 
       override def foldLeft(
         previous: DataState[OnChain, CalculatedState],
