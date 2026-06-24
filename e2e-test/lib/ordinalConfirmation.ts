@@ -48,8 +48,16 @@ export interface OrdinalConfirmationOptions {
    * the on-chain reason instead of timing out as "not included".
    */
   waitNextSnapshot?: (timeoutMs: number) => Promise<void>;
-  /** Returns the on-chain rejection for this update if one has arrived, else undefined. */
-  checkRejection?: () => { ordinal: number; errors: { code: string; message: string }[] } | undefined;
+  /**
+   * Returns the on-chain rejection for this update if one has arrived, else undefined. `alreadyApplied`
+   * is true when the rejection is REDUNDANT — the chain rejected our update only because the effect
+   * already committed (a create whose fiber now exists, or a transition whose fiber advanced past our
+   * target). That is a non-lagging proof of success, used to confirm without waiting on the trailing
+   * GL0-finalized read.
+   */
+  checkRejection?: () =>
+    | { ordinal: number; alreadyApplied: boolean; errors: { code: string; message: string }[] }
+    | undefined;
 }
 
 interface OrdinalSnapshot {
@@ -197,6 +205,14 @@ export async function waitForOrdinalConfirmation(
     // "not included". This is the deterministic signal the blind poll never had.
     const rejection = checkRejection?.();
     if (rejection) {
+      if (rejection.alreadyApplied) {
+        // Redundant rejection = deterministic proof the step committed (the chain advanced past our
+        // target). Confirm via this non-lagging signal instead of waiting on the GL0-finalized read,
+        // which trails the live combine under load — this is what makes confirmation
+        // contention-independent (the read-lag failures that needed lane isolation).
+        w(' ✓ (already applied)\n');
+        return;
+      }
       w(' ✗ (rejected)\n');
       throw new Error(
         `${TAG} ${label} was REJECTED at ML0 (ordinal ${rejection.ordinal}): ` +

@@ -876,7 +876,16 @@ async function runFlow(
                 targetSeq: isCreateStep ? null : preSendSeqNum,
                 sinceOrdinal: sentOrdinal,
               });
-              return r ? { ordinal: r.ordinal, errors: r.errors } : undefined;
+              if (!r) return undefined;
+              // Redundant-rejection = success. The chain only rejected our update because the effect
+              // already committed: for a create, the fiber now exists (actualSeq present); for a
+              // transition, the fiber advanced past our target (actual > preSendSeqNum). This is the
+              // non-lagging confirmation that beats the GL0 read lag under contention. A genuine
+              // failure (or a still-missing predecessor) falls through to the existing throw.
+              const alreadyApplied = isCreateStep
+                ? r.actualSequenceNumber != null
+                : r.actualSequenceNumber != null && r.actualSequenceNumber > preSendSeqNum;
+              return { ordinal: r.ordinal, alreadyApplied, errors: r.errors };
             }
           : undefined,
       });
