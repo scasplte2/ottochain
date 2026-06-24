@@ -208,12 +208,19 @@ jobs:
           # parallel load. Inject via the compose-runner's --env passthrough; the
           # dag-l1.conf ${?DATA_PEERS_COUNT} HOCON override reads it.
           printf 'DATA_PEERS_COUNT=2\n' > "${RUNNER_TEMP}/dl1-extra.env"
-          # --cl1 (not --data): run the FULL metagraph topology (ML0 + CL1 + DL1) so a background
-          # currency-tx drip can push transactions into CL1 and keep ML0 snapshot consensus on the
-          # fast EventTrigger (~5s) instead of the idle TimeTrigger (~40s). The data-application (DL1)
-          # is unaffected — DATA_ONLY_METAGRAPH only zeroed the CL1 node count.
+          # Tighten the DL1 idle snapshot cadence. The data-application L1 fires a TimeTrigger
+          # block every time-trigger-interval when below the event-trigger threshold, and each
+          # such block drives one ML0 snapshot. Default 43s leaves long idle gaps (measured: ML0
+          # ~6.8s avg but with ~45s TimeTrigger stalls) during which a confirmation waits out the
+          # gap. Drop to 8s so idle windows produce snapshots ~5x more often — confirmations across
+          # EVERY lane land sooner. Read via dag-l1.conf ${?DATA_L1_TIME_TRIGGER_INTERVAL}.
+          printf 'DATA_L1_TIME_TRIGGER_INTERVAL=8 seconds\n' >> "${RUNNER_TEMP}/dl1-extra.env"
+          # --data (not --cl1): data-only topology (ML0 + DL1, NUM_CL1_NODES=0). The currency L1
+          # is not needed — ML0 snapshot consensus is already EventTrigger-driven by DL1 data
+          # blocks, so a currency-tx drip would be redundant (and Tessellation's tx mempool does
+          # not pipeline unaccepted txs, which deadlocked the drip on Conflict{ordinal}).
           just up --hypergraph-release="v${{ steps.versions.outputs.tessellation }}" \
-            --skip-assembly --metagraph="${GITHUB_WORKSPACE}" --dl1 --cl1 \
+            --skip-assembly --metagraph="${GITHUB_WORKSPACE}" --dl1 --data \
             --env="${RUNNER_TEMP}/dl1-extra.env"
 
       - name: Wait for cluster health
