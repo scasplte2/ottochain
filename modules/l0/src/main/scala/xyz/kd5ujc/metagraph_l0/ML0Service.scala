@@ -60,7 +60,7 @@ object ML0Service {
     genesisState                                    <- GenesisLoader.load[F](genesisPath)
     checkpointService  <- CheckpointService.make[F, CalculatedState](genesisState.calculated)
     subscriberRegistry <- SubscriberRegistry.make[F]
-    rejectionSink      <- Ref.of[F, Map[Long, List[FiberLogEntry.RejectionReceipt]]](Map.empty)
+    rejectionSink      <- Ref.of[F, List[FiberLogEntry.RejectionReceipt]](List.empty)
     combiner = Combiner.make[F]()
     validator <- Validator.make[F]
 
@@ -88,7 +88,7 @@ object ML0Service {
    */
   private def orderedCombiner[F[+_]: Async](
     inner:         CombinerService[F, OttochainMessage, OnChain, CalculatedState],
-    rejectionSink: Ref[F, Map[Long, List[FiberLogEntry.RejectionReceipt]]]
+    rejectionSink: Ref[F, List[FiberLogEntry.RejectionReceipt]]
   ): CombinerService[F, OttochainMessage, OnChain, CalculatedState] =
     new CombinerService[F, OttochainMessage, OnChain, CalculatedState] {
 
@@ -98,18 +98,19 @@ object ML0Service {
       )(implicit ctx: L0NodeContext[F]): F[DataState[OnChain, CalculatedState]] =
         inner.insert(previous, update).flatTap { result =>
           // The inner combiner appends a RejectionReceipt to latestLogs for every CombineRejected update.
-          // Capture each NEWLY-appended reject into the reliable notification sink, keyed by ordinal, for
-          // onConsensus to drain — the serialized snapshot's latestLogs is re-combined away and unreliable
-          // to read post-finalization. `flatTap` leaves `result` untouched, so consensus is unaffected.
-          result.onChain.latestLogs.toList
-            .flatMap { case (fid, after) =>
-              after.drop(previous.onChain.latestLogs.getOrElse(fid, List.empty).size).collect {
-                case r: FiberLogEntry.RejectionReceipt => r
-              }
+          // Capture each NEWLY-appended reject into the reliable notification sink for onConsensus to drain
+          // — the serialized snapshot's latestLogs is re-combined away and unreliable to read
+          // post-finalization. A FLAT list (drained whole each snapshot), NOT keyed by ordinal: during a
+          // snapshot's combine `ctx.getCurrentOrdinal` is the LAST-finalized ordinal whose hook already
+          // ran, so an ordinal key would orphan most pushes. Receipts carry their own ordinal for the
+          // client's sinceOrdinal filter; re-combine duplicates are deduped client-side. `flatTap` leaves
+          // `result` untouched, so consensus is unaffected.
+          val newRejects = result.onChain.latestLogs.toList.flatMap { case (fid, after) =>
+            after.drop(previous.onChain.latestLogs.getOrElse(fid, List.empty).size).collect {
+              case r: FiberLogEntry.RejectionReceipt => r
             }
-            .traverse_ { r =>
-              rejectionSink.update(_.updatedWith(r.ordinal.value.value)(es => Some(es.getOrElse(List.empty) :+ r)))
-            }
+          }
+          rejectionSink.update(_ ++ newRejects).whenA(newRejects.nonEmpty)
         }
 
       override def foldLeft(
@@ -173,7 +174,7 @@ object ML0Service {
     snapshot:          Hashed[CurrencyIncrementalSnapshot],
     checkpointService: CheckpointService[F, CalculatedState],
     webhookDispatcher: Option[WebhookDispatcher[F]],
-    rejectionSink:     Ref[F, Map[Long, List[FiberLogEntry.RejectionReceipt]]]
+    rejectionSink:     Ref[F, List[FiberLogEntry.RejectionReceipt]]
   )(implicit logger: SelfAwareStructuredLogger[F]): F[Unit] =
     (for {
       committed <- reader.committed
@@ -190,14 +191,9 @@ object ML0Service {
             // snapshot until GL0-finalizes (latestLogs cleared + repopulated each combine), so the FINALIZED
             // copy this hook reads usually shows an empty/partial set (measured: 64 combine-rejects, only ~8
             // surfaced). The combiner instead records every reject here at combine time, keyed by ordinal.
-            drained <- rejectionSink.modify { m =>
-              val snapOrd = snapshot.ordinal.value.value
-              val rejects = m.getOrElse(snapOrd, List.empty)
-              // Drain this ordinal; bound the map by dropping anything older than a small window (an ordinal
-              // whose hook never fires on idle/catch-up) while keeping not-yet-finalized future ordinals.
-              val pruned = (m - snapOrd).filter { case (k, _) => k >= snapOrd - 64L }
-              (pruned, rejects)
-            }
+            // Drain the whole sink (atomic getAndSet): everything the combine recorded since the last
+            // snapshot's hook. Receipts carry their own ordinal; the client filters by sinceOrdinal.
+            drained <- rejectionSink.getAndSet(List.empty)
             rejections = drained.map { r =>
               SnapshotRejection(
                 updateType = r.updateType,
