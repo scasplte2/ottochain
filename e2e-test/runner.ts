@@ -775,11 +775,17 @@ async function runFlow(
           return (record.sequenceNumber ?? -1) > preSendSeqNum;
         },
         resubmit: async () => {
-          // Skip the resubmit if the original already landed — re-sending it would put a DUPLICATE
-          // into a DL1 block (CidAlreadyExists for creates, SequenceNumberMismatch for transitions)
-          // and poison the all-or-nothing block. By now the lagging read has had a full threshold
-          // window to catch up, so this check reliably distinguishes "applied but slow to surface"
-          // (skip — the loop will confirm it) from "genuinely never landed" (re-attempt).
+          // Re-sending an ALREADY-APPLIED update is the dominant cause of the parallel-flow failure:
+          // the duplicate lands in a shared all-or-nothing data block as CidAlreadyExists (create),
+          // NoTransitionForEvent (the fiber's state already advanced past this event), or
+          // SequenceNumberMismatch (its targetSeq is now behind the fiber's commit). ANY such invalid
+          // update fails the ENTIRE block — dropping every other fiber bundled in it, whose runners
+          // then resubmit and re-poison: a cascade that sinks otherwise-valid flows. So only re-send
+          // when the update is genuinely still in flight, never when it has already taken effect.
+          //
+          // Two guards, because the committed read trails GL0 finalization (ML0Service sets the read
+          // route from reader.committed, so an applied update stays invisible for a few ordinals):
+          //   1. committed read — catches applications old enough to have finalized.
           try {
             const rec = (await new HttpClient(
               `${ml0Urls[0]}/data-application/v1/${entityPath}`
@@ -789,7 +795,19 @@ async function runFlow(
               : (rec?.sequenceNumber ?? -1) > preSendSeqNum;
             if (landed) return;
           } catch {
-            // entity not found / read error → fall through and resubmit
+            // entity not found / read error → fall through to the rejection guard
+          }
+          //   2. rejection webhook (NON-lagging) — ML0 dispatches transaction.rejected the instant our
+          //      update (or a prior resubmit of it) is rejected. For a valid flow that happens ONLY
+          //      because the fiber already advanced past our target (the already-applied case). A
+          //      valid update merely dropped by an OTHER fiber's poison is itself valid → no rejection
+          //      → it correctly still re-sends. This is what catches the read-lag window the committed
+          //      poll above misses.
+          if (
+            webhook?.active &&
+            webhook.findRejection({ fiberId: activeCid, sinceOrdinal: sentOrdinal })
+          ) {
+            return;
           }
           const freshMessage = await regenerateMessage();
           await sendToNodes(freshMessage);
