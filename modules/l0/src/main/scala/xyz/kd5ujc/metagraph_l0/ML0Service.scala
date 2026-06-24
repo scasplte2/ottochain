@@ -96,31 +96,30 @@ object ML0Service {
         previous: DataState[OnChain, CalculatedState],
         update:   Signed[OttochainMessage]
       )(implicit ctx: L0NodeContext[F]): F[DataState[OnChain, CalculatedState]] =
-        inner.insert(previous, update).flatTap { result =>
-          // The inner combiner appends a RejectionReceipt to latestLogs for every CombineRejected update.
-          // Capture each NEWLY-appended reject into the reliable notification sink for onConsensus to drain
-          // — the serialized snapshot's latestLogs is re-combined away and unreliable to read
-          // post-finalization. A FLAT list (drained whole each snapshot), NOT keyed by ordinal: during a
-          // snapshot's combine `ctx.getCurrentOrdinal` is the LAST-finalized ordinal whose hook already
-          // ran, so an ordinal key would orphan most pushes. Receipts carry their own ordinal for the
-          // client's sinceOrdinal filter; re-combine duplicates are deduped client-side. `flatTap` leaves
-          // `result` untouched, so consensus is unaffected.
-          val newRejects = result.onChain.latestLogs.toList.flatMap { case (fid, after) =>
-            after.drop(previous.onChain.latestLogs.getOrElse(fid, List.empty).size).collect {
-              case r: FiberLogEntry.RejectionReceipt => r
-            }
-          }
-          rejectionSink.update(_ ++ newRejects).whenA(newRejects.nonEmpty)
-        }
+        inner.insert(previous, update)
 
       override def foldLeft(
         previous: DataState[OnChain, CalculatedState],
         batch:    List[Signed[OttochainMessage]]
       )(implicit ctx: L0NodeContext[F]): F[DataState[OnChain, CalculatedState]] =
-        inner.foldLeft(
-          previous.focus(_.onChain.latestLogs).replace(SortedMap.empty),
-          batch.sorted(OttochainMessage.signedOrdering)
-        )
+        inner
+          .foldLeft(
+            previous.focus(_.onChain.latestLogs).replace(SortedMap.empty),
+            batch.sorted(OttochainMessage.signedOrdering)
+          )
+          .flatTap { result =>
+            // The framework invokes foldLeft (NOT insert) for the batch, so the capture MUST live here.
+            // latestLogs was just cleared above, so result.latestLogs holds ONLY this batch's receipts —
+            // collect its RejectionReceipts into the reliable notification sink for onConsensus to drain
+            // (the serialized snapshot's latestLogs is re-combined away and unreliable to read
+            // post-finalization). A FLAT list, drained whole each snapshot — receipts carry their own
+            // ordinal for the client's sinceOrdinal filter; re-combine duplicates are deduped
+            // client-side. flatTap leaves `result` untouched, so consensus is unaffected.
+            val rejects = result.onChain.latestLogs.values.flatten.collect { case r: FiberLogEntry.RejectionReceipt =>
+              r
+            }.toList
+            rejectionSink.update(_ ++ rejects).whenA(rejects.nonEmpty)
+          }
     }
 
   /**
