@@ -324,8 +324,12 @@ jobs:
 
           # Save full logs as files for artifact upload
           mkdir -p /tmp/ci-logs
-          for container in gl0-0 ml0-0 dl1-0 dl1-1 dl1-2; do
-            docker logs "$container" 2>&1 > /tmp/ci-logs/${container}.log || true
+          # Discover the actual container names (gl0-0/ml0-0/cl1-0/dl1-0… — the exact CL1 suffix is
+          # unknown) instead of hardcoding, so we always capture every metagraph-layer node's log.
+          for container in $(docker ps --format '{{.Names}}'); do
+            case "$container" in
+              gl0*|ml0*|cl1*|dl1*) docker logs "$container" 2>&1 > "/tmp/ci-logs/${container}.log" || true ;;
+            esac
           done
 
           # Inline ML0 rejection scan so the stuck-confirm reason shows up directly in the run
