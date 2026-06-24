@@ -243,6 +243,7 @@ class RegistryCombiner[F[_]: Async: SecurityProvider](
       }
       entry = RegistryEntry(ra.name, signers, RegistryTarget.InstanceAlias(ra.targetFiberId))
       result <- current.withAlias[F](ra.name, entry, ra.targetFiberId)
+      _      <- Slf4jLogger.getLogger[F].info(s"[registry-alias] applied ${ra.name.render} -> ${ra.targetFiberId}")
     } yield result
   }
 

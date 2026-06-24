@@ -477,8 +477,52 @@ async function runFlow(
         }
 
         const regInitial = await getInitialStates(ml0Env);
-        await sendSignedUpdate(regMessage, wallets, dl1Urls);
-        await waitForMl0Confirmation(ml0Urls[0], regPath, landed, maxRetries, retryDelayMs, `${step.action} ${regName}`, log);
+        // Registry ops are one-shot and confirmed by a poll-only read (no sequence number, no
+        // resubmit). A VALID registry update dropped by an all-or-nothing data-block poison (a peer
+        // fiber's invalid update voids the whole block) therefore never re-lands and the poll just
+        // times out — which is what sinks registerAlias at the high-parallel-load tail of a flow
+        // while the same path succeeds for the early publishVersion steps. Re-send on timeout to
+        // recover, but skip the re-send once it has landed: re-publishing an applied version is
+        // itself invalid (append-only / CidAlreadyExists) and would poison the next block.
+        const regResubmits = Number(process.env.E2E_MAX_RESUBMITS) || 3;
+        const regBudget = Math.max(4, Math.ceil(maxRetries / (regResubmits + 1)));
+        let regConfirmed = false;
+        for (let attempt = 0; attempt <= regResubmits && !regConfirmed; attempt++) {
+          if (attempt > 0) {
+            try {
+              const cur = await new HttpClient(
+                `${ml0Urls[0]}/data-application/v1/${regPath}`
+              ).get<unknown>('');
+              if (landed(cur)) {
+                regConfirmed = true;
+                break;
+              }
+            } catch {
+              // not in the registry yet → fall through and re-send
+            }
+          }
+          await sendSignedUpdate(regMessage, wallets, dl1Urls);
+          try {
+            await waitForMl0Confirmation(
+              ml0Urls[0],
+              regPath,
+              landed,
+              regBudget,
+              retryDelayMs,
+              `${step.action} ${regName}`,
+              log
+            );
+            regConfirmed = true;
+          } catch {
+            // timed out this round → the loop re-sends (unless it has since landed)
+          }
+        }
+        if (!regConfirmed) {
+          throw new Error(
+            `ML0 confirmation failed for ${step.action} ${regName}: not in registry after ` +
+              `${regResubmits + 1} attempts`
+          );
+        }
         await validateWithRetries(regLib.validator, session.cid, regInitial, regOptions, wallets, maxRetries, retryDelayMs, ml0Urls);
         l(' \x1b[32mOK\x1b[0m');
         continue;
