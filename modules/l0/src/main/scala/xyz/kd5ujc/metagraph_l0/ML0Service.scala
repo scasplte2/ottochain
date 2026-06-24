@@ -204,6 +204,16 @@ object ML0Service {
                 )
               }
             }
+            _ <- logger.info(
+              s"[rej-drain] ord=${snapshot.ordinal.value} logFibers=${onChain.latestLogs.size} " +
+              s"entries=${onChain.latestLogs.values.map(_.size).sum} " +
+              s"types=${onChain.latestLogs.values.flatten
+                  .map(_.getClass.getSimpleName)
+                  .groupBy(identity)
+                  .view
+                  .mapValues(_.size)
+                  .toMap} rejections=${rejections.size}"
+            )
             stats = NotificationStats(
               updatesProcessed = updatesProcessed,
               stateMachinesActive =
