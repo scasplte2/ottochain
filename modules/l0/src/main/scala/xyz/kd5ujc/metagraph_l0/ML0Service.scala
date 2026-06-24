@@ -2,7 +2,7 @@ package xyz.kd5ujc.metagraph_l0
 
 import cats.Parallel
 import cats.data.NonEmptyList
-import cats.effect.Async
+import cats.effect.{Async, Ref}
 import cats.syntax.all._
 
 import scala.collection.immutable.SortedMap
@@ -10,15 +10,9 @@ import scala.collection.immutable.SortedMap
 import io.constellationnetwork.currency.dataApplication._
 import io.constellationnetwork.currency.dataApplication.dataApplication.DataApplicationValidationErrorOr
 import io.constellationnetwork.currency.schema.currency.CurrencyIncrementalSnapshot
-import io.constellationnetwork.metagraph_sdk.lifecycle.committed.{
-  CatalogJournal,
-  CommittedApp,
-  CommittedOnChain,
-  CommittedReader
-}
+import io.constellationnetwork.metagraph_sdk.lifecycle.committed.{CatalogJournal, CommittedApp, CommittedReader}
 import io.constellationnetwork.metagraph_sdk.lifecycle.{CheckpointService, CombinerService, ValidationService}
 import io.constellationnetwork.metagraph_sdk.std.Checkpoint
-import io.constellationnetwork.metagraph_sdk.std.JsonBinaryCodec.JsonBinaryDecodeOps
 import io.constellationnetwork.security.signature.Signed
 import io.constellationnetwork.security.{Hashed, SecurityProvider}
 
@@ -66,8 +60,9 @@ object ML0Service {
     genesisState                                    <- GenesisLoader.load[F](genesisPath)
     checkpointService  <- CheckpointService.make[F, CalculatedState](genesisState.calculated)
     subscriberRegistry <- SubscriberRegistry.make[F]
-    combiner           <- Combiner.make[F]().pure[F]
-    validator          <- Validator.make[F]
+    rejectionSink      <- Ref.of[F, Map[Long, List[FiberLogEntry.RejectionReceipt]]](Map.empty)
+    combiner = Combiner.make[F](rejectionSink)
+    validator <- Validator.make[F]
 
     webhookDispatcher = httpClient.map(client => WebhookDispatcher.make[F](client, subscriberRegistry, metagraphId))
 
@@ -81,7 +76,7 @@ object ML0Service {
         ml0Routes(checkpointService, subscriberRegistry, reader)
       },
       onConsensusResult =
-        Some((reader, snapshot) => onConsensus(reader, snapshot, checkpointService, webhookDispatcher))
+        Some((reader, snapshot) => onConsensus(reader, snapshot, checkpointService, webhookDispatcher, rejectionSink))
     )
   } yield service
 
@@ -162,7 +157,8 @@ object ML0Service {
     reader:            CommittedReader[F, CalculatedState],
     snapshot:          Hashed[CurrencyIncrementalSnapshot],
     checkpointService: CheckpointService[F, CalculatedState],
-    webhookDispatcher: Option[WebhookDispatcher[F]]
+    webhookDispatcher: Option[WebhookDispatcher[F]],
+    rejectionSink:     Ref[F, Map[Long, List[FiberLogEntry.RejectionReceipt]]]
   )(implicit logger: SelfAwareStructuredLogger[F]): F[Unit] =
     (for {
       committed <- reader.committed
@@ -174,46 +170,30 @@ object ML0Service {
       _ <- webhookDispatcher match {
         case Some(dispatcher) =>
           for {
-            // Drain the committed snapshot's RejectionReceipts. `CommittedApp.makeL0` registers the
-            // on-chain state as `CommittedOnChain[OnChain]` (the dev's `OnChain` + the consensus
-            // breadcrumb), so the signed snapshot's on-chain bytes decode to that wrapper — mirror the
-            // framework's own `contextBreadcrumb` decode and read `.inner`. A decode failure yields an
-            // empty list (logged, never crashing the hook) so a malformed/absent part still finalizes.
-            part <- Async[F]
-              .fromOption(
-                snapshot.signed.value.dataApplication,
-                new RuntimeException("snapshot has no data-application part")
-              )
-            onChain <- part.onChainState
-              .fromBinary[CommittedOnChain[OnChain]]
-              .flatMap(Async[F].fromEither)
-              .map(_.inner)
-              .handleErrorWith { err =>
-                logger.warn(err)("Failed to decode OnChain for rejection drain; using empty list") *>
-                Async[F].pure(OnChain.genesis)
-              }
-            rejections = onChain.latestLogs.toList.flatMap { case (_, entries) =>
-              entries.collect { case r: FiberLogEntry.RejectionReceipt =>
-                SnapshotRejection(
-                  updateType = r.updateType,
-                  fiberId = r.fiberId,
-                  targetSequenceNumber = r.targetSequenceNumber,
-                  actualSequenceNumber = r.actualSequenceNumber,
-                  reason = r.reason,
-                  updateHash = r.updateHash
-                )
-              }
+            // Drain the reliable combine-time rejection sink for this snapshot's ordinal. The snapshot's
+            // serialized `latestLogs` is NOT a reliable drain source: pending updates are re-combined every
+            // snapshot until GL0-finalizes (latestLogs cleared + repopulated each combine), so the FINALIZED
+            // copy this hook reads usually shows an empty/partial set (measured: 64 combine-rejects, only ~8
+            // surfaced). The combiner instead records every reject here at combine time, keyed by ordinal.
+            drained <- rejectionSink.modify { m =>
+              val snapOrd = snapshot.ordinal.value.value
+              val rejects = m.getOrElse(snapOrd, List.empty)
+              // Drain this ordinal; bound the map by dropping anything older than a small window (an ordinal
+              // whose hook never fires on idle/catch-up) while keeping not-yet-finalized future ordinals.
+              val pruned = (m - snapOrd).filter { case (k, _) => k >= snapOrd - 64L }
+              (pruned, rejects)
             }
-            _ <- logger.info(
-              s"[rej-drain] ord=${snapshot.ordinal.value} logFibers=${onChain.latestLogs.size} " +
-              s"entries=${onChain.latestLogs.values.map(_.size).sum} " +
-              s"types=${onChain.latestLogs.values.flatten
-                  .map(_.getClass.getSimpleName)
-                  .groupBy(identity)
-                  .view
-                  .mapValues(_.size)
-                  .toMap} rejections=${rejections.size}"
-            )
+            rejections = drained.map { r =>
+              SnapshotRejection(
+                updateType = r.updateType,
+                fiberId = r.fiberId,
+                targetSequenceNumber = r.targetSequenceNumber,
+                actualSequenceNumber = r.actualSequenceNumber,
+                reason = r.reason,
+                updateHash = r.updateHash
+              )
+            }
+            _ <- logger.info(s"[rej-drain] ord=${snapshot.ordinal.value} rejections=${rejections.size}")
             stats = NotificationStats(
               updatesProcessed = updatesProcessed,
               stateMachinesActive =
