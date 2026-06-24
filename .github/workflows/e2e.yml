@@ -45,7 +45,7 @@ jobs:
             concurrency: ''
             ordinalThreshold: ''
             maxResubmits: ''
-            timeout: 20
+            timeout: 30
           # Heavy examples each get their OWN job/cluster, run in PARALLEL. Two facts forced this:
           # (1) concurrency>1 chokes DL1 data-block formation when gas-heavy flows flood one mempool
           #     (valid updates pile up, ML0 snapshots go out empty — the candidates=Set() stall), and
