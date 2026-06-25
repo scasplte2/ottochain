@@ -69,6 +69,10 @@ jobs:
           - name: staked-oracle
             filter: '--only staked-oracle-pool'
             concurrency: '1'
+            # The pool needs THREE distinct joiners (quorum: 3). With the default single 'alice'
+            # wallet, the bob/carol joins fall back to alice's address and fail the
+            # not-already-a-participant guard, stranding the flow at the second join.
+            wallets: 'alice,bob,carol'
             # Confirmation is webhook-driven (the runner subscribes to ML0 snapshot.finalized /
             # transaction.rejected pushes and re-checks the instant state commits), so the lagging
             # read is no longer the gate. The oracle's data blocks are still sparse, so a block can
@@ -313,6 +317,9 @@ jobs:
           E2E_CONCURRENCY: ${{ matrix.lane.concurrency }}
           E2E_ORDINAL_THRESHOLD: ${{ matrix.lane.ordinalThreshold }}
           E2E_MAX_RESUBMITS: ${{ matrix.lane.maxResubmits }}
+          # Empty for single-signer lanes (runner defaults to 'alice'); set per lane for
+          # multi-participant flows that need distinct joiners (staked-oracle-pool quorum).
+          E2E_WALLETS: ${{ matrix.lane.wallets }}
         run: npm test -- ${{ matrix.lane.filter }}
 
       - name: Collect logs and diagnostics on failure

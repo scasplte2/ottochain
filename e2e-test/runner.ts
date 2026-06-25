@@ -35,7 +35,11 @@ function parseArgs() {
   const args = process.argv.slice(2);
   const opts: Record<string, string> = {
     target: 'local',
-    wallets: 'alice',
+    // Default single signer. Multi-participant flows (e.g. staked-oracle-pool, whose quorum needs
+    // alice+bob+carol as distinct joiners) require more — set via E2E_WALLETS per CI lane. With one
+    // wallet a `wallet: "bob"` step silently falls back to alice's address and fails the
+    // not-already-a-participant guard. `--wallets` still overrides.
+    wallets: process.env.E2E_WALLETS || 'alice',
     waitTime: '5',
     retryDelay: '5',
     // maxRetries × retryDelay(5s) = per ML0-confirmation / DL1-sync / validation wait budget.
