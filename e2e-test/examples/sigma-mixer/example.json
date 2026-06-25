@@ -1,0 +1,108 @@
+{
+  "name": "Sigma-Mixer (CDS OR-of-dhtuple ring mixer)",
+  "description": "An Ergo-style equal-denomination privacy mixer whose anonymity comes from a CDS OR-of-dhtuple Σ-protocol ring proof (sigma_verify). Each ring branch is a DDH tuple (G, H, P_i, nullifier): a satisfied dhtuple proves knowledge of one x with P_j = x·G AND nullifier = x·H, so the revealed nullifier is CRYPTOGRAPHICALLY BOUND to the proven secret — closing the witness-unbound-nullifier double-spend hole that an OR-of-dlog ring leaves open. H is a nothing-up-my-sleeve BN254 base with unknown dlog w.r.t. G (try-and-increment hash-to-curve over 'sigma-mixer:nullifier-base:v1'); a flat spentNullifiers map blocks double-withdraw; the bound message (nullifier ‖ recipient) makes the payout destination a signed field (anti-front-run). This e2e is scoped as CRYPTO + LIFECYCLE plumbing: economic custody (_transferAsset in/out) is exercised only in the production app, NOT here — but the B2 double-spend is still observable at the PROOF layer (flow 4), so the e2e detects the original flaw without any value movement. Anonymity set = exactly n=4 (the ring size is public, INV-3). All proofs are REAL BN254 transcripts produced offline by scripts/gen-sigma-mixer-fixture.ts and verified through the sigma_verify opcode before check-in.",
+  "type": "state-machine",
+  "definition": "definition.json",
+  "initialData": "initial-data.json",
+  "events": [
+    {
+      "name": "deposit 0",
+      "description": "Register ring point P[0]=x0·G",
+      "file": "event-deposit-0.ts",
+      "from": "filling",
+      "to": "filling"
+    },
+    {
+      "name": "deposit 1",
+      "description": "Register ring point P[1]=x1·G",
+      "file": "event-deposit-1.ts",
+      "from": "filling",
+      "to": "filling"
+    },
+    {
+      "name": "deposit 2",
+      "description": "Register ring point P[2]=x2·G",
+      "file": "event-deposit-2.ts",
+      "from": "filling",
+      "to": "filling"
+    },
+    {
+      "name": "deposit 3 (fill-flip)",
+      "description": "4th/final deposit; flips filling -> open (B1 boundary)",
+      "file": "event-deposit-3.ts",
+      "from": "filling",
+      "to": "open"
+    },
+    {
+      "name": "withdraw (honest)",
+      "description": "Real CDS OR-of-dhtuple proof; hides which branch j; Nf=x_j·H is witness-bound",
+      "file": "event-withdraw.ts",
+      "from": "open",
+      "to": "open"
+    },
+    {
+      "name": "withdraw (replay)",
+      "description": "Same Nf replayed after spend; has(spentNullifiers,Nf) denies it",
+      "file": "event-withdraw-replay.ts",
+      "from": "open",
+      "to": "open"
+    },
+    {
+      "name": "withdraw (forged nullifier, B2)",
+      "description": "Attacker-chosen Nf' != x_j·H; shared-z dhtuple rejects it -> sigma_verify false",
+      "file": "event-withdraw-doublespend.ts",
+      "from": "open",
+      "to": "open"
+    },
+    {
+      "name": "withdraw (bad recipient, H2)",
+      "description": "Tampered recipientHex; message-binding === fails -> front-run defeated",
+      "file": "event-withdraw-bad.ts",
+      "from": "open",
+      "to": "open"
+    }
+  ],
+  "testFlows": [
+    {
+      "name": "Sigma-mixer lifecycle — fill, honest withdraw, replay/B2/H2 rejections",
+      "description": "ONE fiber driven through its whole lifecycle in a single sequential flow. Each e2e flow runs on its own freshly-created fiber (session.cid = randomUUID) and flows fan out in parallel with no ordering, so a stateful machine MUST be exercised as one sequential flow — the earlier per-scenario split created independent fibers that each tried to `withdraw` straight out of the FSM initial state `filling` (create sets currentState from definition.initialState, NOT from the data's `status` field), which is NoTransitionForEvent(filling, withdraw). Here we drive the 4 deposits to flip filling->open (B1 boundary; first three keep 'filling' via guard B depositCount+1<target, the 4th flips to 'open' via the open-first guard A depositCount+1==target). The deposit points rebuild EXACTLY the pinned ring the proofs were generated against, so the honest CDS OR-of-dhtuple proof verifies (payout advances, stays 'open' as withdrawCount 0+1<4) and the same-Nf replay is denied by has(spentNullifiers,Nf) (INV-2). The B2 forged-nullifier (INV-1) and H2 bad-recipient (INV-4) reject-variants are trimmed from this e2e for CI wall-clock and remain covered at the proof layer by the fixtures/unit tests.",
+      "steps": [
+        {
+          "action": "create",
+          "definition": "definition.json",
+          "initialData": "initial-data-filling.json"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-deposit-0.ts",
+          "expectedState": "filling"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-deposit-1.ts",
+          "expectedState": "filling"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-deposit-2.ts",
+          "expectedState": "filling"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-deposit-3.ts",
+          "expectedState": "open"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-withdraw.ts",
+          "expectedState": "open"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-withdraw-replay.ts",
+          "expectRejected": "ml0"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,214 @@
+{
+  "states": {
+    "INIT": {
+      "id": "INIT",
+      "isFinal": false,
+      "metadata": {
+        "label": "Init",
+        "description": "Bound the pool; pinned the epoch to consume.",
+        "category": "initial"
+      }
+    },
+    "READY": {
+      "id": "READY",
+      "isFinal": false,
+      "metadata": {
+        "label": "Ready",
+        "description": "Read the pool's settled answer for the pinned epoch.",
+        "category": "active"
+      }
+    }
+  },
+  "initialState": "INIT",
+  "transitions": [
+    {
+      "from": "INIT",
+      "to": "INIT",
+      "eventName": "bind_pool",
+      "guard": {
+        "in": [
+          {
+            "var": "state.owner"
+          },
+          {
+            "map": [
+              {
+                "var": "proofs"
+              },
+              {
+                "var": "address"
+              }
+            ]
+          }
+        ]
+      },
+      "effect": {
+        "merge": [
+          {
+            "var": "state"
+          },
+          {
+            "expectedPoolEpoch": {
+              "get": [
+                {
+                  "get": [
+                    {
+                      "get": [
+                        {
+                          "var": "machines"
+                        },
+                        {
+                          "var": "state.poolId"
+                        }
+                      ]
+                    },
+                    "state"
+                  ]
+                },
+                "epoch"
+              ]
+            },
+            "_addDependency": [
+              {
+                "fiberId": {
+                  "var": "state.poolId"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "dependencies": []
+    },
+    {
+      "from": "INIT",
+      "to": "READY",
+      "eventName": "read_answer",
+      "guard": {
+        "and": [
+          {
+            "in": [
+              {
+                "var": "state.owner"
+              },
+              {
+                "map": [
+                  {
+                    "var": "proofs"
+                  },
+                  {
+                    "var": "address"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "and": [
+              {
+                "if": [
+                  {
+                    "has": [
+                      {
+                        "var": "machines"
+                      },
+                      {
+                        "var": "state.poolId"
+                      }
+                    ]
+                  },
+                  {
+                    "==": [
+                      {
+                        "get": [
+                          {
+                            "get": [
+                              {
+                                "var": "machines"
+                              },
+                              {
+                                "var": "state.poolId"
+                              }
+                            ]
+                          },
+                          "currentStateId"
+                        ]
+                      },
+                      "SETTLED"
+                    ]
+                  },
+                  false
+                ]
+              },
+              {
+                "===": [
+                  {
+                    "get": [
+                      {
+                        "get": [
+                          {
+                            "get": [
+                              {
+                                "var": "machines"
+                              },
+                              {
+                                "var": "state.poolId"
+                              }
+                            ]
+                          },
+                          "state"
+                        ]
+                      },
+                      "epoch"
+                    ]
+                  },
+                  {
+                    "var": "state.expectedPoolEpoch"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "effect": {
+        "merge": [
+          {
+            "var": "state"
+          },
+          {
+            "answer": {
+              "get": [
+                {
+                  "get": [
+                    {
+                      "get": [
+                        {
+                          "get": [
+                            {
+                              "var": "machines"
+                            },
+                            {
+                              "var": "state.poolId"
+                            }
+                          ]
+                        },
+                        "state"
+                      ]
+                    },
+                    "result"
+                  ]
+                },
+                "value"
+              ]
+            },
+            "readAt": {
+              "var": "$ordinal"
+            }
+          }
+        ]
+      },
+      "dependencies": []
+    }
+  ]
+}

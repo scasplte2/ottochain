@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import type { CreateStateMachine, OttochainMessage } from '@ottochain/sdk/core';
 import type { StatesMap } from '../types.ts';
+import { vlog } from '../verbose.ts';
 
 export interface CreateFiberOptions {
   definition: string | object;
@@ -87,7 +88,7 @@ export const validator = ({ cid, statesMap, options }: { cid: string; statesMap:
       );
     }
 
-    console.log(
+    vlog(
       `\x1b[33m[createFiber.validator]\x1b[32m Fiber creation validated successfully for fiberId = ${cid} at ${url}!\x1b[0m`
     );
   }

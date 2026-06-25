@@ -61,6 +61,10 @@ sealed trait FailureReason {
       s"Failed to evaluate owners expression: $error"
     case FailureReason.DependencyLimitExceeded(kind, current, max) =>
       s"Dynamic dependency $kind limit exceeded: $current (max: $max)"
+    case FailureReason.SpawnLimitExceeded(attempted, max) =>
+      s"Spawn fan-out limit exceeded: $attempted (max: $max)"
+    case FailureReason.PolicyViolation(dial, detail) =>
+      s"FiberPolicy violation [$dial]: $detail"
   }
 }
 
@@ -94,4 +98,21 @@ object FailureReason {
 
   /** A dynamic-dependency mutation would breach an ExecutionLimits cap (`kind` = "active" | "ledger"). */
   case class DependencyLimitExceeded(kind: String, current: Int, max: Int) extends FailureReason
+
+  /**
+   * A primary transition's `_spawn` fan-out would breach `ExecutionLimits.maxSpawnsPerTransition`
+   * (engine-default-fixes Fix 3). Fail-closed: the whole transition aborts (total discard) before any child
+   * record is constructed and before per-spawn `initialData` gas is burned.
+   */
+  case class SpawnLimitExceeded(attempted: Int, max: Int) extends FailureReason
+
+  /**
+   * An opt-in [[FiberPolicy]] dial was violated (fiber-policy.md). `dial` names the dial (e.g.
+   * "selfReproducing", "allowedEffects", "sealedStates", "acceptedCallers", "spawnOwnerPolicy",
+   * "maxGenerations", "maxSpawnFanout", "dependencyPolicy", "transferPolicy", or "tighten" at migration);
+   * `detail` is a human-readable reason. Every dial fails FAIL-CLOSED through this variant — the whole
+   * transition aborts (total discard) or the migration is rejected. A non-dial transfer-recipient breach is
+   * surfaced as `CombineRejected` at the asset combiner instead (graceful per-update rejection receipt).
+   */
+  case class PolicyViolation(dial: String, detail: String) extends FailureReason
 }

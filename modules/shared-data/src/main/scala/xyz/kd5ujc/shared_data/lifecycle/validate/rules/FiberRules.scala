@@ -13,7 +13,7 @@ import io.constellationnetwork.metagraph_sdk.json_logic.core.JsonLogicOp
 import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.signature.SignatureProof
 
-import xyz.kd5ujc.schema.fiber.{FiberOrdinal, FiberStatus, StateId, StateMachineDefinition}
+import xyz.kd5ujc.schema.fiber.{FiberOrdinal, FiberPolicy, FiberStatus, StateId, StateMachineDefinition, UpgradePolicy}
 import xyz.kd5ujc.schema.registry.RegistryName
 import xyz.kd5ujc.schema.{CalculatedState, OnChain, Records}
 import xyz.kd5ujc.shared_data.lifecycle.validate.{Limits, ValidationResult}
@@ -397,6 +397,40 @@ object FiberRules {
             )
             .pure[F]
       }
+
+    /**
+     * Validation-tier MIRROR (version-compat-family §3.5 / H4) of the CHEAP, signer-independent UpgradeGate
+     * checks: `Immutable` rejects all migrations, and `tightenOnly` forbids loosening the lattice. Both are
+     * pure functions of the OLD (hash-pinned) and NEW policies, so they can reject a doomed migration early —
+     * before the metered combiner — exactly as `bindingNameMatches`/`currentStateInDefinition` already do.
+     * The `Governed(Role)` and `AppendOnly` tiers (which need full CalculatedState / strict-version
+     * resolution) intentionally stay engine-only; the engine `UpgradeGate` remains the authority and re-runs
+     * EVERYTHING (this mirror is a fail-fast optimization, never the security boundary).
+     */
+    def upgradePolicyPermits[F[_]: Applicative](
+      cid:           UUID,
+      newDefinition: StateMachineDefinition,
+      state:         CalculatedState
+    ): F[ValidationResult] =
+      state.stateMachines.get(cid) match {
+        case None => ().validNec[DataApplicationValidationError].pure[F] // existence handled by cidIsFound
+        case Some(sm) =>
+          val oldPolicy = sm.definition.policy
+          val immutable = oldPolicy.map(_.effectiveUpgradePolicy).contains(UpgradePolicy.Immutable)
+          if (immutable)
+            (Errors.UpgradePolicyViolation(cid, "immutable: migrations are forbidden"): DataApplicationValidationError)
+              .invalidNec[Unit]
+              .pure[F]
+          else
+            FiberPolicy.tightens(oldPolicy, newDefinition.policy) match {
+              case Left(dial) =>
+                (Errors.UpgradePolicyViolation(
+                  cid,
+                  s"dial '$dial' may only tighten, never loosen, across a migration"
+                ): DataApplicationValidationError).invalidNec[Unit].pure[F]
+              case Right(_) => ().validNec[DataApplicationValidationError].pure[F]
+            }
+      }
   }
 
   // ============================================================================
@@ -532,6 +566,10 @@ object FiberRules {
 
     final case class CurrentStateNotInNewDefinition(state: StateId) extends DataApplicationValidationError {
       override val message: String = s"Fiber's current state ${state.value} does not exist in the new definition"
+    }
+
+    final case class UpgradePolicyViolation(cid: UUID, detail: String) extends DataApplicationValidationError {
+      override val message: String = s"Fiber $cid upgrade-policy violation: $detail"
     }
   }
 }

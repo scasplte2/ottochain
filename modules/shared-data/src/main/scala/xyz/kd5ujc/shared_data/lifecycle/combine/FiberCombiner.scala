@@ -8,6 +8,7 @@ import cats.syntax.all._
 import io.constellationnetwork.currency.dataApplication.{DataState, L0NodeContext}
 import io.constellationnetwork.metagraph_sdk.std.JsonBinaryHasher.HasherOps
 import io.constellationnetwork.schema.SnapshotOrdinal
+import io.constellationnetwork.schema.address.Address
 import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.Signed
 
@@ -252,7 +253,12 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
       epochProgress = epochProgress
     )
 
-    outcome <- orchestrator.migrate(update.fiberId, update.newDefinition, newBinding, update.migration)
+    // VERIFIED signer addresses of this UpgradeFiber update — the only authority the version-compat
+    // `Governed` gate trusts (mirrors the create-path owner resolution at :49). Self-asserted identity in
+    // `newDefinition` is NEVER consulted; the gate reads the migrationAuthority from the OLD policy only.
+    addrs <- update.proofs.toList.traverse(_.id.toAddress).map(Set.from[Address])
+
+    outcome <- orchestrator.migrate(update.fiberId, update.newDefinition, newBinding, update.migration, addrs)
 
     newState <- outcome match {
       // A migration pass MUST NOT fabricate `_transferAsset` of held assets (asset-model.md §10, R34); the

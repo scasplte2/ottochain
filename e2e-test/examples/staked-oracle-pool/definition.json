@@ -1,0 +1,1853 @@
+{
+  "states": {
+    "FORMING": {
+      "id": "FORMING",
+      "isFinal": false,
+      "metadata": {
+        "label": "Forming",
+        "description": "Accepting stake/join; registry bound; no epoch yet.",
+        "category": "initial"
+      }
+    },
+    "COLLECTING": {
+      "id": "COLLECTING",
+      "isFinal": false,
+      "metadata": {
+        "label": "Collecting",
+        "description": "Epoch open; participants submit datapoints.",
+        "category": "active"
+      }
+    },
+    "SETTLED": {
+      "id": "SETTLED",
+      "isFinal": false,
+      "metadata": {
+        "label": "Settled",
+        "description": "Result published; entitlement ledger credited; readable cross-fiber.",
+        "category": "pending"
+      }
+    },
+    "CLOSED": {
+      "id": "CLOSED",
+      "isFinal": true,
+      "metadata": {
+        "label": "Closed",
+        "description": "Wound down; stakes + unclaimed rewards still withdrawable/claimable.",
+        "category": "terminal"
+      }
+    }
+  },
+  "initialState": "FORMING",
+  "transitions": [
+    {
+      "from": "FORMING",
+      "to": "FORMING",
+      "eventName": "bind_registry",
+      "guard": {
+        "in": [
+          {
+            "var": "state.authority"
+          },
+          {
+            "map": [
+              {
+                "var": "proofs"
+              },
+              {
+                "var": "address"
+              }
+            ]
+          }
+        ]
+      },
+      "effect": {
+        "merge": [
+          {
+            "var": "state"
+          },
+          {
+            "_addDependency": [
+              {
+                "fiberId": {
+                  "var": "state.registryId"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "dependencies": []
+    },
+    {
+      "from": "FORMING",
+      "to": "FORMING",
+      "eventName": "stake_and_join",
+      "guard": {
+        "and": [
+          {
+            "in": [
+              {
+                "var": "event.agent"
+              },
+              {
+                "map": [
+                  {
+                    "var": "proofs"
+                  },
+                  {
+                    "var": "address"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "===": [
+              {
+                "var": "event.stakeAmount"
+              },
+              {
+                "var": "state.stakeAmount"
+              }
+            ]
+          },
+          {
+            "!": [
+              {
+                "has": [
+                  {
+                    "var": "state.participants"
+                  },
+                  {
+                    "var": "event.agent"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "if": [
+              {
+                "has": [
+                  {
+                    "var": "machines"
+                  },
+                  {
+                    "var": "state.registryId"
+                  }
+                ]
+              },
+              {
+                "some": [
+                  {
+                    "map": [
+                      {
+                        "var": "proofs"
+                      },
+                      {
+                        "var": "address"
+                      }
+                    ]
+                  },
+                  {
+                    ">=": [
+                      {
+                        "get": [
+                          {
+                            "get": [
+                              {
+                                "get": [
+                                  {
+                                    "get": [
+                                      {
+                                        "var": "machines"
+                                      },
+                                      {
+                                        "var": "state.registryId"
+                                      }
+                                    ]
+                                  },
+                                  "state"
+                                ]
+                              },
+                              "reputations"
+                            ]
+                          },
+                          {
+                            "var": ""
+                          }
+                        ]
+                      },
+                      {
+                        "var": "state.minReputation"
+                      }
+                    ]
+                  }
+                ]
+              },
+              true
+            ]
+          }
+        ]
+      },
+      "effect": {
+        "merge": [
+          {
+            "var": "state"
+          },
+          {
+            "participants": {
+              "set": [
+                {
+                  "var": "state.participants"
+                },
+                {
+                  "var": "event.agent"
+                },
+                true
+              ]
+            },
+            "stakes": {
+              "set": [
+                {
+                  "var": "state.stakes"
+                },
+                {
+                  "var": "event.agent"
+                },
+                {
+                  "var": "event.stakeAmount"
+                }
+              ]
+            },
+            "stakeAssetIds": {
+              "set": [
+                {
+                  "var": "state.stakeAssetIds"
+                },
+                {
+                  "var": "event.agent"
+                },
+                {
+                  "var": "event.stakeAssetId"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "dependencies": []
+    },
+    {
+      "from": "COLLECTING",
+      "to": "COLLECTING",
+      "eventName": "stake_and_join",
+      "guard": {
+        "and": [
+          {
+            "in": [
+              {
+                "var": "event.agent"
+              },
+              {
+                "map": [
+                  {
+                    "var": "proofs"
+                  },
+                  {
+                    "var": "address"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "===": [
+              {
+                "var": "event.stakeAmount"
+              },
+              {
+                "var": "state.stakeAmount"
+              }
+            ]
+          },
+          {
+            "!": [
+              {
+                "has": [
+                  {
+                    "var": "state.participants"
+                  },
+                  {
+                    "var": "event.agent"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "if": [
+              {
+                "has": [
+                  {
+                    "var": "machines"
+                  },
+                  {
+                    "var": "state.registryId"
+                  }
+                ]
+              },
+              {
+                "some": [
+                  {
+                    "map": [
+                      {
+                        "var": "proofs"
+                      },
+                      {
+                        "var": "address"
+                      }
+                    ]
+                  },
+                  {
+                    ">=": [
+                      {
+                        "get": [
+                          {
+                            "get": [
+                              {
+                                "get": [
+                                  {
+                                    "get": [
+                                      {
+                                        "var": "machines"
+                                      },
+                                      {
+                                        "var": "state.registryId"
+                                      }
+                                    ]
+                                  },
+                                  "state"
+                                ]
+                              },
+                              "reputations"
+                            ]
+                          },
+                          {
+                            "var": ""
+                          }
+                        ]
+                      },
+                      {
+                        "var": "state.minReputation"
+                      }
+                    ]
+                  }
+                ]
+              },
+              true
+            ]
+          }
+        ]
+      },
+      "effect": {
+        "merge": [
+          {
+            "var": "state"
+          },
+          {
+            "participants": {
+              "set": [
+                {
+                  "var": "state.participants"
+                },
+                {
+                  "var": "event.agent"
+                },
+                true
+              ]
+            },
+            "stakes": {
+              "set": [
+                {
+                  "var": "state.stakes"
+                },
+                {
+                  "var": "event.agent"
+                },
+                {
+                  "var": "event.stakeAmount"
+                }
+              ]
+            },
+            "stakeAssetIds": {
+              "set": [
+                {
+                  "var": "state.stakeAssetIds"
+                },
+                {
+                  "var": "event.agent"
+                },
+                {
+                  "var": "event.stakeAssetId"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "dependencies": []
+    },
+    {
+      "from": "FORMING",
+      "to": "COLLECTING",
+      "eventName": "open_first_epoch",
+      "guard": {
+        "in": [
+          {
+            "var": "state.authority"
+          },
+          {
+            "map": [
+              {
+                "var": "proofs"
+              },
+              {
+                "var": "address"
+              }
+            ]
+          }
+        ]
+      },
+      "effect": {
+        "merge": [
+          {
+            "var": "state"
+          },
+          {
+            "status": "COLLECTING",
+            "epoch": 1,
+            "epochStartedAt": {
+              "var": "$ordinal"
+            },
+            "submissions": []
+          }
+        ]
+      },
+      "dependencies": []
+    },
+    {
+      "from": "SETTLED",
+      "to": "COLLECTING",
+      "eventName": "reset_epoch",
+      "guard": {
+        "in": [
+          {
+            "var": "state.authority"
+          },
+          {
+            "map": [
+              {
+                "var": "proofs"
+              },
+              {
+                "var": "address"
+              }
+            ]
+          }
+        ]
+      },
+      "effect": {
+        "merge": [
+          {
+            "var": "state"
+          },
+          {
+            "status": "COLLECTING",
+            "epoch": {
+              "+": [
+                {
+                  "var": "state.epoch"
+                },
+                1
+              ]
+            },
+            "epochStartedAt": {
+              "var": "$ordinal"
+            },
+            "submissions": [],
+            "inConsensus": [],
+            "claimed": {}
+          }
+        ]
+      },
+      "dependencies": []
+    },
+    {
+      "from": "COLLECTING",
+      "to": "COLLECTING",
+      "eventName": "submit",
+      "guard": {
+        "and": [
+          {
+            "and": [
+              {
+                "in": [
+                  {
+                    "var": "event.agent"
+                  },
+                  {
+                    "map": [
+                      {
+                        "var": "proofs"
+                      },
+                      {
+                        "var": "address"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "has": [
+                  {
+                    "var": "state.participants"
+                  },
+                  {
+                    "var": "event.agent"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "none": [
+              {
+                "var": "state.submissions"
+              },
+              {
+                "===": [
+                  {
+                    "get": [
+                      {
+                        "var": ""
+                      },
+                      "addr"
+                    ]
+                  },
+                  {
+                    "var": "event.agent"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "effect": {
+        "merge": [
+          {
+            "var": "state"
+          },
+          {
+            "submissions": {
+              "merge": [
+                {
+                  "var": "state.submissions"
+                },
+                [
+                  {
+                    "addr": {
+                      "var": "event.agent"
+                    },
+                    "value": {
+                      "var": "event.value"
+                    }
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      },
+      "dependencies": []
+    },
+    {
+      "from": "COLLECTING",
+      "to": "SETTLED",
+      "eventName": "finalize",
+      "guard": {
+        "and": [
+          {
+            "in": [
+              {
+                "var": "state.authority"
+              },
+              {
+                "map": [
+                  {
+                    "var": "proofs"
+                  },
+                  {
+                    "var": "address"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            ">=": [
+              {
+                "count": [
+                  {
+                    "var": "state.submissions"
+                  }
+                ]
+              },
+              {
+                "var": "state.quorum"
+              }
+            ]
+          },
+          {
+            ">=": [
+              {
+                "var": "$ordinal"
+              },
+              {
+                "+": [
+                  {
+                    "var": "state.epochStartedAt"
+                  },
+                  {
+                    "var": "state.epochLength"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "effect": {
+        "merge": [
+          {
+            "var": "state"
+          },
+          {
+            "status": "SETTLED",
+            "inConsensus": {
+              "map": [
+                {
+                  "filter": [
+                    {
+                      "var": "state.submissions"
+                    },
+                    {
+                      "<=": [
+                        {
+                          "abs": [
+                            {
+                              "-": [
+                                {
+                                  "get": [
+                                    {
+                                      "var": ""
+                                    },
+                                    "value"
+                                  ]
+                                },
+                                {
+                                  "/": [
+                                    {
+                                      "reduce": [
+                                        {
+                                          "map": [
+                                            {
+                                              "filter": [
+                                                {
+                                                  "var": "state.submissions"
+                                                },
+                                                {
+                                                  "and": [
+                                                    {
+                                                      "!==": [
+                                                        {
+                                                          "get": [
+                                                            {
+                                                              "var": ""
+                                                            },
+                                                            "value"
+                                                          ]
+                                                        },
+                                                        {
+                                                          "min": [
+                                                            {
+                                                              "map": [
+                                                                {
+                                                                  "var": "state.submissions"
+                                                                },
+                                                                {
+                                                                  "get": [
+                                                                    {
+                                                                      "var": ""
+                                                                    },
+                                                                    "value"
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "!==": [
+                                                        {
+                                                          "get": [
+                                                            {
+                                                              "var": ""
+                                                            },
+                                                            "value"
+                                                          ]
+                                                        },
+                                                        {
+                                                          "max": [
+                                                            {
+                                                              "map": [
+                                                                {
+                                                                  "var": "state.submissions"
+                                                                },
+                                                                {
+                                                                  "get": [
+                                                                    {
+                                                                      "var": ""
+                                                                    },
+                                                                    "value"
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "get": [
+                                                {
+                                                  "var": ""
+                                                },
+                                                "value"
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "+": [
+                                            {
+                                              "var": "accumulator"
+                                            },
+                                            {
+                                              "var": "current"
+                                            }
+                                          ]
+                                        },
+                                        0
+                                      ]
+                                    },
+                                    {
+                                      "count": [
+                                        {
+                                          "map": [
+                                            {
+                                              "filter": [
+                                                {
+                                                  "var": "state.submissions"
+                                                },
+                                                {
+                                                  "and": [
+                                                    {
+                                                      "!==": [
+                                                        {
+                                                          "get": [
+                                                            {
+                                                              "var": ""
+                                                            },
+                                                            "value"
+                                                          ]
+                                                        },
+                                                        {
+                                                          "min": [
+                                                            {
+                                                              "map": [
+                                                                {
+                                                                  "var": "state.submissions"
+                                                                },
+                                                                {
+                                                                  "get": [
+                                                                    {
+                                                                      "var": ""
+                                                                    },
+                                                                    "value"
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "!==": [
+                                                        {
+                                                          "get": [
+                                                            {
+                                                              "var": ""
+                                                            },
+                                                            "value"
+                                                          ]
+                                                        },
+                                                        {
+                                                          "max": [
+                                                            {
+                                                              "map": [
+                                                                {
+                                                                  "var": "state.submissions"
+                                                                },
+                                                                {
+                                                                  "get": [
+                                                                    {
+                                                                      "var": ""
+                                                                    },
+                                                                    "value"
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "get": [
+                                                {
+                                                  "var": ""
+                                                },
+                                                "value"
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "var": "state.outlierBound"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "get": [
+                    {
+                      "var": ""
+                    },
+                    "addr"
+                  ]
+                }
+              ]
+            },
+            "claimed": {},
+            "result": {
+              "value": {
+                "/": [
+                  {
+                    "reduce": [
+                      {
+                        "map": [
+                          {
+                            "filter": [
+                              {
+                                "var": "state.submissions"
+                              },
+                              {
+                                "<=": [
+                                  {
+                                    "abs": [
+                                      {
+                                        "-": [
+                                          {
+                                            "get": [
+                                              {
+                                                "var": ""
+                                              },
+                                              "value"
+                                            ]
+                                          },
+                                          {
+                                            "/": [
+                                              {
+                                                "reduce": [
+                                                  {
+                                                    "map": [
+                                                      {
+                                                        "filter": [
+                                                          {
+                                                            "var": "state.submissions"
+                                                          },
+                                                          {
+                                                            "and": [
+                                                              {
+                                                                "!==": [
+                                                                  {
+                                                                    "get": [
+                                                                      {
+                                                                        "var": ""
+                                                                      },
+                                                                      "value"
+                                                                    ]
+                                                                  },
+                                                                  {
+                                                                    "min": [
+                                                                      {
+                                                                        "map": [
+                                                                          {
+                                                                            "var": "state.submissions"
+                                                                          },
+                                                                          {
+                                                                            "get": [
+                                                                              {
+                                                                                "var": ""
+                                                                              },
+                                                                              "value"
+                                                                            ]
+                                                                          }
+                                                                        ]
+                                                                      }
+                                                                    ]
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "!==": [
+                                                                  {
+                                                                    "get": [
+                                                                      {
+                                                                        "var": ""
+                                                                      },
+                                                                      "value"
+                                                                    ]
+                                                                  },
+                                                                  {
+                                                                    "max": [
+                                                                      {
+                                                                        "map": [
+                                                                          {
+                                                                            "var": "state.submissions"
+                                                                          },
+                                                                          {
+                                                                            "get": [
+                                                                              {
+                                                                                "var": ""
+                                                                              },
+                                                                              "value"
+                                                                            ]
+                                                                          }
+                                                                        ]
+                                                                      }
+                                                                    ]
+                                                                  }
+                                                                ]
+                                                              }
+                                                            ]
+                                                          }
+                                                        ]
+                                                      },
+                                                      {
+                                                        "get": [
+                                                          {
+                                                            "var": ""
+                                                          },
+                                                          "value"
+                                                        ]
+                                                      }
+                                                    ]
+                                                  },
+                                                  {
+                                                    "+": [
+                                                      {
+                                                        "var": "accumulator"
+                                                      },
+                                                      {
+                                                        "var": "current"
+                                                      }
+                                                    ]
+                                                  },
+                                                  0
+                                                ]
+                                              },
+                                              {
+                                                "count": [
+                                                  {
+                                                    "map": [
+                                                      {
+                                                        "filter": [
+                                                          {
+                                                            "var": "state.submissions"
+                                                          },
+                                                          {
+                                                            "and": [
+                                                              {
+                                                                "!==": [
+                                                                  {
+                                                                    "get": [
+                                                                      {
+                                                                        "var": ""
+                                                                      },
+                                                                      "value"
+                                                                    ]
+                                                                  },
+                                                                  {
+                                                                    "min": [
+                                                                      {
+                                                                        "map": [
+                                                                          {
+                                                                            "var": "state.submissions"
+                                                                          },
+                                                                          {
+                                                                            "get": [
+                                                                              {
+                                                                                "var": ""
+                                                                              },
+                                                                              "value"
+                                                                            ]
+                                                                          }
+                                                                        ]
+                                                                      }
+                                                                    ]
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "!==": [
+                                                                  {
+                                                                    "get": [
+                                                                      {
+                                                                        "var": ""
+                                                                      },
+                                                                      "value"
+                                                                    ]
+                                                                  },
+                                                                  {
+                                                                    "max": [
+                                                                      {
+                                                                        "map": [
+                                                                          {
+                                                                            "var": "state.submissions"
+                                                                          },
+                                                                          {
+                                                                            "get": [
+                                                                              {
+                                                                                "var": ""
+                                                                              },
+                                                                              "value"
+                                                                            ]
+                                                                          }
+                                                                        ]
+                                                                      }
+                                                                    ]
+                                                                  }
+                                                                ]
+                                                              }
+                                                            ]
+                                                          }
+                                                        ]
+                                                      },
+                                                      {
+                                                        "get": [
+                                                          {
+                                                            "var": ""
+                                                          },
+                                                          "value"
+                                                        ]
+                                                      }
+                                                    ]
+                                                  }
+                                                ]
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "var": "state.outlierBound"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "get": [
+                              {
+                                "var": ""
+                              },
+                              "value"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "+": [
+                          {
+                            "var": "accumulator"
+                          },
+                          {
+                            "var": "current"
+                          }
+                        ]
+                      },
+                      0
+                    ]
+                  },
+                  {
+                    "count": [
+                      {
+                        "map": [
+                          {
+                            "filter": [
+                              {
+                                "var": "state.submissions"
+                              },
+                              {
+                                "<=": [
+                                  {
+                                    "abs": [
+                                      {
+                                        "-": [
+                                          {
+                                            "get": [
+                                              {
+                                                "var": ""
+                                              },
+                                              "value"
+                                            ]
+                                          },
+                                          {
+                                            "/": [
+                                              {
+                                                "reduce": [
+                                                  {
+                                                    "map": [
+                                                      {
+                                                        "filter": [
+                                                          {
+                                                            "var": "state.submissions"
+                                                          },
+                                                          {
+                                                            "and": [
+                                                              {
+                                                                "!==": [
+                                                                  {
+                                                                    "get": [
+                                                                      {
+                                                                        "var": ""
+                                                                      },
+                                                                      "value"
+                                                                    ]
+                                                                  },
+                                                                  {
+                                                                    "min": [
+                                                                      {
+                                                                        "map": [
+                                                                          {
+                                                                            "var": "state.submissions"
+                                                                          },
+                                                                          {
+                                                                            "get": [
+                                                                              {
+                                                                                "var": ""
+                                                                              },
+                                                                              "value"
+                                                                            ]
+                                                                          }
+                                                                        ]
+                                                                      }
+                                                                    ]
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "!==": [
+                                                                  {
+                                                                    "get": [
+                                                                      {
+                                                                        "var": ""
+                                                                      },
+                                                                      "value"
+                                                                    ]
+                                                                  },
+                                                                  {
+                                                                    "max": [
+                                                                      {
+                                                                        "map": [
+                                                                          {
+                                                                            "var": "state.submissions"
+                                                                          },
+                                                                          {
+                                                                            "get": [
+                                                                              {
+                                                                                "var": ""
+                                                                              },
+                                                                              "value"
+                                                                            ]
+                                                                          }
+                                                                        ]
+                                                                      }
+                                                                    ]
+                                                                  }
+                                                                ]
+                                                              }
+                                                            ]
+                                                          }
+                                                        ]
+                                                      },
+                                                      {
+                                                        "get": [
+                                                          {
+                                                            "var": ""
+                                                          },
+                                                          "value"
+                                                        ]
+                                                      }
+                                                    ]
+                                                  },
+                                                  {
+                                                    "+": [
+                                                      {
+                                                        "var": "accumulator"
+                                                      },
+                                                      {
+                                                        "var": "current"
+                                                      }
+                                                    ]
+                                                  },
+                                                  0
+                                                ]
+                                              },
+                                              {
+                                                "count": [
+                                                  {
+                                                    "map": [
+                                                      {
+                                                        "filter": [
+                                                          {
+                                                            "var": "state.submissions"
+                                                          },
+                                                          {
+                                                            "and": [
+                                                              {
+                                                                "!==": [
+                                                                  {
+                                                                    "get": [
+                                                                      {
+                                                                        "var": ""
+                                                                      },
+                                                                      "value"
+                                                                    ]
+                                                                  },
+                                                                  {
+                                                                    "min": [
+                                                                      {
+                                                                        "map": [
+                                                                          {
+                                                                            "var": "state.submissions"
+                                                                          },
+                                                                          {
+                                                                            "get": [
+                                                                              {
+                                                                                "var": ""
+                                                                              },
+                                                                              "value"
+                                                                            ]
+                                                                          }
+                                                                        ]
+                                                                      }
+                                                                    ]
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "!==": [
+                                                                  {
+                                                                    "get": [
+                                                                      {
+                                                                        "var": ""
+                                                                      },
+                                                                      "value"
+                                                                    ]
+                                                                  },
+                                                                  {
+                                                                    "max": [
+                                                                      {
+                                                                        "map": [
+                                                                          {
+                                                                            "var": "state.submissions"
+                                                                          },
+                                                                          {
+                                                                            "get": [
+                                                                              {
+                                                                                "var": ""
+                                                                              },
+                                                                              "value"
+                                                                            ]
+                                                                          }
+                                                                        ]
+                                                                      }
+                                                                    ]
+                                                                  }
+                                                                ]
+                                                              }
+                                                            ]
+                                                          }
+                                                        ]
+                                                      },
+                                                      {
+                                                        "get": [
+                                                          {
+                                                            "var": ""
+                                                          },
+                                                          "value"
+                                                        ]
+                                                      }
+                                                    ]
+                                                  }
+                                                ]
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "var": "state.outlierBound"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "get": [
+                              {
+                                "var": ""
+                              },
+                              "value"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "epoch": {
+                "var": "state.epoch"
+              },
+              "finalizedAt": {
+                "var": "$ordinal"
+              }
+            }
+          }
+        ]
+      },
+      "dependencies": []
+    },
+    {
+      "from": "SETTLED",
+      "to": "SETTLED",
+      "eventName": "claim_reward",
+      "guard": {
+        "and": [
+          {
+            "in": [
+              {
+                "var": "event.agent"
+              },
+              {
+                "map": [
+                  {
+                    "var": "proofs"
+                  },
+                  {
+                    "var": "address"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "some": [
+              {
+                "var": "state.inConsensus"
+              },
+              {
+                "===": [
+                  {
+                    "var": ""
+                  },
+                  {
+                    "var": "event.agent"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "!": [
+              {
+                "has": [
+                  {
+                    "var": "state.claimed"
+                  },
+                  {
+                    "var": "event.agent"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "has": [
+              {
+                "var": "heldAssets"
+              },
+              {
+                "var": "event.rewardAssetId"
+              }
+            ]
+          }
+        ]
+      },
+      "effect": {
+        "merge": [
+          {
+            "var": "state"
+          },
+          {
+            "claimed": {
+              "set": [
+                {
+                  "var": "state.claimed"
+                },
+                {
+                  "var": "event.agent"
+                },
+                true
+              ]
+            },
+            "_transferAsset": [
+              {
+                "assetId": {
+                  "var": "event.rewardAssetId"
+                },
+                "recipient": {
+                  "var": "event.agent"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "dependencies": []
+    },
+    {
+      "from": "CLOSED",
+      "to": "CLOSED",
+      "eventName": "claim_reward",
+      "guard": {
+        "and": [
+          {
+            "in": [
+              {
+                "var": "event.agent"
+              },
+              {
+                "map": [
+                  {
+                    "var": "proofs"
+                  },
+                  {
+                    "var": "address"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "some": [
+              {
+                "var": "state.inConsensus"
+              },
+              {
+                "===": [
+                  {
+                    "var": ""
+                  },
+                  {
+                    "var": "event.agent"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "!": [
+              {
+                "has": [
+                  {
+                    "var": "state.claimed"
+                  },
+                  {
+                    "var": "event.agent"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "has": [
+              {
+                "var": "heldAssets"
+              },
+              {
+                "var": "event.rewardAssetId"
+              }
+            ]
+          }
+        ]
+      },
+      "effect": {
+        "merge": [
+          {
+            "var": "state"
+          },
+          {
+            "claimed": {
+              "set": [
+                {
+                  "var": "state.claimed"
+                },
+                {
+                  "var": "event.agent"
+                },
+                true
+              ]
+            },
+            "_transferAsset": [
+              {
+                "assetId": {
+                  "var": "event.rewardAssetId"
+                },
+                "recipient": {
+                  "var": "event.agent"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "dependencies": []
+    },
+    {
+      "from": "SETTLED",
+      "to": "SETTLED",
+      "eventName": "withdraw_stake",
+      "guard": {
+        "and": [
+          {
+            "in": [
+              {
+                "var": "event.agent"
+              },
+              {
+                "map": [
+                  {
+                    "var": "proofs"
+                  },
+                  {
+                    "var": "address"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "has": [
+              {
+                "var": "state.stakeAssetIds"
+              },
+              {
+                "var": "event.agent"
+              }
+            ]
+          }
+        ]
+      },
+      "effect": {
+        "merge": [
+          {
+            "var": "state"
+          },
+          {
+            "stakes": {
+              "set": [
+                {
+                  "var": "state.stakes"
+                },
+                {
+                  "var": "event.agent"
+                },
+                0
+              ]
+            },
+            "stakeAssetIds": {
+              "unset": [
+                {
+                  "var": "state.stakeAssetIds"
+                },
+                {
+                  "var": "event.agent"
+                }
+              ]
+            },
+            "_transferAsset": [
+              {
+                "assetId": {
+                  "get": [
+                    {
+                      "var": "state.stakeAssetIds"
+                    },
+                    {
+                      "var": "event.agent"
+                    }
+                  ]
+                },
+                "recipient": {
+                  "var": "event.agent"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "dependencies": []
+    },
+    {
+      "from": "CLOSED",
+      "to": "CLOSED",
+      "eventName": "withdraw_stake",
+      "guard": {
+        "and": [
+          {
+            "in": [
+              {
+                "var": "event.agent"
+              },
+              {
+                "map": [
+                  {
+                    "var": "proofs"
+                  },
+                  {
+                    "var": "address"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "has": [
+              {
+                "var": "state.stakeAssetIds"
+              },
+              {
+                "var": "event.agent"
+              }
+            ]
+          }
+        ]
+      },
+      "effect": {
+        "merge": [
+          {
+            "var": "state"
+          },
+          {
+            "stakes": {
+              "set": [
+                {
+                  "var": "state.stakes"
+                },
+                {
+                  "var": "event.agent"
+                },
+                0
+              ]
+            },
+            "stakeAssetIds": {
+              "unset": [
+                {
+                  "var": "state.stakeAssetIds"
+                },
+                {
+                  "var": "event.agent"
+                }
+              ]
+            },
+            "_transferAsset": [
+              {
+                "assetId": {
+                  "get": [
+                    {
+                      "var": "state.stakeAssetIds"
+                    },
+                    {
+                      "var": "event.agent"
+                    }
+                  ]
+                },
+                "recipient": {
+                  "var": "event.agent"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "dependencies": []
+    },
+    {
+      "from": "FORMING",
+      "to": "CLOSED",
+      "eventName": "close",
+      "guard": {
+        "in": [
+          {
+            "var": "state.authority"
+          },
+          {
+            "map": [
+              {
+                "var": "proofs"
+              },
+              {
+                "var": "address"
+              }
+            ]
+          }
+        ]
+      },
+      "effect": {
+        "merge": [
+          {
+            "var": "state"
+          },
+          {
+            "status": "CLOSED",
+            "closedAt": {
+              "var": "$ordinal"
+            }
+          }
+        ]
+      },
+      "dependencies": []
+    },
+    {
+      "from": "COLLECTING",
+      "to": "CLOSED",
+      "eventName": "close",
+      "guard": {
+        "in": [
+          {
+            "var": "state.authority"
+          },
+          {
+            "map": [
+              {
+                "var": "proofs"
+              },
+              {
+                "var": "address"
+              }
+            ]
+          }
+        ]
+      },
+      "effect": {
+        "merge": [
+          {
+            "var": "state"
+          },
+          {
+            "status": "CLOSED",
+            "closedAt": {
+              "var": "$ordinal"
+            }
+          }
+        ]
+      },
+      "dependencies": []
+    },
+    {
+      "from": "SETTLED",
+      "to": "CLOSED",
+      "eventName": "close",
+      "guard": {
+        "in": [
+          {
+            "var": "state.authority"
+          },
+          {
+            "map": [
+              {
+                "var": "proofs"
+              },
+              {
+                "var": "address"
+              }
+            ]
+          }
+        ]
+      },
+      "effect": {
+        "merge": [
+          {
+            "var": "state"
+          },
+          {
+            "status": "CLOSED",
+            "closedAt": {
+              "var": "$ordinal"
+            }
+          }
+        ]
+      },
+      "dependencies": []
+    }
+  ]
+}

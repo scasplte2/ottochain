@@ -83,7 +83,12 @@ class StateMachineTriggerHandler[F[_]: Async: SecurityProvider, G[_]: Monad](
   ): G[TriggerHandlerResult] =
     for {
       ordinal <- ExecutionOps.askOrdinal[G]
-      outcome <- FiberEvaluator.make[F, G](calculatedState).evaluate(sm, trigger.input, List.empty)
+      // Fix (2): surface the engine-stamped cross-fiber caller into the guard context as $caller. This closes
+      // the cascaded gap — `trigger.sourceFiberId` previously reached only the receipt (:99), never the guard.
+      // It is non-spoofable: the engine stamps `sourceFiberId` at extraction, not the triggering fiber's logic.
+      outcome <- FiberEvaluator
+        .make[F, G](calculatedState)
+        .evaluate(sm, trigger.input, List.empty, caller = trigger.sourceFiberId)
       result <- outcome match {
         // Cascaded (triggered) transitions do not spawn or mutate dynamic dependencies — those directives
         // (`spawns`, `dependencyMutations`) are honoured only on the PRIMARY transition (see FiberEngine),

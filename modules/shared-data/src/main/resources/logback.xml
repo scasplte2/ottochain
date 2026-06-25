@@ -9,8 +9,12 @@
         <appender-ref ref="STDOUT" />
     </root>
 
-    <logger name="org.tessellation" level="DEBUG" />
-    <logger name="xyz.kd5ujc" level="DEBUG" />
+    <!-- Tessellation renamed its package org.tessellation -> io.constellationnetwork in v4.x,
+         so the old "org.tessellation" logger matched nothing and all upstream DEBUG was dead.
+         Keep upstream at INFO globally (root) but surface dag-l1/currency-l1 block-consensus
+         decisions, which log "Cannot start own consensus: <reason>" + peer stats at DEBUG —
+         the only window into why a currency L1 round does or doesn't start. -->
+    <logger name="io.constellationnetwork.dag.l1.domain.consensus.block" level="DEBUG" />
     <logger name="xyz.kd5ujc" level="DEBUG" />
     <logger name="org.http4s.server.middleware.RequestLogger" level="OFF" />
     <logger name="org.http4s.server.middleware.ResponseLogger" level="OFF" />

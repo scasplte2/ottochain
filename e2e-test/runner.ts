@@ -20,6 +20,8 @@ import getMetagraphEnv from './lib/metagraphEnv.ts';
 import type { StatesMap, Wallets, GeneratorFn, ValidatorFn } from './lib/types.ts';
 import { HttpClient } from '@ottochain/sdk';
 import { waitForOrdinalConfirmation, waitForOrdinalAdvance } from './lib/ordinalConfirmation.ts';
+import { WebhookListener } from './lib/webhookListener.ts';
+import { ChainKeepalive } from './lib/keepalive.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,7 +35,11 @@ function parseArgs() {
   const args = process.argv.slice(2);
   const opts: Record<string, string> = {
     target: 'local',
-    wallets: 'alice',
+    // Default single signer. Multi-participant flows (e.g. staked-oracle-pool, whose quorum needs
+    // alice+bob+carol as distinct joiners) require more — set via E2E_WALLETS per CI lane. With one
+    // wallet a `wallet: "bob"` step silently falls back to alice's address and fails the
+    // not-already-a-participant guard. `--wallets` still overrides.
+    wallets: process.env.E2E_WALLETS || 'alice',
     waitTime: '5',
     retryDelay: '5',
     // maxRetries × retryDelay(5s) = per ML0-confirmation / DL1-sync / validation wait budget.
@@ -269,7 +275,7 @@ async function waitForMl0Confirmation(
  * before the runner sends the next step.
  */
 async function waitForDl1Sync(
-  dl1BaseUrl: string,
+  dl1BaseUrls: string[],
   fiberId: string,
   expectedSeqNum: number | null,
   maxRetries: number,
@@ -277,33 +283,41 @@ async function waitForDl1Sync(
   label: string,
   log?: FlowLogger
 ): Promise<void> {
-  const url = `${dl1BaseUrl}/data-application/v1/onchain`;
-  const client = new HttpClient(url);
   const seqLabel = expectedSeqNum === null ? 'exists' : `seq≥${expectedSeqNum}`;
   const w = log ? (s: string) => log.write(s) : (s: string) => process.stdout.write(s);
-  w(`      ⏳ DL1 sync ${fiberId.slice(0, 8)}… (${seqLabel})`);
+  w(`      ⏳ DL1 sync ${fiberId.slice(0, 8)}… (${seqLabel}, ${dl1BaseUrls.length} nodes)`);
+
+  // Per-node readiness: a node is ready once its onchain fiberCommits reflect the prior commit.
+  // ALL nodes must be ready before we return, because the NEXT sequential transition fans out to
+  // every DL1 node and each validates against its OWN cache — a single node still trailing rejects
+  // that next update during block consensus, and it gets excluded from every block (no apply, no
+  // reject: the update simply never lands). Gating on the slowest node closes that hole.
+  const ready = new Array<boolean>(dl1BaseUrls.length).fill(false);
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const onChain = (await client.get<unknown>('')) as {
-        fiberCommits?: Record<string, { sequenceNumber?: number }>;
-      } | null;
-
-      if (onChain?.fiberCommits) {
-        const commit = onChain.fiberCommits[fiberId];
-        if (commit) {
+    await Promise.all(
+      dl1BaseUrls.map(async (base, i) => {
+        if (ready[i]) return;
+        try {
+          const onChain = (await new HttpClient(`${base}/data-application/v1/onchain`).get<unknown>(
+            ''
+          )) as { fiberCommits?: Record<string, { sequenceNumber?: number }> } | null;
+          const commit = onChain?.fiberCommits?.[fiberId];
+          if (!commit) return;
           if (expectedSeqNum === null) {
-            w(' ✓\n');
-            return;
+            ready[i] = true;
+          } else if (commit.sequenceNumber !== undefined && commit.sequenceNumber >= expectedSeqNum) {
+            ready[i] = true;
           }
-          if (commit.sequenceNumber !== undefined && commit.sequenceNumber >= expectedSeqNum) {
-            w(' ✓\n');
-            return;
-          }
+        } catch {
+          // node not ready yet — retry next attempt
         }
-      }
-    } catch {
-      // DL1 may not be ready yet — continue polling
+      })
+    );
+
+    if (ready.every(Boolean)) {
+      w(' ✓\n');
+      return;
     }
     w('.');
     if (attempt < maxRetries) {
@@ -311,10 +325,11 @@ async function waitForDl1Sync(
     }
   }
 
+  const lagging = dl1BaseUrls.filter((_, i) => !ready[i]).length;
   w(' ✗\n');
   throw new Error(
-    `DL1 sync timed out for ${label} at ${url} after ${maxRetries} attempts ` +
-      `(waiting for fiberId=${fiberId} seqNum=${expectedSeqNum ?? 'exists'})`
+    `DL1 sync timed out for ${label} after ${maxRetries} attempts ` +
+      `(waiting for fiberId=${fiberId} seqNum=${expectedSeqNum ?? 'exists'}; ${lagging}/${dl1BaseUrls.length} nodes still lagging)`
   );
 }
 
@@ -329,6 +344,8 @@ interface TestStep {
   event?: string;
   eventData?: Record<string, unknown>;
   expectedState?: string;
+  /** Assert the fiber's `stateData` deep-equals this object after a processEvent step. */
+  expectedStateData?: Record<string, unknown>;
   method?: string;
   args?: string;
   expectedResult?: unknown;
@@ -395,7 +412,8 @@ async function runFlow(
   maxRetries: number,
   retryDelayMs: number,
   waitTimeMs: number,
-  log?: FlowLogger
+  log?: FlowLogger,
+  webhook?: WebhookListener
 ): Promise<{ passed: boolean; error?: string; failedStep?: number }> {
   const w = log ? (s: string) => log.write(s) : (s: string) => process.stdout.write(s);
   const l = log ? (...a: unknown[]) => log.log(...a) : (...a: unknown[]) => console.log(...a);
@@ -473,8 +491,52 @@ async function runFlow(
         }
 
         const regInitial = await getInitialStates(ml0Env);
-        await sendSignedUpdate(regMessage, wallets, dl1Urls);
-        await waitForMl0Confirmation(ml0Urls[0], regPath, landed, maxRetries, retryDelayMs, `${step.action} ${regName}`, log);
+        // Registry ops are one-shot and confirmed by a poll-only read (no sequence number, no
+        // resubmit). A VALID registry update dropped by an all-or-nothing data-block poison (a peer
+        // fiber's invalid update voids the whole block) therefore never re-lands and the poll just
+        // times out — which is what sinks registerAlias at the high-parallel-load tail of a flow
+        // while the same path succeeds for the early publishVersion steps. Re-send on timeout to
+        // recover, but skip the re-send once it has landed: re-publishing an applied version is
+        // itself invalid (append-only / CidAlreadyExists) and would poison the next block.
+        const regResubmits = Number(process.env.E2E_MAX_RESUBMITS) || 3;
+        const regBudget = Math.max(4, Math.ceil(maxRetries / (regResubmits + 1)));
+        let regConfirmed = false;
+        for (let attempt = 0; attempt <= regResubmits && !regConfirmed; attempt++) {
+          if (attempt > 0) {
+            try {
+              const cur = await new HttpClient(
+                `${ml0Urls[0]}/data-application/v1/${regPath}`
+              ).get<unknown>('');
+              if (landed(cur)) {
+                regConfirmed = true;
+                break;
+              }
+            } catch {
+              // not in the registry yet → fall through and re-send
+            }
+          }
+          await sendSignedUpdate(regMessage, wallets, dl1Urls);
+          try {
+            await waitForMl0Confirmation(
+              ml0Urls[0],
+              regPath,
+              landed,
+              regBudget,
+              retryDelayMs,
+              `${step.action} ${regName}`,
+              log
+            );
+            regConfirmed = true;
+          } catch {
+            // timed out this round → the loop re-sends (unless it has since landed)
+          }
+        }
+        if (!regConfirmed) {
+          throw new Error(
+            `ML0 confirmation failed for ${step.action} ${regName}: not in registry after ` +
+              `${regResubmits + 1} attempts`
+          );
+        }
         await validateWithRetries(regLib.validator, session.cid, regInitial, regOptions, wallets, maxRetries, retryDelayMs, ml0Urls);
         l(' \x1b[32mOK\x1b[0m');
         continue;
@@ -584,6 +646,7 @@ async function runFlow(
           stepOptions = {
             eventData,
             expectedState: step.expectedState,
+            expectedStateData: step.expectedStateData,
             targetSequenceNumber: preSendSeqNum >= 0 ? preSendSeqNum : 0,
           };
 
@@ -750,7 +813,9 @@ async function runFlow(
         continue;
       }
 
-      // Ordinal-based confirmation with auto-resubmit
+      // Ordinal-based confirmation with auto-resubmit. Capture the ordinal at send time so the
+      // webhook rejection match ignores any stale rejection carried over from an earlier step.
+      const sentOrdinal = webhook?.latestOrdinal ?? 0;
       await waitForOrdinalConfirmation({
         ml0BaseUrl: ml0Urls[0],
         entityPath,
@@ -768,18 +833,75 @@ async function runFlow(
           return (record.sequenceNumber ?? -1) > preSendSeqNum;
         },
         resubmit: async () => {
+          // Re-sending an ALREADY-APPLIED update is the dominant cause of the parallel-flow failure:
+          // the duplicate lands in a shared all-or-nothing data block as CidAlreadyExists (create),
+          // NoTransitionForEvent (the fiber's state already advanced past this event), or
+          // SequenceNumberMismatch (its targetSeq is now behind the fiber's commit). ANY such invalid
+          // update fails the ENTIRE block — dropping every other fiber bundled in it, whose runners
+          // then resubmit and re-poison: a cascade that sinks otherwise-valid flows. So only re-send
+          // when the update is genuinely still in flight, never when it has already taken effect.
+          //
+          // Two guards, because the committed read trails GL0 finalization (ML0Service sets the read
+          // route from reader.committed, so an applied update stays invisible for a few ordinals):
+          //   1. committed read — catches applications old enough to have finalized.
+          try {
+            const rec = (await new HttpClient(
+              `${ml0Urls[0]}/data-application/v1/${entityPath}`
+            ).get<unknown>('')) as { sequenceNumber?: number; status?: string } | null;
+            const landed = isCreateStep
+              ? rec?.status === 'ACTIVE'
+              : (rec?.sequenceNumber ?? -1) > preSendSeqNum;
+            if (landed) return;
+          } catch {
+            // entity not found / read error → fall through to the rejection guard
+          }
+          //   2. rejection webhook (NON-lagging) — ML0 dispatches transaction.rejected the instant our
+          //      update (or a prior resubmit of it) is rejected. For a valid flow that happens ONLY
+          //      because the fiber already advanced past our target (the already-applied case). A
+          //      valid update merely dropped by an OTHER fiber's poison is itself valid → no rejection
+          //      → it correctly still re-sends. This is what catches the read-lag window the committed
+          //      poll above misses.
+          if (
+            webhook?.active &&
+            webhook.findRejection({ fiberId: activeCid, sinceOrdinal: sentOrdinal })
+          ) {
+            return;
+          }
           const freshMessage = await regenerateMessage();
           await sendToNodes(freshMessage);
         },
-        ordinalThreshold: 5,
-        maxResubmits: 3,
+        ordinalThreshold: Number(process.env.E2E_ORDINAL_THRESHOLD) || 5,
+        maxResubmits: Number(process.env.E2E_MAX_RESUBMITS) || 3,
         pollIntervalMs: 2000,
-        // No fixed wall-clock cap: a slow-but-advancing chain gets its full ordinal budget
-        // (5 × 4 = 20 ordinals). The stall gate fails fast (120s) only if ML0 stops producing
+        // No fixed wall-clock cap: a slow-but-advancing chain gets its full ordinal budget (default
+        // 5 × 4 = 20 ordinals; the heavy CI lane raises it via E2E_ORDINAL_THRESHOLD/E2E_MAX_RESUBMITS).
+        // The stall gate fails fast (120s) only if ML0 stops producing
         // snapshots entirely — i.e. genuine consensus death, not mere slowness under CI load.
         stallTimeoutMs: 120000,
         label: `${step.action} on ${activeCid}`,
         log: log ? { write: (s: string) => log.write(s) } : undefined,
+        // Webhook-driven: re-check the instant a snapshot finalizes (read state is fresh then), and
+        // fail fast with the chain's reason if this exact update is rejected.
+        waitNextSnapshot: webhook?.active ? (ms) => webhook!.waitNextSnapshot(ms) : undefined,
+        checkRejection: webhook?.active
+          ? () => {
+              const r = webhook!.findRejection({
+                fiberId: activeCid,
+                targetSeq: isCreateStep ? null : preSendSeqNum,
+                sinceOrdinal: sentOrdinal,
+              });
+              if (!r) return undefined;
+              // Redundant-rejection = success. The chain only rejected our update because the effect
+              // already committed: for a create, the fiber now exists (actualSeq present); for a
+              // transition, the fiber advanced past our target (actual > preSendSeqNum). This is the
+              // non-lagging confirmation that beats the GL0 read lag under contention. A genuine
+              // failure (or a still-missing predecessor) falls through to the existing throw.
+              const alreadyApplied = isCreateStep
+                ? r.actualSequenceNumber != null
+                : r.actualSequenceNumber != null && r.actualSequenceNumber > preSendSeqNum;
+              return { ordinal: r.ordinal, alreadyApplied, errors: r.errors };
+            }
+          : undefined,
       });
 
       // Wait for DL1 OnChain state to catch up with ML0.
@@ -803,7 +925,7 @@ async function runFlow(
         }
 
         await waitForDl1Sync(
-          dl1Urls[0],
+          dl1Urls,
           activeCid,
           expectedSeqNum,
           maxRetries,
@@ -880,7 +1002,14 @@ async function main() {
   const waitTimeMs = parseInt(opts.waitTime) * 1000;
 
   // Discover examples
-  const examples = await discoverExamples();
+  let examples = await discoverExamples();
+
+  // Lane filters: --only / --exclude (comma-separated example dir names) let CI split the suite into a
+  // fast "core" lane and a slow "heavy" lane (sigma-mixer/rule110/staked-oracle-pool). Unset = all.
+  const only = (opts.only ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  const exclude = (opts.exclude ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  if (only.length) examples = examples.filter((e) => only.includes(e.dir));
+  if (exclude.length) examples = examples.filter((e) => !exclude.includes(e.dir));
 
   if (examples.length === 0) {
     console.error('\x1b[31mNo examples with test flows found\x1b[0m');
@@ -909,6 +1038,33 @@ async function main() {
     process.exit(1);
   }
 
+  // Subscribe to ML0 snapshot/rejection webhooks so confirmations are driven by PUSHES — the chain
+  // commits the read state before dispatching `snapshot.finalized`, so a re-check on each push sees
+  // fresh state — instead of blind-polling a lagging read. Falls back to polling automatically if the
+  // ML0 build doesn't expose webhooks or the callback isn't reachable.
+  const webhook = new WebhookListener();
+  await webhook.start(ml0Urls);
+  console.log(
+    webhook.active
+      ? '\x1b[36m[webhook]\x1b[0m subscribed — confirmations are push-driven\n'
+      : '\x1b[33m[webhook]\x1b[0m not available — falling back to ordinal polling\n'
+  );
+
+  // Keep the chain fed so it never idles into the data-L1 deadlock (see lib/keepalive.ts): once every
+  // flow pauses to wait on a confirmation, the data pipeline stalls permanently and any in-flight
+  // update is stranded uncombined. A steady trickle of throwaway fiber-creates keeps the data-L1
+  // forming blocks for the whole run, so stuck flow updates ride along and get combined. rule110's
+  // definition is a known-good, dependency-free create (no schemaRef binding).
+  const keepalive = new ChainKeepalive(wallets, dl1Urls, {
+    definition: JSON.parse(
+      fs.readFileSync(path.join(examplesDir, 'rule110', 'definition.json'), 'utf8')
+    ),
+    initialData: JSON.parse(
+      fs.readFileSync(path.join(examplesDir, 'rule110', 'initial-data.json'), 'utf8')
+    ),
+  });
+  keepalive.start();
+
   const startTime = Date.now();
   let results: FlowResult[];
 
@@ -916,9 +1072,10 @@ async function main() {
     // -----------------------------------------------------------------------
     // Parallel mode: run all flows concurrently with buffered output
     // -----------------------------------------------------------------------
-    console.log(`Launching ${flowPairs.length} flows in parallel…\n`);
+    const CONCURRENCY = Number(process.env.E2E_CONCURRENCY) || flowPairs.length;
+    console.log(`Launching ${flowPairs.length} flows, ${CONCURRENCY} at a time…\n`);
 
-    const promises = flowPairs.map(async ({ example, flow }) => {
+    const runOne = async ({ example, flow }: (typeof flowPairs)[number]): Promise<FlowResult> => {
       const tag = `${example.dir}/${flow.name}`;
       const logger = new FlowLogger(tag);
       logger.log(
@@ -937,7 +1094,8 @@ async function main() {
         maxRetries,
         retryDelayMs,
         waitTimeMs,
-        logger
+        logger,
+        webhook
       );
       const durationMs = Date.now() - flowStart;
 
@@ -960,9 +1118,24 @@ async function main() {
         durationMs,
         ...result,
       } satisfies FlowResult;
-    });
+    };
 
-    results = await Promise.all(promises);
+    // Bounded-concurrency pool: keep at most CONCURRENCY flows in flight. A heavy
+    // guard (e.g. sigma_verify) on a resource-limited CI cluster slows ML0 snapshot
+    // production; capping in-flight flows stops that from starving every other flow's
+    // transactions of their ordinal-confirmation budget. Result order is preserved.
+    results = new Array<FlowResult>(flowPairs.length);
+    let cursor = 0;
+    const worker = async (): Promise<void> => {
+      for (;;) {
+        const i = cursor++;
+        if (i >= flowPairs.length) return;
+        results[i] = await runOne(flowPairs[i]);
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, flowPairs.length) }, () => worker())
+    );
   } else {
     // -----------------------------------------------------------------------
     // Sequential mode: same as original behavior (no buffering needed)
@@ -985,7 +1158,9 @@ async function main() {
         dl1Urls,
         maxRetries,
         retryDelayMs,
-        waitTimeMs
+        waitTimeMs,
+        undefined,
+        webhook
       );
       const durationMs = Date.now() - flowStart;
 
@@ -1007,6 +1182,8 @@ async function main() {
       }
     }
   }
+
+  keepalive.stop();
 
   const totalDurationMs = Date.now() - startTime;
 
@@ -1031,6 +1208,7 @@ async function main() {
   }
 
   console.log(`\nExit code: ${failed > 0 ? 1 : 0}`);
+  await webhook.stop();
   process.exit(failed > 0 ? 1 : 0);
 }
 

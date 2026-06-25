@@ -40,10 +40,10 @@ object Main
     implicit0(sp: SecurityProvider[IO])              <- SecurityProvider.forAsync[IO]
     _                                                <- loadKeyPair[IO](config).asResource
 
-    // Create HTTP client for webhook delivery (only if webhook URL is configured)
-    httpClient <- config.webhook.url.fold(Resource.pure[IO, Option[org.http4s.client.Client[IO]]](None)) { _ =>
-      EmberClientBuilder.default[IO].build.map(Some(_))
-    }
+    // HTTP client for webhook delivery, built unconditionally. The snapshot/rejection dispatcher is a
+    // no-op when no subscriber is registered, so there is no reason to gate it on a config flag —
+    // subscription via POST /webhooks/subscribe is what actually turns delivery on.
+    httpClient <- EmberClientBuilder.default[IO].build.map(c => Some(c): Option[org.http4s.client.Client[IO]])
 
     // Committed-catalog journal: the node-local LevelDB store that lets a restarted/seeded node
     // re-hydrate its committed cell (without it, a seed lands unhydrated and stalls at combine).

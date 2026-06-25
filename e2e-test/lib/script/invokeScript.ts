@@ -3,6 +3,7 @@ import path from 'path';
 import type { OttochainMessage } from '@ottochain/sdk/core';
 import type { StatesMap } from '../types.ts';
 import { validateScriptLogs } from '../validateLogs.ts';
+import { vlog } from '../verbose.ts';
 
 export interface InvokeScriptOptions {
   method: string;
@@ -67,18 +68,14 @@ export const validator = async ({ cid, statesMap, options, ml0Urls }: { cid: str
     // US-7: invocationLog[0] → lastInvocation
     const latestInvocation = finalRecord.lastInvocation;
     if (latestInvocation) {
-      console.log(
+      vlog(
         `\x1b[33m[invokeScript.validator]\x1b[32m Script invoked successfully for fiberId = ${cid} at ${url}.`
       );
-      console.log(
-        `\x1b[33m[invokeScript.validator]\x1b[0m   Method: ${latestInvocation.method}`
-      );
-      console.log(
+      vlog(`\x1b[33m[invokeScript.validator]\x1b[0m   Method: ${latestInvocation.method}`);
+      vlog(
         `\x1b[33m[invokeScript.validator]\x1b[0m   Result: ${JSON.stringify(latestInvocation.result)}`
       );
-      console.log(
-        `\x1b[33m[invokeScript.validator]\x1b[0m   Gas Used: ${latestInvocation.gasUsed}`
-      );
+      vlog(`\x1b[33m[invokeScript.validator]\x1b[0m   Gas Used: ${latestInvocation.gasUsed}`);
 
       if (options.expectedResult !== undefined) {
         const expectedResult =

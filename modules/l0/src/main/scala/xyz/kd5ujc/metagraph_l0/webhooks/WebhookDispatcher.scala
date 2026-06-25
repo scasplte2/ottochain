@@ -5,17 +5,12 @@ import java.time.Instant
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
-import cats.data.NonEmptyChain
 import cats.effect.kernel.Async
 import cats.implicits._
 
-import io.constellationnetwork.currency.dataApplication.DataApplicationValidationError
 import io.constellationnetwork.currency.schema.currency.CurrencyIncrementalSnapshot
-import io.constellationnetwork.schema.SnapshotOrdinal
 import io.constellationnetwork.security.Hashed
-import io.constellationnetwork.security.signature.Signed
 
-import xyz.kd5ujc.schema.Updates._
 import xyz.kd5ujc.schema.api.webhooks._
 
 import io.circe.syntax._
@@ -37,24 +32,9 @@ trait WebhookDispatcher[F[_]] {
    * Delivery is fire-and-forget to avoid blocking consensus.
    */
   def dispatch(
-    snapshot: Hashed[CurrencyIncrementalSnapshot],
-    stats:    NotificationStats
-  ): F[Unit]
-
-  /**
-   * Dispatch rejection notification for a failed validation.
-   * This should be called from validateData when an update fails validation.
-   *
-   * Delivery is fire-and-forget to avoid blocking consensus.
-   *
-   * @param ordinal Current snapshot ordinal
-   * @param signedUpdate The update that was rejected
-   * @param errors The validation errors that caused the rejection
-   */
-  def dispatchRejection(
-    ordinal:      SnapshotOrdinal,
-    signedUpdate: Signed[OttochainMessage],
-    errors:       NonEmptyChain[DataApplicationValidationError]
+    snapshot:   Hashed[CurrencyIncrementalSnapshot],
+    stats:      NotificationStats,
+    rejections: List[SnapshotRejection]
   ): F[Unit]
 }
 
@@ -75,8 +55,9 @@ object WebhookDispatcher {
     new WebhookDispatcher[F] {
 
       def dispatch(
-        snapshot: Hashed[CurrencyIncrementalSnapshot],
-        stats:    NotificationStats
+        snapshot:   Hashed[CurrencyIncrementalSnapshot],
+        stats:      NotificationStats,
+        rejections: List[SnapshotRejection]
       ): F[Unit] = {
         val notification = SnapshotNotification(
           event = "snapshot.finalized",
@@ -84,7 +65,8 @@ object WebhookDispatcher {
           hash = snapshot.hash.value,
           timestamp = Instant.now(),
           metagraphId = metagraphId,
-          stats = stats
+          stats = stats,
+          rejections = rejections
         )
 
         val body = notification.asJson.noSpaces
@@ -107,89 +89,6 @@ object WebhookDispatcher {
             }
           }
         }
-      }
-
-      def dispatchRejection(
-        ordinal:      SnapshotOrdinal,
-        signedUpdate: Signed[OttochainMessage],
-        errors:       NonEmptyChain[DataApplicationValidationError]
-      ): F[Unit] = {
-        val update = signedUpdate.value
-
-        // Extract target sequence number for transition-like updates
-        val targetSeqNum: Option[Long] = update match {
-          case u: TransitionStateMachine => Some(u.targetSequenceNumber.value.value)
-          case u: ArchiveStateMachine    => Some(u.targetSequenceNumber.value.value)
-          case u: UpgradeFiber           => Some(u.targetSequenceNumber.value.value)
-          case u: InvokeScript           => Some(u.targetSequenceNumber.value.value)
-          case _                         => None
-        }
-
-        // Extract signer IDs from proofs (hex representation)
-        val signers = signedUpdate.proofs.toList.map(_.id.hex.value)
-
-        // Compute hash of signed update for dedup
-        val updateHash = computeUpdateHash(signedUpdate)
-
-        // Convert validation errors to our format
-        val validationErrors = errors.toList.map { err =>
-          ValidationError(
-            code = err.getClass.getSimpleName.stripSuffix("$"),
-            message = err.message
-          )
-        }
-
-        val rejectedUpdate = RejectedUpdate(
-          updateType = update.messageName,
-          fiberId = update.fiberId,
-          targetSequenceNumber = targetSeqNum,
-          errors = validationErrors,
-          signers = signers,
-          updateHash = updateHash
-        )
-
-        val notification = RejectionNotification(
-          event = "transaction.rejected",
-          ordinal = ordinal.value.value,
-          timestamp = Instant.now(),
-          metagraphId = metagraphId,
-          rejection = rejectedUpdate
-        )
-
-        val body = notification.asJson.noSpaces
-
-        registry.listActive.flatMap { subscribers =>
-          if (subscribers.isEmpty) {
-            F.unit
-          } else {
-            logger.info(
-              s"Dispatching rejection webhook for ${update.messageName} fiberId=${update.fiberId} " +
-              s"to ${subscribers.size} subscribers (errors: ${validationErrors.map(_.code).mkString(", ")})"
-            ) *>
-            subscribers.traverse_ { sub =>
-              deliverToSubscriber(sub, body)
-                .flatTap(_ => logger.debug(s"Rejection webhook delivered to ${sub.callbackUrl}"))
-                .handleErrorWith { err =>
-                  // Fire-and-forget: log failure but don't track for rejection notifications
-                  logger.warn(s"Rejection webhook delivery failed for ${sub.callbackUrl}: ${err.getMessage}")
-                }
-            }
-          }
-        }
-      }
-
-      /**
-       * Compute a stable hash of the signed update for deduplication.
-       * Uses the update JSON + first signer to create a unique identifier.
-       */
-      private def computeUpdateHash(signedUpdate: Signed[OttochainMessage]): String = {
-        val updateJson = signedUpdate.value.asJson.noSpaces
-        val firstSigner = signedUpdate.proofs.head.id.hex.value
-        val combined = s"$updateJson:$firstSigner"
-
-        val digest = java.security.MessageDigest.getInstance("SHA-256")
-        digest.update(combined.getBytes(StandardCharsets.UTF_8))
-        digest.digest().map("%02x".format(_)).mkString
       }
 
       private def deliverToSubscriber(sub: Subscriber, body: String): F[Unit] =

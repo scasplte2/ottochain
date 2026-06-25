@@ -437,6 +437,27 @@ class AssetCombiner[F[_]: Async: SecurityProvider](
         s"asset ${transfer.assetId} is not transferable (T=0) — fiber $emittingFiberId cannot transfer it"
       )
 
+      // FiberPolicy dial `transferPolicy`: the EMITTING fiber's hash-pinned recipient allowlist. Read from the
+      // authoritative state (never from the extracted effect). A recipient outside the allowlist is a graceful
+      // CombineRejected (whole update discarded via RejectionReceipt — never a partial apply). `None` on a
+      // recipient class ⇒ that class is unconstrained; absent policy ⇒ legacy (any recipient).
+      _ <- st.calculated.stateMachines
+        .get(emittingFiberId)
+        .flatMap(_.definition.policy)
+        .flatMap(_.transferPolicy)
+        .fold(Async[F].unit) { tp =>
+          val (permitted, who) = transfer.recipient match {
+            case AssetHolder.Fiber(targetId) =>
+              (tp.allowedRecipientFibers.forall(_.contains(targetId)), s"fiber $targetId")
+            case AssetHolder.Wallet(addr) =>
+              (tp.allowedRecipientWallets.forall(_.contains(addr)), s"wallet ${addr.show}")
+          }
+          raiseRejected(
+            permitted,
+            s"transferPolicy: fiber $emittingFiberId may not transfer asset ${transfer.assetId} to $who"
+          )
+        }
+
       // Target liveness: a Fiber recipient must be a live, non-archived fiber record (§5e/§10).
       _ <- transfer.recipient match {
         case AssetHolder.Fiber(targetId) =>

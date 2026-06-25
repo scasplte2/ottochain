@@ -1,0 +1,450 @@
+{
+  "states": {
+    "RUNNING": {
+      "id": "RUNNING",
+      "isFinal": false,
+      "metadata": {
+        "label": "Running",
+        "description": "CA evolving; each step = one generation",
+        "category": "active"
+      }
+    },
+    "HALTED": {
+      "id": "HALTED",
+      "isFinal": true,
+      "metadata": {
+        "label": "Halted",
+        "description": "maxGen reached; terminal",
+        "category": "terminal"
+      }
+    }
+  },
+  "initialState": "RUNNING",
+  "transitions": [
+    {
+      "from": "RUNNING",
+      "to": "RUNNING",
+      "eventName": "step",
+      "guard": {
+        "or": [
+          {
+            "missing": [
+              "state.maxGen"
+            ]
+          },
+          {
+            "<": [
+              {
+                "var": "state.gen"
+              },
+              {
+                "var": "state.maxGen"
+              }
+            ]
+          }
+        ]
+      },
+      "effect": {
+        "merge": [
+          {
+            "var": "state"
+          },
+          {
+            "tape": {
+              "map": [
+                {
+                  "var": "state.idx"
+                },
+                {
+                  "if": [
+                    {
+                      "or": [
+                        {
+                          "==": [
+                            {
+                              "+": [
+                                {
+                                  "*": [
+                                    4,
+                                    {
+                                      "var": [
+                                        {
+                                          "cat": [
+                                            "state.tape.",
+                                            {
+                                              "-": [
+                                                {
+                                                  "var": ""
+                                                },
+                                                1
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        0
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "*": [
+                                    2,
+                                    {
+                                      "var": [
+                                        {
+                                          "cat": [
+                                            "state.tape.",
+                                            {
+                                              "var": ""
+                                            }
+                                          ]
+                                        },
+                                        0
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "var": [
+                                    {
+                                      "cat": [
+                                        "state.tape.",
+                                        {
+                                          "+": [
+                                            {
+                                              "var": ""
+                                            },
+                                            1
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    0
+                                  ]
+                                }
+                              ]
+                            },
+                            1
+                          ]
+                        },
+                        {
+                          "==": [
+                            {
+                              "+": [
+                                {
+                                  "*": [
+                                    4,
+                                    {
+                                      "var": [
+                                        {
+                                          "cat": [
+                                            "state.tape.",
+                                            {
+                                              "-": [
+                                                {
+                                                  "var": ""
+                                                },
+                                                1
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        0
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "*": [
+                                    2,
+                                    {
+                                      "var": [
+                                        {
+                                          "cat": [
+                                            "state.tape.",
+                                            {
+                                              "var": ""
+                                            }
+                                          ]
+                                        },
+                                        0
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "var": [
+                                    {
+                                      "cat": [
+                                        "state.tape.",
+                                        {
+                                          "+": [
+                                            {
+                                              "var": ""
+                                            },
+                                            1
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    0
+                                  ]
+                                }
+                              ]
+                            },
+                            2
+                          ]
+                        },
+                        {
+                          "==": [
+                            {
+                              "+": [
+                                {
+                                  "*": [
+                                    4,
+                                    {
+                                      "var": [
+                                        {
+                                          "cat": [
+                                            "state.tape.",
+                                            {
+                                              "-": [
+                                                {
+                                                  "var": ""
+                                                },
+                                                1
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        0
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "*": [
+                                    2,
+                                    {
+                                      "var": [
+                                        {
+                                          "cat": [
+                                            "state.tape.",
+                                            {
+                                              "var": ""
+                                            }
+                                          ]
+                                        },
+                                        0
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "var": [
+                                    {
+                                      "cat": [
+                                        "state.tape.",
+                                        {
+                                          "+": [
+                                            {
+                                              "var": ""
+                                            },
+                                            1
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    0
+                                  ]
+                                }
+                              ]
+                            },
+                            3
+                          ]
+                        },
+                        {
+                          "==": [
+                            {
+                              "+": [
+                                {
+                                  "*": [
+                                    4,
+                                    {
+                                      "var": [
+                                        {
+                                          "cat": [
+                                            "state.tape.",
+                                            {
+                                              "-": [
+                                                {
+                                                  "var": ""
+                                                },
+                                                1
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        0
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "*": [
+                                    2,
+                                    {
+                                      "var": [
+                                        {
+                                          "cat": [
+                                            "state.tape.",
+                                            {
+                                              "var": ""
+                                            }
+                                          ]
+                                        },
+                                        0
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "var": [
+                                    {
+                                      "cat": [
+                                        "state.tape.",
+                                        {
+                                          "+": [
+                                            {
+                                              "var": ""
+                                            },
+                                            1
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    0
+                                  ]
+                                }
+                              ]
+                            },
+                            5
+                          ]
+                        },
+                        {
+                          "==": [
+                            {
+                              "+": [
+                                {
+                                  "*": [
+                                    4,
+                                    {
+                                      "var": [
+                                        {
+                                          "cat": [
+                                            "state.tape.",
+                                            {
+                                              "-": [
+                                                {
+                                                  "var": ""
+                                                },
+                                                1
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        0
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "*": [
+                                    2,
+                                    {
+                                      "var": [
+                                        {
+                                          "cat": [
+                                            "state.tape.",
+                                            {
+                                              "var": ""
+                                            }
+                                          ]
+                                        },
+                                        0
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "var": [
+                                    {
+                                      "cat": [
+                                        "state.tape.",
+                                        {
+                                          "+": [
+                                            {
+                                              "var": ""
+                                            },
+                                            1
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    0
+                                  ]
+                                }
+                              ]
+                            },
+                            6
+                          ]
+                        }
+                      ]
+                    },
+                    1,
+                    0
+                  ]
+                }
+              ]
+            },
+            "gen": {
+              "+": [
+                {
+                  "var": "state.gen"
+                },
+                1
+              ]
+            }
+          }
+        ]
+      },
+      "dependencies": []
+    },
+    {
+      "from": "RUNNING",
+      "to": "HALTED",
+      "eventName": "halt",
+      "guard": {
+        ">=": [
+          {
+            "var": "state.gen"
+          },
+          {
+            "var": "state.maxGen"
+          }
+        ]
+      },
+      "effect": {
+        "merge": [
+          {
+            "var": "state"
+          },
+          {
+            "status": "halted"
+          }
+        ]
+      },
+      "dependencies": []
+    }
+  ]
+}

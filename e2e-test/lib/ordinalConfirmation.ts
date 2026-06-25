@@ -37,10 +37,37 @@ export interface OrdinalConfirmationOptions {
    * (`ordinalThreshold` × (`maxResubmits` + 1) ordinals) and the stall gate.
    */
   maxTotalTimeMs?: number;
+  /**
+   * Wall-clock FLOOR before "ordinal budget exhausted" may fire. The ordinal budget was designed when
+   * an idle metagraph spent tens of seconds per ordinal, so N ordinals meant minutes of real time.
+   * The chain keepalive keeps the chain hot (multiple ordinals/sec), which collapses that same N-ordinal
+   * budget to a few seconds — far too short for the GL0-finalized committed read to catch up under load.
+   * So once resubmits are spent we keep polling (no more re-sends) until at least this much wall-clock
+   * has elapsed, giving the trailing read time to surface an update that IS out there. The stall gate
+   * still fails fast if the chain actually dies. (default: 60000 = 1 min; 0 disables the floor)
+   */
+  minWallClockMs?: number;
   /** Label for logging */
   label: string;
   /** Optional logger for buffered output */
   log?: { write: (s: string) => void };
+  /**
+   * Push-driven confirmation (webhook). When provided, the loop re-checks the entity the instant a
+   * `snapshot.finalized` arrives (the chain commits read state BEFORE dispatching the webhook, so the
+   * read is fresh) instead of blind-polling — and a matching `transaction.rejected` fails fast with
+   * the on-chain reason instead of timing out as "not included".
+   */
+  waitNextSnapshot?: (timeoutMs: number) => Promise<void>;
+  /**
+   * Returns the on-chain rejection for this update if one has arrived, else undefined. `alreadyApplied`
+   * is true when the rejection is REDUNDANT — the chain rejected our update only because the effect
+   * already committed (a create whose fiber now exists, or a transition whose fiber advanced past our
+   * target). That is a non-lagging proof of success, used to confirm without waiting on the trailing
+   * GL0-finalized read.
+   */
+  checkRejection?: () =>
+    | { ordinal: number; alreadyApplied: boolean; errors: { code: string; message: string }[] }
+    | undefined;
 }
 
 interface OrdinalSnapshot {
@@ -124,8 +151,11 @@ export async function waitForOrdinalConfirmation(
     pollIntervalMs = 2000,
     stallTimeoutMs = 120000,
     maxTotalTimeMs,
+    minWallClockMs = Number(process.env.E2E_MIN_CONFIRM_MS) || 60000,
     label,
     log,
+    waitNextSnapshot,
+    checkRejection,
   } = opts;
 
   const w = log ? (s: string) => log.write(s) : (s: string) => process.stdout.write(s);
@@ -182,6 +212,25 @@ export async function waitForOrdinalConfirmation(
       return;
     }
 
+    // Explicit on-chain rejection (webhook): fail fast with the reason instead of timing out as
+    // "not included". This is the deterministic signal the blind poll never had.
+    const rejection = checkRejection?.();
+    if (rejection) {
+      if (rejection.alreadyApplied) {
+        // Redundant rejection = deterministic proof the step committed (the chain advanced past our
+        // target). Confirm via this non-lagging signal instead of waiting on the GL0-finalized read,
+        // which trails the live combine under load — this is what makes confirmation
+        // contention-independent (the read-lag failures that needed lane isolation).
+        w(' ✓ (already applied)\n');
+        return;
+      }
+      w(' ✗ (rejected)\n');
+      throw new Error(
+        `${TAG} ${label} was REJECTED at ML0 (ordinal ${rejection.ordinal}): ` +
+          rejection.errors.map((e) => `${e.code}: ${e.message}`).join('; ')
+      );
+    }
+
     // Check current ordinal
     const currentSnapshot = await getCurrentOrdinal(ml0BaseUrl);
     if (currentSnapshot) {
@@ -194,14 +243,34 @@ export async function waitForOrdinalConfirmation(
       const ordinalDelta = currentSnapshot.ordinal - startSnapshot.ordinal;
 
       if (ordinalDelta >= ordinalThreshold) {
-        // Ordinals passed without our tx appearing — resubmit
+        // Ordinals passed without our tx surfacing — resubmit (a re-attempt for a genuinely-unlanded
+        // update). The DUPLICATE-seq hazard (resubmitting an already-applied update → DL1 block with a
+        // duplicate seq → SequenceNumberMismatch) is handled inside `resubmit()` itself: it re-reads
+        // the fiber and skips the send if it already advanced. By now the lagging read has had a full
+        // threshold window to catch up, so that check is reliable.
         if (resubmitCount >= maxResubmits) {
-          w(' ✗ (ordinal budget exhausted)\n');
-          throw new Error(
-            `${TAG} Confirmation failed for ${label}: transaction not included after ` +
-              `${ordinalThreshold} ordinals × ${maxResubmits + 1} attempts ` +
-              `(final ordinal: ${currentSnapshot.ordinal})`
-          );
+          // Ordinal budget spent. But under the keepalive, ordinals fly by far faster than GL0
+          // finalizes, so this can be reached in seconds while the committed read is still trailing an
+          // update that DID land. Hold off the failure until a real wall-clock floor has passed —
+          // keep polling (no more re-sends, the update is already out there) so the lagging read can
+          // surface it. The stall gate still fires fast if the chain genuinely dies.
+          if (Date.now() - startTime >= minWallClockMs) {
+            w(' ✗ (ordinal budget exhausted)\n');
+            throw new Error(
+              `${TAG} Confirmation failed for ${label}: transaction not included after ` +
+                `${ordinalThreshold} ordinals × ${maxResubmits + 1} attempts ` +
+                `(final ordinal: ${currentSnapshot.ordinal}, ${Math.round((Date.now() - startTime) / 1000)}s)`
+            );
+          }
+          // Reset the window so we don't spin this branch; keep waiting for the read to catch up.
+          startSnapshot = currentSnapshot;
+          w('·');
+          if (waitNextSnapshot) {
+            await waitNextSnapshot(pollIntervalMs);
+          } else {
+            await new Promise((r) => setTimeout(r, pollIntervalMs));
+          }
+          continue;
         }
 
         resubmitCount++;
@@ -220,7 +289,13 @@ export async function waitForOrdinalConfirmation(
     }
 
     w('.');
-    await new Promise((r) => setTimeout(r, pollIntervalMs));
+    // Wake on the next `snapshot.finalized` push — read state is committed before the webhook fires,
+    // so the next checkEntity sees fresh state — or fall back to the poll interval if no webhook.
+    if (waitNextSnapshot) {
+      await waitNextSnapshot(pollIntervalMs);
+    } else {
+      await new Promise((r) => setTimeout(r, pollIntervalMs));
+    }
   }
 }
 

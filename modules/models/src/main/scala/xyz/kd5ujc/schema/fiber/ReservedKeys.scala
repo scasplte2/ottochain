@@ -68,6 +68,12 @@ object ReservedKeys {
   val ORDINAL = "$ordinal" // Current snapshot ordinal - use for deadline comparisons
   val LAST_SNAPSHOT_HASH = "$lastSnapshotHash" // Hash of parent snapshot - use for randomness, verification
   val EPOCH_PROGRESS = "$epochProgress" // Current epoch progress
+  // engine-stamped cross-fiber caller (engine-default-fixes Fix 2): the EMITTING fiber id of the cross-fiber
+  // trigger, surfaced to the guard context; NullValue for external/primary (wallet) triggers. Non-spoofable —
+  // a fiber cannot forge being another fiber; the engine writes the id at EffectExtractor (:136/:169). A
+  // self-trigger naturally yields $caller == $machineId. External-wallet authorization stays the `proofs`
+  // channel, NOT $caller ($caller=null only says "some non-fiber", it cannot say WHICH wallet).
+  val CALLER = "$caller"
   val PROOFS = "proofs"
   val ADDRESS = "address"
   val ID = "id"
@@ -76,6 +82,18 @@ object ReservedKeys {
   val PARENT = "parent"
   val CHILDREN = "children"
   val SCRIPTS = "scripts"
+
+  // FiberPolicy version & compatibility family (fiber-policy.md `version-compat-family`): the read-only
+  // projection of a depended-on fiber's policy surfaced into machines.<id>._policy, so a consumer guard can
+  // assert a VERIFIED version floor (`depVersionAtLeast`) or an advertised interface (`depSupportsInterface`).
+  // ALWAYS present + well-typed (fail-closed): `version` is a MAP {major,minor,patch} (D2 — JLVM has no
+  // integer-indexed `get`), empty {} when the producer is unbound; `interfaces` is ALWAYS an Array.
+  val POLICY = "_policy"
+  val POLICY_VERSION = "version"
+  val POLICY_INTERFACES = "interfaces"
+  val POLICY_MAJOR = "major"
+  val POLICY_MINOR = "minor"
+  val POLICY_PATCH = "patch"
   val HELD_ASSETS = "heldAssets" // Assets held by this fiber (asset-model.md §10), injected into eval context
 
   // Asset Transfer Directive Keys - Used in extractAssetTransfers for _transferAsset
