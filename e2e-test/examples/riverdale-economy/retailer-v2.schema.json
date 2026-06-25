@@ -1,0 +1,21 @@
+{
+  "stateMessage": {
+    "typeName": "Retailer",
+    "fields": [
+      { "name": "shipmentsReceived", "number": 1, "typeName": "int64", "repeated": false, "optional": false },
+      { "name": "receivedQuantity", "number": 2, "typeName": "int64", "repeated": false, "optional": true },
+      { "name": "status", "number": 3, "typeName": "string", "repeated": false, "optional": true },
+      { "name": "loyaltyPoints", "number": 4, "typeName": "int64", "repeated": false, "optional": true }
+    ]
+  },
+  "commands": {
+    "receive_shipment": {
+      "typeName": "ReceiveShipment",
+      "fields": [{ "name": "quantity", "number": 1, "typeName": "int64", "repeated": false, "optional": false }]
+    },
+    "redeem_loyalty": {
+      "typeName": "RedeemLoyalty",
+      "fields": [{ "name": "points", "number": 1, "typeName": "int64", "repeated": false, "optional": false }]
+    }
+  }
+}

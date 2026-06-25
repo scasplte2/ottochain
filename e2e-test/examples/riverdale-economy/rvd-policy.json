@@ -1,0 +1,13 @@
+{
+  "name": "rvd.asset",
+  "version": "1.0.0",
+  "behavior": 28,
+  "supply": {
+    "mintPolicy": { "==": [1, 1] }
+  },
+  "morphisms": {},
+  "stateShape": {
+    "typeName": "RvdState",
+    "fields": []
+  }
+}

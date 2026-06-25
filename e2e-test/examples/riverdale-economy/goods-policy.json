@@ -1,0 +1,13 @@
+{
+  "name": "goods.asset",
+  "version": "1.0.0",
+  "behavior": 20,
+  "supply": {
+    "mintPolicy": { "==": [1, 1] }
+  },
+  "morphisms": {},
+  "stateShape": {
+    "typeName": "GoodsState",
+    "fields": []
+  }
+}

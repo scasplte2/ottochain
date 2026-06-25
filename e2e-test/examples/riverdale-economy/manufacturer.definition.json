@@ -1,0 +1,33 @@
+{
+  "states": {
+    "stocked": { "id": "stocked", "isFinal": false },
+    "shipped": { "id": "shipped", "isFinal": false }
+  },
+  "initialState": "stocked",
+  "transitions": [
+    {
+      "from": "stocked",
+      "to": "shipped",
+      "eventName": "fulfill_order",
+      "guard": { ">=": [{ "var": "state.inventory" }, { "var": "event.quantity" }] },
+      "effect": {
+        "_triggers": [
+          {
+            "targetMachineId": { "var": "event.retailerId" },
+            "eventName": "receive_shipment",
+            "payload": { "quantity": { "var": "event.quantity" } }
+          }
+        ],
+        "_transferAsset": [
+          {
+            "assetId": { "var": "event.goodsAssetId" },
+            "recipient": { "var": "event.retailerId" }
+          }
+        ],
+        "status": "shipped",
+        "inventory": { "-": [{ "var": "state.inventory" }, { "var": "event.quantity" }] }
+      },
+      "dependencies": []
+    }
+  ]
+}

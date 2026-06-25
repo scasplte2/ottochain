@@ -26,7 +26,7 @@ jobs:
       matrix:
         lane:
           - name: core
-            filter: '--exclude sigma-mixer,rule110,staked-oracle-pool,tictactoe'
+            filter: '--exclude sigma-mixer,rule110,staked-oracle-pool,tictactoe,riverdale-economy'
             concurrency: ''
             ordinalThreshold: ''
             maxResubmits: ''
@@ -89,6 +89,21 @@ jobs:
             ordinalThreshold: '30'
             maxResubmits: '1'
             timeout: 45
+          # riverdale-economy: the first e2e to exercise REAL asset custody + multi-fiber orchestration.
+          # One causal flow (concurrency 1) over 3 party-owned fibers (alice=manufacturer, bob=retailer,
+          # carol=consumer): cross-fiber _triggers (manufacturer.fulfill_order -> retailer.receive_shipment),
+          # real _transferAsset GOODS custody manufacturer-fiber -> retailer-fiber in one transition, and a
+          # verified-bound retailer schema upgrade v1->v2 + migration + a v2-only transition. Needs the 3
+          # distinct party wallets (a step's `signers` ARE its owners/authorizers). Higher ordinal budget:
+          # asset-policy publish + two mints + the new assertAsset/assertState committed reads add confirm
+          # round-trips beyond a plain transition lane.
+          - name: riverdale-economy
+            filter: '--only riverdale-economy'
+            concurrency: '1'
+            wallets: 'alice,bob,carol'
+            ordinalThreshold: '15'
+            maxResubmits: '2'
+            timeout: 40
 
     steps:
       - uses: actions/checkout@v7
