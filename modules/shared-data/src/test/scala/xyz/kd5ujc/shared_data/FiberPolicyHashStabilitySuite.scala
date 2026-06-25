@@ -123,4 +123,40 @@ object FiberPolicyHashStabilitySuite extends SimpleIOSuite {
     val policyField = baseDef.asJson.hcursor.downField("policy").focus
     IO.pure(expect(policyField.forall(_.isNull)))
   }
+
+  test("Immutable encodes to the bare string \"Immutable\" and round-trips") {
+    val immutableDef = baseDef.copy(policy = FiberPolicy.Immutable)
+    val policyField = immutableDef.asJson.hcursor.downField("policy").focus
+    for {
+      reDecoded <- IO.fromEither(decode[StateMachineDefinition](immutableDef.asJson.noSpaces))
+    } yield expect(policyField.contains(io.circe.Json.fromString("Immutable"))) and
+    expect(reDecoded.policy == FiberPolicy.Immutable)
+  }
+
+  test("a Constrained setting ONLY upgradePolicy=Immutable collapses to Immutable (one canonical form)") {
+    val collapsed = FiberPolicy.constrained(upgradePolicy = Some(UpgradePolicy.Immutable))
+    val notImmutable =
+      FiberPolicy.constrained(upgradePolicy = Some(UpgradePolicy.Immutable), maxGenerations = Some(3))
+    IO.pure(
+      expect(collapsed == FiberPolicy.Immutable) and
+      expect(notImmutable.isInstanceOf[FiberPolicy.Constrained])
+    )
+  }
+
+  test("a wire dials object {upgradePolicy:immutable} also decodes to Immutable (collapse on decode)") {
+    val dialsJson = """{
+      "states": { "init": { "id": "init", "isFinal": false } },
+      "initialState": "init",
+      "transitions": [],
+      "policy": { "upgradePolicy": "immutable" }
+    }"""
+    for {
+      fromDials <- IO.fromEither(decode[StateMachineDefinition](dialsJson))
+      fromString <- IO.fromEither(
+        decode[StateMachineDefinition](baseDef.copy(policy = FiberPolicy.Immutable).asJson.noSpaces)
+      )
+      dialsHash  <- fromDials.computeDigest
+      stringHash <- fromString.computeDigest
+    } yield expect(fromDials.policy == FiberPolicy.Immutable) and expect(dialsHash === stringHash)
+  }
 }
