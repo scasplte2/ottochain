@@ -9,6 +9,7 @@ import type {
   CalculatedState,
 } from '@ottochain/sdk/core';
 import type { StatesMap } from '../types.ts';
+import { vlog } from '../verbose.ts';
 
 /**
  * Upgrade an existing fiber to a different registered version of the SAME package (#27).
@@ -62,7 +63,7 @@ export const validator = ({ cid, statesMap, options }: { cid: string; statesMap:
         `\x1b[33m[upgradeFiber.validator]\x1b[0m fiber ${cid} not re-bound to ${options.targetRef.name}@${options.targetRef.version} (binding=${JSON.stringify(binding)}) at ${url}`
       );
     }
-    console.log(
+    vlog(
       `\x1b[33m[upgradeFiber.validator]\x1b[32m fiber ${cid} re-bound to ${options.targetRef.name}@${options.targetRef.version} at ${url}\x1b[0m`
     );
   }

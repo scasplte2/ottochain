@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import type { OttochainMessage } from '@ottochain/sdk/core';
 import type { StatesMap } from '../types.ts';
+import { vlog } from '../verbose.ts';
 
 export interface CreateScriptOptions {
   script?: string;
@@ -68,7 +69,7 @@ export const validator = ({ cid, statesMap }: { cid: string; statesMap: StatesMa
       );
     }
 
-    console.log(
+    vlog(
       `\x1b[33m[createScript.validator]\x1b[32m Script created successfully for fiberId = ${cid} at ${url}!\x1b[0m`
     );
   }

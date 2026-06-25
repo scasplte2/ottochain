@@ -1,4 +1,5 @@
 import { HttpClient } from '@ottochain/sdk';
+import { vlog } from './verbose.ts';
 
 const TAG = '\x1b[33m[validateLogs]\x1b[0m';
 
@@ -50,7 +51,7 @@ export async function validateEventLogs(
       );
     }
 
-    console.log(
+    vlog(
       `${TAG}\x1b[32m Event receipt verified (${lastReceipt.eventName}: ${lastReceipt.fromState && lastReceipt.fromState} → ${lastReceipt.toState && lastReceipt.toState}) for fiberId = ${ctx.fiberId} at ${ml0Url}\x1b[0m`
     );
   }
@@ -93,7 +94,7 @@ export async function validateScriptLogs(
       );
     }
 
-    console.log(
+    vlog(
       `${TAG}\x1b[32m Script invocation verified (method: ${lastInvocation.method}, result: ${JSON.stringify(lastInvocation.result)}) for fiberId = ${ctx.fiberId} at ${ml0Url}\x1b[0m`
     );
   }

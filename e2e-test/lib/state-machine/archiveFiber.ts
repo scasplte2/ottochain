@@ -1,5 +1,6 @@
 import type { OttochainMessage } from '@ottochain/sdk/core';
 import type { StatesMap } from '../types.ts';
+import { vlog } from '../verbose.ts';
 
 export interface ArchiveFiberOptions {
   targetSequenceNumber?: number;
@@ -38,7 +39,7 @@ export const validator = ({ cid, statesMap }: { cid: string; statesMap: StatesMa
       );
     }
 
-    console.log(
+    vlog(
       `\x1b[33m[archiveFiber.validator]\x1b[32m Fiber archived successfully for fiberId = ${cid} at ${url}!\x1b[0m`
     );
   }

@@ -3,6 +3,7 @@ import path from 'path';
 import type { TransitionStateMachine, OttochainMessage } from '@ottochain/sdk/core';
 import type { StatesMap } from '../types.ts';
 import { validateEventLogs } from '../validateLogs.ts';
+import { vlog } from '../verbose.ts';
 
 export interface ProcessEventOptions {
   event?: string;
@@ -107,7 +108,7 @@ export const validator = async ({ cid, statesMap, options, ml0Urls }: { cid: str
 
     // US-7: Use lastReceipt instead of lastEventStatus
     if (finalRecord.lastReceipt?.success) {
-      console.log(
+      vlog(
         `\x1b[33m[processEvent.validator]\x1b[32m Event processed successfully for fiberId = ${cid} at ${url}. ` +
           `Transition: ${finalRecord.lastReceipt.fromState} → ${finalRecord.lastReceipt.toState}\x1b[0m`
       );
