@@ -22,6 +22,14 @@ import { HttpClient } from '@ottochain/sdk';
 import { waitForOrdinalConfirmation, waitForOrdinalAdvance } from './lib/ordinalConfirmation.ts';
 import { WebhookListener } from './lib/webhookListener.ts';
 import { ChainKeepalive } from './lib/keepalive.ts';
+import {
+  deepEqual,
+  selectSigners,
+  holderMatches,
+  pollFiberRecord,
+  pollAssetRecord,
+} from './lib/assertHelpers.ts';
+import type { HolderRef } from './lib/assertHelpers.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -351,6 +359,30 @@ interface TestStep {
   expectedResult?: unknown;
   /** Assert this step is REJECTED: 'dl1' (HTTP 400, structural) or 'ml0' (admitted then combine-denied). */
   expectRejected?: 'dl1' | 'ml0';
+
+  // ---- Multi-fiber / party / asset extensions (riverdale-economy) ----
+  /** On a create step: name the new fiber so later steps can target it (`fiber: "<as>"`). */
+  as?: string;
+  /** Target a previously-named fiber (alias) — or a raw fiberId — instead of the default session fiber. */
+  fiber?: string;
+  /** Sign this step with only these wallet names (⇒ they own a created fiber). Omit = all wallets. */
+  signers?: string[];
+  /** assertState/assertAsset: minimum sequence number the record must have reached. */
+  minSequenceNumber?: number;
+  /** assertAsset: the asset instance to inspect. */
+  assetId?: string;
+  /** assertAsset: expected custody holder, e.g. { Fiber: "retailer" } or { Wallet: "carol" }. */
+  expectedHolder?: HolderRef;
+  /** assertAsset: expected `amount` on the asset record. */
+  expectedAmount?: number;
+  /** createAssetPolicy: path to the policy body file (+ `name` for the registry confirm). */
+  policy?: string;
+  name?: string;
+  /** mintAsset: path to the mint body file (.ts may resolve holder from context.wallets). */
+  mint?: string;
+  /** applyMorphism: path to the morphism body file. */
+  morphism?: string;
+
   [key: string]: unknown;
 }
 
@@ -420,7 +452,15 @@ async function runFlow(
   const session = {
     cid: crypto.randomUUID(),
     scriptFiberId: null as string | null,
+    // Named multi-fiber registry: alias → fiberId. A `create` step with `as` mints a fresh fiberId
+    // and registers it here; any step with `fiber: "<alias>"` resolves to it. Single-fiber flows
+    // never touch this map and keep using `session.cid` (full back-compat).
+    fibers: {} as Record<string, string>,
   };
+  // Resolve a step's target fiber: a registered alias, else a raw fiberId pass-through (e.g. a
+  // spawned child addressed by literal id), else the default session fiber.
+  const resolveFiber = (alias?: string): string =>
+    !alias ? session.cid : session.fibers[alias] ?? alias;
 
   for (let i = 0; i < flow.steps.length; i++) {
     const step = flow.steps[i];
@@ -432,6 +472,68 @@ async function runFlow(
       let validator: ValidatorFn;
       let message: unknown;
       let stepOptions: Record<string, unknown>;
+
+      // Per-step signer subset (party model): the proofs on a message ARE its owners/authorizers, so
+      // `signers` decides which party acts. Omit ⇒ all wallets sign (today's single-fiber behavior).
+      const signWallets = selectSigners(wallets, step.signers);
+
+      // ---- Poll-only assertions (no transaction) ----
+      // assertState observes a fiber changed INDIRECTLY (e.g. by another fiber's cross-fiber
+      // `_triggers`); assertAsset observes real on-chain custody after a `_transferAsset` / morphism.
+      // Both poll the committed read with the standard retry budget (it trails GL0 finalization).
+      if (step.action === 'assertState') {
+        const cid = resolveFiber(step.fiber);
+        const who = step.fiber ?? cid.slice(0, 8);
+        w(`\n      ⏳ assertState ${who}`);
+        const rec = await pollFiberRecord(
+          ml0Urls[0],
+          cid,
+          (r) =>
+            !!r &&
+            (!step.expectedState || r.currentState === step.expectedState) &&
+            (step.minSequenceNumber == null || ((r.sequenceNumber as number) ?? -1) >= step.minSequenceNumber) &&
+            (!step.expectedStateData || deepEqual(r.stateData, step.expectedStateData)),
+          maxRetries,
+          retryDelayMs,
+          (s) => w(s)
+        );
+        if (!rec) throw new Error(`assertState ${who}: fiber never reached the asserted condition at ML0`);
+        if (step.expectedState && rec.currentState !== step.expectedState)
+          throw new Error(`assertState ${who}: expected state "${step.expectedState}" but found "${rec.currentState}"`);
+        if (step.minSequenceNumber != null && ((rec.sequenceNumber as number) ?? -1) < step.minSequenceNumber)
+          throw new Error(`assertState ${who}: expected seq ≥ ${step.minSequenceNumber} but found ${rec.sequenceNumber}`);
+        if (step.expectedStateData && !deepEqual(rec.stateData, step.expectedStateData))
+          throw new Error(`assertState ${who}: stateData mismatch — got ${JSON.stringify(rec.stateData)} want ${JSON.stringify(step.expectedStateData)}`);
+        w(' ✓');
+        l(' \x1b[32mOK\x1b[0m');
+        continue;
+      }
+
+      if (step.action === 'assertAsset') {
+        const assetId = step.assetId as string;
+        if (!assetId) throw new Error('assertAsset requires an `assetId`');
+        w(`\n      ⏳ assertAsset ${assetId.slice(0, 8)}`);
+        const rec = await pollAssetRecord(
+          ml0Urls[0],
+          assetId,
+          (r) =>
+            !!r &&
+            (!step.expectedHolder || holderMatches(r.holder, step.expectedHolder, resolveFiber, wallets)) &&
+            (step.expectedAmount == null || Number(r.amount) === step.expectedAmount) &&
+            (step.minSequenceNumber == null || ((r.sequenceNumber as number) ?? -1) >= step.minSequenceNumber),
+          maxRetries,
+          retryDelayMs,
+          (s) => w(s)
+        );
+        if (!rec) throw new Error(`assertAsset ${assetId}: no committed custody record reaching the asserted condition`);
+        if (step.expectedHolder && !holderMatches(rec.holder, step.expectedHolder, resolveFiber, wallets))
+          throw new Error(`assertAsset ${assetId}: holder mismatch — got ${JSON.stringify(rec.holder)} want ${JSON.stringify(step.expectedHolder)}`);
+        if (step.expectedAmount != null && Number(rec.amount) !== step.expectedAmount)
+          throw new Error(`assertAsset ${assetId}: expected amount ${step.expectedAmount} but found ${rec.amount}`);
+        w(' ✓');
+        l(' \x1b[32mOK\x1b[0m');
+        continue;
+      }
 
       // ---- Registry ops (publishVersion / setVersionStatus / registerAlias) ----
       // Non-sequenced: confirm via /registry/{name}; no seq number or DL1-fiberCommit sync.
@@ -445,11 +547,12 @@ async function runFlow(
         const regName = step.name as string;
         const regOptions: Record<string, unknown> = {
           ...step,
-          targetFiberId: (step.targetFiberId as string) ?? session.cid,
+          // registerAlias can target a named fiber (`fiber: "<alias>"`); defaults to the session fiber.
+          targetFiberId: (step.targetFiberId as string) ?? resolveFiber(step.fiber),
           ...(step.definition ? { definition: path.join(examplesDir, example.dir, step.definition) } : {}),
           ...(step.schemaShape ? { schemaShape: path.join(examplesDir, example.dir, step.schemaShape as string) } : {}),
         };
-        const regMessage = regLib.generator({ cid: session.cid, wallets, options: regOptions });
+        const regMessage = regLib.generator({ cid: resolveFiber(step.fiber), wallets: signWallets, options: regOptions });
         const regPath = `registry/${encodeURIComponent(regName)}`;
         // Did the op land in the registry? (per-action predicate on the /registry/{name} response)
         const landed = (d: unknown): boolean => {
@@ -464,7 +567,7 @@ async function runFlow(
           // Structural reject (e.g. reserved name) -> the /data POST should fail with HTTP 400.
           let rejected = false;
           try {
-            await sendSignedUpdate(regMessage, wallets, dl1Urls);
+            await sendSignedUpdate(regMessage, signWallets, dl1Urls);
           } catch (err) {
             rejected = (err as Error).message.includes('400');
           }
@@ -474,7 +577,7 @@ async function runFlow(
         }
         if (step.expectRejected === 'ml0') {
           // Admitted by DL1 (structurally valid) but rejected at ML0 combine -> never lands.
-          await sendSignedUpdate(regMessage, wallets, dl1Urls).catch(() => undefined);
+          await sendSignedUpdate(regMessage, signWallets, dl1Urls).catch(() => undefined);
           const client = new HttpClient(`${ml0Urls[0]}/data-application/v1/${regPath}`);
           for (let attempt = 0; attempt < 8; attempt++) {
             await new Promise((r) => setTimeout(r, retryDelayMs));
@@ -515,7 +618,7 @@ async function runFlow(
               // not in the registry yet → fall through and re-send
             }
           }
-          await sendSignedUpdate(regMessage, wallets, dl1Urls);
+          await sendSignedUpdate(regMessage, signWallets, dl1Urls);
           try {
             await waitForMl0Confirmation(
               ml0Urls[0],
@@ -537,7 +640,7 @@ async function runFlow(
               `${regResubmits + 1} attempts`
           );
         }
-        await validateWithRetries(regLib.validator, session.cid, regInitial, regOptions, wallets, maxRetries, retryDelayMs, ml0Urls);
+        await validateWithRetries(regLib.validator, resolveFiber(step.fiber), regInitial, regOptions, wallets, maxRetries, retryDelayMs, ml0Urls);
         l(' \x1b[32mOK\x1b[0m');
         continue;
       }
@@ -548,10 +651,112 @@ async function runFlow(
         eventData: step.eventData,
       };
 
+      // ---- Asset ops (createAssetPolicy / mintAsset / applyMorphism) ----
+      // First e2e to exercise REAL asset custody. Plain-JSON messages (the chain JAR decodes the
+      // variants; no SDK asset builder dep). Confirmed via the registry (policy package) or the asset
+      // state-proof read (instance), not a fiber sequence bump.
+      const ASSET_ACTIONS = new Set(['createAssetPolicy', 'mintAsset', 'applyMorphism']);
+      if (ASSET_ACTIONS.has(step.action)) {
+        let assetId = step.assetId as string | undefined;
+        let assetMsg: unknown;
+        if (step.action === 'createAssetPolicy') {
+          const policy = (await loadFileOrModule(path.join(examplesDir, example.dir, step.policy!), loadContext)) as Record<string, unknown>;
+          const lib = await import('./lib/asset/createAssetPolicy.ts');
+          assetMsg = lib.generator({ wallets: signWallets, options: { policy } });
+        } else if (step.action === 'mintAsset') {
+          const mint = (await loadFileOrModule(path.join(examplesDir, example.dir, step.mint!), loadContext)) as Record<string, unknown>;
+          assetId = (mint.assetId as string) ?? assetId;
+          const lib = await import('./lib/asset/mintAsset.ts');
+          assetMsg = lib.generator({ wallets: signWallets, options: { mint } });
+        } else {
+          const morphism = (await loadFileOrModule(path.join(examplesDir, example.dir, step.morphism!), loadContext)) as Record<string, unknown>;
+          assetId = (morphism.assetId as string) ?? assetId;
+          // Morphisms are sequenced by (assetId, targetSequenceNumber): target the asset's current seq.
+          let curSeq = 0;
+          try {
+            const resp = (await new HttpClient(`${ml0Urls[0]}/data-application/v1/assets/${assetId}/state-proof`).get<unknown>('')) as { record?: { sequenceNumber?: number } } | null;
+            curSeq = resp?.record?.sequenceNumber ?? 0;
+          } catch { /* not yet committed */ }
+          const lib = await import('./lib/asset/applyMorphism.ts');
+          assetMsg = lib.generator({ wallets: signWallets, options: { morphism, targetSequenceNumber: curSeq } });
+        }
+
+        const policyName = step.name as string | undefined;
+        const confirmPath =
+          step.action === 'createAssetPolicy'
+            ? `registry/${encodeURIComponent(policyName ?? '')}`
+            : `assets/${assetId}/state-proof`;
+        const confirmUrl = `${ml0Urls[0]}/data-application/v1/${confirmPath}`;
+
+        // Pre-send asset sequence (applyMorphism confirms on a seq ADVANCE).
+        let preAssetSeq = -1;
+        if (step.action === 'applyMorphism') {
+          try {
+            const resp = (await new HttpClient(confirmUrl).get<unknown>('')) as { record?: { sequenceNumber?: number } } | null;
+            preAssetSeq = resp?.record?.sequenceNumber ?? -1;
+          } catch { /* absent */ }
+        }
+        const landed = (d: unknown): boolean => {
+          if (step.action === 'createAssetPolicy') {
+            // Variant-agnostic: any registry target carrying a non-empty versions map (AssetPolicyPackage).
+            const target = (d as { target?: Record<string, unknown> } | null)?.target;
+            if (!target || typeof target !== 'object') return false;
+            return Object.values(target).some((v) => {
+              const vs = (v as { versions?: { versions?: Record<string, unknown> } })?.versions?.versions;
+              return !!vs && Object.keys(vs).length > 0;
+            });
+          }
+          const r = (d as { record?: { sequenceNumber?: number } } | null)?.record;
+          if (!r) return false;
+          if (step.action === 'mintAsset') return true; // existence ⇒ minted
+          return (r.sequenceNumber ?? -1) > preAssetSeq; // applyMorphism ⇒ seq advanced
+        };
+
+        if (step.expectRejected === 'dl1') {
+          let rejected = false;
+          try { await sendSignedUpdate(assetMsg, signWallets, dl1Urls); }
+          catch (err) { rejected = (err as Error).message.includes('400'); }
+          if (!rejected) throw new Error(`expected DL1 to reject ${step.action} (HTTP 400), but it was accepted`);
+          l(' \x1b[32mOK (DL1 rejected)\x1b[0m');
+          continue;
+        }
+        if (step.expectRejected === 'ml0') {
+          await sendSignedUpdate(assetMsg, signWallets, dl1Urls).catch(() => undefined);
+          for (let attempt = 0; attempt < 8; attempt++) {
+            await new Promise((r) => setTimeout(r, retryDelayMs));
+            let data: unknown = null;
+            try { data = await new HttpClient(confirmUrl).get<unknown>(''); } catch { /* absent ⇒ fine */ }
+            if (landed(data)) throw new Error(`expected ML0 to reject ${step.action} (${assetId ?? policyName}), but it landed`);
+          }
+          l(' \x1b[32mOK (ML0 rejected, state unchanged)\x1b[0m');
+          continue;
+        }
+
+        // Send + confirm with a resubmit budget (committed reads trail GL0 finalization; an
+        // all-or-nothing block poison can drop a valid update, so re-send until it lands).
+        const resubmits = Number(process.env.E2E_MAX_RESUBMITS) || 3;
+        const budget = Math.max(4, Math.ceil(maxRetries / (resubmits + 1)));
+        let confirmed = false;
+        for (let attempt = 0; attempt <= resubmits && !confirmed; attempt++) {
+          if (attempt > 0) {
+            try {
+              if (landed(await new HttpClient(confirmUrl).get<unknown>(''))) { confirmed = true; break; }
+            } catch { /* fall through and re-send */ }
+          }
+          await sendSignedUpdate(assetMsg, signWallets, dl1Urls);
+          try {
+            await waitForMl0Confirmation(ml0Urls[0], confirmPath, landed, budget, retryDelayMs, `${step.action} ${assetId ?? policyName ?? ''}`, log);
+            confirmed = true;
+          } catch { /* re-send unless it has since landed */ }
+        }
+        if (!confirmed) throw new Error(`ML0 confirmation failed for ${step.action} (${assetId ?? policyName})`);
+        l(' \x1b[32mOK\x1b[0m');
+        continue;
+      }
+
       // Determine which fiber this step targets and fetch its current sequence number
       // Script actions (createScript, invokeScript, invoke) use the /scripts/ endpoint
       const isScriptStep =
-        (step.action as string).includes('Script') ||
         (step.action as string).includes('Script') ||
         step.action === 'invoke';
       const isCreateStep =
@@ -559,9 +764,20 @@ async function runFlow(
         step.action === 'createStateMachine' ||
         step.action === 'createScript';
 
-      // For createScript, scriptFiberId is assigned inside the switch below,
-      // so we defer activeCid/entityPath until after the switch for create steps.
-      let activeCid = isScriptStep ? session.scriptFiberId! : session.cid;
+      // Resolve this step's target fiber:
+      //  - createScript: scriptFiberId, assigned inside the switch (recomputed after it).
+      //  - state-machine create with `as`: mint a fresh fiberId and register the alias (multi-fiber).
+      //  - state-machine create without `as`: the default session fiber (single-fiber back-compat).
+      //  - any other step: the `fiber` alias (or raw id), else the session fiber.
+      let activeCid: string;
+      if (isScriptStep) {
+        activeCid = session.scriptFiberId!;
+      } else if (isCreateStep && step.as) {
+        activeCid = crypto.randomUUID();
+        session.fibers[step.as] = activeCid;
+      } else {
+        activeCid = resolveFiber(step.fiber);
+      }
       let entityPath = isScriptStep
         ? `scripts/${activeCid}`
         : `state-machines/${activeCid}`;
@@ -600,7 +816,7 @@ async function runFlow(
           generator = libModule.generator;
           validator = libModule.validator;
           message = generator({
-            cid: session.cid,
+            cid: activeCid,
             wallets,
             options: stepOptions,
           });
@@ -654,7 +870,7 @@ async function runFlow(
           generator = libModule.generator;
           validator = libModule.validator;
           message = generator({
-            cid: session.cid,
+            cid: activeCid,
             wallets,
             options: stepOptions,
           });
@@ -700,7 +916,7 @@ async function runFlow(
           const libModule = await import('./lib/state-machine/upgradeFiber.ts');
           generator = libModule.generator;
           validator = libModule.validator;
-          message = generator({ cid: session.cid, wallets, options: stepOptions });
+          message = generator({ cid: activeCid, wallets, options: stepOptions });
           break;
         }
 
@@ -711,7 +927,7 @@ async function runFlow(
           const libModule = await import('./lib/state-machine/archiveFiber.ts');
           generator = libModule.generator;
           validator = libModule.validator;
-          message = generator({ cid: session.cid, wallets, options: stepOptions });
+          message = generator({ cid: activeCid, wallets, options: stepOptions });
           break;
         }
 
@@ -719,13 +935,12 @@ async function runFlow(
           throw new Error(`Unknown action: ${step.action}`);
       }
 
-      // Re-compute activeCid/entityPath after the switch — createScript assigns
-      // session.scriptFiberId inside the switch, so the pre-switch values may be stale.
-      if (isCreateStep) {
-        activeCid = isScriptStep ? session.scriptFiberId! : session.cid;
-        entityPath = isScriptStep
-          ? `scripts/${activeCid}`
-          : `state-machines/${activeCid}`;
+      // Re-compute activeCid/entityPath after the switch ONLY for createScript, which assigns
+      // session.scriptFiberId inside the switch. State-machine creates already resolved activeCid
+      // (a minted `as` fiber or the session fiber) before the switch, so leave those intact.
+      if (isCreateStep && isScriptStep) {
+        activeCid = session.scriptFiberId!;
+        entityPath = `scripts/${activeCid}`;
       }
 
       // Snapshot initial state before sending
@@ -735,7 +950,7 @@ async function runFlow(
       // If N ordinals pass without the transaction appearing in state, automatically
       // regenerate and resubmit. This adapts to ML0's actual consensus speed.
       const sendToNodes = async (msg: unknown) => {
-        await sendSignedUpdate(msg, wallets, dl1Urls);
+        await sendSignedUpdate(msg, signWallets, dl1Urls);
       };
 
       // Helper to regenerate message with fresh sequence number
