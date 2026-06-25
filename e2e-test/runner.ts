@@ -271,7 +271,7 @@ async function waitForMl0Confirmation(
  * before the runner sends the next step.
  */
 async function waitForDl1Sync(
-  dl1BaseUrl: string,
+  dl1BaseUrls: string[],
   fiberId: string,
   expectedSeqNum: number | null,
   maxRetries: number,
@@ -279,33 +279,41 @@ async function waitForDl1Sync(
   label: string,
   log?: FlowLogger
 ): Promise<void> {
-  const url = `${dl1BaseUrl}/data-application/v1/onchain`;
-  const client = new HttpClient(url);
   const seqLabel = expectedSeqNum === null ? 'exists' : `seq≥${expectedSeqNum}`;
   const w = log ? (s: string) => log.write(s) : (s: string) => process.stdout.write(s);
-  w(`      ⏳ DL1 sync ${fiberId.slice(0, 8)}… (${seqLabel})`);
+  w(`      ⏳ DL1 sync ${fiberId.slice(0, 8)}… (${seqLabel}, ${dl1BaseUrls.length} nodes)`);
+
+  // Per-node readiness: a node is ready once its onchain fiberCommits reflect the prior commit.
+  // ALL nodes must be ready before we return, because the NEXT sequential transition fans out to
+  // every DL1 node and each validates against its OWN cache — a single node still trailing rejects
+  // that next update during block consensus, and it gets excluded from every block (no apply, no
+  // reject: the update simply never lands). Gating on the slowest node closes that hole.
+  const ready = new Array<boolean>(dl1BaseUrls.length).fill(false);
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const onChain = (await client.get<unknown>('')) as {
-        fiberCommits?: Record<string, { sequenceNumber?: number }>;
-      } | null;
-
-      if (onChain?.fiberCommits) {
-        const commit = onChain.fiberCommits[fiberId];
-        if (commit) {
+    await Promise.all(
+      dl1BaseUrls.map(async (base, i) => {
+        if (ready[i]) return;
+        try {
+          const onChain = (await new HttpClient(`${base}/data-application/v1/onchain`).get<unknown>(
+            ''
+          )) as { fiberCommits?: Record<string, { sequenceNumber?: number }> } | null;
+          const commit = onChain?.fiberCommits?.[fiberId];
+          if (!commit) return;
           if (expectedSeqNum === null) {
-            w(' ✓\n');
-            return;
+            ready[i] = true;
+          } else if (commit.sequenceNumber !== undefined && commit.sequenceNumber >= expectedSeqNum) {
+            ready[i] = true;
           }
-          if (commit.sequenceNumber !== undefined && commit.sequenceNumber >= expectedSeqNum) {
-            w(' ✓\n');
-            return;
-          }
+        } catch {
+          // node not ready yet — retry next attempt
         }
-      }
-    } catch {
-      // DL1 may not be ready yet — continue polling
+      })
+    );
+
+    if (ready.every(Boolean)) {
+      w(' ✓\n');
+      return;
     }
     w('.');
     if (attempt < maxRetries) {
@@ -313,10 +321,11 @@ async function waitForDl1Sync(
     }
   }
 
+  const lagging = dl1BaseUrls.filter((_, i) => !ready[i]).length;
   w(' ✗\n');
   throw new Error(
-    `DL1 sync timed out for ${label} at ${url} after ${maxRetries} attempts ` +
-      `(waiting for fiberId=${fiberId} seqNum=${expectedSeqNum ?? 'exists'})`
+    `DL1 sync timed out for ${label} after ${maxRetries} attempts ` +
+      `(waiting for fiberId=${fiberId} seqNum=${expectedSeqNum ?? 'exists'}; ${lagging}/${dl1BaseUrls.length} nodes still lagging)`
   );
 }
 
@@ -912,7 +921,7 @@ async function runFlow(
         }
 
         await waitForDl1Sync(
-          dl1Urls[0],
+          dl1Urls,
           activeCid,
           expectedSeqNum,
           maxRetries,

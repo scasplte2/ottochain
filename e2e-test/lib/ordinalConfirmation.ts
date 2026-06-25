@@ -37,6 +37,16 @@ export interface OrdinalConfirmationOptions {
    * (`ordinalThreshold` × (`maxResubmits` + 1) ordinals) and the stall gate.
    */
   maxTotalTimeMs?: number;
+  /**
+   * Wall-clock FLOOR before "ordinal budget exhausted" may fire. The ordinal budget was designed when
+   * an idle metagraph spent tens of seconds per ordinal, so N ordinals meant minutes of real time.
+   * The chain keepalive keeps the chain hot (multiple ordinals/sec), which collapses that same N-ordinal
+   * budget to a few seconds — far too short for the GL0-finalized committed read to catch up under load.
+   * So once resubmits are spent we keep polling (no more re-sends) until at least this much wall-clock
+   * has elapsed, giving the trailing read time to surface an update that IS out there. The stall gate
+   * still fails fast if the chain actually dies. (default: 60000 = 1 min; 0 disables the floor)
+   */
+  minWallClockMs?: number;
   /** Label for logging */
   label: string;
   /** Optional logger for buffered output */
@@ -141,6 +151,7 @@ export async function waitForOrdinalConfirmation(
     pollIntervalMs = 2000,
     stallTimeoutMs = 120000,
     maxTotalTimeMs,
+    minWallClockMs = Number(process.env.E2E_MIN_CONFIRM_MS) || 60000,
     label,
     log,
     waitNextSnapshot,
@@ -238,12 +249,28 @@ export async function waitForOrdinalConfirmation(
         // the fiber and skips the send if it already advanced. By now the lagging read has had a full
         // threshold window to catch up, so that check is reliable.
         if (resubmitCount >= maxResubmits) {
-          w(' ✗ (ordinal budget exhausted)\n');
-          throw new Error(
-            `${TAG} Confirmation failed for ${label}: transaction not included after ` +
-              `${ordinalThreshold} ordinals × ${maxResubmits + 1} attempts ` +
-              `(final ordinal: ${currentSnapshot.ordinal})`
-          );
+          // Ordinal budget spent. But under the keepalive, ordinals fly by far faster than GL0
+          // finalizes, so this can be reached in seconds while the committed read is still trailing an
+          // update that DID land. Hold off the failure until a real wall-clock floor has passed —
+          // keep polling (no more re-sends, the update is already out there) so the lagging read can
+          // surface it. The stall gate still fires fast if the chain genuinely dies.
+          if (Date.now() - startTime >= minWallClockMs) {
+            w(' ✗ (ordinal budget exhausted)\n');
+            throw new Error(
+              `${TAG} Confirmation failed for ${label}: transaction not included after ` +
+                `${ordinalThreshold} ordinals × ${maxResubmits + 1} attempts ` +
+                `(final ordinal: ${currentSnapshot.ordinal}, ${Math.round((Date.now() - startTime) / 1000)}s)`
+            );
+          }
+          // Reset the window so we don't spin this branch; keep waiting for the read to catch up.
+          startSnapshot = currentSnapshot;
+          w('·');
+          if (waitNextSnapshot) {
+            await waitNextSnapshot(pollIntervalMs);
+          } else {
+            await new Promise((r) => setTimeout(r, pollIntervalMs));
+          }
+          continue;
         }
 
         resubmitCount++;
