@@ -71,8 +71,8 @@ object FiberPolicyEnforcementSuite extends SimpleIOSuite {
           ]
         }"""
         base <- parseDef(json)
-        forbid = base.copy(policy = Some(FiberPolicy(allowedEffects = Some(Set(EffectKind.Trigger)))))
-        permit = base.copy(policy = Some(FiberPolicy(allowedEffects = Some(Set(EffectKind.Emit)))))
+        forbid = base.copy(policy = FiberPolicy.constrained(allowedEffects = Some(Set(EffectKind.Trigger))))
+        permit = base.copy(policy = FiberPolicy.constrained(allowedEffects = Some(Set(EffectKind.Emit))))
         data = MapValue(Map("x" -> IntValue(0)))
         h <- (data: JsonLogicValue).computeDigest
         input = FiberInput.Transition("go", MapValue(Map.empty))
@@ -101,7 +101,7 @@ object FiberPolicyEnforcementSuite extends SimpleIOSuite {
           ]
         }"""
         base <- parseDef(json)
-        fdef = base.copy(policy = Some(FiberPolicy(sealedStates = Some(Set(StateId("init"))))))
+        fdef = base.copy(policy = FiberPolicy.constrained(sealedStates = Some(Set(StateId("init")))))
         data = MapValue(Map("x" -> IntValue(0)))
         h <- (data: JsonLogicValue).computeDigest
         st = CalculatedState(SortedMap(fid -> fiber(fid, fdef, data, h, fixture.ordinal)), SortedMap.empty)
@@ -145,8 +145,8 @@ object FiberPolicyEnforcementSuite extends SimpleIOSuite {
         sh <- (srcData: JsonLogicValue).computeDigest
         th <- (tgtData: JsonLogicValue).computeDigest
 
-        denyDef = tgtBase.copy(policy = Some(FiberPolicy(acceptedCallers = Some(Set(UUID.randomUUID())))))
-        allowDef = tgtBase.copy(policy = Some(FiberPolicy(acceptedCallers = Some(Set(sourceId)))))
+        denyDef = tgtBase.copy(policy = FiberPolicy.constrained(acceptedCallers = Some(Set(UUID.randomUUID()))))
+        allowDef = tgtBase.copy(policy = FiberPolicy.constrained(acceptedCallers = Some(Set(sourceId))))
 
         denyState = CalculatedState(
           SortedMap(
@@ -201,7 +201,7 @@ object FiberPolicyEnforcementSuite extends SimpleIOSuite {
           ]
         }"""
         base <- parseDef(json)
-        parentDef = base.copy(policy = Some(FiberPolicy(selfReproducing = Some(true))))
+        parentDef = base.copy(policy = FiberPolicy.constrained(selfReproducing = Some(true)))
         data = MapValue(Map("x" -> IntValue(0)))
         h <- (data: JsonLogicValue).computeDigest
         input = FiberInput.Transition("divide", MapValue(Map.empty))
@@ -232,7 +232,7 @@ object FiberPolicyEnforcementSuite extends SimpleIOSuite {
               "dependencies": [] }
           ]
         }"""
-        base <- parseDef(json) // policy = None ⇒ opt-out
+        base <- parseDef(json) // policy = FiberPolicy.Unconstrained ⇒ opt-out
         data = MapValue(Map("x" -> IntValue(0)))
         h <- (data: JsonLogicValue).computeDigest
         st = CalculatedState(SortedMap(parentId -> fiber(parentId, base, data, h, fixture.ordinal)), SortedMap.empty)
@@ -265,7 +265,7 @@ object FiberPolicyEnforcementSuite extends SimpleIOSuite {
           ]
         }"""
         base <- parseDef(json)
-        fdef = base.copy(policy = Some(FiberPolicy(maxSpawnFanout = Some(1))))
+        fdef = base.copy(policy = FiberPolicy.constrained(maxSpawnFanout = Some(1)))
         data = MapValue(Map("x" -> IntValue(0)))
         h <- (data: JsonLogicValue).computeDigest
         st = CalculatedState(SortedMap(parentId -> fiber(parentId, fdef, data, h, fixture.ordinal)), SortedMap.empty)
@@ -299,7 +299,7 @@ object FiberPolicyEnforcementSuite extends SimpleIOSuite {
           ]
         }"""
         base <- parseDef(json)
-        fdef = base.copy(policy = Some(FiberPolicy(spawnOwnerPolicy = Some(SpawnOwnerPolicy.SubsetOfParent))))
+        fdef = base.copy(policy = FiberPolicy.constrained(spawnOwnerPolicy = Some(SpawnOwnerPolicy.SubsetOfParent)))
         data = MapValue(Map("x" -> IntValue(0)))
         h <- (data: JsonLogicValue).computeDigest
         st = CalculatedState(
@@ -334,7 +334,7 @@ object FiberPolicyEnforcementSuite extends SimpleIOSuite {
           ]
         }"""
         base <- parseDef(json)
-        fdef = base.copy(policy = Some(FiberPolicy(maxGenerations = Some(3))))
+        fdef = base.copy(policy = FiberPolicy.constrained(maxGenerations = Some(3)))
         data = MapValue(Map("x" -> IntValue(0)))
         h <- (data: JsonLogicValue).computeDigest
         // parent references a missing ancestor ⇒ chain unverifiable ⇒ fail-closed reject.
@@ -366,7 +366,7 @@ object FiberPolicyEnforcementSuite extends SimpleIOSuite {
           ]
         }"""
         base <- parseDef(json)
-        fdef = base.copy(policy = Some(FiberPolicy(maxGenerations = Some(1000))))
+        fdef = base.copy(policy = FiberPolicy.constrained(maxGenerations = Some(1000)))
         data = MapValue(Map("x" -> IntValue(0)))
         h <- (data: JsonLogicValue).computeDigest
         // A.parent = B, B.parent = A  ⇒  a 2-node cycle in parentFiberId.
@@ -398,14 +398,13 @@ object FiberPolicyEnforcementSuite extends SimpleIOSuite {
         }"""
         base <- parseDef(json)
         denyDef = base.copy(policy =
-          Some(
-            FiberPolicy(dependencyPolicy =
+          FiberPolicy
+            .constrained(dependencyPolicy =
               Some(DependencyPolicy(DependencyMode.Allowlist, Some(Set(UUID.randomUUID()))))
             )
-          )
         )
         allowDef = base.copy(policy =
-          Some(FiberPolicy(dependencyPolicy = Some(DependencyPolicy(DependencyMode.Allowlist, Some(Set(depId))))))
+          FiberPolicy.constrained(dependencyPolicy = Some(DependencyPolicy(DependencyMode.Allowlist, Some(Set(depId)))))
         )
         data = MapValue(Map("x" -> IntValue(0)))
         h <- (data: JsonLogicValue).computeDigest
@@ -432,8 +431,8 @@ object FiberPolicyEnforcementSuite extends SimpleIOSuite {
         }"""
         base <- parseDef(json)
         // OLD policy: selfReproducing ON (a one-way latch). NEW: cleared ⇒ a loosening ⇒ must abort.
-        oldDef = base.copy(policy = Some(FiberPolicy(selfReproducing = Some(true))))
-        newDef = base.copy(policy = None)
+        oldDef = base.copy(policy = FiberPolicy.constrained(selfReproducing = Some(true)))
+        newDef = base.copy(policy = FiberPolicy.Unconstrained)
         data = MapValue(Map.empty)
         h <- (data: JsonLogicValue).computeDigest
         // Unbound fiber (schemaBinding = None) so the conformance gate is a no-op; the tighten check fires first.
@@ -458,7 +457,7 @@ object FiberPolicyEnforcementSuite extends SimpleIOSuite {
       for {
         fid  <- UUIDGen.randomUUID[IO]
         base <- parseDef("""{"states":{"init":{"id":"init","isFinal":false}},"initialState":"init","transitions":[]}""")
-        pol = Some(FiberPolicy(upgradePolicy = Some(UpgradePolicy.Immutable)))
+        pol = FiberPolicy.constrained(upgradePolicy = Some(UpgradePolicy.Immutable))
         fdef = base.copy(policy = pol)
         data = MapValue(Map.empty)
         h <- (data: JsonLogicValue).computeDigest
@@ -477,7 +476,7 @@ object FiberPolicyEnforcementSuite extends SimpleIOSuite {
         base <- parseDef("""{"states":{"init":{"id":"init","isFinal":false}},"initialState":"init","transitions":[]}""")
         // Governed by `anyAddr`; the NEW policy keeps the SAME Governed tier (tighten-only same-rank rotation OK).
         gov = UpgradePolicy.Governed(MigrationAuthority.Signers(Set(anyAddr)))
-        pol = Some(FiberPolicy(upgradePolicy = Some(gov)))
+        pol = FiberPolicy.constrained(upgradePolicy = Some(gov))
         fdef = base.copy(policy = pol)
         data = MapValue(Map.empty)
         h <- (data: JsonLogicValue).computeDigest

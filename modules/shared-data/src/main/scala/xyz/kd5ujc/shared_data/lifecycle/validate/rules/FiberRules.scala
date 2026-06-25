@@ -416,7 +416,7 @@ object FiberRules {
         case None => ().validNec[DataApplicationValidationError].pure[F] // existence handled by cidIsFound
         case Some(sm) =>
           val oldPolicy = sm.definition.policy
-          val immutable = oldPolicy.map(_.effectiveUpgradePolicy).contains(UpgradePolicy.Immutable)
+          val immutable = oldPolicy.effectiveUpgradePolicy == UpgradePolicy.Immutable
           if (immutable)
             (Errors.UpgradePolicyViolation(cid, "immutable: migrations are forbidden"): DataApplicationValidationError)
               .invalidNec[Unit]

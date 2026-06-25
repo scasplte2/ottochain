@@ -324,7 +324,7 @@ object ContextProvider {
             )
           }
         val interfaces: List[JsonLogicValue] =
-          fiber.definition.policy
+          fiber.definition.policy.dials
             .flatMap(_.interfaces)
             .getOrElse(Set.empty)
             .toList

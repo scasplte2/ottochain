@@ -11,12 +11,12 @@ import derevo.circe.magnolia.{customizableDecoder, customizableEncoder}
 import derevo.derive
 import enumeratum.EnumEntry.Uppercase
 import enumeratum.{CirceEnum, Enum, EnumEntry}
-import io.circe.{Decoder, Encoder}
+import io.circe.{Decoder, Encoder, Json}
 
 /**
  * The 5 directive families [[xyz.kd5ujc.shared_data.fiber.evaluation.EffectExtractor]] scrapes from a
- * transition's effect result. A fiber's [[FiberPolicy.allowedEffects]] (when set) restricts which of these
- * its transitions may produce. Entry names are UPPERCASE on the wire (`"TRIGGER"`, `"SPAWN"`, …) — the
+ * transition's effect result. A fiber's [[FiberPolicy.Constrained.allowedEffects]] (when set) restricts which of
+ * these its transitions may produce. Entry names are UPPERCASE on the wire (`"TRIGGER"`, `"SPAWN"`, …) — the
  * cross-language string contract with the SDK builder.
  */
 sealed trait EffectKind extends EnumEntry with Uppercase
@@ -121,7 +121,7 @@ object MigrationAuthority {
 /**
  * The upgrade-path constitution: how (if at all) the fiber's hash-pinned definition may change. Ordered by
  * `rank` so the tighten-only lattice may only move UP (Immutable > Governed > AppendOnly > Arbitrary); a
- * migration can never launder a stricter tier down to a looser one. `None` on [[FiberPolicy.upgradePolicy]]
+ * migration can never launder a stricter tier down to a looser one. `None` on [[FiberPolicy.Constrained.upgradePolicy]]
  * is exactly [[Arbitrary]] (rank 0, today's behaviour) at every site.
  *
  * Prior art: Aptos `upgrade_policy` (immutable / compatible / arbitrary); Sui `UpgradeCap`; CosmWasm cw2
@@ -186,14 +186,21 @@ final case class VersionRange(
 }
 
 /**
- * The fiber's hash-pinned, opt-in constitution (fiber-policy.md, `fiberpolicy-dials` stream).
+ * The fiber's hash-pinned constitution (fiber-policy.md, `fiberpolicy-dials` stream), as a REQUIRED, NAMED
+ * ADT. Every definition has exactly one of two constitutions:
  *
- * A fiber voluntarily surrenders a capability in return for a guarantee any external observer can verify by
- * resolving ONE `logicHash`-anchored field. Every dial is `Option`/defaulted so a partial policy survives
- * `dropNulls` byte-stably and an all-default [[FiberPolicy]] is canonically identical to an absent one
- * (`Some(empty) ⇒ None`, see [[FiberPolicy.normalize]]). Default `policy = None` on
- * [[StateMachineDefinition]] is exactly today's unconstrained behaviour, hash-identical to a pre-policy
- * definition.
+ *   - [[FiberPolicy.Unconstrained]] — the named default: NO surrendered capability, today's legacy behaviour.
+ *     Replaces the old `None`/`Some(empty)`. [[StateMachineDefinition.policy]] defaults to it, so a pre-policy
+ *     definition is hash-identical to one that explicitly declares `Unconstrained`.
+ *   - [[FiberPolicy.Constrained]] — at least one of the 14 dials is set. A fiber voluntarily surrenders a capability
+ *     in return for a guarantee any external observer can verify by resolving ONE `logicHash`-anchored field.
+ *
+ * Every dial of [[Constrained]] is `Option`/defaulted so a partial policy survives `dropNulls` byte-stably. A
+ * `Constrained` with ALL 14 dials empty is SEMANTICALLY identical to `Unconstrained`; the smart constructor
+ * [[FiberPolicy.constrained]] (and the decoder) collapse it to `Unconstrained` so there is exactly ONE canonical
+ * representation of "unconstrained". This is the internal-determinism rule the verified re-bind
+ * (`definition.computeDigest === logicHash`) relies on: an absent policy key, `Unconstrained`, and an
+ * all-empty `Constrained` ALL encode to the same canonical bytes (field default + smart constructor + dropNulls).
  *
  * Enforcement is FAIL-CLOSED everywhere: a dial breach aborts the whole transition (total discard) or rejects
  * the update via [[FailureReason.PolicyViolation]] / `CombineRejected` — no dial ever silently strips a
@@ -203,51 +210,142 @@ final case class VersionRange(
  * `migrationAuthority`) is enforced at the migrate boundary by [[xyz.kd5ujc.shared_data.fiber.UpgradeGate]].
  * The pause/freeze runtime ops remain DEFERRED to a later wave and are intentionally absent here.
  */
-@derive(customizableEncoder, customizableDecoder)
-final case class FiberPolicy(
-  selfReproducing:  Option[Boolean] = None, // Dial #1: a _spawn child's definition must hash-equal the parent's
-  allowedEffects:   Option[Set[EffectKind]] = None, // None ⇒ all families (legacy)
-  spawnOwnerPolicy: Option[SpawnOwnerPolicy] = None,
-  maxGenerations:   Option[Int] = None, // same-definition-hash spawn-lineage depth cap
-  maxSpawnFanout:   Option[Int] = None, // children per single transition (tighter than ExecutionLimits cap)
-  acceptedCallers:  Option[Set[UUID]] = None, // fiber-origin ($caller) allowlist; user/wallet origin unaffected
-  sealedStates:     Option[Set[StateId]] = None, // states from which NO transition may fire (terminal/halted)
-  transferPolicy:   Option[TransferPolicy] = None,
-  dependencyPolicy: Option[DependencyPolicy] = None,
-  // ── version & compatibility family ──
-  upgradePolicy:      Option[UpgradePolicy] = None, // None ⇒ Arbitrary (legacy); gates migrate at UpgradeGate
-  version:            Option[SemVer] = None, // self-declared semantic version (TRUST-LAYER; gate uses schemaBinding)
-  compatibleWith:     Option[VersionRange] = None, // bridge window: which successor versions migrate may target
-  interfaces:         Option[Set[String]] = None, // ERC-165 interface ids the fiber advertises (self-declared)
-  migrationAuthority: Option[MigrationAuthority] = None // who may authorize a Governed migration
-) {
+sealed trait FiberPolicy {
 
-  /** An all-default policy is semantically equivalent to no policy at all. */
-  def isEmpty: Boolean =
-    selfReproducing.isEmpty && allowedEffects.isEmpty && spawnOwnerPolicy.isEmpty &&
-    maxGenerations.isEmpty && maxSpawnFanout.isEmpty && acceptedCallers.isEmpty &&
-    sealedStates.isEmpty && transferPolicy.isEmpty && dependencyPolicy.isEmpty &&
-    upgradePolicy.isEmpty && version.isEmpty && compatibleWith.isEmpty &&
-    interfaces.isEmpty && migrationAuthority.isEmpty
+  /** Convenience: this dial is ON only when explicitly set to `true`. `Unconstrained` is never reproducing. */
+  def isSelfReproducing: Boolean = this match {
+    case FiberPolicy.Unconstrained  => false
+    case c: FiberPolicy.Constrained => c.selfReproducing.contains(true)
+  }
 
-  /** Convenience: this dial is ON only when explicitly set to `true`. */
-  def isSelfReproducing: Boolean = selfReproducing.contains(true)
+  /** The effective upgrade tier — an absent dial (or `Unconstrained`) is [[UpgradePolicy.Arbitrary]] (legacy). */
+  def effectiveUpgradePolicy: UpgradePolicy =
+    dials.flatMap(_.upgradePolicy).getOrElse(UpgradePolicy.default)
 
-  /** The effective upgrade tier — an absent dial is [[UpgradePolicy.Arbitrary]] (legacy/unconstrained). */
-  def effectiveUpgradePolicy: UpgradePolicy = upgradePolicy.getOrElse(UpgradePolicy.default)
+  /**
+   * The dial bundle when this is a [[FiberPolicy.Constrained]], else `None` (an `Unconstrained` policy has NO dials
+   * set). Keeps consumer call sites that read a single dial readable: `policy.dials.flatMap(_.sealedStates)`
+   * replaces the old `policy.flatMap(_.sealedStates)` over an `Option[FiberPolicy]`, with the identical shape.
+   */
+  def dials: Option[FiberPolicy.Constrained] = this match {
+    case FiberPolicy.Unconstrained  => None
+    case c: FiberPolicy.Constrained => Some(c)
+  }
 }
 
 object FiberPolicy {
 
-  val empty: FiberPolicy = FiberPolicy()
+  /**
+   * The named default: NO surrendered capability — today's unconstrained/legacy behaviour. Replaces the old
+   * `None` / `Some(empty)`. Encodes as the magnolia variant wrapper `{"Unconstrained":{}}`.
+   */
+  case object Unconstrained extends FiberPolicy
 
   /**
-   * Normalize `Some(empty) ⇒ None` so an all-default policy hashes identically to an absent one. This is the
-   * internal-determinism rule the verified re-bind (`definition.computeDigest === logicHash`) relies on,
-   * independent of any back-compat concern: two definitions that mean the same thing MUST hash the same,
+   * A constitution that sets at least one of the 14 dials. Constructed ONLY via the smart constructor
+   * [[FiberPolicy.constrained]] (or the decoder), which collapses an all-empty `Constrained` to [[Unconstrained]] so
+   * there is exactly ONE canonical "unconstrained" form. Encodes as `{"Constrained":{<set dials only, after
+   * dropNulls>}}`.
+   */
+  @derive(customizableEncoder, customizableDecoder)
+  final case class Constrained(
+    selfReproducing:  Option[Boolean] = None, // Dial #1: a _spawn child's definition must hash-equal the parent's
+    allowedEffects:   Option[Set[EffectKind]] = None, // None ⇒ all families (legacy)
+    spawnOwnerPolicy: Option[SpawnOwnerPolicy] = None,
+    maxGenerations:   Option[Int] = None, // same-definition-hash spawn-lineage depth cap
+    maxSpawnFanout:   Option[Int] = None, // children per single transition (tighter than ExecutionLimits cap)
+    acceptedCallers:  Option[Set[UUID]] = None, // fiber-origin ($caller) allowlist; user/wallet origin unaffected
+    sealedStates:     Option[Set[StateId]] = None, // states from which NO transition may fire (terminal/halted)
+    transferPolicy:   Option[TransferPolicy] = None,
+    dependencyPolicy: Option[DependencyPolicy] = None,
+    // ── version & compatibility family ──
+    upgradePolicy:      Option[UpgradePolicy] = None, // None ⇒ Arbitrary (legacy); gates migrate at UpgradeGate
+    version:            Option[SemVer] = None, // self-declared semantic version (TRUST-LAYER; gate uses schemaBinding)
+    compatibleWith:     Option[VersionRange] = None, // bridge window: which successor versions migrate may target
+    interfaces:         Option[Set[String]] = None, // ERC-165 interface ids the fiber advertises (self-declared)
+    migrationAuthority: Option[MigrationAuthority] = None // who may authorize a Governed migration
+  ) extends FiberPolicy {
+
+    /** An all-default `Constrained` is semantically equivalent to `Unconstrained`. */
+    def isEmpty: Boolean =
+      selfReproducing.isEmpty && allowedEffects.isEmpty && spawnOwnerPolicy.isEmpty &&
+      maxGenerations.isEmpty && maxSpawnFanout.isEmpty && acceptedCallers.isEmpty &&
+      sealedStates.isEmpty && transferPolicy.isEmpty && dependencyPolicy.isEmpty &&
+      upgradePolicy.isEmpty && version.isEmpty && compatibleWith.isEmpty &&
+      interfaces.isEmpty && migrationAuthority.isEmpty
+  }
+
+  /**
+   * SMART CONSTRUCTOR (the determinism rule — load-bearing). Returns [[Unconstrained]] when every dial is
+   * empty, otherwise the given [[Constrained]]. This is the ONLY way a `Constrained` should be built, and the codec
+   * routes through it on decode, so an all-empty `Constrained` (typed OR on the wire as `{"Constrained":{}}`) is
+   * indistinguishable from `Unconstrained`. Two definitions that mean the same thing MUST hash the same,
    * regardless of which client (chain, SDK, third-party) wrote them.
    */
-  def normalize(p: Option[FiberPolicy]): Option[FiberPolicy] = p.filterNot(_.isEmpty)
+  def constrained(c: Constrained): FiberPolicy = if (c.isEmpty) Unconstrained else c
+
+  /**
+   * Named, all-defaulted convenience for the common case — the same dials as [[Constrained]], collapsed through the
+   * smart constructor. Lets call sites write `FiberPolicy.constrained(allowedEffects = Some(...))`.
+   */
+  def constrained(
+    selfReproducing:    Option[Boolean] = None,
+    allowedEffects:     Option[Set[EffectKind]] = None,
+    spawnOwnerPolicy:   Option[SpawnOwnerPolicy] = None,
+    maxGenerations:     Option[Int] = None,
+    maxSpawnFanout:     Option[Int] = None,
+    acceptedCallers:    Option[Set[UUID]] = None,
+    sealedStates:       Option[Set[StateId]] = None,
+    transferPolicy:     Option[TransferPolicy] = None,
+    dependencyPolicy:   Option[DependencyPolicy] = None,
+    upgradePolicy:      Option[UpgradePolicy] = None,
+    version:            Option[SemVer] = None,
+    compatibleWith:     Option[VersionRange] = None,
+    interfaces:         Option[Set[String]] = None,
+    migrationAuthority: Option[MigrationAuthority] = None
+  ): FiberPolicy =
+    constrained(
+      Constrained(
+        selfReproducing,
+        allowedEffects,
+        spawnOwnerPolicy,
+        maxGenerations,
+        maxSpawnFanout,
+        acceptedCallers,
+        sealedStates,
+        transferPolicy,
+        dependencyPolicy,
+        upgradePolicy,
+        version,
+        compatibleWith,
+        interfaces,
+        migrationAuthority
+      )
+    )
+
+  // ── Codec ──────────────────────────────────────────────────────────────────────────────────────────
+  // The named variant lives in CODE, not the bytes. `Unconstrained` encodes to JSON null — which the
+  // canonical path's `dropNulls` strips, so the `policy` key is OMITTED on the wire. Absence == Unconstrained,
+  // which is exactly what every pre-policy definition and the e2e/SDK already produce → client↔chain byte
+  // parity for FREE, with no sentinel to coordinate. `Constrained` encodes as its bare dials object (its own
+  // derived codec; `dropNulls` then strips the unset dials). Mirrors the UpgradePolicy / MigrationAuthority
+  // constrained ADT codecs in this file. NOTE: the canonical/signing/hash paths all `dropNulls`, so a `policy:null`
+  // never reaches the wire; a non-dropNulls encode would carry `"policy":null`, which still decodes back to
+  // Unconstrained.
+  private val constrainedEncoder: Encoder[Constrained] = Encoder[Constrained] // derevo-derived dials-object encoder
+  private val constrainedDecoder: Decoder[Constrained] = Decoder[Constrained]
+
+  implicit val encoder: Encoder[FiberPolicy] = Encoder.instance {
+    case Unconstrained  => Json.Null
+    case c: Constrained => constrainedEncoder(c)
+  }
+
+  // null/absent ⇒ Unconstrained; an object ⇒ Constrained routed through the smart constructor, so an all-empty
+  // `{}` (or all-null dials) collapses to Unconstrained — ONE canonical form in BOTH directions.
+  implicit val decoder: Decoder[FiberPolicy] = Decoder.instance { c =>
+    if (c.value.isNull) Right(Unconstrained)
+    else constrainedDecoder(c).map(constrained)
+  }
 
   // ────────────────────────────────────────────────────────────────────────────────────────────────
   // TIGHTEN-ONLY partial order (the trust anchor)
@@ -255,9 +353,10 @@ object FiberPolicy {
 
   /**
    * `tightens(old, neu)` succeeds iff `neu` is at least as restrictive as `old` on EVERY dial — the only
-   * direction a policy may move across a migration. Both sides are normalized first, so `Some(empty)` is
-   * treated as `None`; an absent `old` is fully-unconstrained, hence ANY `neu` is a valid tightening from
-   * "anything goes". Returns `Left(dial)` naming the first dial that LOOSENS.
+   * direction a policy may move across a migration. [[Unconstrained]] is BOTTOM (loosest): an `Unconstrained`
+   * `old` is fully-unconstrained, hence ANY `neu` is a valid tightening from "anything goes". A `Constrained` `old`
+   * with a `Unconstrained` `neu` LOOSENS every set dial back to "anything goes" and is rejected (Left naming
+   * the first loosened dial). Returns `Left(dial)` naming the first dial that LOOSENS.
    *
    * Per-dial order (`neu` must be ≥ `old` in restrictiveness):
    *   - selfReproducing: one-way latch — once ON, may never turn OFF (a fiber cannot graduate out).
@@ -281,11 +380,17 @@ object FiberPolicy {
    * `migrationAuthority` is likewise consulted at the gate (rotation under the same Governed rank is allowed,
    * matching cw2 admin-rotation), so it is not constrained here either.
    */
-  def tightens(old: Option[FiberPolicy], neu: Option[FiberPolicy]): Either[String, Unit] =
-    normalize(old) match {
-      case None => Right(()) // unconstrained prior ⇒ any successor is a valid tightening
-      case Some(o) =>
-        val n = normalize(neu).getOrElse(empty)
+  def tightens(old: FiberPolicy, neu: FiberPolicy): Either[String, Unit] =
+    old match {
+      case Unconstrained  => Right(()) // unconstrained prior ⇒ any successor is a valid tightening
+      case o: Constrained =>
+        // `Unconstrained` (or an all-empty `Constrained`) as the successor clears EVERY dial back to "anything
+        // goes" ⇒ it loosens any set dial. Run the per-dial order against the all-None projection so the
+        // FIRST loosened dial is the one named, exactly as a Some→None loosening would be.
+        val n = neu match {
+          case Unconstrained  => Constrained()
+          case c: Constrained => c
+        }
         for {
           _ <- latchOn("selfReproducing", o.selfReproducing, n.selfReproducing)
           _ <- subset("allowedEffects", o.allowedEffects, n.allowedEffects)
