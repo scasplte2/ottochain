@@ -1,0 +1,14 @@
+{
+  "name": "capped.asset",
+  "version": "1.0.0",
+  "behavior": 28,
+  "supply": {
+    "maxSupply": 100,
+    "mintPolicy": { "==": [1, 1] }
+  },
+  "morphisms": {},
+  "stateShape": {
+    "typeName": "CappedState",
+    "fields": []
+  }
+}

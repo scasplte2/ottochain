@@ -1,0 +1,30 @@
+{
+  "states": {
+    "s0": { "id": "s0", "isFinal": false },
+    "s1": { "id": "s1", "isFinal": false }
+  },
+  "initialState": "s0",
+  "transitions": [
+    {
+      "from": "s0",
+      "to": "s0",
+      "eventName": "ping",
+      "guard": { "==": [1, 1] },
+      "effect": {
+        "status": "s0",
+        "pinged": { "+": [{ "var": "state.pinged" }, 1] }
+      },
+      "dependencies": []
+    },
+    {
+      "from": "s0",
+      "to": "s1",
+      "eventName": "advance",
+      "guard": { "==": [1, 1] },
+      "effect": {
+        "status": "s1"
+      },
+      "dependencies": []
+    }
+  ]
+}

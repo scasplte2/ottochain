@@ -1,87 +1,105 @@
-# Riverdale Economy — supply-chain + upgrade de-risk slice
+# Riverdale Economy — full 6-party economy e2e
 
-A thin, 3-fiber e2e that exercises the cross-fiber + asset-custody + versioned-upgrade surface in one
-worked flow. It is the first example to use **real asset custody** (`createAssetPolicy` / `mintAsset` /
-`_transferAsset`) together with **cross-fiber `_triggers`** and a **verified-bound versioned upgrade**.
+The richest cross-fiber + asset-custody example: a worked **macro-economy** that exercises cross-fiber
+`_triggers`, real `_transferAsset` custody between fibers, two versioned package upgrades, a broadcast tax
+sweep, a spawned child auction, and wallet-context asset morphisms — plus a negative-test flow for graceful
+rejections. It extends the original 3-fiber "supply-chain + upgrade" de-risk slice (now FLOW 1's P0–P7
+backbone) into the whole economy.
 
 ## Parties & assets
 
-CI lane: `--wallets alice,bob,carol`.
+CI lane: `--wallets alice,bob,carol,dave,erin,frank` (a step's `signers` ARE its owners/authorizers).
 
-| Wallet | Role          | Owns / acts on            |
-| ------ | ------------- | ------------------------- |
-| alice  | Manufacturer  | `manufacturer` fiber, mints |
-| bob    | Retailer      | `retailer.machine` package + `retailer` fiber |
-| carol  | Consumer      | `consumer` fiber, holds RVD |
+| Wallet | Role         | Fiber / package                                  |
+| ------ | ------------ | ------------------------------------------------ |
+| alice  | Manufacturer | `manufacturer`, mints the assets                 |
+| bob    | Retailer     | `retailer` (verified-bound `retailer.machine` v1→v2) |
+| carol  | Consumer     | `consumer` (+ spawns the child auction)          |
+| dave   | Bank         | `bank`, holds + lends RVD                         |
+| erin   | Fed          | `fed` (verified-bound `fed.machine` v1→v2)        |
+| frank  | Governance   | `gov`, runs the tax sweep                         |
 
-| Asset       | Behavior bits | Meaning                                              |
-| ----------- | ------------- | --------------------------------------------------- |
-| `goods.asset` | `20` = T\|C | transferable + **combinable** inventory             |
-| `rvd.asset`   | `28` = T\|S\|C = Fungible | the fungible currency               |
+| Asset         | Behavior      | Meaning                                              |
+| ------------- | ------------- | --------------------------------------------------- |
+| `goods.asset` | `20` = T\|C   | combinable + transferable inventory                 |
+| `rvd.asset`   | `28` = T\|S\|C = Fungible | the fungible currency (Transfer/Fractionalize/Burn/Stake morphisms) |
 
-Fixed, deterministic asset ids live in [`ids.ts`](./ids.ts) — **never** `crypto.randomUUID()`, because the
-custody assertions must observe the SAME instance across mint → transfer → assert.
+Fixed, deterministic ids live in [`ids.ts`](./ids.ts) — **never** `crypto.randomUUID()`, so custody/spawn
+assertions observe the SAME instance across mint → transfer → assert.
 
-## The flow (single testFlow)
+## Asset choreography — the R1 constraint (verified in `AssetCombiner.scala`)
 
-- **P0 genesis** — `createAssetPolicy goods.asset` + `rvd.asset` (alice); `publishVersion retailer.machine
-  1.0.0` and `2.0.0` (bob).
-- **P1 create** — `manufacturer` (alice), `retailer` verified-bound to `retailer.machine@1.0.0` (bob),
-  `consumer` (carol).
-- **P2 mint** — GOODS → `Fiber(manufacturer)` amount 500 (+ `assertAsset`); RVD → `Wallet(carol)` amount
-  1000 (+ `assertAsset`).
-- **P3 supply chain** — `manufacturer.fulfill_order` (alice). Its effect, in ONE transition:
-  - `_triggers` the retailer's `receive_shipment` (carrying `quantity`), and
-  - `_transferAsset` moves the GOODS instance into the retailer fiber's custody.
-  - Asserted via `assertState fiber:retailer` (changed indirectly by the trigger) and `assertAsset`
-    (custody now `Fiber(retailer)`).
-- **P4 upgrade** — `upgradeFiber retailer → retailer.machine@2.0.0` with `retailer-migration.json`
-  (adds `loyaltyPoints:0`); `assertState` checks the migrated + preserved fields.
-- **P5 v2-only** — `redeem_loyalty` (a transition that exists ONLY in v2); `assertState` checks the result.
+A FIBER-held asset's raw `ApplyMorphism` is **rejected** (`requireWalletHolder`). Fiber-custody value moves
+**only** via the `_transferAsset` fiber-effect return channel — a WHOLE instance, in a transition effect,
+where the emitting fiber must HOLD it (R1 holder defense in `applyFiberTransfer`). So each payment leg is a
+**separate pre-minted RVD instance**, minted DIRECTLY into the fiber that spends it:
 
-Retailer sequence numbers across the flow: create `0` → receive_shipment (triggered) `1` → upgrade `2` →
-redeem_loyalty `3`.
+| Instance     | Minted into     | Moved by (`_transferAsset`)        |
+| ------------ | --------------- | ---------------------------------- |
+| `RVD_LOAN`   | bank fiber      | `bank.underwrite` → consumer       |
+| `RVD_PAY`    | consumer fiber  | `consumer.buy` → retailer          |
+| `RVD_REPAY`  | consumer fiber  | `consumer.make_payment` → bank     |
+| `RVD_TAX`    | consumer fiber  | `consumer.pay_taxes` → gov         |
+| `GOODS`      | manufacturer    | `fulfill_order` → retailer; then `process_sale` → consumer |
+
+Minting INTO a Fiber holder is allowed (`AssetCombiner.mintAsset`). Wallet-context morphisms (FLOW 1 P12)
+are SEPARATE and run where R1 requires `signer == holder`.
+
+## FLOW 1 — the economy (concurrency 1)
+
+P0 genesis (asset policies + `retailer.machine` v1/v2 + `fed.machine` v1/v2) → P1 create the 6 fibers → P2
+mint GOODS + the four RVD legs → **P3 supply** (manufacturer→retailer) → **P4 monetary** (fed→bank rate) →
+**P5 lending** (bank→consumer, RVD_LOAN custody) → **P6 commerce** (consumer↔retailer: RVD_PAY out, GOODS in,
+one tx) → **P7 retailer upgrade** v1→v2 + v2-only `redeem_loyalty` → **P8 servicing** (consumer→bank,
+RVD_REPAY) → **P9 fed upgrade** v1→v2 + v2-only `emergency_lending` → **P10 tax sweep** (gov broadcasts
+`pay_taxes` to manufacturer/retailer/consumer; consumer remits RVD_TAX to gov) → **P11 auction** (consumer
+spawns a child auction at `AUCTION_CHILD_ID`; bob bids + accepts; `sale_completed` loops back to the
+consumer) → **P12 wallet morphism** (mint RVD into dave's wallet, then `STAKE` it).
+
+### Wallet-morphism coverage + the runner limitation (read this)
+
+The runner confirms an `applyMorphism` step by polling the **source** asset's `state-proof` for a
+**sequence ADVANCE** (`runner.ts` ~L699-713). That only works for **non-consuming** morphisms:
+
+- **STAKE** (live, P12): codomain `E:=1`, bumps the seq, the record survives → confirmable. ✅
+- **FRACTIONALIZE / BURN** (deferred): CONSUMING/terminal — they REMOVE the source record, so the
+  seq-advance predicate can never be satisfied and the step would time out. Their body files
+  (`fractionalize-rvd.ts`, `burn-rvd.ts`) + ids are shipped and the `rvd` policy permits them
+  (`morphisms` + `burnPolicy`); the deferred steps are written out (commented) at the end of P12. They
+  activate the instant the runner gains consuming-morphism confirmation (e.g. confirm Fractionalize via
+  shard existence, Burn via source absence). Absence is also not assertable via `assertAsset`.
+
+`STAKE` is clean to enable: `applyStake` adds no behavior-bit requirement (`structuralOk` has no Stake
+gate); only the policy `morphisms` map must declare it (it does).
+
+## FLOW 2 — negative tests (graceful ML0 rejections)
+
+Disjoint fibers/policies/packages so it never collides with FLOW 1. Each is admitted by DL1 (structurally
+valid) then DENIED at ML0 combine, leaving state unchanged:
+
+- **wrong-party** — alice owns the fiber; a transition signed by bob → `NotSignedByAuthorizedParty`.
+- **replay / seq-regression** — re-submit a one-way transition after the fiber moved on → `NoTransitionForEvent`.
+- **mint-over-cap** — a capped policy (`maxSupply 100`); the 2nd mint pushes derived supply over the cap.
+- **non-monotonic publish** — publish a HIGHER version then a LOWER one (the lower is not in the lineage, so
+  "did not land" is observable — re-publishing the same version is indistinguishable from idempotence).
 
 ## On-wire shapes (verified against the chain sources)
 
-- **`_transferAsset` recipient is a BARE STRING**, not an `AssetHolder` object. The extractor
-  disambiguates: a UUID-shaped string → `AssetHolder.Fiber`, a DAG address → `AssetHolder.Wallet`
-  (`EffectExtractor.parseRecipient`). We pass the retailer's fiberId, so the GOODS lands in
-  `Fiber(retailer)`. The directive is `{"_transferAsset":[{"assetId":<expr>,"recipient":<expr>}]}` with
-  both sub-values resolved against the transition context.
-- **Cross-fiber triggers need NO declared dependency.** `TriggerDispatcher` routes purely by the
-  directive's `targetMachineId` (`{"_triggers":[{"targetMachineId":<expr>,"eventName":<str>,"payload":
-  <expr>}]}`). The only gate is `FiberPolicy.acceptedCallers`, which is **unset** here (Unconstrained), so
-  the manufacturer (the engine-stamped `$caller`) is accepted. The retailer's `receive_shipment` guard is
-  `{"==":[1,1]}`.
-- **The manufacturer must HOLD the GOODS before `fulfill_order`** (minted into `Fiber(manufacturer)`), to
-  satisfy the R1 holder defense: `AssetCombiner.applyFiberTransfer` requires
-  `source.holder == AssetHolder.Fiber(emittingFiberId)` and `behavior.transferable` and a live recipient
-  fiber.
-- **Holder wire forms**: `{"Fiber":{"fiberId":<uuid>}}` / `{"Wallet":{"address":<dag>}}`.
-- **`MintAsset.policyRef`** is a `SchemaRef`: `{"name":"goods.asset","version":{"Exact":{"version":
-  "1.0.0"}}}` (`VersionReq.Exact`; `{"Latest":{}}` also valid).
-- **`CreateAssetPolicy`**: `{name (".asset" TLD, required), version, behavior (packed Int), supply,
-  morphisms (required map, may be `{}`), stateShape, metadata?}`. `supply.mintPolicy` is a JSON-Logic
-  predicate that must ALLOW the mint (`{"==":[1,1]}`); `maxSupply`/`burnPolicy`/`decimals` are omitted
-  (Option ⇒ omit-safe). `morphisms` is left `{}` — the GOODS custody move uses the fiber `_transferAsset`
-  return channel, not a wallet-signed `ApplyMorphism`, so no morphism spec is needed.
-- **Verified binding**: the retailer is created with `schemaRef retailer.machine@1.0.0`, so its definition
-  must hash-equal the published version's `logicHash`. We therefore use the **same** definition file for
-  both `publishVersion` and `create` (and again for v2 publish + upgrade). Note `.machine` is accepted as a
-  package name for `PublishMachineVersion` (no `.package`-TLD enforcement on publish), matching the task.
-- **Migration** runs against the prior state as the context ROOT, so `{"var":""}` is the whole prior
-  state; `retailer-migration.json` = `{"merge":[{"var":""},{"loyaltyPoints":0}]}` and its OUTPUT becomes
-  the new state.
+- `_transferAsset` recipient is a BARE STRING; UUID-shaped → `AssetHolder.Fiber`, DAG address →
+  `AssetHolder.Wallet` (`EffectExtractor.parseRecipient`). We pass fiberIds so legs land in Fiber custody.
+- Cross-fiber triggers need NO declared dependency; the gate is `FiberPolicy.acceptedCallers` (UNSET =
+  Unconstrained here). The retailer/consumer/etc. guards are `{"==":[1,1]}`.
+- Spawned child `owners = event.auctionOwners` (`SpawnProcessor`); a child's transitions are gated by
+  `owners ∪ authorizedSigners` (`FiberRules.updateSignedByOwnerOrParticipant`), so the **bidder bob is in
+  `auctionOwners`** — otherwise his `place_bid`/`accept_bid` are rejected at ML0.
+- `MintAsset` holder wire forms: `{"Fiber":{"fiberId":…}}` / `{"Wallet":{"address":…}}`; `policyRef` is a
+  `SchemaRef` with `VersionReq.Exact`. `ApplyMorphism` body: `{assetId, kind, …}` (`FRACTIONALIZE` adds
+  `shardIds`; the runner fills `targetSequenceNumber`).
+- Verified binding: the retailer/fed are created with `schemaRef …@1.0.0`, so the SAME definition file is
+  used for both publish + create (and again for v2 publish + upgrade) — the `pay_taxes` transition added to
+  the retailer definitions is therefore mirrored in their published versions, keeping `logicHash` aligned.
 
 ## Signed-message discipline (CLAUDE.md #1)
 
-Optional message fields are **omitted**, never set to `null` — the runner's `dropNulls` path strips nulls,
-so the client-signed and chain-re-derived canonicals match. The `.ts` mint/event files return only the
-present fields.
-
-## Note on the consumer fiber
-
-The deliverable set has no dedicated consumer state machine, so the `consumer` fiber is created from
-`manufacturer.definition.json`. It is a third PARTY proving the multi-fiber / signers model; its internal
-transitions are intentionally not exercised by the flow.
+Optional message fields are **omitted**, never `null` — the `.ts` mint/event/morphism files return only
+present fields, so the client-signed and chain-re-derived canonicals match.

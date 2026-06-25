@@ -28,6 +28,16 @@
         "inventory": { "-": [{ "var": "state.inventory" }, { "var": "event.quantity" }] }
       },
       "dependencies": []
+    },
+    {
+      "from": "shipped",
+      "to": "shipped",
+      "eventName": "pay_taxes",
+      "guard": { "==": [1, 1] },
+      "effect": {
+        "taxesPaid": { "+": [{ "var": "state.taxesPaid" }, { "var": "event.taxAmount" }] }
+      },
+      "dependencies": []
     }
   ]
 }

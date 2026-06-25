@@ -44,6 +44,16 @@
         "revenue": { "*": [{ "var": "event.quantity" }, 10] }
       },
       "dependencies": []
+    },
+    {
+      "from": "received",
+      "to": "received",
+      "eventName": "pay_taxes",
+      "guard": { "==": [1, 1] },
+      "effect": {
+        "taxesPaid": { "+": [{ "var": "state.taxesPaid" }, { "var": "event.taxAmount" }] }
+      },
+      "dependencies": []
     }
   ]
 }

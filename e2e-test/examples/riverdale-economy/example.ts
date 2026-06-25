@@ -1,168 +1,199 @@
 /**
- * Riverdale economy — a 3-fiber "supply-chain + upgrade" de-risk slice.
+ * Riverdale Economy — the full 6-party economy e2e (Phase 2).
  *
- * Parties (CI lane passes `--wallets alice,bob,carol`):
- *   alice = Manufacturer   bob = Retailer   carol = Consumer
+ * Parties (CI lane passes `--wallets alice,bob,carol,dave,erin,frank`):
+ *   alice = Manufacturer   bob = Retailer   carol = Consumer   dave = Bank   erin = Fed   frank = Gov
  *
- * Two REAL assets:
- *   GOODS.asset (behavior 20 = T|C: transferable + combinable inventory)
- *   RVD.asset   (behavior 28 = T|S|C = Fungible currency)
- * Fixed, deterministic asset ids live in ./ids.ts (NEVER crypto.randomUUID — the custody assertions must
- * observe the SAME instance across mint → transfer → assert).
+ * This extends the GREEN de-risk slice (cross-fiber `_triggers`, real `_transferAsset` custody between
+ * fibers, a verified-bound versioned upgrade + migration, the assertState/assertAsset poll steps) into the
+ * whole economy: a Fed sets monetary policy that propagates to a Bank; the Bank lends RVD to a Consumer;
+ * the Consumer buys GOODS from a Retailer (money out, goods in, one tx); services the loan back to the
+ * Bank; Governance broadcasts a tax sweep to manufacturer/retailer/consumer; and the Consumer runs a
+ * spawned child auction. Two state-machine PACKAGES (retailer.machine, fed.machine) are versioned v1→v2.
  *
- * One worked flow proves, end-to-end:
- *   (a) cross-fiber `_triggers`        — manufacturer.fulfill_order fires retailer.receive_shipment.
- *   (b) real `_transferAsset` custody  — the GOODS instance moves manufacturer-fiber → retailer-fiber in
- *                                        the SAME transition, asserted via the new `assertAsset` step.
- *   (c) versioned upgrade + migration  — retailer is verified-bound to retailer.machine@1.0.0, upgraded
- *                                        to @2.0.0 with a migration that adds loyaltyPoints:0, then drives
- *                                        a v2-ONLY transition (redeem_loyalty).
- *   (d) the new poll-only assert steps  — assertState / assertAsset (no tx; observe indirect + custody state).
+ * ── Asset choreography (R1, verified in AssetCombiner.scala) ──────────────────────────────────────────
+ *  • A FIBER-held asset's raw `ApplyMorphism` is REJECTED (AssetCombiner.requireWalletHolder). Fiber-custody
+ *    value moves ONLY via the `_transferAsset` fiber-effect return channel (whole instance; the emitting
+ *    fiber must HOLD it — R1 holder defense in applyFiberTransfer). So each payment leg is a SEPARATE
+ *    pre-minted RVD instance, minted DIRECTLY into the fiber that spends it:
+ *      RVD_LOAN  → bank fiber     (bank lends it to the consumer via `underwrite`)
+ *      RVD_PAY   → consumer fiber (consumer pays the retailer via `buy`)
+ *      RVD_REPAY → consumer fiber (consumer services the loan to the bank via `make_payment`)
+ *      RVD_TAX   → consumer fiber (consumer remits to the gov via `pay_taxes`)
+ *    Minting INTO a Fiber holder is allowed (AssetCombiner.mintAsset).
+ *  • Wallet-context morphisms (P12) are SEPARATE from the custody flow and run in WALLET context, where R1
+ *    requires `signer == holder`. STAKE is demonstrated live (it bumps the asset's seq + keeps the record,
+ *    so the runner's `applyMorphism` confirmation can observe it). FRACTIONALIZE + BURN are CONSUMING/
+ *    terminal morphisms — they REMOVE the source record, which the runner's seq-advance confirmation
+ *    cannot observe — so they ship as ready body files (fractionalize-rvd.ts / burn-rvd.ts) + ids and are
+ *    documented as deferred below (see the P12 note). The rvd policy already permits all four.
  *
- * ── On-wire shapes that decide this slice (verified against the chain sources) ──────────────────────────
- *  • `_transferAsset` recipient is a BARE STRING that the extractor disambiguates: a UUID-shaped string →
- *    AssetHolder.Fiber, a DAG address → AssetHolder.Wallet (EffectExtractor.parseRecipient). We pass the
- *    retailer's fiberId, so the GOODS lands in Fiber(retailer) custody — NOT an AssetHolder object.
- *  • A cross-fiber trigger needs NO declared dependency: TriggerDispatcher routes purely by the directive's
- *    `targetMachineId`. The only gate is FiberPolicy.acceptedCallers, which is UNSET here (Unconstrained),
- *    so the manufacturer (caller) is accepted. The retailer's receive_shipment guard is `{"==":[1,1]}`.
- *  • The manufacturer must HOLD the GOODS before fulfill_order — minted into Fiber(manufacturer) in P2 — to
- *    satisfy the R1 holder defense (AssetCombiner.applyFiberTransfer requires holder == Fiber(emitter)).
+ * ── On-wire shapes (verified against the chain sources) ───────────────────────────────────────────────
+ *  • `_transferAsset` recipient is a BARE STRING; a UUID-shaped string → AssetHolder.Fiber, a DAG address →
+ *    AssetHolder.Wallet (EffectExtractor.parseRecipient). We pass fiberIds, so legs land in Fiber custody.
+ *  • A cross-fiber trigger needs NO declared dependency; the gate is FiberPolicy.acceptedCallers (UNSET =
+ *    Unconstrained here), so any caller is accepted (TriggerDispatcher routes by targetMachineId).
+ *  • Spawned child `owners = event.auctionOwners` (SpawnProcessor); a child's transitions are gated by
+ *    `owners ∪ authorizedSigners` (FiberRules.updateSignedByOwnerOrParticipant), so the bidder bob is
+ *    listed in auctionOwners — else his place_bid/accept_bid are rejected at ML0.
+ *  • Signers ARE the party model: a step's `signers` are the proofs ⇒ owners/authorizers.
  *
- * Signers = the party model: a step's `signers` ARE the proofs ⇒ the owners/authorizers. alice owns the
- * manufacturer, bob owns + publishes the retailer package, carol owns the consumer.
- *
- * NOTE on the consumer fiber: the deliverable set has no dedicated consumer machine, so the consumer is
- * created from the manufacturer definition (a generic, valid state machine). It is a third PARTY proving the
- * multi-fiber/signers model; its internal transitions are intentionally not exercised by the flow.
+ * Signed-message discipline (CLAUDE.md #1): the `.ts` mint/event/morphism files return only present fields;
+ * optional fields are omitted, never null.
  */
-import { GOODS_ASSET_ID, RVD_ASSET_ID } from './ids.ts';
+import {
+  GOODS_ASSET_ID,
+  RVD_LOAN_ID,
+  RVD_PAY_ID,
+  RVD_REPAY_ID,
+  RVD_TAX_ID,
+  RVD_STAKE_ID,
+  AUCTION_CHILD_ID,
+  CAPPED_A_ID,
+  CAPPED_B_ID,
+} from './ids.ts';
 
 const RETAILER_PKG = 'retailer.machine';
+const FED_PKG = 'fed.machine';
 
 export default {
   name: 'Riverdale Economy',
   description:
-    'Supply-chain slice: cross-fiber _triggers, real _transferAsset custody between fibers, a verified-bound versioned upgrade + migration + v2-only transition, and the assertState/assertAsset poll steps.',
+    'Full 6-party economy: Fed→Bank monetary policy, Bank→Consumer lending, Consumer↔Retailer commerce (money/goods cross-transfer), loan servicing, a broadcast Gov tax sweep, a spawned child auction, two versioned package upgrades (retailer.machine + fed.machine), and wallet-context asset morphisms — plus a negative-test flow for graceful rejections.',
   type: 'state-machine',
   testFlows: [
     {
-      name: 'manufacturer ships goods to retailer, then retailer upgrades to v2 loyalty',
+      name: 'full economy: monetary policy → lending → commerce → servicing → tax sweep → auction',
       description:
-        'Genesis (asset policies + retailer package v1/v2) → create the 3 party fibers → mint GOODS to the manufacturer + RVD to carol → fulfill_order (trigger + asset custody move) → upgrade the retailer across schema versions with a migration → drive a v2-only redeem_loyalty.',
+        'Genesis (asset policies + retailer.machine v1/v2 + fed.machine v1/v2) → create the 6 party fibers → mint GOODS + the four RVD payment-leg instances → supply chain → monetary policy → lending → commerce → retailer upgrade → loan servicing → fed upgrade → tax sweep → spawned auction → a wallet STAKE morphism.',
       steps: [
-        // ── P0 genesis: asset policies + the retailer state-machine package (two versions) ──
+        // ── P0 genesis: asset policies + the two versioned state-machine packages ──
         { action: 'createAssetPolicy', name: 'goods.asset', policy: 'goods-policy.json', signers: ['alice'] },
         { action: 'createAssetPolicy', name: 'rvd.asset', policy: 'rvd-policy.json', signers: ['alice'] },
-        {
-          action: 'publishVersion',
-          name: RETAILER_PKG,
-          version: '1.0.0',
-          definition: 'retailer-v1.definition.json',
-          schemaShape: 'retailer-v1.schema.json',
-          signers: ['bob'],
-        },
-        {
-          action: 'publishVersion',
-          name: RETAILER_PKG,
-          version: '2.0.0',
-          definition: 'retailer-v2.definition.json',
-          schemaShape: 'retailer-v2.schema.json',
-          signers: ['bob'],
-        },
+        { action: 'publishVersion', name: RETAILER_PKG, version: '1.0.0', definition: 'retailer-v1.definition.json', schemaShape: 'retailer-v1.schema.json', signers: ['bob'] },
+        { action: 'publishVersion', name: RETAILER_PKG, version: '2.0.0', definition: 'retailer-v2.definition.json', schemaShape: 'retailer-v2.schema.json', signers: ['bob'] },
+        { action: 'publishVersion', name: FED_PKG, version: '1.0.0', definition: 'fed-v1.definition.json', schemaShape: 'fed-v1.schema.json', signers: ['erin'] },
+        { action: 'publishVersion', name: FED_PKG, version: '2.0.0', definition: 'fed-v2.definition.json', schemaShape: 'fed-v2.schema.json', signers: ['erin'] },
 
-        // ── P1 create the three party fibers (signers ⇒ owners) ──
-        {
-          action: 'create',
-          as: 'manufacturer',
-          definition: 'manufacturer.definition.json',
-          initialData: 'manufacturer.initial.json',
-          signers: ['alice'],
-        },
-        {
-          action: 'create',
-          as: 'retailer',
-          definition: 'retailer-v1.definition.json',
-          initialData: 'retailer.initial.json',
-          schemaRef: { name: RETAILER_PKG, version: '1.0.0' },
-          signers: ['bob'],
-        },
-        {
-          // The consumer (carol) reuses the manufacturer definition — see the header note. Third party only.
-          action: 'create',
-          as: 'consumer',
-          definition: 'manufacturer.definition.json',
-          initialData: 'manufacturer.initial.json',
-          signers: ['carol'],
-        },
+        // ── P1 create the six party fibers (signers ⇒ owners). retailer + fed are verified-bound. ──
+        { action: 'create', as: 'manufacturer', definition: 'manufacturer.definition.json', initialData: 'manufacturer.initial.json', signers: ['alice'] },
+        { action: 'create', as: 'retailer', definition: 'retailer-v1.definition.json', initialData: 'retailer.initial.json', schemaRef: { name: RETAILER_PKG, version: '1.0.0' }, signers: ['bob'] },
+        { action: 'create', as: 'consumer', definition: 'consumer.definition.json', initialData: 'consumer.initial.json', signers: ['carol'] },
+        { action: 'create', as: 'bank', definition: 'bank.definition.json', initialData: 'bank.initial.json', signers: ['dave'] },
+        { action: 'create', as: 'fed', definition: 'fed-v1.definition.json', initialData: 'fed.initial.json', schemaRef: { name: FED_PKG, version: '1.0.0' }, signers: ['erin'] },
+        { action: 'create', as: 'gov', definition: 'gov.definition.json', initialData: 'gov.initial.json', signers: ['frank'] },
 
-        // ── P2 mint the two real assets ──
+        // ── P2 mint the real assets: GOODS into the manufacturer, the four RVD legs into their spenders ──
         { action: 'mintAsset', mint: 'mint-goods.ts', signers: ['alice'] },
         { action: 'assertAsset', assetId: GOODS_ASSET_ID, expectedHolder: { Fiber: 'manufacturer' }, expectedAmount: 500 },
-        { action: 'mintAsset', mint: 'mint-rvd-carol.ts', signers: ['alice'] },
-        { action: 'assertAsset', assetId: RVD_ASSET_ID, expectedHolder: { Wallet: 'carol' }, expectedAmount: 1000 },
+        { action: 'mintAsset', mint: 'mint-rvd.ts', eventData: { assetId: RVD_LOAN_ID, holderFiber: 'bank', amount: 10000 }, signers: ['alice'] },
+        { action: 'assertAsset', assetId: RVD_LOAN_ID, expectedHolder: { Fiber: 'bank' }, expectedAmount: 10000 },
+        { action: 'mintAsset', mint: 'mint-rvd.ts', eventData: { assetId: RVD_PAY_ID, holderFiber: 'consumer', amount: 500 }, signers: ['alice'] },
+        { action: 'mintAsset', mint: 'mint-rvd.ts', eventData: { assetId: RVD_REPAY_ID, holderFiber: 'consumer', amount: 300 }, signers: ['alice'] },
+        { action: 'mintAsset', mint: 'mint-rvd.ts', eventData: { assetId: RVD_TAX_ID, holderFiber: 'consumer', amount: 50 }, signers: ['alice'] },
+        { action: 'assertAsset', assetId: RVD_PAY_ID, expectedHolder: { Fiber: 'consumer' }, expectedAmount: 500 },
+        { action: 'assertAsset', assetId: RVD_TAX_ID, expectedHolder: { Fiber: 'consumer' }, expectedAmount: 50 },
 
-        // ── P3 supply chain: fulfill_order triggers the retailer AND moves GOODS custody ──
-        {
-          action: 'processEvent',
-          fiber: 'manufacturer',
-          event: 'event-fulfill-order.ts',
-          signers: ['alice'],
-          expectedState: 'shipped',
-        },
-        // The retailer changed INDIRECTLY via the cross-fiber trigger (seq 0 → 1).
+        // ── P3 SUPPLY: manufacturer.fulfill_order ⇒ triggers retailer.receive_shipment + moves GOODS custody ──
+        { action: 'processEvent', fiber: 'manufacturer', event: 'event-fulfill-order.ts', signers: ['alice'], expectedState: 'shipped' },
         { action: 'assertState', fiber: 'retailer', expectedState: 'received', minSequenceNumber: 1 },
-        // The GOODS instance is now in the retailer fiber's custody (asset seq advanced 0 → 1 on transfer).
-        {
-          action: 'assertAsset',
-          assetId: GOODS_ASSET_ID,
-          expectedHolder: { Fiber: 'retailer' },
-          expectedAmount: 500,
-          minSequenceNumber: 1,
-        },
+        { action: 'assertAsset', assetId: GOODS_ASSET_ID, expectedHolder: { Fiber: 'retailer' }, expectedAmount: 500, minSequenceNumber: 1 },
 
-        // ── P4 versioned upgrade across schema versions + migration ──
-        {
-          action: 'upgradeFiber',
-          fiber: 'retailer',
-          targetRef: { name: RETAILER_PKG, version: '2.0.0' },
-          newDefinition: 'retailer-v2.definition.json',
-          migration: 'retailer-migration.json',
-          signers: ['bob'],
-        },
-        // Migrated: loyaltyPoints:0 added; the v1 fields (preserved by the merge) intact; currentState kept.
-        {
-          action: 'assertState',
-          fiber: 'retailer',
-          minSequenceNumber: 2,
-          expectedStateData: {
-            shipmentsReceived: 1,
-            status: 'received',
-            receivedQuantity: 500,
-            loyaltyPoints: 0,
-          },
-        },
+        // ── P4 MONETARY: fed.set_rate ⇒ triggers bank.rate_adjustment (rate propagates cross-fiber) ──
+        { action: 'processEvent', fiber: 'fed', event: 'event-set-rate.ts', signers: ['erin'], expectedState: 'stable' },
+        { action: 'assertState', fiber: 'bank', expectedState: 'operating', minSequenceNumber: 1 },
 
-        // ── P5 v2-only transition ──
-        {
-          action: 'processEvent',
-          fiber: 'retailer',
-          event: 'event-redeem-loyalty.ts',
-          signers: ['bob'],
-          expectedState: 'received',
-        },
-        {
-          action: 'assertState',
-          fiber: 'retailer',
-          minSequenceNumber: 3,
-          expectedState: 'received',
-          expectedStateData: {
-            shipmentsReceived: 1,
-            receivedQuantity: 500,
-            loyaltyPoints: 50,
-            status: 'loyalty_redeemed',
-          },
-        },
+        // ── P5 LENDING: bank.underwrite ⇒ triggers consumer.loan_funded + transfers RVD_LOAN bank→consumer ──
+        { action: 'processEvent', fiber: 'bank', event: 'event-underwrite.ts', signers: ['dave'], expectedState: 'loan_servicing' },
+        { action: 'assertState', fiber: 'consumer', expectedState: 'debt_current', minSequenceNumber: 1 },
+        { action: 'assertAsset', assetId: RVD_LOAN_ID, expectedHolder: { Fiber: 'consumer' }, expectedAmount: 10000, minSequenceNumber: 1 },
+
+        // ── P6 COMMERCE: consumer.buy ⇒ triggers retailer.process_sale; RVD_PAY consumer→retailer, GOODS retailer→consumer ──
+        { action: 'processEvent', fiber: 'consumer', event: 'event-buy.ts', signers: ['carol'], expectedState: 'debt_current' },
+        { action: 'assertState', fiber: 'retailer', expectedState: 'received', minSequenceNumber: 2 },
+        { action: 'assertAsset', assetId: RVD_PAY_ID, expectedHolder: { Fiber: 'retailer' }, expectedAmount: 500, minSequenceNumber: 1 },
+        { action: 'assertAsset', assetId: GOODS_ASSET_ID, expectedHolder: { Fiber: 'consumer' }, expectedAmount: 500, minSequenceNumber: 2 },
+
+        // ── P7 UPGRADE retailer v1→v2 (migration adds loyaltyPoints) + a v2-only redeem_loyalty ──
+        { action: 'upgradeFiber', fiber: 'retailer', targetRef: { name: RETAILER_PKG, version: '2.0.0' }, newDefinition: 'retailer-v2.definition.json', migration: 'retailer-migration.json', signers: ['bob'] },
+        { action: 'assertState', fiber: 'retailer', expectedState: 'received', minSequenceNumber: 3 },
+        { action: 'processEvent', fiber: 'retailer', event: 'event-redeem-loyalty.ts', signers: ['bob'], expectedState: 'received' },
+        { action: 'assertState', fiber: 'retailer', expectedState: 'received', minSequenceNumber: 4 },
+
+        // ── P8 SERVICING: consumer.make_payment ⇒ triggers bank.payment_received + transfers RVD_REPAY consumer→bank ──
+        { action: 'processEvent', fiber: 'consumer', event: 'event-make-payment.ts', signers: ['carol'], expectedState: 'debt_current' },
+        { action: 'assertState', fiber: 'bank', expectedState: 'loan_servicing', minSequenceNumber: 3 },
+        { action: 'assertAsset', assetId: RVD_REPAY_ID, expectedHolder: { Fiber: 'bank' }, expectedAmount: 300, minSequenceNumber: 1 },
+
+        // ── P9 UPGRADE fed v1→v2 (migration adds emergencyLoans) + a v2-only emergency_lending ──
+        { action: 'upgradeFiber', fiber: 'fed', targetRef: { name: FED_PKG, version: '2.0.0' }, newDefinition: 'fed-v2.definition.json', migration: 'fed-migration.json', signers: ['erin'] },
+        { action: 'assertState', fiber: 'fed', expectedState: 'stable', minSequenceNumber: 2 },
+        { action: 'processEvent', fiber: 'fed', event: 'event-emergency-lending.ts', signers: ['erin'], expectedState: 'emergency_lending' },
+        { action: 'assertState', fiber: 'fed', expectedState: 'emergency_lending', minSequenceNumber: 3 },
+
+        // ── P10 TAX SWEEP (broadcast): gov.collect_taxes ⇒ triggers pay_taxes on manufacturer/retailer/consumer; consumer also transfers RVD_TAX consumer→gov ──
+        { action: 'processEvent', fiber: 'gov', event: 'event-collect-taxes.ts', signers: ['frank'], expectedState: 'tax_collection' },
+        { action: 'assertState', fiber: 'gov', expectedState: 'tax_collection', minSequenceNumber: 1, expectedStateData: { totalTaxesCollected: 50, taxpayersBilled: 3, status: 'tax_collection' } },
+        { action: 'assertState', fiber: 'manufacturer', expectedState: 'shipped', minSequenceNumber: 2, expectedStateData: { inventory: 500, taxesPaid: 50, status: 'shipped' } },
+        { action: 'assertState', fiber: 'retailer', expectedState: 'received', minSequenceNumber: 5 },
+        { action: 'assertState', fiber: 'consumer', expectedState: 'debt_current', minSequenceNumber: 4 },
+        { action: 'assertAsset', assetId: RVD_TAX_ID, expectedHolder: { Fiber: 'gov' }, expectedAmount: 50, minSequenceNumber: 1 },
+
+        // ── P11 AUCTION (spawn): consumer.list_item spawns the child auction; bob bids + accepts; sale_completed loops back to the consumer ──
+        { action: 'processEvent', fiber: 'consumer', event: 'event-list-item.ts', signers: ['carol'], expectedState: 'marketplace_selling' },
+        { action: 'assertState', fiber: AUCTION_CHILD_ID, expectedState: 'listed' },
+        { action: 'processEvent', fiber: AUCTION_CHILD_ID, event: 'event-place-bid.ts', signers: ['bob'], expectedState: 'bid_received' },
+        { action: 'processEvent', fiber: AUCTION_CHILD_ID, event: 'event-accept-bid.ts', signers: ['bob'], expectedState: 'sold' },
+        { action: 'assertState', fiber: AUCTION_CHILD_ID, expectedState: 'sold', minSequenceNumber: 2 },
+        { action: 'assertState', fiber: 'consumer', expectedState: 'debt_current', minSequenceNumber: 6 },
+
+        // ── P12 WALLET MORPHISM: mint RVD into dave's WALLET, then STAKE it (R1: signer == holder) ──
+        // STAKE is non-consuming (codomain E:=1, bumps seq, record survives) so the runner can confirm it.
+        { action: 'mintAsset', mint: 'mint-rvd.ts', eventData: { assetId: RVD_STAKE_ID, holderWallet: 'dave', amount: 200 }, signers: ['alice'] },
+        { action: 'assertAsset', assetId: RVD_STAKE_ID, expectedHolder: { Wallet: 'dave' }, expectedAmount: 200 },
+        { action: 'applyMorphism', morphism: 'stake-rvd.ts', signers: ['dave'] },
+        { action: 'assertAsset', assetId: RVD_STAKE_ID, expectedHolder: { Wallet: 'dave' }, expectedAmount: 200, minSequenceNumber: 1 },
+
+        // ── DEFERRED wallet morphisms (CONSUMING / TERMINAL — see ids.ts + fractionalize-rvd.ts / burn-rvd.ts) ──
+        // The runner confirms an `applyMorphism` step by polling the SOURCE asset's state-proof for a
+        // sequence ADVANCE (runner.ts ~L699-713). FRACTIONALIZE and BURN both REMOVE the source record, so
+        // that predicate can never be satisfied and the step would time out. The body files + ids are
+        // shipped so these activate the instant the runner gains consuming/terminal-morphism confirmation
+        // (e.g. confirm Fractionalize via shard existence, Burn via source absence). They would read:
+        //
+        //   { action: 'mintAsset', mint: 'mint-rvd.ts',
+        //     eventData: { assetId: RVD_FRAC_ID, holderWallet: 'carol', amount: 900 }, signers: ['alice'] },
+        //   { action: 'applyMorphism', morphism: 'fractionalize-rvd.ts', signers: ['carol'] }, // → 3 shards @ 300
+        //   { action: 'assertAsset', assetId: RVD_FRAC_A_ID, expectedHolder: { Wallet: 'carol' }, expectedAmount: 300 },
+        //
+        //   { action: 'mintAsset', mint: 'mint-rvd.ts',
+        //     eventData: { assetId: RVD_BURN_ID, holderWallet: 'frank', amount: 200 }, signers: ['alice'] },
+        //   { action: 'applyMorphism', morphism: 'burn-rvd.ts', signers: ['frank'] }, // terminal: record removed
+        //   // NOTE: absence is not assertable via assertAsset, so there is no follow-up assert for the burn.
+      ],
+    },
+    {
+      name: 'negative tests: graceful rejections leave state unchanged',
+      description:
+        'Own fibers/policies/packages (disjoint from flow 1). Each rejection is admitted by DL1 (structurally valid) then DENIED at ML0 combine — the fiber/asset/registry never changes. wrong-party, replay/seq-regression, mint-over-cap, non-monotonic publish.',
+      steps: [
+        // ── wrong-party: alice owns the fiber; a transition signed by bob is denied (NotSignedByAuthorizedParty) ──
+        { action: 'create', as: 'negWrong', definition: 'neg.definition.json', initialData: 'neg.initial.json', signers: ['alice'] },
+        { action: 'processEvent', fiber: 'negWrong', event: 'event-ping.ts', signers: ['bob'], expectRejected: 'ml0' },
+
+        // ── replay / seq-regression: re-submitting a one-way transition after the fiber moved on (NoTransitionForEvent) ──
+        { action: 'create', as: 'negReplay', definition: 'neg.definition.json', initialData: 'neg.initial.json', signers: ['alice'] },
+        { action: 'processEvent', fiber: 'negReplay', event: 'event-advance.ts', signers: ['alice'], expectedState: 's1' },
+        { action: 'processEvent', fiber: 'negReplay', event: 'event-advance.ts', signers: ['alice'], expectRejected: 'ml0' },
+
+        // ── mint-over-cap: a capped policy (maxSupply 100); the first mint fits, the second pushes derived supply over ──
+        { action: 'createAssetPolicy', name: 'capped.asset', policy: 'capped-policy.json', signers: ['alice'] },
+        { action: 'mintAsset', mint: 'mint-rvd.ts', eventData: { assetId: CAPPED_A_ID, holderWallet: 'alice', amount: 50, policyName: 'capped.asset' }, signers: ['alice'] },
+        { action: 'mintAsset', mint: 'mint-rvd.ts', eventData: { assetId: CAPPED_B_ID, holderWallet: 'alice', amount: 60, policyName: 'capped.asset' }, signers: ['alice'], expectRejected: 'ml0' },
+
+        // ── non-monotonic publish: publish a HIGHER version then a LOWER one (the LOWER is not in the lineage, so "did not land" is observable) ──
+        { action: 'publishVersion', name: 'negtest.machine', version: '2.0.0', definition: 'neg.definition.json', schemaShape: 'retailer-v1.schema.json', signers: ['alice'] },
+        { action: 'publishVersion', name: 'negtest.machine', version: '1.0.0', definition: 'neg.definition.json', schemaShape: 'retailer-v1.schema.json', signers: ['alice'], expectRejected: 'ml0' },
       ],
     },
   ],
