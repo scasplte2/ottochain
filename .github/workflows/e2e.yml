@@ -56,7 +56,11 @@ jobs:
           #     submit-window removed, sigma 1 reject) and runs its flows serially (concurrency 1).
           - name: sigma-mixer
             filter: '--only sigma-mixer'
-            concurrency: '1'
+            # Raised 1->2: the "concurrency>1 chokes DL1 (candidates=Set() stall)" hazard noted above
+            # IS the idle deadlock the chain keepalive now prevents. sigma_verify is the gas-heavy
+            # combine, so this is the real stress test of whether the keepalive holds the chain fed
+            # under gas pressure at concurrency. Revert to 1 if it regresses.
+            concurrency: '2'
             ordinalThreshold: '10'
             maxResubmits: '4'
             timeout: 25
