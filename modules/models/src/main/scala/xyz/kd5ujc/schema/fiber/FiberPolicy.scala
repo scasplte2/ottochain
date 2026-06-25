@@ -11,7 +11,7 @@ import derevo.circe.magnolia.{customizableDecoder, customizableEncoder}
 import derevo.derive
 import enumeratum.EnumEntry.Uppercase
 import enumeratum.{CirceEnum, Enum, EnumEntry}
-import io.circe.{Decoder, Encoder, Json}
+import io.circe.{Decoder, DecodingFailure, Encoder, Json}
 
 /**
  * The 5 directive families [[xyz.kd5ujc.shared_data.fiber.evaluation.EffectExtractor]] scrapes from a
@@ -215,6 +215,7 @@ sealed trait FiberPolicy {
   /** Convenience: this dial is ON only when explicitly set to `true`. `Unconstrained` is never reproducing. */
   def isSelfReproducing: Boolean = this match {
     case FiberPolicy.Unconstrained  => false
+    case FiberPolicy.Immutable      => false
     case c: FiberPolicy.Constrained => c.selfReproducing.contains(true)
   }
 
@@ -228,7 +229,10 @@ sealed trait FiberPolicy {
    * replaces the old `policy.flatMap(_.sealedStates)` over an `Option[FiberPolicy]`, with the identical shape.
    */
   def dials: Option[FiberPolicy.Constrained] = this match {
-    case FiberPolicy.Unconstrained  => None
+    case FiberPolicy.Unconstrained => None
+    // Immutable projects to its single-dial equivalent (upgradePolicy=Immutable) so consumers
+    // (effectiveUpgradePolicy, tightens, the engine's reads) see it as a Constrained with nothing else set.
+    case FiberPolicy.Immutable      => Some(FiberPolicy.Constrained(upgradePolicy = Some(UpgradePolicy.Immutable)))
     case c: FiberPolicy.Constrained => Some(c)
   }
 }
@@ -237,15 +241,24 @@ object FiberPolicy {
 
   /**
    * The named default: NO surrendered capability — today's unconstrained/legacy behaviour. Replaces the old
-   * `None` / `Some(empty)`. Encodes as the magnolia variant wrapper `{"Unconstrained":{}}`.
+   * `None` / `Some(empty)`. Encodes to JSON null, which `dropNulls` strips, so the `policy` key is OMITTED.
    */
   case object Unconstrained extends FiberPolicy
 
   /**
+   * A named preset: the definition is permanently LOCKED — semantically `upgradePolicy = Immutable` with no
+   * other dial set. A first-class peer of [[Unconstrained]] / [[Constrained]] that encodes to the bare string
+   * `"Immutable"`. The smart constructor [[FiberPolicy.constrained]] (and the decoder) collapse a `Constrained`
+   * that sets ONLY `upgradePolicy = Immutable` to this, so there is exactly ONE canonical form.
+   */
+  case object Immutable extends FiberPolicy
+
+  /**
    * A constitution that sets at least one of the 14 dials. Constructed ONLY via the smart constructor
    * [[FiberPolicy.constrained]] (or the decoder), which collapses an all-empty `Constrained` to [[Unconstrained]] so
-   * there is exactly ONE canonical "unconstrained" form. Encodes as `{"Constrained":{<set dials only, after
-   * dropNulls>}}`.
+   * there is exactly ONE canonical "unconstrained" form, and `constrained` further collapses an only-
+   * upgradePolicy=Immutable bundle to [[Immutable]]. Encodes as its bare dials object `{<set dials, after
+   * dropNulls>}` (no wrapper).
    */
   @derive(customizableEncoder, customizableDecoder)
   final case class Constrained(
@@ -273,6 +286,10 @@ object FiberPolicy {
       sealedStates.isEmpty && transferPolicy.isEmpty && dependencyPolicy.isEmpty &&
       upgradePolicy.isEmpty && version.isEmpty && compatibleWith.isEmpty &&
       interfaces.isEmpty && migrationAuthority.isEmpty
+
+    /** Exactly `upgradePolicy = Immutable` and nothing else — semantically equal to [[FiberPolicy.Immutable]]. */
+    def isImmutable: Boolean =
+      upgradePolicy.contains(UpgradePolicy.Immutable) && copy(upgradePolicy = None).isEmpty
   }
 
   /**
@@ -282,7 +299,10 @@ object FiberPolicy {
    * indistinguishable from `Unconstrained`. Two definitions that mean the same thing MUST hash the same,
    * regardless of which client (chain, SDK, third-party) wrote them.
    */
-  def constrained(c: Constrained): FiberPolicy = if (c.isEmpty) Unconstrained else c
+  def constrained(c: Constrained): FiberPolicy =
+    if (c.isEmpty) Unconstrained
+    else if (c.isImmutable) Immutable // exactly upgradePolicy=Immutable ⇒ the named preset (one canonical form)
+    else c
 
   /**
    * Named, all-defaulted convenience for the common case — the same dials as [[Constrained]], collapsed through the
@@ -337,14 +357,22 @@ object FiberPolicy {
 
   implicit val encoder: Encoder[FiberPolicy] = Encoder.instance {
     case Unconstrained  => Json.Null
+    case Immutable      => Json.fromString("Immutable") // named preset ⇒ a bare, self-documenting string
     case c: Constrained => constrainedEncoder(c)
   }
 
-  // null/absent ⇒ Unconstrained; an object ⇒ Constrained routed through the smart constructor, so an all-empty
-  // `{}` (or all-null dials) collapses to Unconstrained — ONE canonical form in BOTH directions.
+  // null/absent ⇒ Unconstrained; the bare string "Immutable" ⇒ Immutable; an object ⇒ Constrained routed
+  // through the smart constructor — so an all-empty `{}` collapses to Unconstrained and an only-upgradePolicy=
+  // Immutable object collapses to Immutable. ONE canonical form in BOTH directions.
   implicit val decoder: Decoder[FiberPolicy] = Decoder.instance { c =>
-    if (c.value.isNull) Right(Unconstrained)
-    else constrainedDecoder(c).map(constrained)
+    val j = c.value
+    if (j.isNull) Right(Unconstrained)
+    else
+      j.asString match {
+        case Some("Immutable") => Right(Immutable)
+        case Some(other)       => Left(DecodingFailure(s"unknown FiberPolicy variant '$other'", c.history))
+        case None              => constrainedDecoder(c).map(constrained)
+      }
   }
 
   // ────────────────────────────────────────────────────────────────────────────────────────────────
@@ -381,16 +409,12 @@ object FiberPolicy {
    * matching cw2 admin-rotation), so it is not constrained here either.
    */
   def tightens(old: FiberPolicy, neu: FiberPolicy): Either[String, Unit] =
-    old match {
-      case Unconstrained  => Right(()) // unconstrained prior ⇒ any successor is a valid tightening
-      case o: Constrained =>
-        // `Unconstrained` (or an all-empty `Constrained`) as the successor clears EVERY dial back to "anything
-        // goes" ⇒ it loosens any set dial. Run the per-dial order against the all-None projection so the
-        // FIRST loosened dial is the one named, exactly as a Some→None loosening would be.
-        val n = neu match {
-          case Unconstrained  => Constrained()
-          case c: Constrained => c
-        }
+    old.dials match {
+      case None    => Right(()) // Unconstrained (bottom) ⇒ any successor is a valid tightening
+      case Some(o) =>
+        // Project the successor to its dial-set: Unconstrained ⇒ all-None (loosens any set dial); Immutable ⇒
+        // upgradePolicy=Immutable; Constrained ⇒ itself. Run the per-dial order so the FIRST loosened dial is named.
+        val n = neu.dials.getOrElse(Constrained())
         for {
           _ <- latchOn("selfReproducing", o.selfReproducing, n.selfReproducing)
           _ <- subset("allowedEffects", o.allowedEffects, n.allowedEffects)

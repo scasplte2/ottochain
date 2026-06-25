@@ -277,4 +277,18 @@ object FiberPolicyTightensSuite extends FunSuite {
     expect(DependencyMode.Allowlist.entryName == "ALLOWLIST") and
     expect(DependencyMode.Frozen.entryName == "FROZEN")
   }
+
+  // ── Immutable (the named preset = upgradePolicy Immutable; near the top of the lattice) ──────────────
+
+  test("tightens: Immutable is reachable from Unconstrained but cannot loosen out") {
+    ok(FiberPolicy.Unconstrained, FiberPolicy.Immutable) and // bottom → Immutable: valid tightening
+    ok(FiberPolicy.Immutable, FiberPolicy.Immutable) and // idempotent
+    // Immutable → anything that drops the Immutable tier LOOSENS upgradePolicy ⇒ rejected
+    rejected(FiberPolicy.Immutable, FiberPolicy.Unconstrained, "upgradePolicy") and
+    rejected(
+      FiberPolicy.Immutable,
+      FiberPolicy.constrained(upgradePolicy = Some(UpgradePolicy.AppendOnly)),
+      "upgradePolicy"
+    )
+  }
 }
