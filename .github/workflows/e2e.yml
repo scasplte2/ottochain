@@ -62,11 +62,11 @@ jobs:
             timeout: 25
           - name: rule110
             filter: '--only rule110'
-            # Raised 1->2 now that the chain keepalive prevents the idle deadlock that
-            # concurrency>1 used to trigger (the DL1 mempool no longer starves into a frozen
-            # finalization reference). rule110 is light per-step, so this probes the framework
-            # under intra-lane contention with minimal gas noise before the heavier lanes follow.
-            concurrency: '2'
+            # Raised to 3 (all 3 flows at once) now that the chain keepalive prevents the idle
+            # deadlock that concurrency>1 used to trigger (the DL1 mempool no longer starves into a
+            # frozen finalization reference). rule110 is light per-step, so this is the clean probe
+            # of full intra-lane contention before the gas-heavy lanes follow.
+            concurrency: '3'
             ordinalThreshold: '10'
             maxResubmits: '4'
             timeout: 30

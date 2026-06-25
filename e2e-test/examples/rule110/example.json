@@ -70,7 +70,7 @@
               14
             ],
             "gen": 1,
-            "maxGen": 3
+            "maxGen": 8
           }
         },
         {
@@ -113,7 +113,7 @@
               14
             ],
             "gen": 2,
-            "maxGen": 3
+            "maxGen": 8
           }
         },
         {
@@ -156,7 +156,222 @@
               14
             ],
             "gen": 3,
-            "maxGen": 3
+            "maxGen": 8
+          }
+        },
+        {
+          "action": "processEvent",
+          "event": "event-step.ts",
+          "expectedState": "RUNNING",
+          "expectedStateData": {
+            "tape": [
+              0,
+              0,
+              0,
+              1,
+              1,
+              1,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "idx": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14
+            ],
+            "gen": 4,
+            "maxGen": 8
+          }
+        },
+        {
+          "action": "processEvent",
+          "event": "event-step.ts",
+          "expectedState": "RUNNING",
+          "expectedStateData": {
+            "tape": [
+              0,
+              0,
+              1,
+              1,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "idx": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14
+            ],
+            "gen": 5,
+            "maxGen": 8
+          }
+        },
+        {
+          "action": "processEvent",
+          "event": "event-step.ts",
+          "expectedState": "RUNNING",
+          "expectedStateData": {
+            "tape": [
+              0,
+              1,
+              1,
+              1,
+              0,
+              0,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "idx": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14
+            ],
+            "gen": 6,
+            "maxGen": 8
+          }
+        },
+        {
+          "action": "processEvent",
+          "event": "event-step.ts",
+          "expectedState": "RUNNING",
+          "expectedStateData": {
+            "tape": [
+              1,
+              1,
+              0,
+              1,
+              0,
+              1,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "idx": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14
+            ],
+            "gen": 7,
+            "maxGen": 8
+          }
+        },
+        {
+          "action": "processEvent",
+          "event": "event-step.ts",
+          "expectedState": "RUNNING",
+          "expectedStateData": {
+            "tape": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "idx": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14
+            ],
+            "gen": 8,
+            "maxGen": 8
           }
         }
       ]
@@ -185,6 +400,31 @@
           "action": "create",
           "definition": "definition.json",
           "initialData": "initial-data.json"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-step.ts",
+          "expectedState": "RUNNING"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-step.ts",
+          "expectedState": "RUNNING"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-step.ts",
+          "expectedState": "RUNNING"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-step.ts",
+          "expectedState": "RUNNING"
+        },
+        {
+          "action": "processEvent",
+          "event": "event-step.ts",
+          "expectedState": "RUNNING"
         },
         {
           "action": "processEvent",
