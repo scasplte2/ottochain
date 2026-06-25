@@ -1,0 +1,59 @@
+{
+  "states": {
+    "awaiting": { "id": "awaiting", "isFinal": false },
+    "received": { "id": "received", "isFinal": false }
+  },
+  "initialState": "awaiting",
+  "transitions": [
+    {
+      "from": "awaiting",
+      "to": "received",
+      "eventName": "receive_shipment",
+      "guard": { "==": [1, 1] },
+      "effect": {
+        "status": "received",
+        "receivedQuantity": { "var": "event.quantity" },
+        "shipmentsReceived": { "+": [{ "var": "state.shipmentsReceived" }, 1] }
+      },
+      "dependencies": []
+    },
+    {
+      "from": "received",
+      "to": "received",
+      "eventName": "redeem_loyalty",
+      "guard": { ">=": [{ "var": "state.loyaltyPoints" }, 0] },
+      "effect": {
+        "status": "loyalty_redeemed",
+        "loyaltyPoints": { "+": [{ "var": "state.loyaltyPoints" }, { "var": "event.points" }] }
+      },
+      "dependencies": []
+    },
+    {
+      "from": "received",
+      "to": "received",
+      "eventName": "process_sale",
+      "guard": { "==": [1, 1] },
+      "effect": {
+        "_transferAsset": [
+          {
+            "assetId": { "var": "event.goodsAssetId" },
+            "recipient": { "var": "event.buyerId" }
+          }
+        ],
+        "status": "received",
+        "revenue": { "*": [{ "var": "event.quantity" }, 10] }
+      },
+      "dependencies": []
+    },
+    {
+      "from": "received",
+      "to": "received",
+      "eventName": "pay_taxes",
+      "guard": { "==": [1, 1] },
+      "effect": {
+        "taxesPaid": { "+": [{ "var": "state.taxesPaid" }, { "var": "event.taxAmount" }] }
+      },
+      "dependencies": []
+    }
+  ]
+}

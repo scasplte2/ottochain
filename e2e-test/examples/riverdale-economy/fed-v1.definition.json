@@ -1,0 +1,29 @@
+{
+  "states": {
+    "stable": { "id": "stable", "isFinal": false }
+  },
+  "initialState": "stable",
+  "transitions": [
+    {
+      "from": "stable",
+      "to": "stable",
+      "eventName": "set_rate",
+      "guard": { "==": [1, 1] },
+      "effect": {
+        "_triggers": [
+          {
+            "targetMachineId": { "var": "event.bankId" },
+            "eventName": "rate_adjustment",
+            "payload": {
+              "newBaseRate": { "var": "event.newBaseRate" }
+            }
+          }
+        ],
+        "status": "stable",
+        "baseRate": { "var": "event.newBaseRate" },
+        "rateChangeCount": { "+": [{ "var": "state.rateChangeCount" }, 1] }
+      },
+      "dependencies": []
+    }
+  ]
+}

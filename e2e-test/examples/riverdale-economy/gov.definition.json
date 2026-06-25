@@ -1,0 +1,50 @@
+{
+  "states": {
+    "monitoring": { "id": "monitoring", "isFinal": false },
+    "tax_collection": { "id": "tax_collection", "isFinal": false }
+  },
+  "initialState": "monitoring",
+  "transitions": [
+    {
+      "from": "monitoring",
+      "to": "tax_collection",
+      "eventName": "collect_taxes",
+      "guard": { "==": [1, 1] },
+      "effect": {
+        "_triggers": [
+          {
+            "targetMachineId": { "var": "event.manufacturerId" },
+            "eventName": "pay_taxes",
+            "payload": {
+              "taxAmount": { "var": "event.taxAmount" },
+              "taxAssetId": { "var": "event.taxAssetId" },
+              "govId": { "var": "machineId" }
+            }
+          },
+          {
+            "targetMachineId": { "var": "event.retailerId" },
+            "eventName": "pay_taxes",
+            "payload": {
+              "taxAmount": { "var": "event.taxAmount" },
+              "taxAssetId": { "var": "event.taxAssetId" },
+              "govId": { "var": "machineId" }
+            }
+          },
+          {
+            "targetMachineId": { "var": "event.consumerId" },
+            "eventName": "pay_taxes",
+            "payload": {
+              "taxAmount": { "var": "event.taxAmount" },
+              "taxAssetId": { "var": "event.taxAssetId" },
+              "govId": { "var": "machineId" }
+            }
+          }
+        ],
+        "status": "tax_collection",
+        "totalTaxesCollected": { "+": [{ "var": "state.totalTaxesCollected" }, { "var": "event.taxAmount" }] },
+        "taxpayersBilled": { "+": [{ "var": "state.taxpayersBilled" }, 3] }
+      },
+      "dependencies": []
+    }
+  ]
+}

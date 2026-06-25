@@ -1,0 +1,23 @@
+{
+  "stateMessage": {
+    "typeName": "Governance",
+    "fields": [
+      { "name": "totalTaxesCollected", "number": 1, "typeName": "int64", "repeated": false, "optional": false },
+      { "name": "taxpayersBilled", "number": 2, "typeName": "int64", "repeated": false, "optional": true },
+      { "name": "status", "number": 3, "typeName": "string", "repeated": false, "optional": true }
+    ]
+  },
+  "commands": {
+    "collect_taxes": {
+      "typeName": "CollectTaxes",
+      "fields": [
+        { "name": "manufacturerId", "number": 1, "typeName": "string", "repeated": false, "optional": false },
+        { "name": "retailerId", "number": 2, "typeName": "string", "repeated": false, "optional": false },
+        { "name": "consumerId", "number": 3, "typeName": "string", "repeated": false, "optional": false },
+        { "name": "govId", "number": 4, "typeName": "string", "repeated": false, "optional": true },
+        { "name": "taxAmount", "number": 5, "typeName": "int64", "repeated": false, "optional": false },
+        { "name": "taxAssetId", "number": 6, "typeName": "string", "repeated": false, "optional": false }
+      ]
+    }
+  }
+}

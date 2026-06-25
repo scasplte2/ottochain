@@ -1,0 +1,62 @@
+{
+  "stateMessage": {
+    "typeName": "Consumer",
+    "fields": [
+      { "name": "balance", "number": 1, "typeName": "int64", "repeated": false, "optional": false },
+      { "name": "loanBalance", "number": 2, "typeName": "int64", "repeated": false, "optional": true },
+      { "name": "purchaseCount", "number": 3, "typeName": "int64", "repeated": false, "optional": true },
+      { "name": "paymentsMade", "number": 4, "typeName": "int64", "repeated": false, "optional": true },
+      { "name": "activeListings", "number": 5, "typeName": "int64", "repeated": false, "optional": true },
+      { "name": "marketplaceSales", "number": 6, "typeName": "int64", "repeated": false, "optional": true },
+      { "name": "taxesPaid", "number": 7, "typeName": "int64", "repeated": false, "optional": true },
+      { "name": "status", "number": 8, "typeName": "string", "repeated": false, "optional": true }
+    ]
+  },
+  "commands": {
+    "loan_funded": {
+      "typeName": "LoanFunded",
+      "fields": [{ "name": "amount", "number": 1, "typeName": "int64", "repeated": false, "optional": false }]
+    },
+    "buy": {
+      "typeName": "Buy",
+      "fields": [
+        { "name": "retailerId", "number": 1, "typeName": "string", "repeated": false, "optional": false },
+        { "name": "quantity", "number": 2, "typeName": "int64", "repeated": false, "optional": false },
+        { "name": "goodsAssetId", "number": 3, "typeName": "string", "repeated": false, "optional": false },
+        { "name": "payAssetId", "number": 4, "typeName": "string", "repeated": false, "optional": false }
+      ]
+    },
+    "make_payment": {
+      "typeName": "MakePayment",
+      "fields": [
+        { "name": "bankId", "number": 1, "typeName": "string", "repeated": false, "optional": false },
+        { "name": "amount", "number": 2, "typeName": "int64", "repeated": false, "optional": false },
+        { "name": "repayAssetId", "number": 3, "typeName": "string", "repeated": false, "optional": false }
+      ]
+    },
+    "pay_taxes": {
+      "typeName": "PayTaxes",
+      "fields": [
+        { "name": "taxAssetId", "number": 1, "typeName": "string", "repeated": false, "optional": false },
+        { "name": "govId", "number": 2, "typeName": "string", "repeated": false, "optional": false },
+        { "name": "taxAmount", "number": 3, "typeName": "int64", "repeated": false, "optional": false }
+      ]
+    },
+    "list_item": {
+      "typeName": "ListItem",
+      "fields": [
+        { "name": "auctionId", "number": 1, "typeName": "string", "repeated": false, "optional": false },
+        { "name": "reservePrice", "number": 2, "typeName": "int64", "repeated": false, "optional": false },
+        { "name": "itemName", "number": 3, "typeName": "string", "repeated": false, "optional": false },
+        { "name": "auctionOwners", "number": 4, "typeName": "string", "repeated": true, "optional": false }
+      ]
+    },
+    "sale_completed": {
+      "typeName": "SaleCompleted",
+      "fields": [
+        { "name": "amount", "number": 1, "typeName": "int64", "repeated": false, "optional": false },
+        { "name": "buyer", "number": 2, "typeName": "string", "repeated": false, "optional": true }
+      ]
+    }
+  }
+}

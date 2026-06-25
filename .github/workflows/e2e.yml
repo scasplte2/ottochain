@@ -26,7 +26,7 @@ jobs:
       matrix:
         lane:
           - name: core
-            filter: '--exclude sigma-mixer,rule110,staked-oracle-pool,tictactoe'
+            filter: '--exclude sigma-mixer,rule110,staked-oracle-pool,tictactoe,riverdale-economy'
             concurrency: ''
             ordinalThreshold: ''
             maxResubmits: ''
@@ -89,6 +89,22 @@ jobs:
             ordinalThreshold: '30'
             maxResubmits: '1'
             timeout: 45
+          # riverdale-economy: the full 6-party economy e2e (REAL asset custody + multi-fiber orchestration).
+          # FLOW 1 (concurrency 1, ~60 steps, one causal narrative) over 6 party-owned fibers
+          # (alice=manufacturer, bob=retailer, carol=consumer, dave=bank, erin=fed, frank=gov): cross-fiber
+          # _triggers, real `_transferAsset` RVD/GOODS custody between fibers, two verified-bound versioned
+          # package upgrades (retailer.machine + fed.machine v1->v2 + migration + v2-only transitions), a
+          # broadcast Gov tax sweep, a spawned child auction, and a wallet-context STAKE morphism. FLOW 2 is
+          # the negative-test flow (wrong-party / replay / mint-over-cap / non-monotonic publish — all
+          # graceful ML0 rejections). Needs all 6 distinct party wallets (a step's `signers` ARE its
+          # owners/authorizers). Higher timeout: ~70 mutating + assert steps over committed reads.
+          - name: riverdale-economy
+            filter: '--only riverdale-economy'
+            concurrency: '1'
+            wallets: 'alice,bob,carol,dave,erin,frank'
+            ordinalThreshold: '15'
+            maxResubmits: '2'
+            timeout: 55
 
     steps:
       - uses: actions/checkout@v7
