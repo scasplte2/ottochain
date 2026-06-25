@@ -16,6 +16,23 @@
         "shipmentsReceived": { "+": [{ "var": "state.shipmentsReceived" }, 1] }
       },
       "dependencies": []
+    },
+    {
+      "from": "received",
+      "to": "received",
+      "eventName": "process_sale",
+      "guard": { "==": [1, 1] },
+      "effect": {
+        "_transferAsset": [
+          {
+            "assetId": { "var": "event.goodsAssetId" },
+            "recipient": { "var": "event.buyerId" }
+          }
+        ],
+        "status": "received",
+        "revenue": { "*": [{ "var": "event.quantity" }, 10] }
+      },
+      "dependencies": []
     }
   ]
 }

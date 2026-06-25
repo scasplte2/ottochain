@@ -4,13 +4,22 @@
     "fields": [
       { "name": "shipmentsReceived", "number": 1, "typeName": "int64", "repeated": false, "optional": false },
       { "name": "receivedQuantity", "number": 2, "typeName": "int64", "repeated": false, "optional": true },
-      { "name": "status", "number": 3, "typeName": "string", "repeated": false, "optional": true }
+      { "name": "status", "number": 3, "typeName": "string", "repeated": false, "optional": true },
+      { "name": "revenue", "number": 4, "typeName": "int64", "repeated": false, "optional": true }
     ]
   },
   "commands": {
     "receive_shipment": {
       "typeName": "ReceiveShipment",
       "fields": [{ "name": "quantity", "number": 1, "typeName": "int64", "repeated": false, "optional": false }]
+    },
+    "process_sale": {
+      "typeName": "ProcessSale",
+      "fields": [
+        { "name": "buyerId", "number": 1, "typeName": "string", "repeated": false, "optional": false },
+        { "name": "quantity", "number": 2, "typeName": "int64", "repeated": false, "optional": false },
+        { "name": "goodsAssetId", "number": 3, "typeName": "string", "repeated": false, "optional": false }
+      ]
     }
   }
 }

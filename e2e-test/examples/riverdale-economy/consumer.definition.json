@@ -1,0 +1,174 @@
+{
+  "states": {
+    "ACTIVE": { "id": "ACTIVE", "isFinal": false },
+    "debt_current": { "id": "debt_current", "isFinal": false },
+    "marketplace_selling": { "id": "marketplace_selling", "isFinal": false }
+  },
+  "initialState": "ACTIVE",
+  "transitions": [
+    {
+      "from": "ACTIVE",
+      "to": "debt_current",
+      "eventName": "loan_funded",
+      "guard": { "==": [1, 1] },
+      "effect": {
+        "status": "debt_current",
+        "loanBalance": { "var": "event.amount" },
+        "balance": { "+": [{ "var": "state.balance" }, { "var": "event.amount" }] }
+      },
+      "dependencies": []
+    },
+    {
+      "from": "debt_current",
+      "to": "debt_current",
+      "eventName": "buy",
+      "guard": { "==": [1, 1] },
+      "effect": {
+        "_triggers": [
+          {
+            "targetMachineId": { "var": "event.retailerId" },
+            "eventName": "process_sale",
+            "payload": {
+              "buyerId": { "var": "machineId" },
+              "quantity": { "var": "event.quantity" },
+              "goodsAssetId": { "var": "event.goodsAssetId" }
+            }
+          }
+        ],
+        "_transferAsset": [
+          {
+            "assetId": { "var": "event.payAssetId" },
+            "recipient": { "var": "event.retailerId" }
+          }
+        ],
+        "status": "debt_current",
+        "purchaseCount": { "+": [{ "var": "state.purchaseCount" }, 1] }
+      },
+      "dependencies": []
+    },
+    {
+      "from": "debt_current",
+      "to": "debt_current",
+      "eventName": "make_payment",
+      "guard": { "==": [1, 1] },
+      "effect": {
+        "_triggers": [
+          {
+            "targetMachineId": { "var": "event.bankId" },
+            "eventName": "payment_received",
+            "payload": {
+              "borrowerId": { "var": "machineId" },
+              "amount": { "var": "event.amount" }
+            }
+          }
+        ],
+        "_transferAsset": [
+          {
+            "assetId": { "var": "event.repayAssetId" },
+            "recipient": { "var": "event.bankId" }
+          }
+        ],
+        "status": "debt_current",
+        "loanBalance": { "-": [{ "var": "state.loanBalance" }, { "var": "event.amount" }] },
+        "paymentsMade": { "+": [{ "var": "state.paymentsMade" }, 1] }
+      },
+      "dependencies": []
+    },
+    {
+      "from": "debt_current",
+      "to": "debt_current",
+      "eventName": "pay_taxes",
+      "guard": { "==": [1, 1] },
+      "effect": {
+        "_transferAsset": [
+          {
+            "assetId": { "var": "event.taxAssetId" },
+            "recipient": { "var": "event.govId" }
+          }
+        ],
+        "status": "debt_current",
+        "taxesPaid": { "+": [{ "var": "state.taxesPaid" }, { "var": "event.taxAmount" }] }
+      },
+      "dependencies": []
+    },
+    {
+      "from": "debt_current",
+      "to": "marketplace_selling",
+      "eventName": "list_item",
+      "guard": { "==": [1, 1] },
+      "effect": {
+        "_spawn": [
+          {
+            "childId": { "var": "event.auctionId" },
+            "definition": {
+              "states": {
+                "listed": { "id": "listed", "isFinal": false },
+                "bid_received": { "id": "bid_received", "isFinal": false },
+                "sold": { "id": "sold", "isFinal": true }
+              },
+              "initialState": "listed",
+              "transitions": [
+                {
+                  "from": "listed",
+                  "to": "bid_received",
+                  "eventName": "place_bid",
+                  "guard": { "==": [1, 1] },
+                  "effect": {
+                    "status": "bid_received",
+                    "highestBid": { "var": "event.bidAmount" },
+                    "highestBidder": { "var": "event.bidderId" }
+                  },
+                  "dependencies": []
+                },
+                {
+                  "from": "bid_received",
+                  "to": "sold",
+                  "eventName": "accept_bid",
+                  "guard": { "==": [1, 1] },
+                  "effect": {
+                    "_triggers": [
+                      {
+                        "targetMachineId": { "var": "parent.machineId" },
+                        "eventName": "sale_completed",
+                        "payload": {
+                          "amount": { "var": "state.highestBid" },
+                          "buyer": { "var": "state.highestBidder" }
+                        }
+                      }
+                    ],
+                    "status": "sold"
+                  },
+                  "dependencies": []
+                }
+              ]
+            },
+            "initialData": {
+              "reservePrice": { "var": "event.reservePrice" },
+              "itemName": { "var": "event.itemName" },
+              "sellerId": { "var": "machineId" },
+              "highestBid": 0,
+              "status": "listed"
+            },
+            "owners": { "var": "event.auctionOwners" }
+          }
+        ],
+        "status": "marketplace_selling",
+        "activeListings": { "+": [{ "var": "state.activeListings" }, 1] }
+      },
+      "dependencies": []
+    },
+    {
+      "from": "marketplace_selling",
+      "to": "debt_current",
+      "eventName": "sale_completed",
+      "guard": { "==": [1, 1] },
+      "effect": {
+        "status": "debt_current",
+        "balance": { "+": [{ "var": "state.balance" }, { "var": "event.amount" }] },
+        "activeListings": { "-": [{ "var": "state.activeListings" }, 1] },
+        "marketplaceSales": { "+": [{ "var": "state.marketplaceSales" }, 1] }
+      },
+      "dependencies": []
+    }
+  ]
+}
