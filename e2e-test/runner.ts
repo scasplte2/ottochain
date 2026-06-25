@@ -341,6 +341,55 @@ async function waitForDl1Sync(
   );
 }
 
+/**
+ * Wait until every DL1 node's OnChain state carries an `assetCommits[assetId]` entry — the asset
+ * analogue of waitForDl1Sync. An `applyMorphism` is structurally validated at DL1 against
+ * `OnChain.assetCommits` (AssetRules.applyMorphismStructural: unknown asset is a HARD reject), so a
+ * `mintAsset` → `applyMorphism` on the same asset races the snapshot's ML0→GL0→DL1 propagation: the
+ * morphism reaches DL1 before the mint's commit does and is rejected HTTP 400. Gating on every DL1
+ * node having the commit (existence is enough — STAKE/Transfer/Wrap keep the record; the seq bump is
+ * checked at combine) closes that hole, exactly as the fiber path does for fiberCommits.
+ */
+async function waitForDl1AssetSync(
+  dl1BaseUrls: string[],
+  assetId: string,
+  maxRetries: number,
+  retryDelayMs: number,
+  label: string,
+  log?: FlowLogger
+): Promise<void> {
+  const w = log ? (s: string) => log.write(s) : (s: string) => process.stdout.write(s);
+  w(`      ⏳ DL1 asset sync ${assetId.slice(0, 8)}… (${dl1BaseUrls.length} nodes)`);
+  const ready = new Array<boolean>(dl1BaseUrls.length).fill(false);
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    await Promise.all(
+      dl1BaseUrls.map(async (base, i) => {
+        if (ready[i]) return;
+        try {
+          const onChain = (await new HttpClient(`${base}/data-application/v1/onchain`).get<unknown>(
+            ''
+          )) as { assetCommits?: Record<string, unknown> } | null;
+          if (onChain?.assetCommits && onChain.assetCommits[assetId] != null) ready[i] = true;
+        } catch {
+          // node not ready yet — retry next attempt
+        }
+      })
+    );
+    if (ready.every(Boolean)) {
+      w(' ✓\n');
+      return;
+    }
+    w('.');
+    if (attempt < maxRetries) await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+  }
+  const lagging = dl1BaseUrls.filter((_, i) => !ready[i]).length;
+  w(' ✗\n');
+  throw new Error(
+    `DL1 asset sync timed out for ${label} after ${maxRetries} attempts ` +
+      `(waiting for assetId=${assetId}; ${lagging}/${dl1BaseUrls.length} nodes still lagging)`
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Example discovery
 // ---------------------------------------------------------------------------
@@ -750,6 +799,12 @@ async function runFlow(
           } catch { /* re-send unless it has since landed */ }
         }
         if (!confirmed) throw new Error(`ML0 confirmation failed for ${step.action} (${assetId ?? policyName})`);
+        // After a mint, gate on every DL1 node ingesting the new assetCommit before the next step — a
+        // subsequent applyMorphism on this asset is structurally validated at DL1 against OnChain.assetCommits
+        // and would 400 "unknown asset" if it raced ahead of the mint's ML0→GL0→DL1 propagation.
+        if (step.action === 'mintAsset' && assetId) {
+          await waitForDl1AssetSync(dl1Urls, assetId, maxRetries, retryDelayMs, `${step.action} ${assetId}`, log);
+        }
         l(' \x1b[32mOK\x1b[0m');
         continue;
       }
