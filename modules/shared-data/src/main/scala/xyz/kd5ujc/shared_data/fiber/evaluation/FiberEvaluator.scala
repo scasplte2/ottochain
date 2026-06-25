@@ -130,7 +130,7 @@ object FiberEvaluator {
         fiber:  Records.StateMachineFiberRecord,
         caller: Option[UUID]
       ): Option[FailureReason] = {
-        val policy = fiber.definition.policy
+        val policy = fiber.definition.policy.dials
         val sealedHit =
           policy.flatMap(_.sealedStates).filter(_.contains(fiber.currentState)).map { _ =>
             FailureReason.PolicyViolation("sealedStates", s"state '${fiber.currentState.value}' is sealed")
@@ -246,7 +246,7 @@ object FiberEvaluator {
                   transition,
                   effectResult,
                   contextData,
-                  fiber.definition.policy.flatMap(_.allowedEffects)
+                  fiber.definition.policy.dials.flatMap(_.allowedEffects)
                 )
             }
 
