@@ -113,33 +113,49 @@ export default {
         'Genesis (asset policies + retailer.machine v1/v2 + fed.machine v1/v2) → create the 6 party fibers → mint GOODS + the four RVD payment-leg instances → supply chain → monetary policy → lending → commerce → retailer upgrade → loan servicing → fed upgrade → tax sweep → spawned auction → wallet STAKE / FRACTIONALIZE / BURN morphisms.',
       steps: [
         // ── P0 genesis: asset policies + the two versioned state-machine packages ──
+        // PARALLEL batch (3): the two asset-policy creates + retailer.machine@1.0.0 are three DISTINCT
+        // registry names with no shared lineage, so they publish concurrently. The `2.0.0` publishes
+        // (and fed@1.0.0, which is not contiguous) stay SEQUENTIAL: a version lineage is monotonic
+        // append-only (VersionLineage.publish rejects a version ≤ the current head with NonMonotonic —
+        // see the N3 negative test), so racing `1.0.0`/`2.0.0` of the SAME package could land `2.0.0`
+        // first and get `1.0.0` rejected. So a package's later versions only publish after the prior
+        // version has confirmed.
         phase('P0  genesis · policies + versioned packages'),
-        { action: 'createAssetPolicy', name: 'goods.asset', policy: 'goods-policy.json', signers: ['alice'] },
-        { action: 'createAssetPolicy', name: 'rvd.asset', policy: 'rvd-policy.json', signers: ['alice'] },
-        { action: 'publishVersion', name: RETAILER_PKG, version: '1.0.0', definition: 'retailer-v1.definition.json', schemaShape: 'retailer-v1.schema.json', signers: ['bob'] },
+        { action: 'createAssetPolicy', name: 'goods.asset', policy: 'goods-policy.json', signers: ['alice'], parallel: true },
+        { action: 'createAssetPolicy', name: 'rvd.asset', policy: 'rvd-policy.json', signers: ['alice'], parallel: true },
+        { action: 'publishVersion', name: RETAILER_PKG, version: '1.0.0', definition: 'retailer-v1.definition.json', schemaShape: 'retailer-v1.schema.json', signers: ['bob'], parallel: true },
         { action: 'publishVersion', name: RETAILER_PKG, version: '2.0.0', definition: 'retailer-v2.definition.json', schemaShape: 'retailer-v2.schema.json', signers: ['bob'] },
         { action: 'publishVersion', name: FED_PKG, version: '1.0.0', definition: 'fed-v1.definition.json', schemaShape: 'fed-v1.schema.json', signers: ['erin'] },
         { action: 'publishVersion', name: FED_PKG, version: '2.0.0', definition: 'fed-v2.definition.json', schemaShape: 'fed-v2.schema.json', signers: ['erin'] },
 
         // ── P1 create the six party fibers (signers ⇒ owners). retailer + fed are verified-bound. ──
+        // PARALLEL batch (6): each create mints its OWN `as` fiber (distinct alias ⇒ distinct
+        // session.fibers key, no shared-state race) and references nothing created in P1. The two
+        // verified-bound creates depend only on their P0 package version (already confirmed). The
+        // `economy` marker below is non-parallel and bounds the batch.
         phase('P1  create the six party fibers'),
-        { action: 'create', as: 'manufacturer', definition: 'manufacturer.definition.json', initialData: 'manufacturer.initial.json', signers: ['alice'] },
-        { action: 'create', as: 'retailer', definition: 'retailer-v1.definition.json', initialData: 'retailer.initial.json', schemaRef: { name: RETAILER_PKG, version: '1.0.0' }, signers: ['bob'] },
-        { action: 'create', as: 'consumer', definition: 'consumer.definition.json', initialData: 'consumer.initial.json', signers: ['carol'] },
-        { action: 'create', as: 'bank', definition: 'bank.definition.json', initialData: 'bank.initial.json', signers: ['dave'] },
-        { action: 'create', as: 'fed', definition: 'fed-v1.definition.json', initialData: 'fed.initial.json', schemaRef: { name: FED_PKG, version: '1.0.0' }, signers: ['erin'] },
-        { action: 'create', as: 'gov', definition: 'gov.definition.json', initialData: 'gov.initial.json', signers: ['frank'] },
+        { action: 'create', as: 'manufacturer', definition: 'manufacturer.definition.json', initialData: 'manufacturer.initial.json', signers: ['alice'], parallel: true },
+        { action: 'create', as: 'retailer', definition: 'retailer-v1.definition.json', initialData: 'retailer.initial.json', schemaRef: { name: RETAILER_PKG, version: '1.0.0' }, signers: ['bob'], parallel: true },
+        { action: 'create', as: 'consumer', definition: 'consumer.definition.json', initialData: 'consumer.initial.json', signers: ['carol'], parallel: true },
+        { action: 'create', as: 'bank', definition: 'bank.definition.json', initialData: 'bank.initial.json', signers: ['dave'], parallel: true },
+        { action: 'create', as: 'fed', definition: 'fed-v1.definition.json', initialData: 'fed.initial.json', schemaRef: { name: FED_PKG, version: '1.0.0' }, signers: ['erin'], parallel: true },
+        { action: 'create', as: 'gov', definition: 'gov.definition.json', initialData: 'gov.initial.json', signers: ['frank'], parallel: true },
         economy('after genesis'),
 
         // ── P2 mint the real assets: GOODS into the manufacturer, the four RVD legs into their spenders ──
+        // The mints depend on P1 (the holder fibers must exist) but NOT on each other (distinct
+        // assetIds ⇒ distinct asset-map keys; mint-into-fiber doesn't bump the fiber's seq). The three
+        // consumer-leg mints (RVD_PAY/REPAY/TAX) are contiguous, so they form one PARALLEL batch
+        // (bounded by the assertAsset before/after). GOODS + RVD_LOAN stay sequential — each is a
+        // singleton split off by its own assertAsset checkpoint, so there's nothing to batch them with.
         phase('P2  mint GOODS + the four RVD payment legs'),
         { action: 'mintAsset', mint: 'mint-goods.ts', signers: ['alice'] },
         { action: 'assertAsset', assetId: GOODS_ASSET_ID, label: 'GOODS', expectedHolder: { Fiber: 'manufacturer' }, expectedAmount: 500 },
         { action: 'mintAsset', mint: 'mint-rvd.ts', eventData: { assetId: RVD_LOAN_ID, holderFiber: 'bank', amount: 10000 }, signers: ['alice'] },
         { action: 'assertAsset', assetId: RVD_LOAN_ID, label: 'RVD-loan', expectedHolder: { Fiber: 'bank' }, expectedAmount: 10000 },
-        { action: 'mintAsset', mint: 'mint-rvd.ts', eventData: { assetId: RVD_PAY_ID, holderFiber: 'consumer', amount: 500 }, signers: ['alice'] },
-        { action: 'mintAsset', mint: 'mint-rvd.ts', eventData: { assetId: RVD_REPAY_ID, holderFiber: 'consumer', amount: 300 }, signers: ['alice'] },
-        { action: 'mintAsset', mint: 'mint-rvd.ts', eventData: { assetId: RVD_TAX_ID, holderFiber: 'consumer', amount: 50 }, signers: ['alice'] },
+        { action: 'mintAsset', mint: 'mint-rvd.ts', eventData: { assetId: RVD_PAY_ID, holderFiber: 'consumer', amount: 500 }, signers: ['alice'], parallel: true },
+        { action: 'mintAsset', mint: 'mint-rvd.ts', eventData: { assetId: RVD_REPAY_ID, holderFiber: 'consumer', amount: 300 }, signers: ['alice'], parallel: true },
+        { action: 'mintAsset', mint: 'mint-rvd.ts', eventData: { assetId: RVD_TAX_ID, holderFiber: 'consumer', amount: 50 }, signers: ['alice'], parallel: true },
         { action: 'assertAsset', assetId: RVD_PAY_ID, label: 'RVD-pay', expectedHolder: { Fiber: 'consumer' }, expectedAmount: 500 },
         { action: 'assertAsset', assetId: RVD_TAX_ID, label: 'RVD-tax', expectedHolder: { Fiber: 'consumer' }, expectedAmount: 50 },
         economy('after mint'),
