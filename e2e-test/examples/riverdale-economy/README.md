@@ -56,6 +56,19 @@ RVD_REPAY) → **P9 fed upgrade** v1→v2 + v2-only `emergency_lending` → **P1
 spawns a child auction at `AUCTION_CHILD_ID`; bob bids + accepts; `sale_completed` loops back to the
 consumer) → **P12 wallet morphism** (mint RVD into dave's wallet, then `STAKE` it).
 
+### Reading the run (observability steps)
+
+Each phase opens with a `phase` banner (`── P5  lending ───`) and closes with an `economy` snapshot —
+both are **poll-only, no-tx** steps the runner treats as early-continue no-ops, so they never affect
+pass/fail. The `economy` step reads the ML0 `/checkpoint` ONCE and prints a compact per-party table
+(fiber `currentState` + a few `show` stateData fields + the asset instances each party/wallet holds),
+rendering **deltas** against the previous snapshot — e.g. `inventory 1000→500`, `+GOODS×500` (acquired),
+`RVD-loan 10000→0` (departed). `assertState`/`assertAsset` print what they observed
+(`assertState retailer → received (seq 1)`, `assertAsset GOODS → Fiber(retailer) ×500`) instead of a
+bare `OK`. Run a single example locally and it defaults to **concurrency 1 with live (write-through)
+output** — the flow streams as it happens instead of dumping at the end; the keepalive + per-send `[dl1]`
+lines are silenced by default (set `E2E_VERBOSE=1` to restore them).
+
 ### Wallet-morphism coverage + the runner limitation (read this)
 
 The runner confirms an `applyMorphism` step by polling the **source** asset's `state-proof` for a

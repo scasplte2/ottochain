@@ -80,12 +80,24 @@ class FlowLogger {
   private lines: string[] = [];
   private currentLine = '';
   public readonly tag: string;
+  /**
+   * Live (write-through) mode. When the runner is at CONCURRENCY 1 a flow CANNOT interleave with
+   * another, so its output is written straight to stdout as it happens (no 20-min buffer-then-dump).
+   * When > 1 flow runs in parallel we keep buffering and flush each flow as one block, so the
+   * concurrent flows' lines never interleave. flush() is a no-op in live mode (nothing is buffered).
+   */
+  private readonly live: boolean;
 
-  constructor(tag: string) {
+  constructor(tag: string, live = false) {
     this.tag = tag;
+    this.live = live;
   }
 
   write(text: string): void {
+    if (this.live) {
+      process.stdout.write(text);
+      return;
+    }
     this.currentLine += text;
     if (text.includes('\n')) {
       const parts = this.currentLine.split('\n');
@@ -99,6 +111,11 @@ class FlowLogger {
 
   log(...args: unknown[]): void {
     const text = args.map(String).join(' ');
+    if (this.live) {
+      // The preceding write()s already emitted the partial line; complete it with a newline.
+      process.stdout.write(text + '\n');
+      return;
+    }
     if (this.currentLine) {
       this.lines.push(this.currentLine + text);
       this.currentLine = '';
@@ -108,6 +125,7 @@ class FlowLogger {
   }
 
   flush(): void {
+    if (this.live) return; // write-through already emitted everything
     if (this.currentLine) {
       this.lines.push(this.currentLine);
       this.currentLine = '';
@@ -116,6 +134,125 @@ class FlowLogger {
       console.log(this.lines.join('\n'));
       this.lines = [];
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Observability helpers (phase headers + economy snapshot — riverdale-economy)
+// ---------------------------------------------------------------------------
+
+/** Fixed visual width for the `── <phase> ───` and `│ economy ───` rules. */
+const RULE_WIDTH = 48;
+
+/** A phase banner: `── <label> ─────────…` padded/truncated to RULE_WIDTH (leading blank line). */
+function phaseBanner(label: string): string {
+  const head = `── ${label} `;
+  const trimmed = head.length > RULE_WIDTH ? head.slice(0, RULE_WIDTH) : head;
+  return `\n${trimmed}${'─'.repeat(Math.max(0, RULE_WIDTH - trimmed.length))}`;
+}
+
+/** One stored economy snapshot for a party, used to render deltas on the NEXT economy step. */
+type PartySnapshot = {
+  state?: string;
+  fields: Record<string, number | string>;
+  assets: Record<string, number>;
+};
+
+/** A party as declared in an `economy` step. */
+type EconomyParty = { fiber?: string; wallet?: string; label: string; show?: string[] };
+/** An asset id → friendly label entry as declared in an `economy` step. */
+type EconomyAsset = { id: string; label: string };
+
+/**
+ * Read the ML0 checkpoint ONCE and print a compact economy table — one line per party (its fiber
+ * `currentState` + the selected `show` stateData fields) plus the asset instances it holds. Values
+ * that changed since the previous `economy` step render as deltas: `inventory 1000→500` for a show
+ * field, `+GOODS×500` for a newly-acquired instance, `RVD-loan 10000→0` for one that left custody.
+ * Observability-only and side-effect-free on the chain — it NEVER throws (a checkpoint read error
+ * degrades to a single note line), so it stays a true no-op for the flow's pass/fail.
+ */
+async function renderEconomy(
+  step: TestStep,
+  ml0BaseUrl: string,
+  wallets: Wallets,
+  resolveFiber: (alias?: string) => string,
+  prev: Record<string, PartySnapshot>,
+  l: (...a: unknown[]) => void
+): Promise<void> {
+  type SmRec = { currentState?: string; stateData?: Record<string, unknown> };
+  type AsRec = { holder?: { Fiber?: { fiberId?: string }; Wallet?: { address?: string } }; amount?: number };
+
+  const parties = step.parties ?? [];
+  const assetLabels = new Map<string, string>();
+  for (const a of step.assets ?? []) assetLabels.set(a.id, a.label);
+
+  let machines: Record<string, SmRec> = {};
+  let assets: Record<string, AsRec> = {};
+  try {
+    const cp = (await new HttpClient(`${ml0BaseUrl}/data-application/v1/checkpoint`).get<unknown>(
+      ''
+    )) as { state?: { stateMachines?: Record<string, SmRec>; assets?: Record<string, AsRec> } } | null;
+    machines = cp?.state?.stateMachines ?? {};
+    assets = cp?.state?.assets ?? {};
+  } catch (e) {
+    l(`    \x1b[36m│\x1b[0m economy (checkpoint unavailable: ${(e as Error).message})`);
+    return;
+  }
+
+  const head = step.label ? `economy ${step.label} ` : 'economy ';
+  l(`    \x1b[36m│\x1b[0m ${head}${'─'.repeat(Math.max(4, 30 - head.length))}`);
+
+  const labelW = parties.reduce((m, p) => Math.max(m, p.label.length), 0);
+
+  for (const party of parties) {
+    const fiberId = party.fiber ? resolveFiber(party.fiber) : undefined;
+    const walletAddr = party.wallet ? wallets[party.wallet]?.address : undefined;
+    const rec = fiberId ? machines[fiberId] : undefined;
+    const before = prev[party.label];
+    const seen = before !== undefined;
+
+    // currentState (plain — no delta; matches the confirmed preview).
+    const state = rec?.currentState ?? (fiberId ? '—' : '');
+
+    // selected stateData show-fields (delta when changed since the last economy step).
+    const stateData = (rec?.stateData ?? {}) as Record<string, unknown>;
+    const showFields = party.show ?? Object.keys(stateData).slice(0, 3);
+    const curFields: Record<string, number | string> = {};
+    const fieldParts: string[] = [];
+    for (const f of showFields) {
+      const raw = stateData[f];
+      if (raw === undefined) continue;
+      const val = typeof raw === 'number' || typeof raw === 'string' ? raw : String(raw);
+      curFields[f] = val;
+      const had = before?.fields[f];
+      fieldParts.push(had !== undefined && had !== val ? `${f} ${had}→${val}` : `${f} ${val}`);
+    }
+
+    // held asset instances (acquired/changed/departed deltas once the party has a prior snapshot).
+    const curAssets: Record<string, number> = {};
+    for (const [id, arec] of Object.entries(assets)) {
+      const h = arec?.holder;
+      const mine =
+        (fiberId !== undefined && h?.Fiber?.fiberId === fiberId) ||
+        (walletAddr !== undefined && h?.Wallet?.address === walletAddr);
+      if (mine) curAssets[id] = Number(arec?.amount ?? 0);
+    }
+    const assetParts: string[] = [];
+    for (const id of new Set([...Object.keys(curAssets), ...Object.keys(before?.assets ?? {})])) {
+      const name = assetLabels.get(id) ?? id.slice(0, 8);
+      const cur = curAssets[id];
+      const was = before?.assets[id];
+      if (cur !== undefined && was !== undefined && cur !== was) assetParts.push(`${name} ${was}→${cur}`);
+      else if (cur !== undefined && was === undefined) assetParts.push(seen ? `+${name}×${cur}` : `${name}×${cur}`);
+      else if (cur === undefined && was !== undefined && seen) assetParts.push(`${name} ${was}→0`);
+      else if (cur !== undefined) assetParts.push(`${name}×${cur}`);
+    }
+
+    const cols = [state, fieldParts.join('  '), assetParts.join(' ')].filter(Boolean).join('   ');
+    // Skip a wholly-empty row (e.g. a wallet party that holds nothing yet) so the table stays tight.
+    if (cols) l(`    \x1b[36m│\x1b[0m ${party.label.padEnd(labelW)}  ${cols}`);
+
+    prev[party.label] = { state: rec?.currentState, fields: curFields, assets: curAssets };
   }
 }
 
@@ -432,6 +569,14 @@ interface TestStep {
   /** applyMorphism: path to the morphism body file. */
   morphism?: string;
 
+  // ---- Observability (poll-only, no tx) — `phase` headers + `economy` snapshots ----
+  /** phase: the banner text. economy: an optional section sub-label. assertAsset: friendly asset name. */
+  label?: string;
+  /** economy: the parties to render (each resolved by fiber alias or wallet name). */
+  parties?: EconomyParty[];
+  /** economy: asset id → friendly label map for rendering held instances (GOODS, RVD-loan, …). */
+  assets?: EconomyAsset[];
+
   [key: string]: unknown;
 }
 
@@ -505,6 +650,9 @@ async function runFlow(
     // and registers it here; any step with `fiber: "<alias>"` resolves to it. Single-fiber flows
     // never touch this map and keep using `session.cid` (full back-compat).
     fibers: {} as Record<string, string>,
+    // Previous `economy` snapshot per party label, so the next `economy` step can render deltas
+    // (e.g. `inventory 1000→500`) instead of re-printing the absolute value. Observability-only.
+    economy: {} as Record<string, PartySnapshot>,
   };
   // Resolve a step's target fiber: a registered alias, else a raw fiberId pass-through (e.g. a
   // spawned child addressed by literal id), else the default session fiber.
@@ -513,6 +661,19 @@ async function runFlow(
 
   for (let i = 0; i < flow.steps.length; i++) {
     const step = flow.steps[i];
+
+    // ---- Observability annotations (poll-only, no tx; rendered WITHOUT the "[Step N] action…"
+    // prefix so they read as section banners / tables). `phase` is pure text; `economy` reads the
+    // ML0 checkpoint ONCE and prints a compact economy table. Both early-continue like assertState. ----
+    if (step.action === 'phase') {
+      l(phaseBanner(String(step.label ?? '')));
+      continue;
+    }
+    if (step.action === 'economy') {
+      await renderEconomy(step, ml0Urls[0], wallets, resolveFiber, session.economy, l);
+      continue;
+    }
+
     const stepLabel = `[Step ${i + 1}/${flow.steps.length}]`;
     w(`  ${stepLabel} ${step.action}...`);
 
@@ -554,7 +715,8 @@ async function runFlow(
         if (step.expectedStateData && !deepEqual(rec.stateData, step.expectedStateData))
           throw new Error(`assertState ${who}: stateData mismatch — got ${JSON.stringify(rec.stateData)} want ${JSON.stringify(step.expectedStateData)}`);
         w(' ✓');
-        l(' \x1b[32mOK\x1b[0m');
+        // Summarize what was observed (not a bare "OK") so the flow reads as a story.
+        l(` \x1b[32massertState ${who} → ${String(rec.currentState)}\x1b[0m (seq ${Number(rec.sequenceNumber)})`);
         continue;
       }
 
@@ -580,7 +742,19 @@ async function runFlow(
         if (step.expectedAmount != null && Number(rec.amount) !== step.expectedAmount)
           throw new Error(`assertAsset ${assetId}: expected amount ${step.expectedAmount} but found ${rec.amount}`);
         w(' ✓');
-        l(' \x1b[32mOK\x1b[0m');
+        // Summarize the observed custody: friendly asset name (step.label) or id8, holder, amount.
+        const assetName = (step.label as string | undefined) ?? assetId.slice(0, 8);
+        const holderLabel = step.expectedHolder
+          ? 'Fiber' in step.expectedHolder
+            ? `Fiber(${step.expectedHolder.Fiber})`
+            : `Wallet(${step.expectedHolder.Wallet})`
+          : (() => {
+              const h = rec.holder as { Fiber?: { fiberId?: string }; Wallet?: { address?: string } } | undefined;
+              if (h?.Fiber?.fiberId) return `Fiber(${h.Fiber.fiberId.slice(0, 8)})`;
+              if (h?.Wallet?.address) return `Wallet(${h.Wallet.address.slice(0, 8)})`;
+              return '?';
+            })();
+        l(` \x1b[32massertAsset ${assetName} → ${holderLabel}\x1b[0m ×${Number(rec.amount)}`);
         continue;
       }
 
@@ -1342,12 +1516,27 @@ async function main() {
     // -----------------------------------------------------------------------
     // Parallel mode: run all flows concurrently with buffered output
     // -----------------------------------------------------------------------
-    const CONCURRENCY = Number(process.env.E2E_CONCURRENCY) || flowPairs.length;
+    // Concurrency: an explicit E2E_CONCURRENCY wins (0/NaN ignored, preserving the old `|| default`).
+    // Otherwise an INTERACTIVE single-example run (e.g. a local `--only riverdale-economy` in a TTY)
+    // defaults to 1 so its flows run serially and stream live. The isTTY gate is load-bearing: it keeps
+    // CI behavior identical — the tictactoe lane is single-example with no explicit concurrency and has
+    // 3 flows that MUST keep running in parallel (serializing them would ~3x its wall-clock and risk the
+    // job timeout). CI has no TTY, so it always takes the `flowPairs.length` branch as before.
+    const envConc = Number(process.env.E2E_CONCURRENCY);
+    const CONCURRENCY =
+      Number.isFinite(envConc) && envConc > 0
+        ? envConc
+        : examples.length === 1 && process.stdout.isTTY
+          ? 1
+          : flowPairs.length;
+    // At CONCURRENCY 1 no two flows can interleave, so stream each flow's output live (write-through)
+    // instead of buffering it until flush — the single-example local run reads in real time.
+    const liveOutput = CONCURRENCY === 1;
     console.log(`Launching ${flowPairs.length} flows, ${CONCURRENCY} at a time…\n`);
 
     const runOne = async ({ example, flow }: (typeof flowPairs)[number]): Promise<FlowResult> => {
       const tag = `${example.dir}/${flow.name}`;
-      const logger = new FlowLogger(tag);
+      const logger = new FlowLogger(tag, liveOutput);
       logger.log(
         `\x1b[36m[${example.dir}]\x1b[0m Running: ${flow.name} (${flow.steps.length} steps)`
       );
