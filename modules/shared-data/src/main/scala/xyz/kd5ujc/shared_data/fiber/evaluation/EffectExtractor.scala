@@ -9,14 +9,14 @@ import cats.syntax.all._
 import cats.{Monad, ~>}
 
 import io.constellationnetwork.metagraph_sdk.json_logic._
-import io.constellationnetwork.metagraph_sdk.json_logic.core.{BoolValue, StrValue}
-import io.constellationnetwork.schema.address.{Address, DAGAddressRefined}
+import io.constellationnetwork.metagraph_sdk.json_logic.core.{BoolValue, MapValue, StrValue}
 
 import xyz.kd5ujc.schema.asset.AssetHolder
 import xyz.kd5ujc.schema.fiber._
 import xyz.kd5ujc.shared_data.fiber.core._
+import xyz.kd5ujc.shared_data.lifecycle.combine.CombineRejected
 
-import eu.timepit.refined.refineV
+import io.circe.syntax._
 
 /**
  * Extracts side effects from transition effect results.
@@ -178,9 +178,11 @@ object EffectExtractor {
    * Extract fiber-held asset custody transfers (`_transferAsset`, asset-model.md §10) with gas metering via
    * StateT. Mirrors [[extractTriggerEvents]] EXACTLY: the directive's `assetId`/`recipient` JSON-Logic
    * expressions are RESOLVED here (against the transition context), so the resulting [[FiberEffect.AssetTransferred]]
-   * carries values, not logic. Gas is charged under [[GasExhaustionPhase.Morphism]]. A malformed directive
-   * (non-UUID `assetId`, or a `recipient` that resolves to neither a UUID nor a DAG address) is DROPPED —
-   * the same fail-silent mode the other extractors use for malformed items.
+   * carries values, not logic. Gas is charged under [[GasExhaustionPhase.Morphism]]. The `recipient` is the
+   * canonical [[AssetHolder]] OBJECT form ONLY (`{"Fiber":{"fiberId":..}}` / `{"Wallet":{"address":..}}`) —
+   * see [[parseAssetTransfer]]. A malformed directive (non-UUID `assetId`, a `recipient` that is not a
+   * well-formed `AssetHolder` object, or a gas/eval failure) raises a graceful [[CombineRejected]] — NOT a
+   * silent drop; surfacing the parse failure is deliberate (a silently-dropped transfer is a latent bug).
    *
    * SECURITY: this extractor carries NO authorization. The combiner ([[xyz.kd5ujc.shared_data.lifecycle.combine.AssetCombiner.applyFiberTransfer]])
    * enforces `holder == AssetHolder.Fiber(emittingFiberId)` before applying any extracted transfer (R1).
@@ -194,10 +196,23 @@ object EffectExtractor {
     lift: F ~> G
   ): G[List[FiberEffect.AssetTransferred]] =
     extractArrayByKey(effectResult, ReservedKeys.TRANSFER_ASSET)
-      .flatTraverse { item =>
-        parseAssetTransfer[F, G](item, contextData).map(_.toList)
-      }
+      .traverse(item => parseAssetTransfer[F, G](item, contextData))
 
+  /**
+   * Parse one `_transferAsset` directive item into an [[FiberEffect.AssetTransferred]]. The `assetId` /
+   * `recipient` expressions are RESOLVED here (gas charged under [[GasExhaustionPhase.Morphism]]) so the
+   * effect carries values, not logic.
+   *
+   * The recipient is the canonical [[AssetHolder]] OBJECT form ONLY — `{"Fiber":{"fiberId":..}}` /
+   * `{"Wallet":{"address":..}}` — decoded strictly through the same magnolia `AssetHolder` codec used on every
+   * other surface (`MintAsset.holder`, `ApplyMorphism.recipient`, `AssetRecord.holder`). The old bare-string
+   * UUID/DAG-address disambiguation is GONE. Any malformation — a non-object item, a missing/non-UUID
+   * `assetId`, a recipient that is not a well-formed `AssetHolder` object, or a gas/eval failure — raises a
+   * graceful [[CombineRejected]] (NOT a silent drop): extraction runs only on the combiner apply path, so the
+   * raise is caught at `Combiner.insert` → `RejectionReceipt` (rule #2; the same authoritative-gate pattern
+   * `AssetCombiner` already uses), never a block-acceptance `Invalid`. Surfacing the error is deliberate — a
+   * silently-dropped transfer is a latent bug, not a no-op.
+   */
   private def parseAssetTransfer[F[_]: Async, G[_]: Monad](
     value:       JsonLogicValue,
     contextData: JsonLogicValue
@@ -205,45 +220,72 @@ object EffectExtractor {
     S:    Stateful[G, ExecutionState],
     A:    Ask[G, FiberContext],
     lift: F ~> G
-  ): G[Option[FiberEffect.AssetTransferred]] =
+  ): G[FiberEffect.AssetTransferred] =
     value match {
       case MapValue(transferMap) =>
-        (for {
-          assetIdValue <- OptionT.fromOption[G](transferMap.get(ReservedKeys.ASSET_ID))
-          assetIdExpr = ExpressionParser.valueToExpression(assetIdValue)
-          // Charge gas for assetId resolution under the Morphism phase.
-          evaluatedAssetId <- OptionT(
-            MeteredEvaluator.evalOpt[F, G](assetIdExpr, contextData, GasExhaustionPhase.Morphism)
-          )
-          assetIdStr <- OptionT.fromOption[G](evaluatedAssetId match {
-            case StrValue(s) => Some(s); case _ => None
-          })
-          assetId <- OptionT.fromOption[G](scala.util.Try(UUID.fromString(assetIdStr)).toOption)
-
-          recipientValue <- OptionT.fromOption[G](transferMap.get(ReservedKeys.RECIPIENT))
-          recipientExpr = ExpressionParser.valueToExpression(recipientValue)
-          // Charge gas for recipient resolution under the Morphism phase.
-          evaluatedRecipient <- OptionT(
-            MeteredEvaluator.evalOpt[F, G](recipientExpr, contextData, GasExhaustionPhase.Morphism)
-          )
-          recipientStr <- OptionT.fromOption[G](evaluatedRecipient match {
-            case StrValue(s) => Some(s); case _ => None
-          })
-          recipient <- OptionT.fromOption[G](parseRecipient(recipientStr))
-        } yield FiberEffect.AssetTransferred(assetId = assetId, recipient = recipient)).value
-      case _ => none[FiberEffect.AssetTransferred].pure[G]
+        for {
+          assetIdValue     <- requireField[F, G](transferMap, ReservedKeys.ASSET_ID, "assetId")
+          evaluatedAssetId <- evalOrReject[F, G](assetIdValue, contextData, "assetId")
+          assetId <- evaluatedAssetId match {
+            case StrValue(s) =>
+              scala.util.Try(UUID.fromString(s)).toOption match {
+                case Some(uuid) => uuid.pure[G]
+                case None       => rejectTransfer[F, G, UUID](s"assetId is not a valid UUID: '$s'")
+              }
+            case other => rejectTransfer[F, G, UUID](s"assetId must be a UUID string, got $other")
+          }
+          recipientValue     <- requireField[F, G](transferMap, ReservedKeys.RECIPIENT, "recipient")
+          evaluatedRecipient <- evalOrReject[F, G](recipientValue, contextData, "recipient")
+          recipient <- evaluatedRecipient match {
+            case MapValue(_) =>
+              evaluatedRecipient.asJson.as[AssetHolder] match {
+                case Right(holder) => holder.pure[G]
+                case Left(err) =>
+                  rejectTransfer[F, G, AssetHolder](
+                    s"recipient is not a valid AssetHolder object {Fiber|Wallet}: ${err.getMessage}"
+                  )
+              }
+            case other =>
+              rejectTransfer[F, G, AssetHolder](
+                s"""recipient must be an AssetHolder object {"Fiber":{"fiberId":..}} / {"Wallet":{"address":..}}, got $other"""
+              )
+          }
+        } yield FiberEffect.AssetTransferred(assetId = assetId, recipient = recipient)
+      case other =>
+        rejectTransfer[F, G, FiberEffect.AssetTransferred](s"malformed item (expected an object), got $other")
     }
 
-  /**
-   * Disambiguate a recipient string into an [[AssetHolder]]: a UUID-shaped string is a fiber custody target
-   * ([[AssetHolder.Fiber]]); otherwise a valid DAG address is a wallet ([[AssetHolder.Wallet]]). Neither →
-   * `None` (malformed, dropped). UUID is tried FIRST so a UUID never accidentally validates as an address.
-   */
-  private def parseRecipient(s: String): Option[AssetHolder] =
-    scala.util.Try(UUID.fromString(s)).toOption match {
-      case Some(uuid) => Some(AssetHolder.Fiber(uuid))
-      case None       => refineV[DAGAddressRefined](s).toOption.map(refined => AssetHolder.Wallet(Address(refined)))
+  /** Look up a required `_transferAsset` field, or raise a graceful [[CombineRejected]] naming what is missing. */
+  private def requireField[F[_]: Async, G[_]: Monad](
+    map:   Map[String, JsonLogicValue],
+    key:   String,
+    label: String
+  )(implicit lift: F ~> G): G[JsonLogicValue] =
+    map.get(key) match {
+      case Some(v) => v.pure[G]
+      case None    => rejectTransfer[F, G, JsonLogicValue](s"missing $label")
     }
+
+  /** Evaluate a `_transferAsset` sub-expression under the Morphism gas phase; a `Left` (gas/eval failure) is LOUD. */
+  private def evalOrReject[F[_]: Async, G[_]: Monad](
+    value:       JsonLogicValue,
+    contextData: JsonLogicValue,
+    label:       String
+  )(implicit
+    S:    Stateful[G, ExecutionState],
+    A:    Ask[G, FiberContext],
+    lift: F ~> G
+  ): G[JsonLogicValue] =
+    MeteredEvaluator
+      .eval[F, G](ExpressionParser.valueToExpression(value), contextData, GasExhaustionPhase.Morphism)
+      .flatMap {
+        case Right(v)     => v.pure[G]
+        case Left(reason) => rejectTransfer[F, G, JsonLogicValue](s"$label did not evaluate: $reason")
+      }
+
+  /** Raise a graceful, combiner-caught [[CombineRejected]] for a malformed `_transferAsset` directive. */
+  private def rejectTransfer[F[_]: Async, G[_], A](reason: String)(implicit lift: F ~> G): G[A] =
+    lift(Async[F].raiseError[A](CombineRejected(s"_transferAsset: $reason")))
 
   /**
    * Extract dynamic-dependency mutations (`_addDependency` / `_setDependencyActive`) with gas metering.

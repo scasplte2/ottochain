@@ -38,7 +38,7 @@
         "_transferAsset": [
           {
             "assetId": { "var": "event.payAssetId" },
-            "recipient": { "var": "event.retailerId" }
+            "recipient": { "Fiber": { "fiberId": { "var": "event.retailerId" } } }
           }
         ],
         "status": "debt_current",
@@ -65,7 +65,7 @@
         "_transferAsset": [
           {
             "assetId": { "var": "event.repayAssetId" },
-            "recipient": { "var": "event.bankId" }
+            "recipient": { "Fiber": { "fiberId": { "var": "event.bankId" } } }
           }
         ],
         "status": "debt_current",
@@ -83,7 +83,7 @@
         "_transferAsset": [
           {
             "assetId": { "var": "event.taxAssetId" },
-            "recipient": { "var": "event.govId" }
+            "recipient": { "Fiber": { "fiberId": { "var": "event.govId" } } }
           }
         ],
         "status": "debt_current",
