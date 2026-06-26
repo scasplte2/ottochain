@@ -22,11 +22,10 @@
  *      RVD_TAX   → consumer fiber (consumer remits to the gov via `pay_taxes`)
  *    Minting INTO a Fiber holder is allowed (AssetCombiner.mintAsset).
  *  • Wallet-context morphisms (P12) are SEPARATE from the custody flow and run in WALLET context, where R1
- *    requires `signer == holder`. STAKE is demonstrated live (it bumps the asset's seq + keeps the record,
- *    so the runner's `applyMorphism` confirmation can observe it). FRACTIONALIZE + BURN are CONSUMING/
- *    terminal morphisms — they REMOVE the source record, which the runner's seq-advance confirmation
- *    cannot observe — so they ship as ready body files (fractionalize-rvd.ts / burn-rvd.ts) + ids and are
- *    documented as deferred below (see the P12 note). The rvd policy already permits all four.
+ *    requires `signer == holder`. All three wallet-context morphisms run LIVE: STAKE (non-consuming —
+ *    bumps the seq, the record survives), FRACTIONALIZE (consuming — removes the source + writes shards;
+ *    the runner confirms it via the first shard's EXISTENCE), and BURN (terminal — removes the record;
+ *    the runner confirms it via the source's ABSENCE). The rvd policy permits all four morphisms.
  *
  * ── On-wire shapes (verified against the chain sources) ───────────────────────────────────────────────
  *  • `_transferAsset` recipient is a BARE STRING; a UUID-shaped string → AssetHolder.Fiber, a DAG address →
@@ -48,6 +47,11 @@ import {
   RVD_REPAY_ID,
   RVD_TAX_ID,
   RVD_STAKE_ID,
+  RVD_FRAC_ID,
+  RVD_FRAC_A_ID,
+  RVD_FRAC_B_ID,
+  RVD_FRAC_C_ID,
+  RVD_BURN_ID,
   AUCTION_CHILD_ID,
   CAPPED_A_ID,
   CAPPED_B_ID,
@@ -72,6 +76,11 @@ const ECON_ASSETS = [
   { id: RVD_REPAY_ID, label: 'RVD-repay' },
   { id: RVD_TAX_ID, label: 'RVD-tax' },
   { id: RVD_STAKE_ID, label: 'RVD-stake' },
+  { id: RVD_FRAC_ID, label: 'RVD-frac' },
+  { id: RVD_FRAC_A_ID, label: 'RVD-fracA' },
+  { id: RVD_FRAC_B_ID, label: 'RVD-fracB' },
+  { id: RVD_FRAC_C_ID, label: 'RVD-fracC' },
+  { id: RVD_BURN_ID, label: 'RVD-burn' },
 ];
 
 /** The six party fibers + the two demo wallets, each with the few stateData fields worth watching. */
@@ -101,7 +110,7 @@ export default {
     {
       name: 'full economy: monetary policy → lending → commerce → servicing → tax sweep → auction',
       description:
-        'Genesis (asset policies + retailer.machine v1/v2 + fed.machine v1/v2) → create the 6 party fibers → mint GOODS + the four RVD payment-leg instances → supply chain → monetary policy → lending → commerce → retailer upgrade → loan servicing → fed upgrade → tax sweep → spawned auction → a wallet STAKE morphism.',
+        'Genesis (asset policies + retailer.machine v1/v2 + fed.machine v1/v2) → create the 6 party fibers → mint GOODS + the four RVD payment-leg instances → supply chain → monetary policy → lending → commerce → retailer upgrade → loan servicing → fed upgrade → tax sweep → spawned auction → wallet STAKE / FRACTIONALIZE / BURN morphisms.',
       steps: [
         // ── P0 genesis: asset policies + the two versioned state-machine packages ──
         phase('P0  genesis · policies + versioned packages'),
@@ -218,11 +227,27 @@ export default {
         { action: 'assertAsset', assetId: RVD_STAKE_ID, label: 'RVD-stake', expectedHolder: { Wallet: 'dave' }, expectedAmount: 200, minSequenceNumber: 1 },
         economy('final · staked'),
 
-        // ── STILL DEFERRED: FRACTIONALIZE + BURN (CONSUMING — they REMOVE the source record) ──
-        // The runner confirms `applyMorphism` via a SOURCE-seq advance, which a consuming morphism can never
-        // satisfy. Lighting them up needs a terminal/consuming confirm mode (Fractionalize via output-shard
-        // existence, Burn via source absence). Body files (fractionalize-rvd.ts / burn-rvd.ts) + ids + the
-        // rvd policy's morphism declarations are all shipped; this is the remaining morphism fast-follow.
+        // ── P12b FRACTIONALIZE: mint RVD into carol's WALLET, split it into 3 shards (CONSUMING) ──
+        // Fractionalize REMOVES the source + writes one shard per shardId (combinable:=false, amount
+        // partitioned 900→3×300). The runner confirms this consuming morphism via the first shard's existence.
+        phase('P12b  wallet fractionalize'),
+        { action: 'mintAsset', mint: 'mint-rvd.ts', eventData: { assetId: RVD_FRAC_ID, holderWallet: 'carol', amount: 900 }, signers: ['alice'] },
+        { action: 'assertAsset', assetId: RVD_FRAC_ID, label: 'RVD-frac', expectedHolder: { Wallet: 'carol' }, expectedAmount: 900 },
+        { action: 'applyMorphism', morphism: 'fractionalize-rvd.ts', signers: ['carol'] },
+        { action: 'assertAsset', assetId: RVD_FRAC_A_ID, label: 'RVD-fracA', expectedHolder: { Wallet: 'carol' }, expectedAmount: 300 },
+        { action: 'assertAsset', assetId: RVD_FRAC_B_ID, label: 'RVD-fracB', expectedHolder: { Wallet: 'carol' }, expectedAmount: 300 },
+        { action: 'assertAsset', assetId: RVD_FRAC_C_ID, label: 'RVD-fracC', expectedHolder: { Wallet: 'carol' }, expectedAmount: 300 },
+        economy('final · fractionalized'),
+
+        // ── P12c BURN: mint RVD into frank's WALLET, then burn it (CONSUMING / terminal) ──
+        // Burn evaluates the policy burnPolicy then REMOVES the record. The runner confirms it via the
+        // source's ABSENCE (exists→404). No post-assert — a burned record is gone (absence isn't assertable);
+        // the economy snapshot shows frank's RVD-burn simply disappear.
+        phase('P12c  wallet burn'),
+        { action: 'mintAsset', mint: 'mint-rvd.ts', eventData: { assetId: RVD_BURN_ID, holderWallet: 'frank', amount: 200 }, signers: ['alice'] },
+        { action: 'assertAsset', assetId: RVD_BURN_ID, label: 'RVD-burn', expectedHolder: { Wallet: 'frank' }, expectedAmount: 200 },
+        { action: 'applyMorphism', morphism: 'burn-rvd.ts', signers: ['frank'] },
+        economy('final · burned'),
       ],
     },
     {

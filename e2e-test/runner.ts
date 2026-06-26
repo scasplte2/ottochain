@@ -225,7 +225,8 @@ async function renderEconomy(
       const val = typeof raw === 'number' || typeof raw === 'string' ? raw : String(raw);
       curFields[f] = val;
       const had = before?.fields[f];
-      fieldParts.push(had !== undefined && had !== val ? `${f} ${had}→${val}` : `${f} ${val}`);
+      // Highlight a changed value in yellow so the eye lands on what moved this snapshot.
+      fieldParts.push(had !== undefined && had !== val ? `${f} \x1b[33m${had}→${val}\x1b[0m` : `${f} ${val}`);
     }
 
     // held asset instances (acquired/changed/departed deltas once the party has a prior snapshot).
@@ -242,9 +243,10 @@ async function renderEconomy(
       const name = assetLabels.get(id) ?? id.slice(0, 8);
       const cur = curAssets[id];
       const was = before?.assets[id];
-      if (cur !== undefined && was !== undefined && cur !== was) assetParts.push(`${name} ${was}→${cur}`);
-      else if (cur !== undefined && was === undefined) assetParts.push(seen ? `+${name}×${cur}` : `${name}×${cur}`);
-      else if (cur === undefined && was !== undefined && seen) assetParts.push(`${name} ${was}→0`);
+      // Yellow = amount changed or instance left custody; green = newly acquired; plain = unchanged.
+      if (cur !== undefined && was !== undefined && cur !== was) assetParts.push(`\x1b[33m${name} ${was}→${cur}\x1b[0m`);
+      else if (cur !== undefined && was === undefined) assetParts.push(seen ? `\x1b[32m+${name}×${cur}\x1b[0m` : `${name}×${cur}`);
+      else if (cur === undefined && was !== undefined && seen) assetParts.push(`\x1b[33m${name} ${was}→0\x1b[0m`);
       else if (cur !== undefined) assetParts.push(`${name}×${cur}`);
     }
 
@@ -882,6 +884,8 @@ async function runFlow(
       if (ASSET_ACTIONS.has(step.action)) {
         let assetId = step.assetId as string | undefined;
         let assetMsg: unknown;
+        let morphismKind: string | undefined;
+        let fracFirstShard: string | undefined;
         if (step.action === 'createAssetPolicy') {
           const policy = (await loadFileOrModule(path.join(examplesDir, example.dir, step.policy!), loadContext)) as Record<string, unknown>;
           const lib = await import('./lib/asset/createAssetPolicy.ts');
@@ -894,6 +898,8 @@ async function runFlow(
         } else {
           const morphism = (await loadFileOrModule(path.join(examplesDir, example.dir, step.morphism!), loadContext)) as Record<string, unknown>;
           assetId = (morphism.assetId as string) ?? assetId;
+          morphismKind = String(morphism.kind ?? '').toUpperCase();
+          fracFirstShard = Array.isArray(morphism.shardIds) ? String((morphism.shardIds as unknown[])[0]) : undefined;
           // Morphisms are sequenced by (assetId, targetSequenceNumber): target the asset's current seq.
           let curSeq = 0;
           try {
@@ -904,11 +910,18 @@ async function runFlow(
           assetMsg = lib.generator({ wallets: signWallets, options: { morphism, targetSequenceNumber: curSeq } });
         }
 
+        // Consuming morphisms REMOVE the source record, so they can't be confirmed by a source-seq
+        // advance: FRACTIONALIZE confirms via the first output shard's EXISTENCE; BURN/DECOMPOSE via the
+        // source's ABSENCE (handled below). Non-consuming (Stake/Transfer/Wrap) keep seq-advance.
+        const fractionalize = step.action === 'applyMorphism' && morphismKind === 'FRACTIONALIZE';
+        const burnAbsence = step.action === 'applyMorphism' && (morphismKind === 'BURN' || morphismKind === 'DECOMPOSE');
         const policyName = step.name as string | undefined;
         const confirmPath =
           step.action === 'createAssetPolicy'
             ? `registry/${encodeURIComponent(policyName ?? '')}`
-            : `assets/${assetId}/state-proof`;
+            : fractionalize && fracFirstShard
+              ? `assets/${fracFirstShard}/state-proof`
+              : `assets/${assetId}/state-proof`;
         const confirmUrl = `${ml0Urls[0]}/data-application/v1/${confirmPath}`;
 
         // Pre-send asset sequence (applyMorphism confirms on a seq ADVANCE).
@@ -932,7 +945,8 @@ async function runFlow(
           const r = (d as { record?: { sequenceNumber?: number } } | null)?.record;
           if (!r) return false;
           if (step.action === 'mintAsset') return true; // existence ⇒ minted
-          return (r.sequenceNumber ?? -1) > preAssetSeq; // applyMorphism ⇒ seq advanced
+          if (fractionalize) return true; // confirmPath is the first shard ⇒ its existence = fractionalized
+          return (r.sequenceNumber ?? -1) > preAssetSeq; // non-consuming applyMorphism ⇒ source seq advanced
         };
 
         if (step.expectRejected === 'dl1') {
@@ -952,6 +966,31 @@ async function runFlow(
             if (landed(data)) throw new Error(`expected ML0 to reject ${step.action} (${assetId ?? policyName}), but it landed`);
           }
           l(' \x1b[32mOK (ML0 rejected, state unchanged)\x1b[0m');
+          continue;
+        }
+
+        if (burnAbsence) {
+          // BURN/DECOMPOSE: the source record is REMOVED. Confirm by polling the source until it is
+          // ABSENT — it existed pre-send (minted + asserted), so an exists→404 transition means the
+          // morphism committed. (A consuming morphism can never satisfy the source-seq-advance predicate.)
+          w(`\n      ⏳ ML0 confirm ${step.action} ${(assetId ?? '').slice(0, 8)} → source removed`);
+          const resubmitsB = Number(process.env.E2E_MAX_RESUBMITS) || 3;
+          const budgetB = Math.max(4, Math.ceil(maxRetries / (resubmitsB + 1)));
+          let gone = false;
+          for (let attempt = 0; attempt <= resubmitsB && !gone; attempt++) {
+            if (attempt > 0) {
+              // already removed by a prior send? (don't re-burn a gone asset — it would reject)
+              try { await new HttpClient(confirmUrl).get<unknown>(''); } catch { gone = true; break; }
+            }
+            await sendSignedUpdate(assetMsg, signWallets, dl1Urls).catch(() => undefined);
+            for (let p = 0; p < budgetB && !gone; p++) {
+              await new Promise((r) => setTimeout(r, retryDelayMs));
+              try { await new HttpClient(confirmUrl).get<unknown>(''); w('.'); } catch { gone = true; }
+            }
+          }
+          if (!gone) { w(' ✗\n'); throw new Error(`ML0 confirmation failed for ${step.action} (${assetId}): source still present (not removed)`); }
+          w(' ✓\n');
+          l(' \x1b[32mOK\x1b[0m');
           continue;
         }
 
