@@ -52,12 +52,17 @@ export class ChainKeepalive {
       const message = createFiber({ cid: crypto.randomUUID(), options: this.options });
       await sendSignedUpdate(message, this.wallets, this.dl1Urls, { quiet: true });
       this.ticks++;
+      // Quiet by default: the keepalive is pure background plumbing, so its per-tick chatter buries
+      // the flow output (50+ lines over a 20-min run). Gate ALL keepalive progress logs behind
+      // E2E_VERBOSE; the one-line stop() summary always prints so the run still reports it was fed.
       if (!this.confirmedAlive) {
         this.confirmedAlive = true;
-        console.log('\x1b[36m[keepalive]\x1b[0m feeding the chain — first novel update accepted');
+        if (process.env.E2E_VERBOSE) {
+          console.log('\x1b[36m[keepalive]\x1b[0m feeding the chain — first novel update accepted');
+        }
       }
-      // Heartbeat every ~30s so the run log shows the chain is being kept fed, without spamming.
-      if (this.ticks % 10 === 0) {
+      // Heartbeat every ~30s so a verbose run log shows the chain is being kept fed, without spamming.
+      if (process.env.E2E_VERBOSE && this.ticks % 10 === 0) {
         console.log(`\x1b[36m[keepalive]\x1b[0m ${this.ticks} updates sent (${this.errors} failed)`);
       }
     } catch {
@@ -71,7 +76,8 @@ export class ChainKeepalive {
     this.running = false;
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
-    console.log(`\x1b[36m[keepalive]\x1b[0m stopped — ${this.ticks} updates sent (${this.errors} failed)`);
+    const mode = process.env.E2E_VERBOSE ? 'verbose' : 'silent';
+    console.log(`\x1b[36m[keepalive]\x1b[0m ${mode} · ${this.ticks} sent, ${this.errors} failed`);
     return { ticks: this.ticks, errors: this.errors };
   }
 }

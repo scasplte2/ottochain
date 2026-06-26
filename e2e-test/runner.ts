@@ -80,12 +80,24 @@ class FlowLogger {
   private lines: string[] = [];
   private currentLine = '';
   public readonly tag: string;
+  /**
+   * Live (write-through) mode. When the runner is at CONCURRENCY 1 a flow CANNOT interleave with
+   * another, so its output is written straight to stdout as it happens (no 20-min buffer-then-dump).
+   * When > 1 flow runs in parallel we keep buffering and flush each flow as one block, so the
+   * concurrent flows' lines never interleave. flush() is a no-op in live mode (nothing is buffered).
+   */
+  private readonly live: boolean;
 
-  constructor(tag: string) {
+  constructor(tag: string, live = false) {
     this.tag = tag;
+    this.live = live;
   }
 
   write(text: string): void {
+    if (this.live) {
+      process.stdout.write(text);
+      return;
+    }
     this.currentLine += text;
     if (text.includes('\n')) {
       const parts = this.currentLine.split('\n');
@@ -99,6 +111,11 @@ class FlowLogger {
 
   log(...args: unknown[]): void {
     const text = args.map(String).join(' ');
+    if (this.live) {
+      // The preceding write()s already emitted the partial line; complete it with a newline.
+      process.stdout.write(text + '\n');
+      return;
+    }
     if (this.currentLine) {
       this.lines.push(this.currentLine + text);
       this.currentLine = '';
@@ -108,6 +125,7 @@ class FlowLogger {
   }
 
   flush(): void {
+    if (this.live) return; // write-through already emitted everything
     if (this.currentLine) {
       this.lines.push(this.currentLine);
       this.currentLine = '';
@@ -116,6 +134,127 @@ class FlowLogger {
       console.log(this.lines.join('\n'));
       this.lines = [];
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Observability helpers (phase headers + economy snapshot — riverdale-economy)
+// ---------------------------------------------------------------------------
+
+/** Fixed visual width for the `── <phase> ───` and `│ economy ───` rules. */
+const RULE_WIDTH = 48;
+
+/** A phase banner: `── <label> ─────────…` padded/truncated to RULE_WIDTH (leading blank line). */
+function phaseBanner(label: string): string {
+  const head = `── ${label} `;
+  const trimmed = head.length > RULE_WIDTH ? head.slice(0, RULE_WIDTH) : head;
+  return `\n${trimmed}${'─'.repeat(Math.max(0, RULE_WIDTH - trimmed.length))}`;
+}
+
+/** One stored economy snapshot for a party, used to render deltas on the NEXT economy step. */
+type PartySnapshot = {
+  state?: string;
+  fields: Record<string, number | string>;
+  assets: Record<string, number>;
+};
+
+/** A party as declared in an `economy` step. */
+type EconomyParty = { fiber?: string; wallet?: string; label: string; show?: string[] };
+/** An asset id → friendly label entry as declared in an `economy` step. */
+type EconomyAsset = { id: string; label: string };
+
+/**
+ * Read the ML0 checkpoint ONCE and print a compact economy table — one line per party (its fiber
+ * `currentState` + the selected `show` stateData fields) plus the asset instances it holds. Values
+ * that changed since the previous `economy` step render as deltas: `inventory 1000→500` for a show
+ * field, `+GOODS×500` for a newly-acquired instance, `RVD-loan 10000→0` for one that left custody.
+ * Observability-only and side-effect-free on the chain — it NEVER throws (a checkpoint read error
+ * degrades to a single note line), so it stays a true no-op for the flow's pass/fail.
+ */
+async function renderEconomy(
+  step: TestStep,
+  ml0BaseUrl: string,
+  wallets: Wallets,
+  resolveFiber: (alias?: string) => string,
+  prev: Record<string, PartySnapshot>,
+  l: (...a: unknown[]) => void
+): Promise<void> {
+  type SmRec = { currentState?: string; stateData?: Record<string, unknown> };
+  type AsRec = { holder?: { Fiber?: { fiberId?: string }; Wallet?: { address?: string } }; amount?: number };
+
+  const parties = step.parties ?? [];
+  const assetLabels = new Map<string, string>();
+  for (const a of step.assets ?? []) assetLabels.set(a.id, a.label);
+
+  let machines: Record<string, SmRec> = {};
+  let assets: Record<string, AsRec> = {};
+  try {
+    const cp = (await new HttpClient(`${ml0BaseUrl}/data-application/v1/checkpoint`).get<unknown>(
+      ''
+    )) as { state?: { stateMachines?: Record<string, SmRec>; assets?: Record<string, AsRec> } } | null;
+    machines = cp?.state?.stateMachines ?? {};
+    assets = cp?.state?.assets ?? {};
+  } catch (e) {
+    l(`    \x1b[36m│\x1b[0m economy (checkpoint unavailable: ${(e as Error).message})`);
+    return;
+  }
+
+  const head = step.label ? `economy ${step.label} ` : 'economy ';
+  l(`    \x1b[36m│\x1b[0m ${head}${'─'.repeat(Math.max(4, 30 - head.length))}`);
+
+  const labelW = parties.reduce((m, p) => Math.max(m, p.label.length), 0);
+
+  for (const party of parties) {
+    const fiberId = party.fiber ? resolveFiber(party.fiber) : undefined;
+    const walletAddr = party.wallet ? wallets[party.wallet]?.address : undefined;
+    const rec = fiberId ? machines[fiberId] : undefined;
+    const before = prev[party.label];
+    const seen = before !== undefined;
+
+    // currentState (plain — no delta; matches the confirmed preview).
+    const state = rec?.currentState ?? (fiberId ? '—' : '');
+
+    // selected stateData show-fields (delta when changed since the last economy step).
+    const stateData = (rec?.stateData ?? {}) as Record<string, unknown>;
+    const showFields = party.show ?? Object.keys(stateData).slice(0, 3);
+    const curFields: Record<string, number | string> = {};
+    const fieldParts: string[] = [];
+    for (const f of showFields) {
+      const raw = stateData[f];
+      if (raw === undefined) continue;
+      const val = typeof raw === 'number' || typeof raw === 'string' ? raw : String(raw);
+      curFields[f] = val;
+      const had = before?.fields[f];
+      // Highlight a changed value in yellow so the eye lands on what moved this snapshot.
+      fieldParts.push(had !== undefined && had !== val ? `${f} \x1b[33m${had}→${val}\x1b[0m` : `${f} ${val}`);
+    }
+
+    // held asset instances (acquired/changed/departed deltas once the party has a prior snapshot).
+    const curAssets: Record<string, number> = {};
+    for (const [id, arec] of Object.entries(assets)) {
+      const h = arec?.holder;
+      const mine =
+        (fiberId !== undefined && h?.Fiber?.fiberId === fiberId) ||
+        (walletAddr !== undefined && h?.Wallet?.address === walletAddr);
+      if (mine) curAssets[id] = Number(arec?.amount ?? 0);
+    }
+    const assetParts: string[] = [];
+    for (const id of new Set([...Object.keys(curAssets), ...Object.keys(before?.assets ?? {})])) {
+      const name = assetLabels.get(id) ?? id.slice(0, 8);
+      const cur = curAssets[id];
+      const was = before?.assets[id];
+      // Yellow = amount changed or instance left custody; green = newly acquired; plain = unchanged.
+      if (cur !== undefined && was !== undefined && cur !== was) assetParts.push(`\x1b[33m${name} ${was}→${cur}\x1b[0m`);
+      else if (cur !== undefined && was === undefined) assetParts.push(seen ? `\x1b[32m+${name}×${cur}\x1b[0m` : `${name}×${cur}`);
+      else if (cur === undefined && was !== undefined && seen) assetParts.push(`\x1b[33m${name} ${was}→0\x1b[0m`);
+      else if (cur !== undefined) assetParts.push(`${name}×${cur}`);
+    }
+
+    const cols = [state, fieldParts.join('  '), assetParts.join(' ')].filter(Boolean).join('   ');
+    // Skip a wholly-empty row (e.g. a wallet party that holds nothing yet) so the table stays tight.
+    if (cols) l(`    \x1b[36m│\x1b[0m ${party.label.padEnd(labelW)}  ${cols}`);
+
+    prev[party.label] = { state: rec?.currentState, fields: curFields, assets: curAssets };
   }
 }
 
@@ -408,6 +547,13 @@ interface TestStep {
   expectedResult?: unknown;
   /** Assert this step is REJECTED: 'dl1' (HTTP 400, structural) or 'ml0' (admitted then combine-denied). */
   expectRejected?: 'dl1' | 'ml0';
+  /**
+   * Run this step concurrently with adjacent `parallel: true` steps (a maximal consecutive run forms
+   * one batch). Use ONLY for steps with no inter-dependency (independent setup: registry publishes,
+   * fiber creates, independent mints). Omit ⇒ the step runs sequentially with byte-for-byte the same
+   * behavior as before. A non-parallel step (incl. `phase`/`economy` markers) bounds each batch.
+   */
+  parallel?: boolean;
 
   // ---- Multi-fiber / party / asset extensions (riverdale-economy) ----
   /** On a create step: name the new fiber so later steps can target it (`fiber: "<as>"`). */
@@ -431,6 +577,14 @@ interface TestStep {
   mint?: string;
   /** applyMorphism: path to the morphism body file. */
   morphism?: string;
+
+  // ---- Observability (poll-only, no tx) — `phase` headers + `economy` snapshots ----
+  /** phase: the banner text. economy: an optional section sub-label. assertAsset: friendly asset name. */
+  label?: string;
+  /** economy: the parties to render (each resolved by fiber alias or wallet name). */
+  parties?: EconomyParty[];
+  /** economy: asset id → friendly label map for rendering held instances (GOODS, RVD-loan, …). */
+  assets?: EconomyAsset[];
 
   [key: string]: unknown;
 }
@@ -505,18 +659,44 @@ async function runFlow(
     // and registers it here; any step with `fiber: "<alias>"` resolves to it. Single-fiber flows
     // never touch this map and keep using `session.cid` (full back-compat).
     fibers: {} as Record<string, string>,
+    // Previous `economy` snapshot per party label, so the next `economy` step can render deltas
+    // (e.g. `inventory 1000→500`) instead of re-printing the absolute value. Observability-only.
+    economy: {} as Record<string, PartySnapshot>,
   };
   // Resolve a step's target fiber: a registered alias, else a raw fiberId pass-through (e.g. a
   // spawned child addressed by literal id), else the default session fiber.
   const resolveFiber = (alias?: string): string =>
     !alias ? session.cid : session.fibers[alias] ?? alias;
 
-  for (let i = 0; i < flow.steps.length; i++) {
-    const step = flow.steps[i];
-    const stepLabel = `[Step ${i + 1}/${flow.steps.length}]`;
-    w(`  ${stepLabel} ${step.action}...`);
+  // Tag for the per-step buffer loggers used by a `parallel` batch (mirror runOne's `${dir}/${name}`).
+  const tag = log?.tag ?? `${example.dir}/${flow.name}`;
 
-    try {
+  // One step's full body, extracted so a `parallel` batch can run several of these concurrently.
+  // It writes via the injected `sw`/`sl` (the flow's live logger when sequential, a per-step buffer
+  // when batched) and threads `slog` into the confirmation helpers. It THROWS on failure — the
+  // caller (sequential try/catch, or the batch's Promise.allSettled) decides the flow's pass/fail.
+  const processStep = async (
+    step: TestStep,
+    i: number,
+    sw: (s: string) => void,
+    sl: (...a: unknown[]) => void,
+    slog: FlowLogger | undefined
+  ): Promise<void> => {
+    // ---- Observability annotations (poll-only, no tx; rendered WITHOUT the "[Step N] action…"
+    // prefix so they read as section banners / tables). `phase` is pure text; `economy` reads the
+    // ML0 checkpoint ONCE and prints a compact economy table. Both early-return like assertState. ----
+    if (step.action === 'phase') {
+      sl(phaseBanner(String(step.label ?? '')));
+      return;
+    }
+    if (step.action === 'economy') {
+      await renderEconomy(step, ml0Urls[0], wallets, resolveFiber, session.economy, sl);
+      return;
+    }
+
+    const stepLabel = `[Step ${i + 1}/${flow.steps.length}]`;
+    sw(`  ${stepLabel} ${step.action}...`);
+
       let generator: GeneratorFn;
       let validator: ValidatorFn;
       let message: unknown;
@@ -533,7 +713,7 @@ async function runFlow(
       if (step.action === 'assertState') {
         const cid = resolveFiber(step.fiber);
         const who = step.fiber ?? cid.slice(0, 8);
-        w(`\n      ⏳ assertState ${who}`);
+        sw(`\n      ⏳ assertState ${who}`);
         const rec = await pollFiberRecord(
           ml0Urls[0],
           cid,
@@ -544,7 +724,7 @@ async function runFlow(
             (!step.expectedStateData || deepEqual(r.stateData, step.expectedStateData)),
           maxRetries,
           retryDelayMs,
-          (s) => w(s)
+          (s) => sw(s)
         );
         if (!rec) throw new Error(`assertState ${who}: fiber never reached the asserted condition at ML0`);
         if (step.expectedState && rec.currentState !== step.expectedState)
@@ -553,15 +733,16 @@ async function runFlow(
           throw new Error(`assertState ${who}: expected seq ≥ ${step.minSequenceNumber} but found ${rec.sequenceNumber}`);
         if (step.expectedStateData && !deepEqual(rec.stateData, step.expectedStateData))
           throw new Error(`assertState ${who}: stateData mismatch — got ${JSON.stringify(rec.stateData)} want ${JSON.stringify(step.expectedStateData)}`);
-        w(' ✓');
-        l(' \x1b[32mOK\x1b[0m');
-        continue;
+        sw(' ✓');
+        // Summarize what was observed (not a bare "OK") so the flow reads as a story.
+        sl(` \x1b[32massertState ${who} → ${String(rec.currentState)}\x1b[0m (seq ${Number(rec.sequenceNumber)})`);
+        return;
       }
 
       if (step.action === 'assertAsset') {
         const assetId = step.assetId as string;
         if (!assetId) throw new Error('assertAsset requires an `assetId`');
-        w(`\n      ⏳ assertAsset ${assetId.slice(0, 8)}`);
+        sw(`\n      ⏳ assertAsset ${assetId.slice(0, 8)}`);
         const rec = await pollAssetRecord(
           ml0Urls[0],
           assetId,
@@ -572,16 +753,28 @@ async function runFlow(
             (step.minSequenceNumber == null || ((r.sequenceNumber as number) ?? -1) >= step.minSequenceNumber),
           maxRetries,
           retryDelayMs,
-          (s) => w(s)
+          (s) => sw(s)
         );
         if (!rec) throw new Error(`assertAsset ${assetId}: no committed custody record reaching the asserted condition`);
         if (step.expectedHolder && !holderMatches(rec.holder, step.expectedHolder, resolveFiber, wallets))
           throw new Error(`assertAsset ${assetId}: holder mismatch — got ${JSON.stringify(rec.holder)} want ${JSON.stringify(step.expectedHolder)}`);
         if (step.expectedAmount != null && Number(rec.amount) !== step.expectedAmount)
           throw new Error(`assertAsset ${assetId}: expected amount ${step.expectedAmount} but found ${rec.amount}`);
-        w(' ✓');
-        l(' \x1b[32mOK\x1b[0m');
-        continue;
+        sw(' ✓');
+        // Summarize the observed custody: friendly asset name (step.label) or id8, holder, amount.
+        const assetName = (step.label as string | undefined) ?? assetId.slice(0, 8);
+        const holderLabel = step.expectedHolder
+          ? 'Fiber' in step.expectedHolder
+            ? `Fiber(${step.expectedHolder.Fiber})`
+            : `Wallet(${step.expectedHolder.Wallet})`
+          : (() => {
+              const h = rec.holder as { Fiber?: { fiberId?: string }; Wallet?: { address?: string } } | undefined;
+              if (h?.Fiber?.fiberId) return `Fiber(${h.Fiber.fiberId.slice(0, 8)})`;
+              if (h?.Wallet?.address) return `Wallet(${h.Wallet.address.slice(0, 8)})`;
+              return '?';
+            })();
+        sl(` \x1b[32massertAsset ${assetName} → ${holderLabel}\x1b[0m ×${Number(rec.amount)}`);
+        return;
       }
 
       // ---- Registry ops (publishVersion / setVersionStatus / registerAlias) ----
@@ -621,8 +814,8 @@ async function runFlow(
             rejected = (err as Error).message.includes('400');
           }
           if (!rejected) throw new Error(`expected DL1 to reject ${step.action} ${regName} (HTTP 400), but it was accepted`);
-          l(' \x1b[32mOK (DL1 rejected)\x1b[0m');
-          continue;
+          sl(' \x1b[32mOK (DL1 rejected)\x1b[0m');
+          return;
         }
         if (step.expectRejected === 'ml0') {
           // Admitted by DL1 (structurally valid) but rejected at ML0 combine -> never lands.
@@ -638,8 +831,8 @@ async function runFlow(
             }
             if (landed(data)) throw new Error(`expected ML0 to reject ${step.action} ${regName}, but it landed`);
           }
-          l(' \x1b[32mOK (ML0 rejected, state unchanged)\x1b[0m');
-          continue;
+          sl(' \x1b[32mOK (ML0 rejected, state unchanged)\x1b[0m');
+          return;
         }
 
         const regInitial = await getInitialStates(ml0Env);
@@ -676,7 +869,7 @@ async function runFlow(
               regBudget,
               retryDelayMs,
               `${step.action} ${regName}`,
-              log
+              slog
             );
             regConfirmed = true;
           } catch {
@@ -690,8 +883,8 @@ async function runFlow(
           );
         }
         await validateWithRetries(regLib.validator, resolveFiber(step.fiber), regInitial, regOptions, wallets, maxRetries, retryDelayMs, ml0Urls);
-        l(' \x1b[32mOK\x1b[0m');
-        continue;
+        sl(' \x1b[32mOK\x1b[0m');
+        return;
       }
 
       const loadContext = {
@@ -708,6 +901,8 @@ async function runFlow(
       if (ASSET_ACTIONS.has(step.action)) {
         let assetId = step.assetId as string | undefined;
         let assetMsg: unknown;
+        let morphismKind: string | undefined;
+        let fracFirstShard: string | undefined;
         if (step.action === 'createAssetPolicy') {
           const policy = (await loadFileOrModule(path.join(examplesDir, example.dir, step.policy!), loadContext)) as Record<string, unknown>;
           const lib = await import('./lib/asset/createAssetPolicy.ts');
@@ -720,6 +915,8 @@ async function runFlow(
         } else {
           const morphism = (await loadFileOrModule(path.join(examplesDir, example.dir, step.morphism!), loadContext)) as Record<string, unknown>;
           assetId = (morphism.assetId as string) ?? assetId;
+          morphismKind = String(morphism.kind ?? '').toUpperCase();
+          fracFirstShard = Array.isArray(morphism.shardIds) ? String((morphism.shardIds as unknown[])[0]) : undefined;
           // Morphisms are sequenced by (assetId, targetSequenceNumber): target the asset's current seq.
           let curSeq = 0;
           try {
@@ -730,11 +927,18 @@ async function runFlow(
           assetMsg = lib.generator({ wallets: signWallets, options: { morphism, targetSequenceNumber: curSeq } });
         }
 
+        // Consuming morphisms REMOVE the source record, so they can't be confirmed by a source-seq
+        // advance: FRACTIONALIZE confirms via the first output shard's EXISTENCE; BURN/DECOMPOSE via the
+        // source's ABSENCE (handled below). Non-consuming (Stake/Transfer/Wrap) keep seq-advance.
+        const fractionalize = step.action === 'applyMorphism' && morphismKind === 'FRACTIONALIZE';
+        const burnAbsence = step.action === 'applyMorphism' && (morphismKind === 'BURN' || morphismKind === 'DECOMPOSE');
         const policyName = step.name as string | undefined;
         const confirmPath =
           step.action === 'createAssetPolicy'
             ? `registry/${encodeURIComponent(policyName ?? '')}`
-            : `assets/${assetId}/state-proof`;
+            : fractionalize && fracFirstShard
+              ? `assets/${fracFirstShard}/state-proof`
+              : `assets/${assetId}/state-proof`;
         const confirmUrl = `${ml0Urls[0]}/data-application/v1/${confirmPath}`;
 
         // Pre-send asset sequence (applyMorphism confirms on a seq ADVANCE).
@@ -758,7 +962,8 @@ async function runFlow(
           const r = (d as { record?: { sequenceNumber?: number } } | null)?.record;
           if (!r) return false;
           if (step.action === 'mintAsset') return true; // existence ⇒ minted
-          return (r.sequenceNumber ?? -1) > preAssetSeq; // applyMorphism ⇒ seq advanced
+          if (fractionalize) return true; // confirmPath is the first shard ⇒ its existence = fractionalized
+          return (r.sequenceNumber ?? -1) > preAssetSeq; // non-consuming applyMorphism ⇒ source seq advanced
         };
 
         if (step.expectRejected === 'dl1') {
@@ -766,8 +971,8 @@ async function runFlow(
           try { await sendSignedUpdate(assetMsg, signWallets, dl1Urls); }
           catch (err) { rejected = (err as Error).message.includes('400'); }
           if (!rejected) throw new Error(`expected DL1 to reject ${step.action} (HTTP 400), but it was accepted`);
-          l(' \x1b[32mOK (DL1 rejected)\x1b[0m');
-          continue;
+          sl(' \x1b[32mOK (DL1 rejected)\x1b[0m');
+          return;
         }
         if (step.expectRejected === 'ml0') {
           await sendSignedUpdate(assetMsg, signWallets, dl1Urls).catch(() => undefined);
@@ -777,8 +982,33 @@ async function runFlow(
             try { data = await new HttpClient(confirmUrl).get<unknown>(''); } catch { /* absent ⇒ fine */ }
             if (landed(data)) throw new Error(`expected ML0 to reject ${step.action} (${assetId ?? policyName}), but it landed`);
           }
-          l(' \x1b[32mOK (ML0 rejected, state unchanged)\x1b[0m');
-          continue;
+          sl(' \x1b[32mOK (ML0 rejected, state unchanged)\x1b[0m');
+          return;
+        }
+
+        if (burnAbsence) {
+          // BURN/DECOMPOSE: the source record is REMOVED. Confirm by polling the source until it is
+          // ABSENT — it existed pre-send (minted + asserted), so an exists→404 transition means the
+          // morphism committed. (A consuming morphism can never satisfy the source-seq-advance predicate.)
+          sw(`\n      ⏳ ML0 confirm ${step.action} ${(assetId ?? '').slice(0, 8)} → source removed`);
+          const resubmitsB = Number(process.env.E2E_MAX_RESUBMITS) || 3;
+          const budgetB = Math.max(4, Math.ceil(maxRetries / (resubmitsB + 1)));
+          let gone = false;
+          for (let attempt = 0; attempt <= resubmitsB && !gone; attempt++) {
+            if (attempt > 0) {
+              // already removed by a prior send? (don't re-burn a gone asset — it would reject)
+              try { await new HttpClient(confirmUrl).get<unknown>(''); } catch { gone = true; break; }
+            }
+            await sendSignedUpdate(assetMsg, signWallets, dl1Urls).catch(() => undefined);
+            for (let p = 0; p < budgetB && !gone; p++) {
+              await new Promise((r) => setTimeout(r, retryDelayMs));
+              try { await new HttpClient(confirmUrl).get<unknown>(''); sw('.'); } catch { gone = true; }
+            }
+          }
+          if (!gone) { sw(' ✗\n'); throw new Error(`ML0 confirmation failed for ${step.action} (${assetId}): source still present (not removed)`); }
+          sw(' ✓\n');
+          sl(' \x1b[32mOK\x1b[0m');
+          return;
         }
 
         // Send + confirm with a resubmit budget (committed reads trail GL0 finalization; an
@@ -794,7 +1024,7 @@ async function runFlow(
           }
           await sendSignedUpdate(assetMsg, signWallets, dl1Urls);
           try {
-            await waitForMl0Confirmation(ml0Urls[0], confirmPath, landed, budget, retryDelayMs, `${step.action} ${assetId ?? policyName ?? ''}`, log);
+            await waitForMl0Confirmation(ml0Urls[0], confirmPath, landed, budget, retryDelayMs, `${step.action} ${assetId ?? policyName ?? ''}`, slog);
             confirmed = true;
           } catch { /* re-send unless it has since landed */ }
         }
@@ -803,10 +1033,10 @@ async function runFlow(
         // subsequent applyMorphism on this asset is structurally validated at DL1 against OnChain.assetCommits
         // and would 400 "unknown asset" if it raced ahead of the mint's ML0→GL0→DL1 propagation.
         if (step.action === 'mintAsset' && assetId) {
-          await waitForDl1AssetSync(dl1Urls, assetId, maxRetries, retryDelayMs, `${step.action} ${assetId}`, log);
+          await waitForDl1AssetSync(dl1Urls, assetId, maxRetries, retryDelayMs, `${step.action} ${assetId}`, slog);
         }
-        l(' \x1b[32mOK\x1b[0m');
-        continue;
+        sl(' \x1b[32mOK\x1b[0m');
+        return;
       }
 
       // Determine which fiber this step targets and fetch its current sequence number
@@ -1046,7 +1276,7 @@ async function runFlow(
           if (!errMsg.includes('400') || sendAttempt >= 2) {
             throw sendErr;
           }
-          w(` (send retry)...`);
+          sw(` (send retry)...`);
           await new Promise((r) => setTimeout(r, 1000));
           currentMessage = await regenerateMessage();
         }
@@ -1063,7 +1293,7 @@ async function runFlow(
       if (step.expectRejected === 'ml0') {
         await waitForOrdinalAdvance(ml0Urls[0], 4, {
           label: `${step.action} reject settle on ${activeCid}`,
-          log: log ? { write: (s: string) => log.write(s) } : undefined,
+          log: slog ? { write: (s: string) => slog.write(s) } : undefined,
         });
         let afterSeq = -1;
         try {
@@ -1079,8 +1309,8 @@ async function runFlow(
             `expected ML0 to reject ${step.action} on ${activeCid} (guard denied), but the fiber advanced past seq ${preSendSeqNum} to ${afterSeq}`
           );
         }
-        l(' \x1b[32mOK (ML0 rejected, state unchanged)\x1b[0m');
-        continue;
+        sl(' \x1b[32mOK (ML0 rejected, state unchanged)\x1b[0m');
+        return;
       }
 
       // Ordinal-based confirmation with auto-resubmit. Capture the ordinal at send time so the
@@ -1149,7 +1379,7 @@ async function runFlow(
         // snapshots entirely — i.e. genuine consensus death, not mere slowness under CI load.
         stallTimeoutMs: 120000,
         label: `${step.action} on ${activeCid}`,
-        log: log ? { write: (s: string) => log.write(s) } : undefined,
+        log: slog ? { write: (s: string) => slog.write(s) } : undefined,
         // Webhook-driven: re-check the instant a snapshot finalizes (read state is fresh then), and
         // fail fast with the chain's reason if this exact update is rejected.
         waitNextSnapshot: webhook?.active ? (ms) => webhook!.waitNextSnapshot(ms) : undefined,
@@ -1201,7 +1431,7 @@ async function runFlow(
           maxRetries,
           retryDelayMs,
           `${step.action} DL1 sync for ${activeCid}`,
-          log
+          slog
         );
       }
 
@@ -1221,14 +1451,39 @@ async function runFlow(
         ml0Urls
       );
 
-      l(' \x1b[32mOK\x1b[0m');
-    } catch (error) {
-      l(' \x1b[31mFAIL\x1b[0m');
-      return {
-        passed: false,
-        error: (error as Error).message,
-        failedStep: i + 1,
-      };
+      sl(' \x1b[32mOK\x1b[0m');
+  };
+
+  // Batch-aware driver. A maximal run of consecutive `parallel: true` steps runs concurrently to
+  // cut wall-clock; every other step runs exactly as before (same w/l/log, same try/catch →
+  // {passed:false, failedStep:i+1}), so sequential behavior is byte-for-byte unchanged.
+  for (let i = 0; i < flow.steps.length; i++) {
+    if (flow.steps[i].parallel) {
+      let j = i;
+      while (j < flow.steps.length && flow.steps[j].parallel) j++;
+      const batch = flow.steps.slice(i, j);
+      l(`  ── parallel batch: ${batch.length} steps (${batch.map((s) => s.action).join(', ')}) ──`);
+      // Each step buffers to its OWN logger so concurrent output doesn't interleave; flush in step order.
+      const buffers = batch.map(() => new FlowLogger(tag, false));
+      const settled = await Promise.allSettled(
+        batch.map((s, k) =>
+          processStep(s, i + k, (x) => buffers[k].write(x), (...a) => buffers[k].log(...a), buffers[k])
+        )
+      );
+      for (const b of buffers) b.flush(); // ordered, contiguous per-step output
+      const failedAt = settled.findIndex((r) => r.status === 'rejected');
+      if (failedAt >= 0) {
+        const reason = (settled[failedAt] as PromiseRejectedResult).reason as Error;
+        return { passed: false, error: reason.message, failedStep: i + failedAt + 1 };
+      }
+      i = j - 1;
+    } else {
+      try {
+        await processStep(flow.steps[i], i, w, l, log); // sequential: the flow's live logger (UNCHANGED behavior)
+      } catch (error) {
+        l(' \x1b[31mFAIL\x1b[0m');
+        return { passed: false, error: (error as Error).message, failedStep: i + 1 };
+      }
     }
   }
 
@@ -1342,12 +1597,27 @@ async function main() {
     // -----------------------------------------------------------------------
     // Parallel mode: run all flows concurrently with buffered output
     // -----------------------------------------------------------------------
-    const CONCURRENCY = Number(process.env.E2E_CONCURRENCY) || flowPairs.length;
+    // Concurrency: an explicit E2E_CONCURRENCY wins (0/NaN ignored, preserving the old `|| default`).
+    // Otherwise an INTERACTIVE single-example run (e.g. a local `--only riverdale-economy` in a TTY)
+    // defaults to 1 so its flows run serially and stream live. The isTTY gate is load-bearing: it keeps
+    // CI behavior identical — the tictactoe lane is single-example with no explicit concurrency and has
+    // 3 flows that MUST keep running in parallel (serializing them would ~3x its wall-clock and risk the
+    // job timeout). CI has no TTY, so it always takes the `flowPairs.length` branch as before.
+    const envConc = Number(process.env.E2E_CONCURRENCY);
+    const CONCURRENCY =
+      Number.isFinite(envConc) && envConc > 0
+        ? envConc
+        : examples.length === 1 && process.stdout.isTTY
+          ? 1
+          : flowPairs.length;
+    // At CONCURRENCY 1 no two flows can interleave, so stream each flow's output live (write-through)
+    // instead of buffering it until flush — the single-example local run reads in real time.
+    const liveOutput = CONCURRENCY === 1;
     console.log(`Launching ${flowPairs.length} flows, ${CONCURRENCY} at a time…\n`);
 
     const runOne = async ({ example, flow }: (typeof flowPairs)[number]): Promise<FlowResult> => {
       const tag = `${example.dir}/${flow.name}`;
-      const logger = new FlowLogger(tag);
+      const logger = new FlowLogger(tag, liveOutput);
       logger.log(
         `\x1b[36m[${example.dir}]\x1b[0m Running: ${flow.name} (${flow.steps.length} steps)`
       );
