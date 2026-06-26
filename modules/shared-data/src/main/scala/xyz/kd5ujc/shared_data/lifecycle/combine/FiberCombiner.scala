@@ -121,6 +121,34 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
       )
       .whenA(fiberRecord.sequenceNumber =!= update.targetSequenceNumber)
 
+    // F7 signer-authorization, enforced HERE on the AUTHORITATIVE apply path (03-cross-fiber-and-
+    // authorization.md §3) — the binding gate, not the validator. Graceful `CombineRejected` (rule #2: never a
+    // block-acceptance Invalid; a stateful Invalid would drop the whole all-or-nothing snapshot). Reads ONLY
+    // the fiber's own hash-pinned `definition.policy` dial + the stable `owners`/`authorizedSigners` record
+    // fields — NO registry/asset lineage (rule #3 — outside the TOCTOU hazard class). The absent dial defaults
+    // to `Open` (today's LIVE guard-only behaviour), so every existing fiber is UNCHANGED and apps opt UP
+    // explicitly (the §3.4 / §6 Q1 default-Open decision). Verified signer resolution mirrors the create path
+    // (:50) and `FiberRules.L0.updateSignedByOwnerOrParticipant`.
+    signerAddresses <- update.proofs.toList.traverse(_.id.toAddress).map(_.toSet)
+    effectivePolicy = fiberRecord.definition.policy.dials
+      .flatMap(_.transitionPolicy)
+      .getOrElse(TransitionPolicy.default)
+    transitionAuthorized = effectivePolicy match {
+      case TransitionPolicy.Open => true
+      case TransitionPolicy.OwnersOrParticipants =>
+        signerAddresses.intersect(fiberRecord.owners ++ fiberRecord.authorizedSigners).nonEmpty
+      case TransitionPolicy.Owners =>
+        signerAddresses.intersect(fiberRecord.owners).nonEmpty
+    }
+    _ <- Async[F]
+      .raiseError(
+        CombineRejected(
+          s"transition on fiber ${update.fiberId} not authorized: signer(s) not permitted by " +
+          s"transitionPolicy=$effectivePolicy"
+        )
+      )
+      .whenA(!transitionAuthorized)
+
     input = FiberInput.Transition(update.eventName, update.payload)
     proofsList = update.proofs.toList
 

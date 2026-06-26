@@ -61,6 +61,50 @@ object DependencyMode extends Enum[DependencyMode] with CirceEnum[DependencyMode
 }
 
 /**
+ * Who may submit a `TransitionStateMachine` for this fiber — the WALLET/owner authorization axis, enforced on
+ * the AUTHORITATIVE apply path (the combiner) as a graceful `CombineRejected`
+ * (03-cross-fiber-and-authorization.md §3). Orthogonal to [[FiberPolicy.Constrained.acceptedCallers]] (the
+ * FIBER-origin `$caller` axis); the two compose. Ordered loosest→tightest by `rank`; the tighten-only lattice
+ * may only move UP (Open → OwnersOrParticipants → Owners), never loosen — so a fiber can never launder itself
+ * from `Owners` down to `Open`. An ABSENT dial is [[TransitionPolicy.Open]] (rank 0) — today's LIVE,
+ * guard-only behaviour — so every pre-dial fiber is UNCHANGED and apps opt UP explicitly (the §3.4 / §6 Q1
+ * default-Open decision; tightening the default is a separate, maintainer-reserved security call).
+ */
+sealed trait TransitionPolicy { def rank: Int }
+
+object TransitionPolicy {
+
+  /** Any signer; the transition GUARD is the sole gate (today's live behaviour). LOOSEST — the absent default. */
+  case object Open extends TransitionPolicy { val rank = 0 }
+
+  /** The verified signer(s) must be in `owners ∪ authorizedSigners` (the create-time participant allowlist). */
+  case object OwnersOrParticipants extends TransitionPolicy { val rank = 1 }
+
+  /** The verified signer(s) must be in `owners` only. TIGHTEST. */
+  case object Owners extends TransitionPolicy { val rank = 2 }
+
+  /** The default tier for an absent dial — `Open` (today's live guard-only behaviour). Use everywhere `None`. */
+  val default: TransitionPolicy = Open
+
+  // Bare, self-documenting string tags (mirrors UpgradePolicy's bare-object branch + FiberPolicy.Immutable's
+  // "Immutable"): total, fail-closed. The canonical/signing paths `dropNulls`, so an absent dial is stripped
+  // and a pre-dial definition stays byte-identical (rule #1); a set dial round-trips through the tag.
+  implicit val encoder: Encoder[TransitionPolicy] = Encoder.instance {
+    case Open                 => Json.fromString("Open")
+    case OwnersOrParticipants => Json.fromString("OwnersOrParticipants")
+    case Owners               => Json.fromString("Owners")
+  }
+
+  implicit val decoder: Decoder[TransitionPolicy] =
+    Decoder.decodeString.emap {
+      case "Open"                 => Right(Open)
+      case "OwnersOrParticipants" => Right(OwnersOrParticipants)
+      case "Owners"               => Right(Owners)
+      case other                  => Left(s"unknown transitionPolicy '$other'")
+    }
+}
+
+/**
  * Recipient allowlist for `_transferAsset`. Carries NO conservation/amount notion: `AssetTransferred` is a
  * whole-record custody move with no amount, so the only meaningful dial is WHO may receive. `None` on either
  * field ⇒ that recipient class is unconstrained.
@@ -192,11 +236,11 @@ final case class VersionRange(
  *   - [[FiberPolicy.Unconstrained]] — the named default: NO surrendered capability, today's legacy behaviour.
  *     Replaces the old `None`/`Some(empty)`. [[StateMachineDefinition.policy]] defaults to it, so a pre-policy
  *     definition is hash-identical to one that explicitly declares `Unconstrained`.
- *   - [[FiberPolicy.Constrained]] — at least one of the 14 dials is set. A fiber voluntarily surrenders a capability
+ *   - [[FiberPolicy.Constrained]] — at least one of the 15 dials is set. A fiber voluntarily surrenders a capability
  *     in return for a guarantee any external observer can verify by resolving ONE `logicHash`-anchored field.
  *
  * Every dial of [[Constrained]] is `Option`/defaulted so a partial policy survives `dropNulls` byte-stably. A
- * `Constrained` with ALL 14 dials empty is SEMANTICALLY identical to `Unconstrained`; the smart constructor
+ * `Constrained` with ALL 15 dials empty is SEMANTICALLY identical to `Unconstrained`; the smart constructor
  * [[FiberPolicy.constrained]] (and the decoder) collapse it to `Unconstrained` so there is exactly ONE canonical
  * representation of "unconstrained". This is the internal-determinism rule the verified re-bind
  * (`definition.computeDigest === logicHash`) relies on: an absent policy key, `Unconstrained`, and an
@@ -254,7 +298,7 @@ object FiberPolicy {
   case object Immutable extends FiberPolicy
 
   /**
-   * A constitution that sets at least one of the 14 dials. Constructed ONLY via the smart constructor
+   * A constitution that sets at least one of the 15 dials. Constructed ONLY via the smart constructor
    * [[FiberPolicy.constrained]] (or the decoder), which collapses an all-empty `Constrained` to [[Unconstrained]] so
    * there is exactly ONE canonical "unconstrained" form, and `constrained` further collapses an only-
    * upgradePolicy=Immutable bundle to [[Immutable]]. Encodes as its bare dials object `{<set dials, after
@@ -268,6 +312,7 @@ object FiberPolicy {
     maxGenerations:   Option[Int] = None, // same-definition-hash spawn-lineage depth cap
     maxSpawnFanout:   Option[Int] = None, // children per single transition (tighter than ExecutionLimits cap)
     acceptedCallers:  Option[Set[UUID]] = None, // fiber-origin ($caller) allowlist; user/wallet origin unaffected
+    transitionPolicy: Option[TransitionPolicy] = None, // wallet/owner transition-auth axis; None ⇒ Open (legacy)
     sealedStates:     Option[Set[StateId]] = None, // states from which NO transition may fire (terminal/halted)
     transferPolicy:   Option[TransferPolicy] = None,
     dependencyPolicy: Option[DependencyPolicy] = None,
@@ -283,9 +328,9 @@ object FiberPolicy {
     def isEmpty: Boolean =
       selfReproducing.isEmpty && allowedEffects.isEmpty && spawnOwnerPolicy.isEmpty &&
       maxGenerations.isEmpty && maxSpawnFanout.isEmpty && acceptedCallers.isEmpty &&
-      sealedStates.isEmpty && transferPolicy.isEmpty && dependencyPolicy.isEmpty &&
-      upgradePolicy.isEmpty && version.isEmpty && compatibleWith.isEmpty &&
-      interfaces.isEmpty && migrationAuthority.isEmpty
+      transitionPolicy.isEmpty && sealedStates.isEmpty && transferPolicy.isEmpty &&
+      dependencyPolicy.isEmpty && upgradePolicy.isEmpty && version.isEmpty &&
+      compatibleWith.isEmpty && interfaces.isEmpty && migrationAuthority.isEmpty
 
     /** Exactly `upgradePolicy = Immutable` and nothing else — semantically equal to [[FiberPolicy.Immutable]]. */
     def isImmutable: Boolean =
@@ -315,6 +360,7 @@ object FiberPolicy {
     maxGenerations:     Option[Int] = None,
     maxSpawnFanout:     Option[Int] = None,
     acceptedCallers:    Option[Set[UUID]] = None,
+    transitionPolicy:   Option[TransitionPolicy] = None,
     sealedStates:       Option[Set[StateId]] = None,
     transferPolicy:     Option[TransferPolicy] = None,
     dependencyPolicy:   Option[DependencyPolicy] = None,
@@ -332,6 +378,7 @@ object FiberPolicy {
         maxGenerations,
         maxSpawnFanout,
         acceptedCallers,
+        transitionPolicy,
         sealedStates,
         transferPolicy,
         dependencyPolicy,
@@ -422,6 +469,10 @@ object FiberPolicy {
           _ <- capShrinks("maxGenerations", o.maxGenerations, n.maxGenerations)
           _ <- capShrinks("maxSpawnFanout", o.maxSpawnFanout, n.maxSpawnFanout)
           _ <- subset("acceptedCallers", o.acceptedCallers, n.acceptedCallers)
+          // transitionPolicy: the auth posture may only TIGHTEN (rank up: Open ⊐ OwnersOrParticipants ⊐
+          // Owners); an absent dial is Open (rank 0), so None→Some(stricter) is OK and a stricter-old→None
+          // loosens (rejected). Never launder Owners down to Open across a migration.
+          _ <- rankUp("transitionPolicy", o.transitionPolicy.map(_.rank), n.transitionPolicy.map(_.rank))
           _ <- superset("sealedStates", o.sealedStates, n.sealedStates)
           _ <- transferTightens(o.transferPolicy, n.transferPolicy)
           _ <- dependencyTightens(o.dependencyPolicy, n.dependencyPolicy)

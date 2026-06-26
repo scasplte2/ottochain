@@ -5,6 +5,7 @@ import cats.effect.IO
 
 import xyz.kd5ujc.schema.Updates
 import xyz.kd5ujc.schema.Updates.OttochainMessage
+import xyz.kd5ujc.schema.fiber.{FiberPolicy, StateMachineDefinition, TransitionPolicy}
 import xyz.kd5ujc.shared_data.lifecycle.validate.RegistryValidator
 
 import io.circe.parser.{decode, parse}
@@ -100,5 +101,41 @@ object PublishVersionSigningCanonicalSuite extends SimpleIOSuite {
       case Right(other) => IO.pure(failure(s"decoded to unexpected type: ${other.getClass.getSimpleName}"))
       case Left(err)    => IO.pure(failure(s"DECODE FAILED: $err"))
     }
+  }
+
+  // ── F7 transitionPolicy dial — rule #1 canonical guards (03-cross-fiber-and-authorization.md §5) ──────
+  // The dial is a new signed-message surface inside StateMachineDefinition.policy (FiberPolicy.Constrained).
+  // It MUST be Option/omit-safe: an ABSENT dial encodes byte-identically to the pre-change canonical (None →
+  // null → stripped by dropNulls); a SET dial round-trips through its bare string tag.
+
+  // A definition exactly as a pre-dial client wrote it — no `policy` key, no `transitionPolicy`. Guards
+  // ({"==":[1,1]}) + empty effect are the round-trip-proven shapes from `harnessJson`.
+  private val defNoPolicyJson: String =
+    """{
+      |  "states":{"s0":{"id":"s0","isFinal":false},"s1":{"id":"s1","isFinal":false}},
+      |  "initialState":"s0",
+      |  "transitions":[{"from":"s0","to":"s1","eventName":"ping","guard":{"==":[1,1]},"effect":{},"dependencies":[]}]
+      |}""".stripMargin
+
+  test("absent transitionPolicy: decode->encode injects nothing (byte-identical canonical)") {
+    val parsed = parse(defNoPolicyJson).toOption.get
+    val reencoded = decode[StateMachineDefinition](defNoPolicyJson).toOption.get.asJson
+    IO.pure(
+      expect.same(dropNulls(reencoded), dropNulls(parsed)) and
+      expect(!dropNulls(reencoded).noSpaces.contains("transitionPolicy")) and
+      expect(!dropNulls(reencoded).noSpaces.contains("policy"))
+    )
+  }
+
+  test("set transitionPolicy = Owners round-trips and emits its bare string tag") {
+    val base = decode[StateMachineDefinition](defNoPolicyJson).toOption.get
+    val withDial = base.copy(policy = FiberPolicy.constrained(transitionPolicy = Some(TransitionPolicy.Owners)))
+    val encoded = withDial.asJson
+    IO.pure(
+      expect(decode[StateMachineDefinition](encoded.noSpaces) == Right(withDial)) and
+      expect(dropNulls(encoded).noSpaces.contains("\"transitionPolicy\":\"Owners\"")) and
+      // a SET dial does NOT collapse to Unconstrained — the `policy` key is present
+      expect(dropNulls(encoded).noSpaces.contains("\"policy\""))
+    )
   }
 }
