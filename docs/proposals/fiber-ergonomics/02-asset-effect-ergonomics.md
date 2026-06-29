@@ -95,6 +95,14 @@ item"). **This RFC proposes nothing that removes `requireWalletHolder` for exter
 
 ## 2. F2 — canonicalize the recipient
 
+> **Revised decision — shipped in #193 (object-form ONLY + fail-loud).** This section originally proposed
+> *accepting both* the bare string and the object form (additive, soft-deprecation). On review that was
+> **reversed** for a greenfield codebase: the bare-string form is **removed**, the recipient is the
+> `AssetHolder` object form **only**, and a malformed recipient now **fails loud** (a graceful
+> `CombineRejected`) rather than being silently dropped. The static recipient-shape check is **linter-only**
+> (advisory; no hard registration gate). The "accept both / soft-deprecation" prose below is kept for
+> history but is **superseded** — see the revised proposal and §4/§5.
+
 ### The surprise, exactly
 
 `_transferAsset` is extracted by `EffectExtractor.extractAssetTransfers` (`EffectExtractor.scala:188`);
@@ -125,23 +133,25 @@ but the value it becomes — and the value every *other* surface uses — is the
 exists in passing — the guard-context `holderJlv` emits lowercase `{"wallet":..}`/`{"fiber":..}` at
 `AssetCombiner.scala:1098` — out of scope here, but the same "one concept, three encodings" smell.)
 
-### Proposal: accept the object form alongside the bare string
+### Proposal (as shipped, #193): the object form ONLY + fail-loud
 
-In `parseAssetTransfer` (`EffectExtractor.scala:201`), the recipient expression is evaluated and then
-required to be a `StrValue` before `parseRecipient` runs (`:229`). Widen that single step to accept
-**both**:
+In `parseAssetTransfer` (`EffectExtractor.scala`), the evaluated recipient MUST be the canonical
+`AssetHolder` wire form (`{"Fiber":{"fiberId": <uuid-str>}}` / `{"Wallet":{"address": <dag-addr>}}`),
+decoded **strictly** through the magnolia `AssetHolder` codec. The bare-string `parseRecipient`
+disambiguation is **deleted** — there is no longer a UUID-vs-DAG-address guess.
 
-- `StrValue(s)` → `parseRecipient(s)` (unchanged — the bare-string path stays).
-- `MapValue(_)` matching the canonical `AssetHolder` wire form (`{"Fiber":{"fiberId": <uuid-str>}}` or
-  `{"Wallet":{"address": <dag-addr>}}`) → decode straight to `AssetHolder` (reuse the magnolia
-  `AssetHolder` decoder, or a small explicit match on the single-key variant).
+A malformed directive — a non-object item, a missing/non-UUID `assetId`, a recipient that is not a
+well-formed `AssetHolder`, or a gas/eval failure — raises a graceful `CombineRejected` (caught at
+`Combiner.insert` → `RejectionReceipt`, the same authoritative-gate pattern `AssetCombiner`'s R1 holder
+check uses), **not** a silent drop. A silently-dropped transfer is a latent bug; surfacing it is the point.
 
-Authors who already think in `AssetHolder` (everyone holding a `fiberHolder(...)`/`walletHolder(...)` from
-the SDK) can pass it directly; the bare string keeps working with a **soft-deprecation doc note**
-("prefer the object form; the bare string remains supported"). This is the F2 fix in full — one
-additional `case` in one private parser.
+Authors build the recipient with the SDK `toFiber(...)`/`toWallet(...)` helpers (which now emit the object
+form, mirroring `fiberHolder`/`walletHolder`); it is authorable with a dynamic id
+(`{"Fiber":{"fiberId":{"var":"event.x"}}}`) because a single-key non-operator map decodes to a literal
+`MapExpression`. The static recipient SHAPE is also flagged offline (advisory) by the Proposal 01
+`DefinitionLinter`. (The original "accept both / soft-deprecation" plan is superseded — see the banner.)
 
-### Confirm it is additive + canonical-safe
+### Confirm it is canonical-safe (no longer additive)
 
 The directive lives in the fiber **definition's** `transition.effect` expression, which is evaluated
 **pre-combine** at `FiberEvaluator.evaluateEffectExpression` (`FiberEvaluator.scala:257`) →
@@ -149,10 +159,11 @@ The directive lives in the fiber **definition's** `transition.effect` expression
 `TransitionStateMachine(fiberId, eventName, payload, targetSequenceNumber)`
 (`Updates.scala:65`) — it carries an event name and payload, **never the directive or its recipient**.
 The recipient form is therefore *never* a signed-message field; it is an interpretation detail of the
-already-registered definition, resolved at evaluation time. Widening `parseAssetTransfer` changes no wire
-shape on any `OttochainMessage`, touches no canonical, and re-uses the existing (already-canonical)
-`AssetHolder` codec. Existing definitions emitting bare strings re-evaluate identically. **Additive and
-canonical-safe by construction** (full trace + CLAUDE.md rule mapping in §4).
+already-registered definition, resolved at evaluation time. Restricting `parseAssetTransfer` to the object
+form changes no wire shape on any `OttochainMessage`, touches no canonical, and re-uses the existing
+(already-canonical) `AssetHolder` codec. Existing definitions emitting bare strings are now **rejected**
+(the bare-string form is removed) — a breaking change to authored effects, but **canonical-safe by
+construction** since the recipient is never a signed-message field (full trace + CLAUDE.md rule mapping in §4).
 
 ---
 
@@ -229,8 +240,11 @@ amount it could not pre-mint. If/when built: start with `_burnHeld` (trivial, lo
 
 ## 4. Safety & compatibility
 
-**Additive.** The bare-string recipient still parses (§2 widens, never narrows). The (b) directives are
-opt-in: a definition that never emits `_burnHeld`/`_splitHeld` is byte-identical and behaves identically;
+**Canonical-safe, not additive (F2).** The bare-string recipient is **removed** (§2 narrows to the object
+form), so an existing definition that emitted a bare string is now rejected — a breaking change to authored
+effects, but the signed canonical is untouched (the recipient is never a signed-message field; trace below).
+The (b) directives remain opt-in: a definition that never emits `_burnHeld`/`_splitHeld` is byte-identical
+and behaves identically;
 the fail-closed `allowedEffects` gate means a policy that does not list the new `EffectKind`s *rejects*
 them rather than silently honoring them.
 
@@ -263,9 +277,12 @@ non-reentrant driver as `applyFiberTransfers` (`AssetCombiner.scala:379`) and co
 
 ### Alternatives considered
 
-- **F2: rewrite `_transferAsset` to take *only* the object form (drop the bare string).** Rejected —
-  breaks every existing definition emitting a bare string (e.g. `lending-zk-loan.ts:386`,
-  `recipient: { var: "state.borrower" }`). The accept-both alias is strictly safer and just as legible.
+- **F2: accept BOTH the object form and the bare string (additive alias).** Considered, then **rejected**
+  on review: for a greenfield codebase, two encodings for one concept is the "one concept, three encodings"
+  smell this RFC set out to remove, and a silently-dropped malformed recipient is a latent bug. **Shipped
+  instead (#193): object form ONLY + fail-loud** (`CombineRejected`), with the call sites migrated in
+  lockstep (chain e2e defs + the SDK `toFiber`/`toWallet` builders and apps, e.g. `lending-zk-loan`
+  borrower/lender → `toWallet`).
 - **F1: relax `requireWalletHolder` to let a fiber's *owner* sign an `ApplyMorphism` on a fiber-held
   asset.** Rejected — re-introduces an external-signer authority over fiber-custodied value, the exact
   hole R1 closes; and "fiber owner" is not the fiber's custody authority (the transition logic is).
@@ -279,20 +296,20 @@ non-reentrant driver as `applyFiberTransfers` (`AssetCombiner.scala:379`) and co
 |---|---|---|---|
 | Doc-comments (a.1) | comments only | none | P0 |
 | SDK `transferAsset()` + sell template (a.2/a.3) | SDK (Proposal 00) | low (off-chain) | P2 |
-| F2 accept object-form recipient (§2) | `EffectExtractor.parseAssetTransfer` (one `case`) | low (pre-combine, canonical-safe) | P4 |
+| F2 object-form-only recipient + fail-loud (§2) | `EffectExtractor.parseAssetTransfer` + migrate all call sites (chain + SDK) | med (breaking authored form; canonical-safe) | P4 |
 | (b) `_burnHeld` | new `FiberEffect` + `applyFiberBurn` + `EffectKind` + tests | med (combiner state-transition) | conditional, after F2 |
 | (b) `_splitHeld` (amount-aware) | as above + new conservation codomain | med-high (new codomain) | conditional, last |
 
 ### Open questions
 
-1. **Object-form recipient validation depth.** Should `parseAssetTransfer` reuse the full magnolia
-   `AssetHolder` decoder (strict — rejects unknown keys) or match the single-key variant by hand
-   (lenient)? Strict is safer but must still *fail-silent-drop* a malformed directive to match the
-   existing extractor contract (`EffectExtractor.scala:182`). Lean strict.
-2. **Soft-deprecation surface.** Bare-string recipients are dropped silently when malformed today; an
-   object-form typo would do the same. Does the dry-run validator (Proposal 01) flag a recipient that is
-   neither a resolvable bare string nor a well-formed `AssetHolder` object at authoring time? (It should —
-   this is exactly the F4-class "silent drop" the validator targets.)
+1. **Object-form recipient validation depth — RESOLVED (strict + fail-loud).** `parseAssetTransfer` reuses
+   the full magnolia `AssetHolder` decoder (strict — rejects unknown keys / missing fields), and a malformed
+   directive raises a graceful `CombineRejected` rather than being dropped (the extractor's old
+   fail-silent-drop contract was changed deliberately — see the §2 banner).
+2. **Static recipient-shape catch — RESOLVED (linter-only).** The Proposal 01 `DefinitionLinter` flags a
+   recipient that is not a well-formed `AssetHolder` object at authoring time (a literal bare string →
+   Warning, a malformed literal object → Error, a dynamic `{var}` → left to the combiner). This is
+   **advisory only** — there is deliberately no hard registration gate (the maintainer-chosen posture).
 3. **`_splitHeld` amount source.** If (b) is built: do shard amounts come from the directive (explicit
    `amounts`, conservation-checked) or from a computed expression evaluated against the transition context
    (more powerful, more gas, more validation)? The riverdale "split off leg amount X" need wants the
