@@ -1,5 +1,7 @@
 package xyz.kd5ujc.schema.fiber
 
+import enumeratum.{Enum, EnumEntry}
+
 /**
  * Reserved keys used throughout the fiber processing engine.
  *
@@ -8,7 +10,9 @@ package xyz.kd5ujc.schema.fiber
  * extracted from effect results but not merged into state.
  */
 object ReservedKeys {
-  // Effect Result Keys - Used in extracting side effects from transition results
+  // Effect Result Keys - Used in extracting side effects from transition results. The FiberDirective enum
+  // (the engine's directive registry) is the single source for the directive SET; these named constants are
+  // the per-key references the extractor dispatch + FiberDirective itself use.
   val TRIGGERS = "_triggers"
   val SPAWN = "_spawn"
   val SCRIPT_CALL = "_scriptCall"
@@ -16,6 +20,9 @@ object ReservedKeys {
   val TRANSFER_ASSET = "_transferAsset" // Fiber-held asset custody transfer (asset-model.md §10)
   val ADD_DEPENDENCY = "_addDependency" // Runtime-add/re-activate a dynamic cross-fiber dependency (append-only ledger)
   val SET_DEPENDENCY_ACTIVE = "_setDependencyActive" // Toggle a dynamic dependency's active flag (never removed)
+
+  /** Every reserved directive key — derived from [[FiberDirective]] so a new directive updates all consumers. */
+  val directiveKeys: Set[String] = FiberDirective.values.flatMap(_.keys).toSet
 
   // Script Return Convention Keys - Used in extractStateAndResult for script results
   val SCRIPT_STATE = "_state"
@@ -118,5 +125,46 @@ object ReservedKeys {
   val STATUS = "status"
   val LAST_INVOCATION = "lastInvocation"
 
+  /**
+   * All `_`-prefixed keys the engine RECOGNIZES (i.e. never a typo): the [[FiberDirective]] directive keys
+   * plus the script-return convention (`_state`/`_result`) and the cross-fiber policy projection (`_policy`).
+   * Derived from `directiveKeys`, so a new directive updates it automatically.
+   */
+  val recognizedInternalKeys: Set[String] = directiveKeys ++ Set(SCRIPT_STATE, SCRIPT_RESULT, POLICY)
+
   def isInternal(key: String): Boolean = key.startsWith("_")
+}
+
+/**
+ * The first-segment context ROOTS the engine injects into a state-machine transition's evaluation context
+ * (`ContextProvider.buildStateMachineContext`). A `{"var":"X.…"}` whose first segment `X` is not one of these
+ * can only ever resolve to `null`. This enum is the single source of the root set ([[FiberContextRoot.keys]]),
+ * so tooling (e.g. the offline linter) derives it instead of hand-maintaining a duplicate. Each entry names an
+ * existing `ReservedKeys` constant — the roots are multi-purpose strings, so this DECLARES which keys are
+ * roots rather than re-homing the constants.
+ */
+sealed abstract class FiberContextRoot(val key: String) extends EnumEntry
+
+object FiberContextRoot extends Enum[FiberContextRoot] {
+  case object State extends FiberContextRoot(ReservedKeys.STATE)
+  case object Event extends FiberContextRoot(ReservedKeys.EVENT)
+  case object EventName extends FiberContextRoot(ReservedKeys.EVENT_NAME)
+  case object MachineId extends FiberContextRoot(ReservedKeys.MACHINE_ID)
+  case object CurrentStateId extends FiberContextRoot(ReservedKeys.CURRENT_STATE_ID)
+  case object SequenceNumber extends FiberContextRoot(ReservedKeys.SEQUENCE_NUMBER)
+  case object Ordinal extends FiberContextRoot(ReservedKeys.ORDINAL)
+  case object LastSnapshotHash extends FiberContextRoot(ReservedKeys.LAST_SNAPSHOT_HASH)
+  case object EpochProgress extends FiberContextRoot(ReservedKeys.EPOCH_PROGRESS)
+  case object Caller extends FiberContextRoot(ReservedKeys.CALLER)
+  case object Proofs extends FiberContextRoot(ReservedKeys.PROOFS)
+  case object Machines extends FiberContextRoot(ReservedKeys.MACHINES)
+  case object Parent extends FiberContextRoot(ReservedKeys.PARENT)
+  case object Children extends FiberContextRoot(ReservedKeys.CHILDREN)
+  case object Scripts extends FiberContextRoot(ReservedKeys.SCRIPTS)
+  case object HeldAssets extends FiberContextRoot(ReservedKeys.HELD_ASSETS)
+
+  override val values: IndexedSeq[FiberContextRoot] = findValues
+
+  /** Every context-root key — the single source for "is this a valid first-segment var root". */
+  val keys: Set[String] = values.map(_.key).toSet
 }
