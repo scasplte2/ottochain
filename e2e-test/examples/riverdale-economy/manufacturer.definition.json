@@ -21,7 +21,7 @@
         "_transferAsset": [
           {
             "assetId": { "var": "event.goodsAssetId" },
-            "recipient": { "var": "event.retailerId" }
+            "recipient": { "Fiber": { "fiberId": { "var": "event.retailerId" } } }
           }
         ],
         "status": "shipped",

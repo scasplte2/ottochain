@@ -46,7 +46,7 @@
         "_transferAsset": [
           {
             "assetId": { "var": "event.loanAssetId" },
-            "recipient": { "var": "event.consumerId" }
+            "recipient": { "Fiber": { "fiberId": { "var": "event.consumerId" } } }
           }
         ],
         "status": "loan_servicing",
