@@ -59,35 +59,263 @@ object EffectExtractor {
     extractByKey(effectResult, key).collect { case ArrayValue(items) => items }.getOrElse(List.empty)
 
   /**
-   * Extract ALL side effects from a transition's effect result + expression as a single ordered list
-   * of typed [[FiberEffect]]s. `_triggers` and `_scriptCall` become `Triggered`; `_spawn` directives
-   * become `Spawned`; `_emit` events become `Emitted`; `_transferAsset` directives become `AssetTransferred`.
+   * Extract ALL side effects from a transition's effect EXPRESSION as a single ordered list of typed
+   * [[FiberEffect]]s. `_triggers` and `_scriptCall` become `Triggered`; `_spawn` directives become
+   * `Spawned`; `_emit` events become `Emitted`; `_transferAsset` directives become `AssetTransferred`;
+   * `_addDependency`/`_setDependencyActive` become `DependencyMutated`.
    *
-   * Order matches the prior per-key extraction (triggers, then script call, then spawns, then emitted, then
-   * asset transfers), and gas for payload/args/directive evaluation is charged in that order via
-   * [[MeteredEvaluator]].
+   * SECURITY (directive-injection immunity) — a reserved directive is honoured ONLY when its KEY is
+   * LITERALLY AUTHORED in the signed effect expression (`transition.effect`), never when the key is
+   * COMPUTED from event data. The injection vector this closes: an effect whose top-level key is built
+   * from data — e.g. `{"merge":[{"var":"state"},{"set":[{}, {"var":"event.k"}, {"var":"event.v"}]}]}`
+   * with attacker-sent `event.k = "_transferAsset"` — would, under result-based extraction (reading
+   * `key.startsWith("_")` off the post-evaluation result), forge a `_transferAsset` directive and drain
+   * the fiber's held assets. Here directives are sourced from [[authoredDirectiveResult]], which walks
+   * the AUTHORED AST: a data-computed key is never a literal key in the AST, so it can never become a
+   * directive, and the directive VALUE is evaluated from the authored sub-expression (never substituted
+   * by a `merge`/`set` of attacker data). `_spawn` was already expression-extracted and is unchanged.
+   *
+   * Conditional/merge directives are preserved: [[authoredDirectiveResult]] evaluates `if`-conditions to
+   * pick the taken branch and unions `merge` operands, so a directive authored inside an `if`/`merge`
+   * fires exactly when the surrounding branch would have surfaced it.
+   *
+   * Dispatch is a TYPED, EXHAUSTIVE registry over [[FiberDirective]] ([[handlerFor]]): every directive has a
+   * handler, enforced at compile time, and the emitted order is `FiberDirective.values` (triggers, script
+   * call, spawn, emit, transfer, dependency — unchanged from the prior hand-wired sequence). Gas for
+   * payload/args/directive evaluation is charged in that order via [[MeteredEvaluator]].
    */
   def extractEffects[F[_]: Async, G[_]: Monad](
-    effectResult:  JsonLogicValue,
     effectExpr:    JsonLogicExpression,
     contextData:   JsonLogicValue,
     sourceFiberId: UUID
   )(implicit S: Stateful[G, ExecutionState], A: Ask[G, FiberContext], lift: F ~> G): G[List[FiberEffect]] =
-    for {
-      triggers       <- extractTriggerEvents[F, G](effectResult, contextData, sourceFiberId)
-      scriptCall     <- extractScriptCall[F, G](effectResult, contextData, sourceFiberId)
-      assetTransfers <- extractAssetTransfers[F, G](effectResult, contextData)
-      depMutations   <- extractDependencyMutations[F, G](effectResult, contextData)
-    } yield {
-      val spawns = extractSpawnDirectivesFromExpression(effectExpr)
-      // Fix (1): stamp the EMITTING fiber id into every emitted event at extraction. `sourceFiberId` is the
-      // fiber whose transition produced this effect result — the emitter (distinct from any cross-fiber caller).
-      val emitted = extractEmittedEvents(effectResult, sourceFiberId)
-      (triggers ++ scriptCall.toList).map(FiberEffect.Triggered) ++
-      spawns.map(FiberEffect.Spawned) ++
-      emitted.map(FiberEffect.Emitted) ++
-      assetTransfers ++
-      depMutations
+    authoredDirectiveResult[F, G](effectExpr, contextData).flatMap { authored =>
+      // `authored` = a synthetic MapValue holding ONLY the directive keys LITERALLY authored in the effect
+      // expression, evaluated from their authored sub-expressions. Every result-position handler reads
+      // directives from THIS, never from the raw (injectable) effect result; the `Spawn` handler reads the
+      // effect EXPRESSION directly (already immune).
+      val ctx = EffectContext(effectExpr, authored, contextData, sourceFiberId)
+      FiberDirective.values.toList.flatTraverse(directive => handlerFor[F, G](directive).apply(ctx))
+    }
+
+  /** Everything a directive extractor needs; `authored` is the injection-immune authored directive result. */
+  final case class EffectContext(
+    effectExpr:    JsonLogicExpression,
+    authored:      JsonLogicValue,
+    contextData:   JsonLogicValue,
+    sourceFiberId: UUID
+  )
+
+  /**
+   * The typed directive registry: a TOTAL match over [[FiberDirective]] returning the REAL extractor for that
+   * directive as `EffectContext => G[List[FiberEffect]]`. Because the match is exhaustive over a sealed enum,
+   * introducing a new `FiberDirective` without wiring its handler is a compile error — the exhaustiveness
+   * guard, with real wiring (no stringly-typed indirection).
+   */
+  private def handlerFor[F[_]: Async, G[_]: Monad](
+    directive: FiberDirective
+  )(implicit
+    S:    Stateful[G, ExecutionState],
+    A:    Ask[G, FiberContext],
+    lift: F ~> G
+  ): EffectContext => G[List[FiberEffect]] =
+    directive match {
+      case FiberDirective.Triggers =>
+        ctx =>
+          extractTriggerEvents[F, G](ctx.authored, ctx.contextData, ctx.sourceFiberId).map(
+            _.map(t => FiberEffect.Triggered(t): FiberEffect)
+          )
+
+      case FiberDirective.ScriptCall =>
+        ctx =>
+          extractScriptCall[F, G](ctx.authored, ctx.contextData, ctx.sourceFiberId)
+            .map(_.toList.map(t => FiberEffect.Triggered(t): FiberEffect))
+
+      // Spawn is sourced from the effect EXPRESSION (already injection-immune), not the authored result.
+      case FiberDirective.Spawn =>
+        ctx =>
+          extractSpawnDirectivesFromExpression(ctx.effectExpr).map(d => FiberEffect.Spawned(d): FiberEffect).pure[G]
+
+        // Fix (1): `extractEmittedEvents` stamps the EMITTING fiber id (`sourceFiberId`) into every emitted
+      // event — the emitter, distinct from any cross-fiber caller.
+      case FiberDirective.Emit =>
+        ctx =>
+          extractEmittedEvents(ctx.authored, ctx.sourceFiberId).map(e => FiberEffect.Emitted(e): FiberEffect).pure[G]
+
+      case FiberDirective.Transfer =>
+        ctx => extractAssetTransfers[F, G](ctx.authored, ctx.contextData).map(_.map(x => x: FiberEffect))
+
+      case FiberDirective.Dependency =>
+        ctx => extractDependencyMutations[F, G](ctx.authored, ctx.contextData).map(_.map(x => x: FiberEffect))
+    }
+
+  /**
+   * Reserved directive keys honoured from the effect RESULT position (everything except `_spawn`, which has
+   * its own expression extractor [[extractSpawnDirectivesFromExpression]] and is already immune). Single
+   * source of truth: derived from [[FiberDirective]].
+   */
+  private val resultDirectiveKeys: Set[String] = FiberDirective.resultKeys
+
+  /**
+   * Build the injection-immune "authored result": a [[MapValue]] containing ONLY the reserved directive
+   * keys that are LITERALLY authored in `effectExpr` (in a result-surfacing position), each mapped to the
+   * value obtained by evaluating its AUTHORED sub-expression against `contextData`. A directive key that
+   * only appears in the post-evaluation result because event data flowed into a computed key
+   * (`set`/`merge` with a `{"var":…}` key) is NOT a literal AST key, so it is absent here and never honoured.
+   *
+   * Fast path: if the expression authors no directive key at all (the overwhelmingly common case — pure
+   * state effects), this returns the empty map WITHOUT evaluating anything, so directive-free transitions
+   * stay byte-for-byte gas-neutral.
+   */
+  def authoredDirectiveResult[F[_]: Async, G[_]: Monad](
+    effectExpr:  JsonLogicExpression,
+    contextData: JsonLogicValue
+  )(implicit S: Stateful[G, ExecutionState], A: Ask[G, FiberContext], lift: F ~> G): G[JsonLogicValue] =
+    if (!hasAuthoredDirective(effectExpr)) (MapValue.empty: JsonLogicValue).pure[G]
+    else
+      collectDirectiveEntries[F, G](effectExpr, contextData).map { entries =>
+        val combined = entries
+          .groupBy(_._1)
+          .map { case (k, kvs) => k -> combineDirectiveValues(kvs.map(_._2)) }
+        MapValue(combined): JsonLogicValue
+      }
+
+  /**
+   * Pure static scan mirroring the result-surfacing positions of [[collectDirectiveEntries]]: does
+   * `expr` literally author any reserved directive key that could surface as a top-level result key?
+   * Used purely to keep directive-free effects from paying for the evaluating walker.
+   */
+  private def hasAuthoredDirective(expr: JsonLogicExpression): Boolean =
+    expr match {
+      case MapExpression(m)                            => m.keys.exists(resultDirectiveKeys)
+      case ConstExpression(MapValue(m))                => m.keys.exists(resultDirectiveKeys)
+      case ApplyExpression(JsonLogicOp.MergeOp, args)  => args.exists(hasAuthoredDirective)
+      case ApplyExpression(JsonLogicOp.IfElseOp, args) => args.exists(hasAuthoredDirective)
+      case ApplyExpression(JsonLogicOp.SetOp, obj :: keyExpr :: _ :: Nil) =>
+        hasAuthoredDirective(obj) || (keyExpr match {
+          case ConstExpression(StrValue(k)) => resultDirectiveKeys(k)
+          case _                            => false
+        })
+      case ArrayExpression(elems)             => elems.exists(tupleDirectiveKey(_).isDefined)
+      case ConstExpression(ArrayValue(elems)) => elems.exists(constTupleDirectiveKey(_).isDefined)
+      case _                                  => false
+    }
+
+  /**
+   * Walk the AUTHORED effect expression and collect `(directiveKey, evaluatedValue)` pairs from every
+   * result-surfacing position, evaluating each authored directive value sub-expression against `contextData`:
+   *   - [[MapExpression]] / literal map: a LITERAL directive key → evaluate its value sub-expression.
+   *   - `merge`: union of operands → recurse into every operand.
+   *   - `if`: result is the taken branch → evaluate the conditions, recurse into the selected branch ONLY
+   *     (so a directive in a not-taken branch never fires — matching the old result-based semantics).
+   *   - `set`: a LITERAL string directive key arg is honoured (recurse the base object too); a COMPUTED
+   *     key arg (the injection vector) contributes nothing.
+   *   - `[[key, value], …]` tuple-update forms (the `ArrayValue` effect shape): literal directive keys only.
+   * Anything else (a bare `var`, an arbitrary op, …) surfaces no authored directive.
+   */
+  private def collectDirectiveEntries[F[_]: Async, G[_]: Monad](
+    expr:        JsonLogicExpression,
+    contextData: JsonLogicValue
+  )(implicit S: Stateful[G, ExecutionState], A: Ask[G, FiberContext], lift: F ~> G): G[List[(String, JsonLogicValue)]] =
+    expr match {
+      case MapExpression(m) =>
+        m.toList.flatTraverse {
+          case (k, vExpr) if resultDirectiveKeys(k) => evalDirectiveValue[F, G](k, vExpr, contextData)
+          case _                                    => List.empty[(String, JsonLogicValue)].pure[G]
+        }
+
+      case ConstExpression(MapValue(m)) =>
+        m.toList.collect { case (k, v) if resultDirectiveKeys(k) => k -> v }.pure[G]
+
+      case ApplyExpression(JsonLogicOp.MergeOp, args) =>
+        args.flatTraverse(collectDirectiveEntries[F, G](_, contextData))
+
+      case ApplyExpression(JsonLogicOp.IfElseOp, args) =>
+        selectIfBranch[F, G](args, contextData).flatMap {
+          case Some(branch) => collectDirectiveEntries[F, G](branch, contextData)
+          case None         => List.empty[(String, JsonLogicValue)].pure[G]
+        }
+
+      case ApplyExpression(JsonLogicOp.SetOp, obj :: keyExpr :: valExpr :: Nil) =>
+        for {
+          base <- collectDirectiveEntries[F, G](obj, contextData)
+          extra <- keyExpr match {
+            case ConstExpression(StrValue(k)) if resultDirectiveKeys(k) =>
+              evalDirectiveValue[F, G](k, valExpr, contextData)
+            case _ => List.empty[(String, JsonLogicValue)].pure[G]
+          }
+        } yield base ++ extra
+
+      case ArrayExpression(elems) =>
+        elems.flatTraverse { elem =>
+          tupleDirectiveKey(elem) match {
+            case Some((k, vExpr)) => evalDirectiveValue[F, G](k, vExpr, contextData)
+            case None             => List.empty[(String, JsonLogicValue)].pure[G]
+          }
+        }
+
+      case ConstExpression(ArrayValue(elems)) =>
+        elems.flatMap(constTupleDirectiveKey).pure[G]
+
+      case _ => List.empty[(String, JsonLogicValue)].pure[G]
+    }
+
+  /** Evaluate one authored directive value sub-expression; a failed/dropped eval yields no entry. */
+  private def evalDirectiveValue[F[_]: Async, G[_]: Monad](
+    key:         String,
+    valueExpr:   JsonLogicExpression,
+    contextData: JsonLogicValue
+  )(implicit S: Stateful[G, ExecutionState], A: Ask[G, FiberContext], lift: F ~> G): G[List[(String, JsonLogicValue)]] =
+    MeteredEvaluator
+      .evalOpt[F, G](valueExpr, contextData, GasExhaustionPhase.Effect)
+      .map(_.map(key -> _).toList)
+
+  /**
+   * Replicate metakit's `if` branch selection over the AUTHORED condition expressions: walk `(cond, branch)`
+   * pairs, evaluate each condition against `contextData`, return the first truthy branch, else the trailing
+   * `else`. A condition that fails to evaluate is treated as not-taken (graceful), and a malformed (even)
+   * arg list yields no branch — such an effect would already have aborted in the main effect evaluation.
+   */
+  private def selectIfBranch[F[_]: Async, G[_]: Monad](
+    args:        List[JsonLogicExpression],
+    contextData: JsonLogicValue
+  )(implicit S: Stateful[G, ExecutionState], A: Ask[G, FiberContext], lift: F ~> G): G[Option[JsonLogicExpression]] =
+    args match {
+      case cond :: branch :: rest =>
+        MeteredEvaluator.evalOpt[F, G](cond, contextData, GasExhaustionPhase.Effect).flatMap {
+          case Some(v) if v.isTruthy => (Some(branch): Option[JsonLogicExpression]).pure[G]
+          case _                     => selectIfBranch[F, G](rest, contextData)
+        }
+      case lastElse :: Nil => (Some(lastElse): Option[JsonLogicExpression]).pure[G]
+      case Nil             => (None: Option[JsonLogicExpression]).pure[G]
+    }
+
+  /** A literal `[directiveKey, valueExpr]` tuple in the array-update effect form, or `None`. */
+  private def tupleDirectiveKey(elem: JsonLogicExpression): Option[(String, JsonLogicExpression)] =
+    elem match {
+      case ArrayExpression(ConstExpression(StrValue(k)) :: valExpr :: Nil) if resultDirectiveKeys(k) =>
+        Some(k -> valExpr)
+      case _ => None
+    }
+
+  /** A literal `[directiveKey, value]` tuple in a fully-constant array-update effect, or `None`. */
+  private def constTupleDirectiveKey(elem: JsonLogicValue): Option[(String, JsonLogicValue)] =
+    elem match {
+      case ArrayValue(StrValue(k) :: v :: Nil) if resultDirectiveKeys(k) => Some(k -> v)
+      case _                                                             => None
+    }
+
+  /**
+   * Combine the values collected for a single directive key across multiple surfacing positions (e.g. a
+   * `merge` of two maps that each author `_triggers`). Array directives concatenate (preserving authored
+   * order); a non-array directive (`_scriptCall`) takes the last, matching `merge`'s last-wins for maps.
+   */
+  private def combineDirectiveValues(values: List[JsonLogicValue]): JsonLogicValue =
+    values match {
+      case single :: Nil => single
+      case many if many.forall(_.isInstanceOf[ArrayValue]) =>
+        ArrayValue(many.flatMap { case ArrayValue(items) => items; case _ => List.empty })
+      case many => many.lastOption.getOrElse(NullValue)
     }
 
   /**
