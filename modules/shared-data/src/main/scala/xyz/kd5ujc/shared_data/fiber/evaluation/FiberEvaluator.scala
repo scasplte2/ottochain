@@ -302,7 +302,7 @@ object FiberEvaluator {
           fiberGasConfig <- A.reader(_.fiberGasConfig)
           limits         <- ExecutionOps.askLimits[G]
 
-          effects <- EffectExtractor.extractEffects[F, G](effectResult, transition.effect, contextData, fiberId)
+          effects <- EffectExtractor.extractEffects[F, G](transition.effect, contextData, fiberId)
           allTriggers = effects.collect { case FiberEffect.Triggered(t) => t }
           spawnMachines = effects.collect { case FiberEffect.Spawned(d) => d }
           emittedEvents = effects.collect { case FiberEffect.Emitted(ev) => ev }
