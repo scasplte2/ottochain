@@ -170,8 +170,13 @@ object FiberEvaluator {
                   input,
                   proofs,
                   // machines context = this transition's STATIC dependencies ∪ the fiber's ACTIVE
-                  // runtime (dynamic) dependencies. (#24)
-                  transition.dependencies ++ DependencyLedger.activeIds(fiber.dynamicDependencies)
+                  // runtime (dynamic) dependencies (#24) ∪ the F6 AUTO-DECLARED static `machines.<uuid>`
+                  // references scanned from the guard/effect AST (03-cross-fiber-and-authorization.md §2a).
+                  // The auto set augments the RUNTIME dep set ONLY — it NEVER mutates the signed, hash-pinned
+                  // `transition.dependencies` (rule #1); the projection stays bounded (finite, parse-time-known).
+                  transition.dependencies ++
+                  DependencyLedger.activeIds(fiber.dynamicDependencies) ++
+                  StaticDependencyScan.staticMachineRefs(transition)
                 )
                 .liftTo[G]
               result <- evaluateGuardAndApply(
