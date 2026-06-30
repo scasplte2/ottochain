@@ -184,7 +184,7 @@ jobs:
       # transient release-download 404/5xx (the download step is skipped entirely).
       - name: Cache tessellation release JARs
         id: cache-tess-jars
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: tess-jars
           key: tessellation-jars-${{ steps.versions.outputs.tess_tag }}
