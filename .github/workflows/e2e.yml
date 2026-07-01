@@ -61,6 +61,26 @@ jobs:
           echo "lanes=$LANES" >>"$GITHUB_OUTPUT"
           echo "Selected lanes:"; echo "$LANES" | jq -r '.[].name'
 
+  # Lightweight, cluster-free gate: type-check the e2e harness against the PUBLISHED @ottochain/sdk.
+  # The harness runs under tsx (which erases types), so without this a drift between the SDK's export
+  # surface and the harness (e.g. a renamed/removed type) would silently pass CI and only bite a user.
+  # This is the circular-dep guard: an SDK change that breaks the harness's contract fails here.
+  typecheck:
+    name: E2E Typecheck (published SDK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+      - name: Install E2E dependencies
+        working-directory: e2e-test
+        run: npm ci
+      - name: Type-check harness against @ottochain/sdk
+        working-directory: e2e-test
+        run: npm run typecheck
+
   e2e:
     name: E2E Tests (${{ matrix.lane.name }})
     needs: prepare
