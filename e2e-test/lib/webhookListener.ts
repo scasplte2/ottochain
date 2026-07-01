@@ -1,6 +1,9 @@
 import http from 'http';
 import { execSync } from 'child_process';
 
+import { OttoMetagraphClient } from '@ottochain/sdk';
+import type { SubscribeResponse } from '@ottochain/sdk';
+
 /**
  * Push-driven confirmation source for the e2e runner.
  *
@@ -16,9 +19,20 @@ import { execSync } from 'child_process';
  * moment the snapshot that rejected it finalizes (still ahead of a "not included" timeout, but now
  * deterministic: it reflects committed state, not a pre-combine guess).
  *
+ * Subscription lifecycle goes through the SDK's typed client — `OttoMetagraphClient.subscribeWebhook`
+ * / `unsubscribeWebhook` / `listWebhookSubscribers` — NOT raw fetch. That is deliberate: it makes
+ * this harness exercise (and therefore GUARD) the SDK's webhook request surface, so a drift between
+ * the SDK client and the chain's `/webhooks/*` routes/DTOs breaks the e2e instead of a user.
+ *
+ * The PUSH payload (chain → this callback) is not yet modeled by the SDK (it's a server-initiated
+ * notification, outside the client's request surface), so the local `RejectionPayload` / handler
+ * shapes below mirror the chain's `SnapshotNotification` (webhooks/Subscriber.scala) verbatim. TODO:
+ * once the SDK exports the notification payload types, import them here so this shape is guarded too.
+ *
  * Webhook API (modules/l0 ML0Routes + WebhookDispatcher):
- *   POST   /data-application/v1/webhooks/subscribe      { callbackUrl, secret? }
- *   DELETE /data-application/v1/webhooks/subscribe/{id}
+ *   POST   /data-application/v1/webhooks/subscribe      { callbackUrl, secret? }  (SDK subscribeWebhook)
+ *   DELETE /data-application/v1/webhooks/subscribe/{id}                           (SDK unsubscribeWebhook)
+ *   GET    /data-application/v1/webhooks/subscribers                              (SDK listWebhookSubscribers)
  *   push:  { event: "snapshot.finalized", ordinal, hash, stats:{updatesProcessed,...,rejectedCount},
  *           rejections:[{ updateType, fiberId, targetSequenceNumber, actualSequenceNumber,
  *                         reason, updateHash }] }
@@ -73,7 +87,7 @@ function resolveCallbackHost(): string {
 
 export class WebhookListener {
   private server?: http.Server;
-  private subscriptions: { ml0Url: string; id: string }[] = [];
+  private subscriptions: { client: OttoMetagraphClient; id: string }[] = [];
   private snapshotWaiters: Array<() => void> = [];
   private rejections: RejectionInfo[] = [];
   /** Highest finalized ordinal seen via `snapshot.finalized`. */
@@ -114,18 +128,30 @@ export class WebhookListener {
     const uniqueMl0 = [...new Set(ml0Urls)];
     for (const ml0Url of uniqueMl0) {
       try {
-        const r = await fetch(`${ml0Url}/data-application/v1/webhooks/subscribe`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ callbackUrl: this.callbackUrl }),
-        });
-        const id = (await r.json().catch(() => ({})))?.id as string | undefined;
-        if (r.ok && id) {
-          this.subscriptions.push({ ml0Url, id });
+        // Subscribe through the SDK's typed client (not raw fetch) so this harness guards the SDK's
+        // webhook request surface: a drift in the method signature, path, or DTO breaks here.
+        const client = new OttoMetagraphClient({ ml0Url });
+        const resp: SubscribeResponse = await client.subscribeWebhook({ callbackUrl: this.callbackUrl });
+        if (resp?.id) {
+          this.subscriptions.push({ client, id: resp.id });
           this.active = true;
         }
       } catch {
         // ML0 may not expose webhooks (older build) — caller falls back to polling.
+      }
+    }
+
+    // Exercise the list endpoint too (and confirm the node registered our callback) — another SDK
+    // surface guarded, and a useful sanity log for the container→host reachability.
+    if (this.active) {
+      try {
+        const list = await this.subscriptions[0].client.listWebhookSubscribers();
+        console.log(
+          `\x1b[36m[webhook]\x1b[0m subscribed ${this.subscriptions.length} node(s); ` +
+            `node reports ${list.subscribers?.length ?? 0} active subscriber(s)`
+        );
+      } catch {
+        /* non-fatal: the subscribe already succeeded */
       }
     }
   }
@@ -202,7 +228,7 @@ export class WebhookListener {
   async stop(): Promise<void> {
     for (const sub of this.subscriptions) {
       try {
-        await fetch(`${sub.ml0Url}/data-application/v1/webhooks/subscribe/${sub.id}`, { method: 'DELETE' });
+        await sub.client.unsubscribeWebhook(sub.id);
       } catch {
         /* best-effort */
       }
