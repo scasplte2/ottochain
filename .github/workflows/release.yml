@@ -84,6 +84,36 @@ jobs:
 
           ls -la release-jars/
 
+      - name: Generate OpenAPI specs
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          mkdir -p release-jars
+
+          # Regenerate the tapir contracts from the *tagged* source so the attached specs are
+          # guaranteed to match this release's code — not just whatever docs/openapi-*.{json,yaml}
+          # was last committed. sbt is already warm from `assembly`, so this only runs the compiled
+          # generator (same command the CI drift gate uses). One contract PER LAYER (ml0 + dl1),
+          # each as JSON and YAML → release-jars/openapi-{ml0,dl1}.{json,yaml}.
+          sbt "currencyL0/runMain xyz.kd5ujc.metagraph_l0.openapi.GenerateOpenApi release-jars"
+
+          for layer in ml0 dl1; do
+            # Version-stamped copies tie each contract to this release's jars.
+            cp "release-jars/openapi-${layer}.json" "release-jars/openapi-${layer}-${VERSION}.json"
+            cp "release-jars/openapi-${layer}.yaml" "release-jars/openapi-${layer}-${VERSION}.yaml"
+
+            # Sanity: valid JSON carrying a contract version (info.version is the deliberately
+            # decoupled contractVersion, NOT the build version — the filename carries the build tie).
+            CONTRACT=$(jq -r '.info.version' "release-jars/openapi-${layer}.json")
+            echo "✅ ${layer} OpenAPI generated (contract version: ${CONTRACT}) for release v${VERSION} — JSON + YAML"
+
+            # Belt-and-suspenders: the committed contract should already match (the CI drift gate
+            # enforces this on every merge to main). Warn — don't fail the release — if a tag was
+            # somehow cut off-sync.
+            if [ -f "docs/openapi-${layer}.json" ] && ! diff -q "docs/openapi-${layer}.json" "release-jars/openapi-${layer}.json" >/dev/null; then
+              echo "::warning::Regenerated openapi-${layer} differs from committed docs/openapi-${layer}.json — the tag may predate a drift-gate sync."
+            fi
+          done
+
       - name: Generate changelog
         run: |
           # Get previous tag for changelog
@@ -106,6 +136,8 @@ jobs:
           echo "- \`metagraph-l0-${{ steps.version.outputs.VERSION }}.jar\` - Metagraph L0 layer" >> CHANGELOG.md
           echo "- \`currency-l1-${{ steps.version.outputs.VERSION }}.jar\` - Currency L1 layer" >> CHANGELOG.md
           echo "- \`data-l1-${{ steps.version.outputs.VERSION }}.jar\` - Data L1 layer" >> CHANGELOG.md
+          echo "- \`openapi-ml0-${{ steps.version.outputs.VERSION }}.json\` / \`.yaml\` - OpenAPI 3.1 contract for the ML0 layer (also \`openapi-ml0.json\` / \`.yaml\`)" >> CHANGELOG.md
+          echo "- \`openapi-dl1-${{ steps.version.outputs.VERSION }}.json\` / \`.yaml\` - OpenAPI 3.1 contract for the Data-L1 layer (also \`openapi-dl1.json\` / \`.yaml\`)" >> CHANGELOG.md
 
       - name: Create Release and Upload JARs
         uses: softprops/action-gh-release@v3
@@ -115,6 +147,14 @@ jobs:
             release-jars/metagraph-l0-${{ steps.version.outputs.VERSION }}.jar
             release-jars/currency-l1-${{ steps.version.outputs.VERSION }}.jar
             release-jars/data-l1-${{ steps.version.outputs.VERSION }}.jar
+            release-jars/openapi-ml0-${{ steps.version.outputs.VERSION }}.json
+            release-jars/openapi-ml0-${{ steps.version.outputs.VERSION }}.yaml
+            release-jars/openapi-ml0.json
+            release-jars/openapi-ml0.yaml
+            release-jars/openapi-dl1-${{ steps.version.outputs.VERSION }}.json
+            release-jars/openapi-dl1-${{ steps.version.outputs.VERSION }}.yaml
+            release-jars/openapi-dl1.json
+            release-jars/openapi-dl1.yaml
           body_path: CHANGELOG.md
           prerelease: ${{ contains(steps.version.outputs.VERSION, 'alpha') || contains(steps.version.outputs.VERSION, 'beta') || contains(steps.version.outputs.VERSION, 'rc') }}
           generate_release_notes: false
@@ -138,4 +178,5 @@ jobs:
           echo "- **Version:** v${{ steps.version.outputs.VERSION }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Tag:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           echo "- **JARs:** 3 artifacts uploaded" >> $GITHUB_STEP_SUMMARY
+          echo "- **OpenAPI:** \`openapi-{ml0,dl1}-${{ steps.version.outputs.VERSION }}.{json,yaml}\` (+ stable \`openapi-{ml0,dl1}.{json,yaml}\`)" >> $GITHUB_STEP_SUMMARY
           echo "- **Deploy notification:** Sent to ottochain-deploy" >> $GITHUB_STEP_SUMMARY

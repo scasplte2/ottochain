@@ -1,0 +1,144 @@
+openapi: 3.1.0
+info:
+  title: OttoChain Data L1 API
+  version: 1.0.0
+paths:
+  /data-application/v1/version:
+    get:
+      tags:
+      - meta
+      - dl1
+      summary: Service identity + build metadata
+      operationId: getData-applicationV1Version
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionInfo'
+  /data-application/v1/util/hash:
+    post:
+      tags:
+      - meta
+      - dl1
+      summary: Canonical hash of a signed message
+      operationId: postData-applicationV1UtilHash
+      requestBody:
+        description: Signed[OttochainMessage]
+        content:
+          application/json:
+            schema: {}
+        required: true
+      responses:
+        '200':
+          description: 'HashResult: { "messageHash": <hash>, "message": <message>
+            }'
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: 'Invalid value for: body'
+          content:
+            text/plain:
+              schema:
+                type: string
+  /data-application/v1/onchain:
+    get:
+      tags:
+      - state
+      - dl1
+      summary: Current on-chain state
+      operationId: getData-applicationV1Onchain
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnChain'
+components:
+  schemas:
+    AssetCommit:
+      title: AssetCommit
+      type: object
+      required:
+      - behavior
+      - sequenceNumber
+      - recordHash
+      properties:
+        behavior:
+          type: integer
+          format: int32
+        sequenceNumber:
+          type: integer
+          format: int64
+        recordHash:
+          type: string
+        origin:
+          type: string
+    FiberCommit:
+      title: FiberCommit
+      type: object
+      required:
+      - recordHash
+      - sequenceNumber
+      properties:
+        recordHash:
+          type: string
+        stateDataHash:
+          type: string
+        sequenceNumber:
+          type: integer
+          format: int64
+    Map_V:
+      title: Map_V
+      type: object
+      additionalProperties:
+        $ref: '#/components/schemas/FiberCommit'
+    OnChain:
+      title: OnChain
+      type: object
+      required:
+      - fiberCommits
+      - latestLogs
+      - registryCommits
+      - assetCommits
+      properties:
+        fiberCommits:
+          $ref: '#/components/schemas/Map_V'
+        latestLogs:
+          $ref: '#/components/schemas/Map_V'
+        registryCommits:
+          $ref: '#/components/schemas/Map_V'
+        assetCommits:
+          $ref: '#/components/schemas/Map_V'
+    VersionInfo:
+      title: VersionInfo
+      type: object
+      required:
+      - service
+      - version
+      - name
+      - scalaVersion
+      - sbtVersion
+      - gitCommit
+      - buildTime
+      - tessellationVersion
+      properties:
+        service:
+          type: string
+        version:
+          type: string
+        name:
+          type: string
+        scalaVersion:
+          type: string
+        sbtVersion:
+          type: string
+        gitCommit:
+          type: string
+        buildTime:
+          type: string
+        tessellationVersion:
+          type: string

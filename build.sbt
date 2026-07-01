@@ -121,7 +121,8 @@ lazy val currencyL0 = (project in file("modules/l0"))
       Libraries.tapirJsonCirce,
       Libraries.tapirHttp4sServer,
       Libraries.tapirOpenApiDocs,
-      Libraries.sttpOpenApiCirce
+      Libraries.sttpOpenApiCirce,
+      Libraries.sttpOpenApiCirceYaml
     )
   )
 

@@ -51,6 +51,7 @@ object Dependencies {
     val tapirHttp4sServer = "com.softwaremill.sttp.tapir" %% "tapir-http4s-server" % V.tapir
     val tapirOpenApiDocs = "com.softwaremill.sttp.tapir" %% "tapir-openapi-docs" % V.tapir
     val sttpOpenApiCirce = "com.softwaremill.sttp.apispec" %% "openapi-circe" % V.sttpApiSpec
+    val sttpOpenApiCirceYaml = "com.softwaremill.sttp.apispec" %% "openapi-circe-yaml" % V.sttpApiSpec
 
   }
 

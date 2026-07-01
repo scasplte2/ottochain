@@ -10,9 +10,33 @@ import weaver.SimpleIOSuite
 object OpenApiDocSuite extends SimpleIOSuite {
 
   private val doc = ApiEndpoints.openApiJson
+  private val yaml = ApiEndpoints.openApiYaml
 
   pureTest("generates an OpenAPI 3.x document") {
     expect.all(doc.contains("\"openapi\""), doc.contains("3.1") || doc.contains("3.0"))
+  }
+
+  pureTest("renders the same document as YAML") {
+    expect.all(
+      yaml.contains("openapi: 3.1"),
+      yaml.contains("title: OttoChain Metagraph L0 API"),
+      yaml.contains("/data-application/v1/version:"),
+      yaml.contains("- ml0")
+    )
+  }
+
+  pureTest("DL1 is a separate single-layer contract") {
+    val dl1Json = DataL1ApiEndpoints.openApiJson
+    val dl1Yaml = DataL1ApiEndpoints.openApiYaml
+    expect.all(
+      DataL1ApiEndpoints.all.size == 3,
+      dl1Json.contains("3.1"),
+      dl1Json.contains("/data-application/v1/version"),
+      dl1Json.contains("/data-application/v1/onchain"),
+      !dl1Json.contains("/data-application/v1/state-machines"), // ML0-only surface stays out
+      dl1Yaml.contains("title: OttoChain Data L1 API"),
+      dl1Yaml.contains("- dl1")
+    )
   }
 
   pureTest("documents every custom path family") {
