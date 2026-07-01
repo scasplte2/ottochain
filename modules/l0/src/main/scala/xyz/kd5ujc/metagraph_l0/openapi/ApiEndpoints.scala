@@ -15,7 +15,9 @@ import xyz.kd5ujc.schema.{CalculatedState, OnChain, Records}
 
 import io.circe.Json
 import io.circe.syntax._
+import sttp.apispec.openapi.OpenAPI
 import sttp.apispec.openapi.circe._
+import sttp.apispec.openapi.circe.yaml._
 import sttp.model.StatusCode
 import sttp.tapir._
 import sttp.tapir.docs.openapi.OpenAPIDocsInterpreter
@@ -253,10 +255,14 @@ object ApiEndpoints {
     webhookSubscribers
   )
 
+  /** The tapir-derived OpenAPI document — the one source both renderings share. */
+  private def openApiDoc: OpenAPI =
+    OpenAPIDocsInterpreter().toOpenAPI(all, "OttoChain Metagraph API", contractVersion)
+
   def openApiJson: String =
-    OpenAPIDocsInterpreter()
-      .toOpenAPI(all, "OttoChain Metagraph API", contractVersion)
-      .asJson
-      .deepDropNullValues
-      .spaces2
+    openApiDoc.asJson.deepDropNullValues.spaces2
+
+  /** Same document as [[openApiJson]], rendered as YAML (nulls dropped by `toYaml`). */
+  def openApiYaml: String =
+    openApiDoc.toYaml
 }

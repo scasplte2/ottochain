@@ -1,829 +1,1121 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
   title: OttoChain Metagraph API
-  description: |
-    API for interacting with OttoChain metagraph on Constellation Network.
-    
-    ## Layers & Ports
-    | Layer | Port | Description |
-    |-------|------|-------------|
-    | GL0   | 9000 | Global L0 — DAG consensus |
-    | GL1   | 9100 | Global L1 — DAG transaction batching |
-    | ML0   | 9200 | Metagraph L0 — OttoChain snapshots |
-    | CL1   | 9300 | Currency L1 — token transactions |
-    | DL1   | 9400 | Data L1 — data transaction validation |
   version: 1.0.0
-  contact:
-    name: OttoChain
-    url: https://github.com/scasplte2/ottochain
-  license:
-    name: MIT
-
-servers:
-  - url: http://localhost:9200
-    description: Local ML0 (Metagraph L0)
-  - url: http://localhost:9400
-    description: Local DL1 (Data L1)
-
-tags:
-  - name: Node
-    description: Node status and health
-  - name: Cluster
-    description: Cluster management
-  - name: Snapshots
-    description: Metagraph snapshots
-  - name: StateMachines
-    description: OttoChain state machines (fibers)
-  - name: Currency
-    description: Token operations
-
 paths:
-  # ===== Node Endpoints =====
-  /node/info:
+  /data-application/v1/version:
     get:
-      tags: [Node]
-      summary: Get node information
-      operationId: getNodeInfo
+      tags:
+      - meta
+      summary: Service identity + build metadata
+      operationId: getData-applicationV1Version
       responses:
         '200':
-          description: Node information
+          description: ''
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/NodeInfo'
-
-  /node/state:
-    get:
-      tags: [Node]
-      summary: Get node state
-      operationId: getNodeState
+                $ref: '#/components/schemas/VersionInfo'
+  /data-application/v1/util/hash:
+    post:
+      tags:
+      - meta
+      summary: Canonical hash of a signed message
+      operationId: postData-applicationV1UtilHash
+      requestBody:
+        description: Signed[OttochainMessage]
+        content:
+          application/json:
+            schema: {}
+        required: true
       responses:
         '200':
-          description: Current node state
+          description: 'HashResult: { "messageHash": <hash>, "message": <message>
+            }'
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/NodeState'
-
-  /node/health:
-    get:
-      tags: [Node]
-      summary: Health check
-      operationId: getHealth
-      responses:
-        '200':
-          description: Node is healthy
-        '503':
-          description: Node is unhealthy
-
-  /node/session:
-    get:
-      tags: [Node]
-      summary: Get current session ID
-      operationId: getNodeSession
-      responses:
-        '200':
-          description: Current session
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  session:
-                    type: string
-
-  /metrics:
-    get:
-      tags: [Node]
-      summary: Prometheus metrics
-      operationId: getMetrics
-      responses:
-        '200':
-          description: Prometheus metrics
+              schema: {}
+        '400':
+          description: 'Invalid value for: body'
           content:
             text/plain:
               schema:
                 type: string
-
-  # ===== Cluster Endpoints =====
-  /cluster/info:
+  /data-application/v1/onchain:
     get:
-      tags: [Cluster]
-      summary: Get cluster info
-      operationId: getClusterInfo
+      tags:
+      - state
+      summary: Current on-chain state
+      operationId: getData-applicationV1Onchain
       responses:
         '200':
-          description: Cluster peer list
+          description: ''
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ClusterPeer'
-
-  /cluster/session:
+                $ref: '#/components/schemas/OnChain'
+  /data-application/v1/checkpoint:
     get:
-      tags: [Cluster]
-      summary: Get cluster session
-      operationId: getClusterSession
+      tags:
+      - state
+      summary: Current checkpoint (calculated state snapshot)
+      operationId: getData-applicationV1Checkpoint
       responses:
         '200':
-          description: Current cluster session
+          description: ''
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClusterSession'
-
-  /cluster/peers:
+                $ref: '#/components/schemas/Checkpoint_CalculatedState'
+  /data-application/v1/state-machines:
     get:
-      tags: [Cluster]
-      summary: Get peer details
-      operationId: getClusterPeers
+      tags:
+      - state-machines
+      summary: List state machines (optionally filtered by status)
+      operationId: getData-applicationV1State-machines
+      parameters:
+      - name: status
+        in: query
+        description: 'Filter by fiber status: ACTIVE | ARCHIVED | FAILED'
+        required: false
+        schema:
+          type: string
       responses:
         '200':
-          description: Detailed peer information
+          description: ''
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ClusterPeer'
-
-  /cluster/join:
-    post:
-      tags: [Cluster]
-      summary: Join cluster
-      operationId: joinCluster
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/JoinRequest'
-      responses:
-        '200':
-          description: Successfully joined
+                $ref: '#/components/schemas/Map_V'
         '400':
-          description: Invalid request
-
-  /cluster/leave:
-    post:
-      tags: [Cluster]
-      summary: Leave cluster
-      operationId: leaveCluster
-      responses:
-        '200':
-          description: Successfully left cluster
-
-  # ===== Snapshot Endpoints (ML0) =====
-  /snapshots/latest:
-    get:
-      tags: [Snapshots]
-      summary: Get latest snapshot
-      operationId: getLatestSnapshot
-      responses:
-        '200':
-          description: Latest metagraph snapshot
+          description: 'Invalid value for: query parameter status'
           content:
-            application/json:
+            text/plain:
               schema:
-                $ref: '#/components/schemas/Snapshot'
-
-  /snapshots/latest/ordinal:
+                type: string
+  /data-application/v1/state-machines/{id}:
     get:
-      tags: [Snapshots]
-      summary: Get latest ordinal
-      operationId: getLatestOrdinal
-      responses:
-        '200':
-          description: Latest snapshot ordinal
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SnapshotOrdinal'
-
-  /snapshots/{ordinal}:
-    get:
-      tags: [Snapshots]
-      summary: Get snapshot by ordinal
-      operationId: getSnapshotByOrdinal
+      tags:
+      - state-machines
+      summary: Get a state machine by id
+      operationId: getData-applicationV1State-machinesId
       parameters:
-        - name: ordinal
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int64
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
         '200':
-          description: Snapshot at ordinal
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Snapshot'
-        '404':
-          description: Snapshot not found
-
-  /snapshots/latest/metadata:
-    get:
-      tags: [Snapshots]
-      summary: Get latest snapshot metadata
-      operationId: getLatestSnapshotMetadata
-      responses:
-        '200':
-          description: Snapshot metadata
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SnapshotMetadata'
-
-  /snapshots/latest/combined:
-    get:
-      tags: [Snapshots]
-      summary: Get latest combined snapshot
-      operationId: getLatestCombinedSnapshot
-      responses:
-        '200':
-          description: Combined snapshot with full state
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CombinedSnapshot'
-
-  /snapshots/{hash}:
-    get:
-      tags: [Snapshots]
-      summary: Get snapshot by hash
-      operationId: getSnapshotByHash
-      parameters:
-        - name: hash
-          in: path
-          required: true
-          schema:
-            $ref: '#/components/schemas/HashValue'
-      responses:
-        '200':
-          description: Snapshot
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Snapshot'
-        '404':
-          description: Snapshot not found
-
-  # ===== OttoChain Custom Endpoints =====
-  /v1/state-machines:
-    get:
-      tags: [StateMachines]
-      summary: List all state machines
-      operationId: listStateMachines
-      responses:
-        '200':
-          description: List of state machine fiber records
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/StateMachineFiberRecord'
-
-  /v1/state-machines/{fiberId}:
-    get:
-      tags: [StateMachines]
-      summary: Get state machine by fiber ID
-      operationId: getStateMachine
-      parameters:
-        - name: fiberId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: State machine fiber record
+          description: ''
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/StateMachineFiberRecord'
-        '404':
-          description: State machine not found
-
-  /v1/checkpoint:
-    get:
-      tags: [StateMachines]
-      summary: Get latest checkpoint
-      operationId: getCheckpoint
-      responses:
-        '200':
-          description: Latest on-chain state checkpoint
+        '400':
+          description: 'Invalid value for: path parameter id'
           content:
-            application/json:
+            text/plain:
               schema:
-                $ref: '#/components/schemas/OnChainState'
-
-  # ===== Currency Endpoints =====
-  /currency/{address}/balance:
+                type: string
+  /data-application/v1/state-machines/{id}/events:
     get:
-      tags: [Currency]
-      summary: Get token balance
-      operationId: getBalance
+      tags:
+      - state-machines
+      summary: Event receipts for a state machine
+      operationId: getData-applicationV1State-machinesIdEvents
       parameters:
-        - name: address
-          in: path
-          required: true
-          schema:
-            $ref: '#/components/schemas/Address'
-      responses:
-        '200':
-          description: Token balance
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Balance'
-
-  /currency/total-supply:
-    get:
-      tags: [Currency]
-      summary: Get total token supply
-      operationId: getTotalSupply
-      responses:
-        '200':
-          description: Total supply
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TokenSupply'
-
-  /currency/last-reference/{address}:
-    get:
-      tags: [Currency]
-      summary: Get last transaction reference for address
-      operationId: getLastReference
-      parameters:
-        - name: address
-          in: path
-          required: true
-          schema:
-            $ref: '#/components/schemas/Address'
-      responses:
-        '200':
-          description: Last reference
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TransactionReference'
-
-  # ===== Transaction Endpoints (CL1) =====
-  /transactions:
-    post:
-      tags: [Currency]
-      summary: Submit currency transaction
-      operationId: submitTransaction
-      requestBody:
+      - name: id
+        in: path
         required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EventReceipt'
+        '400':
+          description: 'Invalid value for: path parameter id'
+          content:
+            text/plain:
+              schema:
+                type: string
+  /data-application/v1/state-machines/{id}/audit:
+    get:
+      tags:
+      - state-machines
+      summary: Audit trail for a state machine
+      operationId: getData-applicationV1State-machinesIdAudit
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Rendered audit trail
+          content:
+            application/json:
+              schema: {}
+        '400':
+          description: 'Invalid value for: path parameter id'
+          content:
+            text/plain:
+              schema:
+                type: string
+  /data-application/v1/state-machines/{id}/estimate-fee:
+    get:
+      tags:
+      - state-machines
+      summary: Static fee estimate for a transition
+      operationId: getData-applicationV1State-machinesIdEstimate-fee
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: event
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransitionFeeEstimate'
+        '400':
+          description: 'Invalid value for: path parameter id, Invalid value for: query
+            parameter event'
+          content:
+            text/plain:
+              schema:
+                type: string
+  /data-application/v1/state-machines/{id}/state-proof:
+    get:
+      tags:
+      - proofs
+      summary: Committed-state Merkle proof for a state machine
+      operationId: getData-applicationV1State-machinesIdState-proof
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: field
+        in: query
+        description: 'Optional: also surface this named `stateData` field of the proven
+          record'
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StateProofResponse'
+        '400':
+          description: 'Invalid value for: path parameter id, Invalid value for: query
+            parameter field'
+          content:
+            text/plain:
+              schema:
+                type: string
+  /data-application/v1/scripts:
+    get:
+      tags:
+      - scripts
+      summary: List scripts (optionally filtered by status)
+      operationId: getData-applicationV1Scripts
+      parameters:
+      - name: status
+        in: query
+        description: 'Filter by fiber status: ACTIVE | ARCHIVED | FAILED'
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Map_V'
+        '400':
+          description: 'Invalid value for: query parameter status'
+          content:
+            text/plain:
+              schema:
+                type: string
+  /data-application/v1/scripts/{id}:
+    get:
+      tags:
+      - scripts
+      summary: Get a script by id
+      operationId: getData-applicationV1ScriptsId
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScriptFiberRecord'
+        '400':
+          description: 'Invalid value for: path parameter id'
+          content:
+            text/plain:
+              schema:
+                type: string
+  /data-application/v1/scripts/{id}/invocations:
+    get:
+      tags:
+      - scripts
+      summary: Invocation history for a script
+      operationId: getData-applicationV1ScriptsIdInvocations
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScriptInvocation'
+        '400':
+          description: 'Invalid value for: path parameter id'
+          content:
+            text/plain:
+              schema:
+                type: string
+  /data-application/v1/scripts/{id}/estimate-fee:
+    get:
+      tags:
+      - scripts
+      summary: Static fee estimate for a script invocation
+      operationId: getData-applicationV1ScriptsIdEstimate-fee
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScriptFeeEstimate'
+        '400':
+          description: 'Invalid value for: path parameter id'
+          content:
+            text/plain:
+              schema:
+                type: string
+  /data-application/v1/scripts/{id}/state-proof:
+    get:
+      tags:
+      - proofs
+      summary: Committed-state Merkle proof for a script
+      operationId: getData-applicationV1ScriptsIdState-proof
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: field
+        in: query
+        description: 'Optional: also surface this named `stateData` field of the proven
+          record'
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StateProofResponse'
+        '400':
+          description: 'Invalid value for: path parameter id, Invalid value for: query
+            parameter field'
+          content:
+            text/plain:
+              schema:
+                type: string
+  /data-application/v1/assets/{id}/state-proof:
+    get:
+      tags:
+      - proofs
+      summary: Custody (committed-state) Merkle proof for an asset
+      operationId: getData-applicationV1AssetsIdState-proof
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: field
+        in: query
+        description: 'Optional: also surface this named `stateData` field of the proven
+          record'
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StateProofResponse'
+        '400':
+          description: 'Invalid value for: path parameter id, Invalid value for: query
+            parameter field'
+          content:
+            text/plain:
+              schema:
+                type: string
+  /data-application/v1/registry:
+    get:
+      tags:
+      - registry
+      summary: All registered package versions
+      operationId: getData-applicationV1Registry
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Map_V'
+  /data-application/v1/registry/reverse/{id}:
+    get:
+      tags:
+      - registry
+      summary: Reverse-lookup a registry name by id
+      operationId: getData-applicationV1RegistryReverseId
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: string
+        '400':
+          description: 'Invalid value for: path parameter id'
+          content:
+            text/plain:
+              schema:
+                type: string
+  /data-application/v1/registry/{name}:
+    get:
+      tags:
+      - registry
+      summary: Resolve a registry entry by name
+      operationId: getData-applicationV1RegistryName
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistryEntry'
+  /data-application/v1/webhooks/subscribe:
+    post:
+      tags:
+      - webhooks
+      summary: Register a webhook subscriber
+      operationId: postData-applicationV1WebhooksSubscribe
+      requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SignedTransaction'
-      responses:
-        '200':
-          description: Transaction accepted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TransactionResponse'
-        '400':
-          description: Invalid transaction
-
-  /transactions/{hash}:
-    get:
-      tags: [Currency]
-      summary: Get pending transaction by hash
-      operationId: getTransaction
-      parameters:
-        - name: hash
-          in: path
-          required: true
-          schema:
-            $ref: '#/components/schemas/HashValue'
-      responses:
-        '200':
-          description: Transaction details
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TransactionInfo'
-        '404':
-          description: Transaction not found
-
-  # ===== Data L1 Endpoints =====
-  /data:
-    post:
-      tags: [StateMachines]
-      summary: Submit data transaction
-      operationId: submitDataTransaction
-      requestBody:
+              $ref: '#/components/schemas/SubscribeRequest'
         required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DataTransaction'
       responses:
         '200':
-          description: Transaction accepted
+          description: 201 Created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TransactionResponse'
+                $ref: '#/components/schemas/SubscribeResponse'
         '400':
-          description: Invalid transaction
-
+          description: 'Invalid value for: body'
+          content:
+            text/plain:
+              schema:
+                type: string
+  /data-application/v1/webhooks/subscribe/{id}:
+    delete:
+      tags:
+      - webhooks
+      summary: Unregister a webhook subscriber
+      operationId: deleteData-applicationV1WebhooksSubscribeId
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: ''
+  /data-application/v1/webhooks/subscribers:
+    get:
+      tags:
+      - webhooks
+      summary: List webhook subscribers (secrets redacted)
+      operationId: getData-applicationV1WebhooksSubscribers
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriberList'
 components:
   schemas:
-    # ===== Common Types (from ottochain.v1.common) =====
-    Address:
-      type: string
-      pattern: '^DAG[0-9A-Za-z]{37}$'
-      description: Constellation DAG address
-      example: "DAG4o41NzhfX6DyYBTTXu6sJa6awm36abJpv89jB"
-
-    HashValue:
-      type: string
-      pattern: '^[a-f0-9]{64}$'
-      description: 256-bit hash value
-      example: "a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd"
-
-    SnapshotOrdinal:
+    AssetCommit:
+      title: AssetCommit
       type: object
+      required:
+      - behavior
+      - sequenceNumber
+      - recordHash
       properties:
-        value:
+        behavior:
+          type: integer
+          format: int32
+        sequenceNumber:
           type: integer
           format: int64
-      required: [value]
-
-    FiberOrdinal:
+        recordHash:
+          type: string
+        origin:
+          type: string
+    AssetRecord:
+      title: AssetRecord
       type: object
+      required:
+      - assetId
+      - schemaBinding
+      - behavior
+      - holder
+      - amount
+      - sequenceNumber
+      - creationOrdinal
+      - latestUpdateOrdinal
       properties:
-        value:
+        assetId:
+          type: string
+          format: uuid
+        schemaBinding:
+          $ref: '#/components/schemas/SchemaBinding'
+        behavior:
+          $ref: '#/components/schemas/TokenBehavior'
+        holder: {}
+        amount:
           type: integer
           format: int64
-      required: [value]
-
-    StateId:
-      type: object
-      properties:
-        value:
-          type: string
-      required: [value]
-
-    # ===== Node Types =====
-    NodeInfo:
-      type: object
-      properties:
-        state:
-          $ref: '#/components/schemas/NodeState'
-        version:
-          type: string
-        host:
-          type: string
-        publicPort:
+        sequenceNumber:
           type: integer
-        p2pPort:
+          format: int64
+        creationOrdinal:
           type: integer
-        id:
-          type: string
-          description: Node peer ID
-        session:
-          type: string
-
-    NodeState:
-      type: string
-      enum:
-        - Initial
-        - ReadyToJoin
-        - LoadingGenesis
-        - GenesisReady
-        - RollbackInProgress
-        - RollbackDone
-        - StartingSession
-        - SessionStarted
-        - WaitingForDownload
-        - DownloadInProgress
-        - Observing
-        - WaitingForObserving
-        - WaitingForReady
-        - Ready
-        - Leaving
-        - Offline
-
-    # ===== Cluster Types =====
-    ClusterPeer:
-      type: object
-      properties:
-        id:
-          type: string
-        ip:
-          type: string
-        publicPort:
+          format: int64
+        latestUpdateOrdinal:
           type: integer
-        p2pPort:
+          format: int64
+        expiresAt:
           type: integer
-        session:
-          type: string
-        state:
-          $ref: '#/components/schemas/NodeState'
-
-    ClusterSession:
-      type: object
-      properties:
-        token:
-          type: string
-
-    JoinRequest:
-      type: object
-      properties:
-        id:
-          type: string
-          description: Peer ID to join
-        ip:
-          type: string
-        p2pPort:
-          type: integer
-      required: [id, ip, p2pPort]
-
-    # ===== Snapshot Types =====
-    Snapshot:
-      type: object
-      properties:
-        ordinal:
-          $ref: '#/components/schemas/SnapshotOrdinal'
-        hash:
-          $ref: '#/components/schemas/HashValue'
-        lastSnapshotHash:
-          $ref: '#/components/schemas/HashValue'
-        timestamp:
-          type: string
-          format: date-time
-        blocks:
+          format: int64
+        componentFiberIds:
           type: array
           items:
-            type: object
-        tips:
-          type: object
-
-    SnapshotMetadata:
+            type: string
+            format: uuid
+        componentsCommitment:
+          type: string
+        parentCompositeId:
+          type: string
+          format: uuid
+        provenance:
+          $ref: '#/components/schemas/OriginProvenance'
+    CalculatedState:
+      title: CalculatedState
       type: object
+      required:
+      - stateMachines
+      - scripts
+      - registry
+      - reverseNames
+      - assets
+      - usedNonces
+      properties:
+        stateMachines:
+          $ref: '#/components/schemas/Map_V'
+        scripts:
+          $ref: '#/components/schemas/Map_V'
+        registry:
+          $ref: '#/components/schemas/Map_V'
+        reverseNames:
+          $ref: '#/components/schemas/Map_V'
+        assets:
+          $ref: '#/components/schemas/Map_V'
+        usedNonces:
+          $ref: '#/components/schemas/Map_V'
+    Checkpoint_CalculatedState:
+      title: Checkpoint_CalculatedState
+      type: object
+      required:
+      - ordinal
+      - state
       properties:
         ordinal:
-          $ref: '#/components/schemas/SnapshotOrdinal'
-        hash:
-          $ref: '#/components/schemas/HashValue'
-        timestamp:
-          type: string
-          format: date-time
-        size:
           type: integer
-
-    CombinedSnapshot:
-      type: object
-      properties:
-        snapshot:
-          $ref: '#/components/schemas/Snapshot'
+          format: int64
         state:
-          type: object
-          description: Full calculated state
-
-    # ===== OttoChain State Machine Types (from ottochain.v1.records) =====
-    StateMachineFiberRecord:
+          $ref: '#/components/schemas/CalculatedState'
+    DynamicDependency:
+      title: DynamicDependency
       type: object
-      description: On-chain state machine fiber record
+      required:
+      - fiberId
+      - active
+      - addedAt
       properties:
         fiberId:
           type: string
-          description: Unique fiber identifier
-        creationOrdinal:
-          $ref: '#/components/schemas/SnapshotOrdinal'
-        previousUpdateOrdinal:
-          $ref: '#/components/schemas/SnapshotOrdinal'
-        latestUpdateOrdinal:
-          $ref: '#/components/schemas/SnapshotOrdinal'
-        definition:
-          $ref: '#/components/schemas/StateMachineDefinition'
-        currentState:
-          $ref: '#/components/schemas/StateId'
-        stateData:
-          type: object
-          description: Current state data (JSON)
-        stateDataHash:
-          $ref: '#/components/schemas/HashValue'
+          format: uuid
+        active:
+          type: boolean
+        addedAt:
+          type: integer
+          format: int64
+    EmittedEvent:
+      title: EmittedEvent
+      type: object
+      required:
+      - name
+      - data
+      - emitterFiberId
+      - emissionIndex
+      properties:
+        name:
+          type: string
+        data: {}
+        destination:
+          type: string
+        emitterFiberId:
+          type: string
+          format: uuid
+        emissionIndex:
+          type: integer
+          format: int32
+    EventReceipt:
+      title: EventReceipt
+      type: object
+      required:
+      - fiberId
+      - sequenceNumber
+      - eventName
+      - ordinal
+      - fromState
+      - toState
+      - success
+      - gasUsed
+      - triggersFired
+      properties:
+        fiberId:
+          type: string
+          format: uuid
         sequenceNumber:
-          $ref: '#/components/schemas/FiberOrdinal'
-        owners:
+          type: integer
+          format: int64
+        eventName:
+          type: string
+        ordinal:
+          type: integer
+          format: int64
+        fromState:
+          type: string
+        toState:
+          type: string
+        success:
+          type: boolean
+        gasUsed:
+          type: integer
+          format: int64
+        triggersFired:
+          type: integer
+          format: int32
+        errorMessage:
+          type: string
+        sourceFiberId:
+          type: string
+          format: uuid
+        emittedEvents:
           type: array
           items:
-            $ref: '#/components/schemas/Address'
+            $ref: '#/components/schemas/EmittedEvent'
+    FiberCommit:
+      title: FiberCommit
+      type: object
+      required:
+      - recordHash
+      - sequenceNumber
+      properties:
+        recordHash:
+          type: string
+        stateDataHash:
+          type: string
+        sequenceNumber:
+          type: integer
+          format: int64
+    Map_V:
+      title: Map_V
+      type: object
+      additionalProperties:
+        $ref: '#/components/schemas/FiberCommit'
+    OnChain:
+      title: OnChain
+      type: object
+      required:
+      - fiberCommits
+      - latestLogs
+      - registryCommits
+      - assetCommits
+      properties:
+        fiberCommits:
+          $ref: '#/components/schemas/Map_V'
+        latestLogs:
+          $ref: '#/components/schemas/Map_V'
+        registryCommits:
+          $ref: '#/components/schemas/Map_V'
+        assetCommits:
+          $ref: '#/components/schemas/Map_V'
+    OriginProvenance:
+      title: OriginProvenance
+      type: object
+      required:
+      - originChainId
+      - originAssetRef
+      - attestationHash
+      properties:
+        originChainId:
+          type: string
+        originAssetRef:
+          type: string
+        fullPath:
+          type: array
+          items:
+            type: string
+        attestationHash:
+          type: string
+    RegistryEntry:
+      title: RegistryEntry
+      type: object
+      required:
+      - name
+      - target
+      - metadata
+      properties:
+        name:
+          type: string
+        owner:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+        target: {}
+        metadata:
+          $ref: '#/components/schemas/Map_V'
+    SchemaBinding:
+      title: SchemaBinding
+      type: object
+      required:
+      - name
+      - version
+      - schemaHash
+      - logicHash
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        schemaHash:
+          type: string
+        logicHash:
+          type: string
+    ScriptFeeEstimate:
+      title: ScriptFeeEstimate
+      type: object
+      required:
+      - scriptId
+      - gasEstimate
+      - opCount
+      - maxDepth
+      - note
+      properties:
+        scriptId:
+          type: string
+          format: uuid
+        gasEstimate:
+          type: integer
+          format: int64
+        opCount:
+          type: integer
+          format: int32
+        maxDepth:
+          type: integer
+          format: int32
+        note:
+          type: string
+    ScriptFiberRecord:
+      title: ScriptFiberRecord
+      type: object
+      required:
+      - fiberId
+      - creationOrdinal
+      - latestUpdateOrdinal
+      - scriptProgram
+      - accessControl
+      - sequenceNumber
+      - status
+      properties:
+        fiberId:
+          type: string
+          format: uuid
+        creationOrdinal:
+          type: integer
+          format: int64
+        latestUpdateOrdinal:
+          type: integer
+          format: int64
+        scriptProgram: {}
+        stateData: {}
+        stateDataHash:
+          type: string
+        accessControl: {}
+        sequenceNumber:
+          type: integer
+          format: int64
+        owners:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
         status:
-          $ref: '#/components/schemas/FiberStatus'
+          type: string
+        lastInvocation:
+          $ref: '#/components/schemas/ScriptInvocation'
+        schemaBinding:
+          $ref: '#/components/schemas/SchemaBinding'
+    ScriptInvocation:
+      title: ScriptInvocation
+      type: object
+      required:
+      - fiberId
+      - method
+      - args
+      - result
+      - gasUsed
+      - invokedAt
+      - invokedBy
+      properties:
+        fiberId:
+          type: string
+          format: uuid
+        method:
+          type: string
+        args: {}
+        result: {}
+        gasUsed:
+          type: integer
+          format: int64
+        invokedAt:
+          type: integer
+          format: int64
+        invokedBy:
+          type: string
+    StateMachineFiberRecord:
+      title: StateMachineFiberRecord
+      type: object
+      required:
+      - fiberId
+      - creationOrdinal
+      - previousUpdateOrdinal
+      - latestUpdateOrdinal
+      - definition
+      - currentState
+      - stateData
+      - stateDataHash
+      - sequenceNumber
+      - status
+      properties:
+        fiberId:
+          type: string
+          format: uuid
+        creationOrdinal:
+          type: integer
+          format: int64
+        previousUpdateOrdinal:
+          type: integer
+          format: int64
+        latestUpdateOrdinal:
+          type: integer
+          format: int64
+        definition: {}
+        currentState:
+          type: string
+        stateData: {}
+        stateDataHash:
+          type: string
+        sequenceNumber:
+          type: integer
+          format: int64
+        owners:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+        status:
+          type: string
         lastReceipt:
           $ref: '#/components/schemas/EventReceipt'
         parentFiberId:
           type: string
+          format: uuid
         childFiberIds:
           type: array
+          uniqueItems: true
           items:
             type: string
-
-    StateMachineDefinition:
-      type: object
-      description: State machine definition (from ottochain.v1.fiber)
-      properties:
-        states:
-          type: object
-          additionalProperties:
-            $ref: '#/components/schemas/StateDefinition'
-        initialState:
-          $ref: '#/components/schemas/StateId'
-        version:
-          type: string
-
-    StateDefinition:
-      type: object
-      properties:
-        transitions:
+            format: uuid
+        schemaBinding:
+          $ref: '#/components/schemas/SchemaBinding'
+        authorizedSigners:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+        dynamicDependencies:
           type: array
           items:
-            $ref: '#/components/schemas/TransitionDefinition'
-        onEnter:
-          type: object
-        onExit:
-          type: object
-
-    TransitionDefinition:
+            $ref: '#/components/schemas/DynamicDependency'
+    StateProofResponse:
+      title: StateProofResponse
       type: object
+      required:
+      - key
+      - ordinal
+      - committedRoot
+      - mptRoot
+      - record
+      - proof
       properties:
-        event:
+        key:
           type: string
-        target:
-          $ref: '#/components/schemas/StateId'
-        guard:
-          type: object
-          description: JSON Logic guard condition
-        actions:
-          type: array
-          items:
-            type: object
-
-    FiberStatus:
-      type: string
-      enum:
-        - FIBER_STATUS_UNSPECIFIED
-        - ACTIVE
-        - COMPLETED
-        - SUSPENDED
-        - DEACTIVATED
-        - MIGRATING
-        - PENDING_VERIFICATION
-      description: Current fiber status
-
-    EventReceipt:
-      type: object
-      properties:
-        eventHash:
-          $ref: '#/components/schemas/HashValue'
-        success:
-          type: boolean
-        resultData:
-          type: object
-        errorMessage:
-          type: string
-
-    OnChainState:
-      type: object
-      description: Complete on-chain state checkpoint
-      properties:
-        fiberCommits:
-          type: object
-          additionalProperties:
-            $ref: '#/components/schemas/FiberCommit'
-        latestLogs:
-          type: object
-          additionalProperties:
-            type: array
-            items:
-              $ref: '#/components/schemas/FiberLogEntry'
-
-    FiberCommit:
-      type: object
-      properties:
-        recordHash:
-          $ref: '#/components/schemas/HashValue'
-        stateDataHash:
-          $ref: '#/components/schemas/HashValue'
-        sequenceNumber:
-          $ref: '#/components/schemas/FiberOrdinal'
-
-    FiberLogEntry:
-      type: object
-      properties:
-        ordinal:
-          $ref: '#/components/schemas/FiberOrdinal'
-        eventType:
-          type: string
-        data:
-          type: object
-        timestamp:
-          type: string
-          format: date-time
-
-    # ===== Currency Types =====
-    Balance:
-      type: object
-      properties:
-        balance:
-          type: integer
-          format: int64
-        ordinal:
-          $ref: '#/components/schemas/SnapshotOrdinal'
-
-    TokenSupply:
-      type: object
-      properties:
-        total:
-          type: integer
-          format: int64
-
-    TransactionReference:
-      type: object
-      properties:
         ordinal:
           type: integer
           format: int64
-        hash:
-          $ref: '#/components/schemas/HashValue'
-
-    SignedTransaction:
-      type: object
-      properties:
-        value:
-          $ref: '#/components/schemas/Transaction'
-        proofs:
-          type: array
-          items:
-            $ref: '#/components/schemas/Proof'
-      required: [value, proofs]
-
-    Transaction:
-      type: object
-      properties:
-        source:
-          $ref: '#/components/schemas/Address'
-        destination:
-          $ref: '#/components/schemas/Address'
-        amount:
-          type: integer
-          format: int64
-        fee:
-          type: integer
-          format: int64
-        parent:
-          $ref: '#/components/schemas/TransactionReference'
-        salt:
-          type: integer
-          format: int64
-
-    TransactionInfo:
-      type: object
-      properties:
-        transaction:
-          $ref: '#/components/schemas/SignedTransaction'
-        hash:
-          $ref: '#/components/schemas/HashValue'
-        status:
+        committedRoot: {}
+        mptRoot: {}
+        record: {}
+        proof: {}
+        field:
           type: string
-          enum: [Pending, Accepted, Rejected]
-
-    # ===== Transaction Types =====
-    DataTransaction:
+        fieldValue: {}
+    SubscribeRequest:
+      title: SubscribeRequest
       type: object
+      required:
+      - callbackUrl
       properties:
-        value:
-          type: object
-          description: Transaction payload
-        proofs:
-          type: array
-          items:
-            $ref: '#/components/schemas/Proof'
-
-    Proof:
+        callbackUrl:
+          type: string
+        secret:
+          type: string
+    SubscribeResponse:
+      title: SubscribeResponse
       type: object
+      required:
+      - id
+      - callbackUrl
+      - createdAt
       properties:
         id:
           type: string
-        signature:
+        callbackUrl:
           type: string
-
-    TransactionResponse:
+        createdAt:
+          type: string
+          format: date-time
+    Subscriber:
+      title: Subscriber
+      type: object
+      required:
+      - id
+      - callbackUrl
+      - active
+      - createdAt
+      - failCount
+      properties:
+        id:
+          type: string
+        callbackUrl:
+          type: string
+        secret:
+          type: string
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        lastDeliveryAt:
+          type: string
+          format: date-time
+        failCount:
+          type: integer
+          format: int32
+    SubscriberList:
+      title: SubscriberList
       type: object
       properties:
-        hash:
-          $ref: '#/components/schemas/HashValue'
+        subscribers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Subscriber'
+    TokenBehavior:
+      title: TokenBehavior
+      type: object
+      required:
+      - transferable
+      - splittable
+      - combinable
+      - expirable
+      - governable
+      properties:
+        transferable:
+          type: boolean
+        splittable:
+          type: boolean
+        combinable:
+          type: boolean
+        expirable:
+          type: boolean
+        governable:
+          type: boolean
+    TransitionFeeEstimate:
+      title: TransitionFeeEstimate
+      type: object
+      required:
+      - fiberId
+      - currentState
+      - event
+      - gasEstimate
+      - opCount
+      - maxDepth
+      - candidateTransitions
+      - note
+      properties:
+        fiberId:
+          type: string
+          format: uuid
+        currentState:
+          type: string
+        event:
+          type: string
+        gasEstimate:
+          type: integer
+          format: int64
+        opCount:
+          type: integer
+          format: int32
+        maxDepth:
+          type: integer
+          format: int32
+        candidateTransitions:
+          type: integer
+          format: int32
+        note:
+          type: string
+    VersionInfo:
+      title: VersionInfo
+      type: object
+      required:
+      - service
+      - version
+      - name
+      - scalaVersion
+      - sbtVersion
+      - gitCommit
+      - buildTime
+      - tessellationVersion
+      properties:
+        service:
+          type: string
+        version:
+          type: string
+        name:
+          type: string
+        scalaVersion:
+          type: string
+        sbtVersion:
+          type: string
+        gitCommit:
+          type: string
+        buildTime:
+          type: string
+        tessellationVersion:
+          type: string

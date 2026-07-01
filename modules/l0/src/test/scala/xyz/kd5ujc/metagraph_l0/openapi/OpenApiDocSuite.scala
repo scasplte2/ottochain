@@ -10,9 +10,18 @@ import weaver.SimpleIOSuite
 object OpenApiDocSuite extends SimpleIOSuite {
 
   private val doc = ApiEndpoints.openApiJson
+  private val yaml = ApiEndpoints.openApiYaml
 
   pureTest("generates an OpenAPI 3.x document") {
     expect.all(doc.contains("\"openapi\""), doc.contains("3.1") || doc.contains("3.0"))
+  }
+
+  pureTest("renders the same document as YAML") {
+    expect.all(
+      yaml.contains("openapi: 3.1"),
+      yaml.contains("title: OttoChain Metagraph API"),
+      yaml.contains("/data-application/v1/version:")
+    )
   }
 
   pureTest("documents every custom path family") {
