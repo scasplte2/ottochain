@@ -255,9 +255,13 @@ object ApiEndpoints {
     webhookSubscribers
   )
 
-  /** The tapir-derived OpenAPI document — the one source both renderings share. */
+  /**
+   * The tapir-derived OpenAPI document — the one source both renderings share. Every endpoint is tagged
+   *  `ml0` so this single-layer contract is self-identifying (the DL1 surface is a separate document,
+   *  [[DataL1ApiEndpoints]]).
+   */
   private def openApiDoc: OpenAPI =
-    OpenAPIDocsInterpreter().toOpenAPI(all, "OttoChain Metagraph API", contractVersion)
+    OpenAPIDocsInterpreter().toOpenAPI(all.map(_.tag("ml0")), "OttoChain Metagraph L0 API", contractVersion)
 
   def openApiJson: String =
     openApiDoc.asJson.deepDropNullValues.spaces2

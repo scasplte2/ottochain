@@ -110,25 +110,27 @@ jobs:
           PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
           REPO: ${{ github.repository }}
         run: |
-          # GenerateOpenApi writes docs/openapi.json AND its docs/openapi.yaml sibling.
-          sbt "currencyL0/runMain xyz.kd5ujc.metagraph_l0.openapi.GenerateOpenApi docs/openapi.json"
-          if git diff --quiet -- docs/openapi.json docs/openapi.yaml; then
-            echo "docs/openapi.{json,yaml} are in sync."
+          # GenerateOpenApi writes one contract per layer into docs/:
+          #   docs/openapi-ml0.{json,yaml} + docs/openapi-dl1.{json,yaml}
+          sbt "currencyL0/runMain xyz.kd5ujc.metagraph_l0.openapi.GenerateOpenApi docs"
+          SPECS="docs/openapi-ml0.json docs/openapi-ml0.yaml docs/openapi-dl1.json docs/openapi-dl1.yaml"
+          if git diff --quiet -- $SPECS; then
+            echo "OpenAPI contracts are in sync."
             exit 0
           fi
           if [ "$EVENT_NAME" = "pull_request" ] && [ "$PR_HEAD_REPO" = "$REPO" ]; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add docs/openapi.json docs/openapi.yaml
-            git commit -m "chore: sync docs/openapi.{json,yaml}"
+            git add $SPECS
+            git commit -m "chore: sync OpenAPI contracts (ml0 + dl1)"
             if git push origin "HEAD:$HEAD_REF"; then
-              echo "::notice::OpenAPI contract drifted; regenerated + committed to the PR branch. CI will re-run and pass."
+              echo "::notice::OpenAPI contracts drifted; regenerated + committed to the PR branch. CI will re-run and pass."
             else
-              echo "::error::docs/openapi.{json,yaml} are stale and the auto-commit push failed (branch protection or a read-only Actions token). Run: sbt \"currencyL0/runMain xyz.kd5ujc.metagraph_l0.openapi.GenerateOpenApi docs/openapi.json\" and commit them."
+              echo "::error::OpenAPI contracts are stale and the auto-commit push failed (branch protection or a read-only Actions token). Run: sbt \"currencyL0/runMain xyz.kd5ujc.metagraph_l0.openapi.GenerateOpenApi docs\" and commit them."
               exit 1
             fi
           else
-            echo "::error::docs/openapi.{json,yaml} are stale. Run: sbt \"currencyL0/runMain xyz.kd5ujc.metagraph_l0.openapi.GenerateOpenApi docs/openapi.json\" and commit them."
+            echo "::error::OpenAPI contracts are stale. Run: sbt \"currencyL0/runMain xyz.kd5ujc.metagraph_l0.openapi.GenerateOpenApi docs\" and commit them."
             exit 1
           fi
 

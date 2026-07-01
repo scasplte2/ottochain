@@ -4,29 +4,34 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
 
 /**
- * Writes the OpenAPI document to disk so it can be committed as a build artifact and consumed by the SDK
- * codegen (Phase 3). The JSON goes to `outPath` (default `docs/openapi.json`) and a YAML rendering of the
- * same document is written alongside it (the `.json` extension swapped for `.yaml`, or `.yaml` appended).
+ * Writes the OpenAPI contracts to disk so they can be committed as build artifacts and consumed by the SDK
+ * codegen. One document PER LAYER — OpenAPI keys by (path, method), so the ML0 and DL1 surfaces (which share
+ * `/data-application/v1/...` paths) cannot live in one document. For each layer we emit both JSON and YAML:
  *
- * Run: `sbt "currencyL0/runMain xyz.kd5ujc.metagraph_l0.openapi.GenerateOpenApi [outPath]"`
+ *   <outDir>/openapi-ml0.json  <outDir>/openapi-ml0.yaml   ([[ApiEndpoints]])
+ *   <outDir>/openapi-dl1.json  <outDir>/openapi-dl1.yaml   ([[DataL1ApiEndpoints]])
+ *
+ * `outDir` defaults to `docs`. Run:
+ * `sbt "currencyL0/runMain xyz.kd5ujc.metagraph_l0.openapi.GenerateOpenApi [outDir]"`
  */
 object GenerateOpenApi {
 
-  /** `foo/openapi.json` -> `foo/openapi.yaml`; anything else gets `.yaml` appended. */
-  private def yamlSibling(json: Path): Path = {
-    val name = json.getFileName.toString
-    val yamlName = if (name.endsWith(".json")) name.dropRight(".json".length) + ".yaml" else name + ".yaml"
-    Option(json.getParent).map(_.resolve(yamlName)).getOrElse(Paths.get(yamlName))
-  }
+  final private case class Spec(baseName: String, endpoints: Int, json: String, yaml: String)
+
+  private def specs: List[Spec] = List(
+    Spec("openapi-ml0", ApiEndpoints.all.size, ApiEndpoints.openApiJson, ApiEndpoints.openApiYaml),
+    Spec("openapi-dl1", DataL1ApiEndpoints.all.size, DataL1ApiEndpoints.openApiJson, DataL1ApiEndpoints.openApiYaml)
+  )
 
   def main(args: Array[String]): Unit = {
-    val jsonOut = Paths.get(if (args.nonEmpty) args(0) else "docs/openapi.json")
-    val yamlOut = yamlSibling(jsonOut)
-    Option(jsonOut.getParent).foreach(Files.createDirectories(_))
-    Files.write(jsonOut, ApiEndpoints.openApiJson.getBytes(StandardCharsets.UTF_8))
-    Files.write(yamlOut, ApiEndpoints.openApiYaml.getBytes(StandardCharsets.UTF_8))
-    println(
-      s"Wrote OpenAPI (${ApiEndpoints.all.size} endpoints) to ${jsonOut.toAbsolutePath} and ${yamlOut.toAbsolutePath}"
-    )
+    val dir: Path = Paths.get(if (args.nonEmpty) args(0) else "docs")
+    Files.createDirectories(dir)
+    specs.foreach { s =>
+      val jsonOut = dir.resolve(s.baseName + ".json")
+      val yamlOut = dir.resolve(s.baseName + ".yaml")
+      Files.write(jsonOut, s.json.getBytes(StandardCharsets.UTF_8))
+      Files.write(yamlOut, s.yaml.getBytes(StandardCharsets.UTF_8))
+      println(s"Wrote ${s.baseName} (${s.endpoints} endpoints, json+yaml) to ${dir.toAbsolutePath}")
+    }
   }
 }

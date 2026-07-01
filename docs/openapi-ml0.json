@@ -1,14 +1,15 @@
 {
   "openapi" : "3.1.0",
   "info" : {
-    "title" : "OttoChain Metagraph API",
+    "title" : "OttoChain Metagraph L0 API",
     "version" : "1.0.0"
   },
   "paths" : {
     "/data-application/v1/version" : {
       "get" : {
         "tags" : [
-          "meta"
+          "meta",
+          "ml0"
         ],
         "summary" : "Service identity + build metadata",
         "operationId" : "getData-applicationV1Version",
@@ -29,7 +30,8 @@
     "/data-application/v1/util/hash" : {
       "post" : {
         "tags" : [
-          "meta"
+          "meta",
+          "ml0"
         ],
         "summary" : "Canonical hash of a signed message",
         "operationId" : "postData-applicationV1UtilHash",
@@ -71,7 +73,8 @@
     "/data-application/v1/onchain" : {
       "get" : {
         "tags" : [
-          "state"
+          "state",
+          "ml0"
         ],
         "summary" : "Current on-chain state",
         "operationId" : "getData-applicationV1Onchain",
@@ -92,7 +95,8 @@
     "/data-application/v1/checkpoint" : {
       "get" : {
         "tags" : [
-          "state"
+          "state",
+          "ml0"
         ],
         "summary" : "Current checkpoint (calculated state snapshot)",
         "operationId" : "getData-applicationV1Checkpoint",
@@ -113,7 +117,8 @@
     "/data-application/v1/state-machines" : {
       "get" : {
         "tags" : [
-          "state-machines"
+          "state-machines",
+          "ml0"
         ],
         "summary" : "List state machines (optionally filtered by status)",
         "operationId" : "getData-applicationV1State-machines",
@@ -155,7 +160,8 @@
     "/data-application/v1/state-machines/{id}" : {
       "get" : {
         "tags" : [
-          "state-machines"
+          "state-machines",
+          "ml0"
         ],
         "summary" : "Get a state machine by id",
         "operationId" : "getData-applicationV1State-machinesId",
@@ -197,7 +203,8 @@
     "/data-application/v1/state-machines/{id}/events" : {
       "get" : {
         "tags" : [
-          "state-machines"
+          "state-machines",
+          "ml0"
         ],
         "summary" : "Event receipts for a state machine",
         "operationId" : "getData-applicationV1State-machinesIdEvents",
@@ -242,7 +249,8 @@
     "/data-application/v1/state-machines/{id}/audit" : {
       "get" : {
         "tags" : [
-          "state-machines"
+          "state-machines",
+          "ml0"
         ],
         "summary" : "Audit trail for a state machine",
         "operationId" : "getData-applicationV1State-machinesIdAudit",
@@ -284,7 +292,8 @@
     "/data-application/v1/state-machines/{id}/estimate-fee" : {
       "get" : {
         "tags" : [
-          "state-machines"
+          "state-machines",
+          "ml0"
         ],
         "summary" : "Static fee estimate for a transition",
         "operationId" : "getData-applicationV1State-machinesIdEstimate-fee",
@@ -334,7 +343,8 @@
     "/data-application/v1/state-machines/{id}/state-proof" : {
       "get" : {
         "tags" : [
-          "proofs"
+          "proofs",
+          "ml0"
         ],
         "summary" : "Committed-state Merkle proof for a state machine",
         "operationId" : "getData-applicationV1State-machinesIdState-proof",
@@ -385,7 +395,8 @@
     "/data-application/v1/scripts" : {
       "get" : {
         "tags" : [
-          "scripts"
+          "scripts",
+          "ml0"
         ],
         "summary" : "List scripts (optionally filtered by status)",
         "operationId" : "getData-applicationV1Scripts",
@@ -427,7 +438,8 @@
     "/data-application/v1/scripts/{id}" : {
       "get" : {
         "tags" : [
-          "scripts"
+          "scripts",
+          "ml0"
         ],
         "summary" : "Get a script by id",
         "operationId" : "getData-applicationV1ScriptsId",
@@ -469,7 +481,8 @@
     "/data-application/v1/scripts/{id}/invocations" : {
       "get" : {
         "tags" : [
-          "scripts"
+          "scripts",
+          "ml0"
         ],
         "summary" : "Invocation history for a script",
         "operationId" : "getData-applicationV1ScriptsIdInvocations",
@@ -514,7 +527,8 @@
     "/data-application/v1/scripts/{id}/estimate-fee" : {
       "get" : {
         "tags" : [
-          "scripts"
+          "scripts",
+          "ml0"
         ],
         "summary" : "Static fee estimate for a script invocation",
         "operationId" : "getData-applicationV1ScriptsIdEstimate-fee",
@@ -556,7 +570,8 @@
     "/data-application/v1/scripts/{id}/state-proof" : {
       "get" : {
         "tags" : [
-          "proofs"
+          "proofs",
+          "ml0"
         ],
         "summary" : "Committed-state Merkle proof for a script",
         "operationId" : "getData-applicationV1ScriptsIdState-proof",
@@ -607,7 +622,8 @@
     "/data-application/v1/assets/{id}/state-proof" : {
       "get" : {
         "tags" : [
-          "proofs"
+          "proofs",
+          "ml0"
         ],
         "summary" : "Custody (committed-state) Merkle proof for an asset",
         "operationId" : "getData-applicationV1AssetsIdState-proof",
@@ -658,7 +674,8 @@
     "/data-application/v1/registry" : {
       "get" : {
         "tags" : [
-          "registry"
+          "registry",
+          "ml0"
         ],
         "summary" : "All registered package versions",
         "operationId" : "getData-applicationV1Registry",
@@ -679,7 +696,8 @@
     "/data-application/v1/registry/reverse/{id}" : {
       "get" : {
         "tags" : [
-          "registry"
+          "registry",
+          "ml0"
         ],
         "summary" : "Reverse-lookup a registry name by id",
         "operationId" : "getData-applicationV1RegistryReverseId",
@@ -721,7 +739,8 @@
     "/data-application/v1/registry/{name}" : {
       "get" : {
         "tags" : [
-          "registry"
+          "registry",
+          "ml0"
         ],
         "summary" : "Resolve a registry entry by name",
         "operationId" : "getData-applicationV1RegistryName",
@@ -752,7 +771,8 @@
     "/data-application/v1/webhooks/subscribe" : {
       "post" : {
         "tags" : [
-          "webhooks"
+          "webhooks",
+          "ml0"
         ],
         "summary" : "Register a webhook subscriber",
         "operationId" : "postData-applicationV1WebhooksSubscribe",
@@ -793,7 +813,8 @@
     "/data-application/v1/webhooks/subscribe/{id}" : {
       "delete" : {
         "tags" : [
-          "webhooks"
+          "webhooks",
+          "ml0"
         ],
         "summary" : "Unregister a webhook subscriber",
         "operationId" : "deleteData-applicationV1WebhooksSubscribeId",
@@ -817,7 +838,8 @@
     "/data-application/v1/webhooks/subscribers" : {
       "get" : {
         "tags" : [
-          "webhooks"
+          "webhooks",
+          "ml0"
         ],
         "summary" : "List webhook subscribers (secrets redacted)",
         "operationId" : "getData-applicationV1WebhooksSubscribers",

@@ -1,12 +1,13 @@
 openapi: 3.1.0
 info:
-  title: OttoChain Metagraph API
+  title: OttoChain Metagraph L0 API
   version: 1.0.0
 paths:
   /data-application/v1/version:
     get:
       tags:
       - meta
+      - ml0
       summary: Service identity + build metadata
       operationId: getData-applicationV1Version
       responses:
@@ -20,6 +21,7 @@ paths:
     post:
       tags:
       - meta
+      - ml0
       summary: Canonical hash of a signed message
       operationId: postData-applicationV1UtilHash
       requestBody:
@@ -45,6 +47,7 @@ paths:
     get:
       tags:
       - state
+      - ml0
       summary: Current on-chain state
       operationId: getData-applicationV1Onchain
       responses:
@@ -58,6 +61,7 @@ paths:
     get:
       tags:
       - state
+      - ml0
       summary: Current checkpoint (calculated state snapshot)
       operationId: getData-applicationV1Checkpoint
       responses:
@@ -71,6 +75,7 @@ paths:
     get:
       tags:
       - state-machines
+      - ml0
       summary: List state machines (optionally filtered by status)
       operationId: getData-applicationV1State-machines
       parameters:
@@ -97,6 +102,7 @@ paths:
     get:
       tags:
       - state-machines
+      - ml0
       summary: Get a state machine by id
       operationId: getData-applicationV1State-machinesId
       parameters:
@@ -123,6 +129,7 @@ paths:
     get:
       tags:
       - state-machines
+      - ml0
       summary: Event receipts for a state machine
       operationId: getData-applicationV1State-machinesIdEvents
       parameters:
@@ -151,6 +158,7 @@ paths:
     get:
       tags:
       - state-machines
+      - ml0
       summary: Audit trail for a state machine
       operationId: getData-applicationV1State-machinesIdAudit
       parameters:
@@ -176,6 +184,7 @@ paths:
     get:
       tags:
       - state-machines
+      - ml0
       summary: Static fee estimate for a transition
       operationId: getData-applicationV1State-machinesIdEstimate-fee
       parameters:
@@ -208,6 +217,7 @@ paths:
     get:
       tags:
       - proofs
+      - ml0
       summary: Committed-state Merkle proof for a state machine
       operationId: getData-applicationV1State-machinesIdState-proof
       parameters:
@@ -242,6 +252,7 @@ paths:
     get:
       tags:
       - scripts
+      - ml0
       summary: List scripts (optionally filtered by status)
       operationId: getData-applicationV1Scripts
       parameters:
@@ -268,6 +279,7 @@ paths:
     get:
       tags:
       - scripts
+      - ml0
       summary: Get a script by id
       operationId: getData-applicationV1ScriptsId
       parameters:
@@ -294,6 +306,7 @@ paths:
     get:
       tags:
       - scripts
+      - ml0
       summary: Invocation history for a script
       operationId: getData-applicationV1ScriptsIdInvocations
       parameters:
@@ -322,6 +335,7 @@ paths:
     get:
       tags:
       - scripts
+      - ml0
       summary: Static fee estimate for a script invocation
       operationId: getData-applicationV1ScriptsIdEstimate-fee
       parameters:
@@ -348,6 +362,7 @@ paths:
     get:
       tags:
       - proofs
+      - ml0
       summary: Committed-state Merkle proof for a script
       operationId: getData-applicationV1ScriptsIdState-proof
       parameters:
@@ -382,6 +397,7 @@ paths:
     get:
       tags:
       - proofs
+      - ml0
       summary: Custody (committed-state) Merkle proof for an asset
       operationId: getData-applicationV1AssetsIdState-proof
       parameters:
@@ -416,6 +432,7 @@ paths:
     get:
       tags:
       - registry
+      - ml0
       summary: All registered package versions
       operationId: getData-applicationV1Registry
       responses:
@@ -429,6 +446,7 @@ paths:
     get:
       tags:
       - registry
+      - ml0
       summary: Reverse-lookup a registry name by id
       operationId: getData-applicationV1RegistryReverseId
       parameters:
@@ -455,6 +473,7 @@ paths:
     get:
       tags:
       - registry
+      - ml0
       summary: Resolve a registry entry by name
       operationId: getData-applicationV1RegistryName
       parameters:
@@ -474,6 +493,7 @@ paths:
     post:
       tags:
       - webhooks
+      - ml0
       summary: Register a webhook subscriber
       operationId: postData-applicationV1WebhooksSubscribe
       requestBody:
@@ -499,6 +519,7 @@ paths:
     delete:
       tags:
       - webhooks
+      - ml0
       summary: Unregister a webhook subscriber
       operationId: deleteData-applicationV1WebhooksSubscribeId
       parameters:
@@ -514,6 +535,7 @@ paths:
     get:
       tags:
       - webhooks
+      - ml0
       summary: List webhook subscribers (secrets redacted)
       operationId: getData-applicationV1WebhooksSubscribers
       responses:
