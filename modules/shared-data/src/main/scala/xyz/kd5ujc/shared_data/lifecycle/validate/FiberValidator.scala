@@ -134,20 +134,24 @@ object FiberValidator {
       FiberRules.L0.updateSignedByOwners(update.fiberId, proofs, state.calculated)
 
     /**
-     * Validates an UpgradeFiber update (L0): the immutable-auth owner-signature gate PLUS the cheap,
-     * signer-independent fail-fast mirrors of the engine UpgradeGate (version-compat-family §3.5): same-package
-     * re-bind, current-state-preserved, and tighten-only policy. The mutable `fiberIsActive` status check was
-     * removed (audit M1) — a concurrent archive flips it and poisons the block. The engine UpgradeGate + the
-     * combiner (`FiberCombiner.upgradeFiber`: exact-sequence, same-package, verified re-bind, monotonic
-     * version) remain the authority and re-run everything.
+     * Validates an UpgradeFiber update (L0): ONLY the immutable-auth owner-signature gate.
+     *
+     * `updateSignedByOwners` reads `owners`, fixed at creation (TOCTOU-safe), and the combiner does NOT
+     * re-check upgrade signers — so this gate MUST stay at ML0. The former fail-fast mirrors of the engine
+     * UpgradeGate — same-package (`bindingNameMatches`), current-state-preserved (`currentStateInDefinition`)
+     * and tighten-only (`upgradePolicyPermits`) — were REMOVED (audit M1 residual): each reads mutable
+     * `CalculatedState.stateMachines`, so a concurrent same-fiber update (an archive, a competing upgrade that
+     * advances/re-binds, a sequence bump) can flip them Valid->Invalid between DL1 block formation and ML0
+     * re-validation, dropping the ENTIRE block (tessellation all-or-nothing — the same-fiber sibling of C3).
+     * All three are re-enforced GRACEFULLY downstream as CombineRejected / abort -> RejectionReceipt:
+     * same-package by `FiberCombiner.upgradeFiber` (`b.name === targetRef.name`), current-state-preserved by
+     * the engine `migrateStateMachineGated` (`newDefinition.states.contains(currentState)` false ->
+     * ValidationFailed), and tighten-only / Immutable / Governed / AppendOnly by the engine `UpgradeGate.check`.
+     * The engine + combiner remain the authority. The DL1 `L1Validator.upgrade` path is unchanged — a DL1
+     * rejection does not poison a block.
      */
     def upgrade(update: UpgradeFiber): F[ValidationResult] =
-      for {
-        signedByOwner <- FiberRules.L0.updateSignedByOwners(update.fiberId, proofs, state.calculated)
-        bindingOk     <- FiberRules.L0.bindingNameMatches(update.fiberId, update.targetRef.name, state.calculated)
-        stateOk       <- FiberRules.L0.currentStateInDefinition(update.fiberId, update.newDefinition, state.calculated)
-        policyOk      <- FiberRules.L0.upgradePolicyPermits(update.fiberId, update.newDefinition, state.calculated)
-      } yield List(signedByOwner, bindingOk, stateOk, policyOk).combineAll
+      FiberRules.L0.updateSignedByOwners(update.fiberId, proofs, state.calculated)
   }
 
   /**
@@ -200,7 +204,10 @@ object FiberValidator {
     /**
      * Validates an UpgradeFiber update at the ML0 block-acceptance gate: structural L1 checks (existence,
      * new-definition structure/limits/depth/reserved-keys) MINUS the mutable `FiberRules.L1.sequenceNumberMatches`
-     * (audit M1) PLUS the L0 owner-signature + fail-fast UpgradeGate mirrors (in `l0.upgrade`).
+     * (audit M1) PLUS the L0 immutable-auth owner-signature gate (in `l0.upgrade`). The former fail-fast
+     * UpgradeGate mirrors (same-package / current-state / tighten-only) were REMOVED from this gate — they read
+     * mutable `stateMachines` and are re-enforced gracefully by the engine + combiner (audit M1 residual; see
+     * `l0.upgrade`).
      */
     def upgrade(update: UpgradeFiber): F[ValidationResult] =
       for {

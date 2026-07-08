@@ -13,8 +13,7 @@ import io.constellationnetwork.metagraph_sdk.json_logic.core.JsonLogicOp
 import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.signature.SignatureProof
 
-import xyz.kd5ujc.schema.fiber.{FiberOrdinal, FiberPolicy, FiberStatus, StateId, StateMachineDefinition, UpgradePolicy}
-import xyz.kd5ujc.schema.registry.RegistryName
+import xyz.kd5ujc.schema.fiber.{FiberOrdinal, FiberStatus, StateId, StateMachineDefinition}
 import xyz.kd5ujc.schema.{CalculatedState, OnChain, Records}
 import xyz.kd5ujc.shared_data.lifecycle.validate.{Limits, ValidationResult}
 import xyz.kd5ujc.shared_data.syntax.calculatedState._
@@ -357,80 +356,17 @@ object FiberRules {
           }
       }
 
-    /**
-     * An upgrade (#27) target must stay within the SAME package: the fiber must already be bound, and the
-     * target name must equal its current binding's name (no cross-package switch).
-     */
-    def bindingNameMatches[F[_]: Applicative](
-      cid:        UUID,
-      targetName: RegistryName,
-      state:      CalculatedState
-    ): F[ValidationResult] =
-      state.stateMachines.get(cid) match {
-        case None => (Errors.FiberNotFound(cid): DataApplicationValidationError).invalidNec[Unit].pure[F]
-        case Some(sm) =>
-          sm.schemaBinding match {
-            case Some(b) if b.name === targetName => ().validNec[DataApplicationValidationError].pure[F]
-            case Some(b) =>
-              (Errors.UpgradeCrossPackage(cid, b.name.render, targetName.render): DataApplicationValidationError)
-                .invalidNec[Unit]
-                .pure[F]
-            case None =>
-              (Errors.CannotUpgradeUnboundFiber(cid): DataApplicationValidationError).invalidNec[Unit].pure[F]
-          }
-      }
-
-    /** An upgrade's preserved current state id must exist in the new definition. */
-    def currentStateInDefinition[F[_]: Applicative](
-      cid:           UUID,
-      newDefinition: StateMachineDefinition,
-      state:         CalculatedState
-    ): F[ValidationResult] =
-      state.stateMachines.get(cid) match {
-        case None => (Errors.FiberNotFound(cid): DataApplicationValidationError).invalidNec[Unit].pure[F]
-        case Some(sm) =>
-          Validated
-            .condNec(
-              newDefinition.states.contains(sm.currentState),
-              (),
-              Errors.CurrentStateNotInNewDefinition(sm.currentState): DataApplicationValidationError
-            )
-            .pure[F]
-      }
-
-    /**
-     * Validation-tier MIRROR (version-compat-family §3.5 / H4) of the CHEAP, signer-independent UpgradeGate
-     * checks: `Immutable` rejects all migrations, and `tightenOnly` forbids loosening the lattice. Both are
-     * pure functions of the OLD (hash-pinned) and NEW policies, so they can reject a doomed migration early —
-     * before the metered combiner — exactly as `bindingNameMatches`/`currentStateInDefinition` already do.
-     * The `Governed(Role)` and `AppendOnly` tiers (which need full CalculatedState / strict-version
-     * resolution) intentionally stay engine-only; the engine `UpgradeGate` remains the authority and re-runs
-     * EVERYTHING (this mirror is a fail-fast optimization, never the security boundary).
-     */
-    def upgradePolicyPermits[F[_]: Applicative](
-      cid:           UUID,
-      newDefinition: StateMachineDefinition,
-      state:         CalculatedState
-    ): F[ValidationResult] =
-      state.stateMachines.get(cid) match {
-        case None => ().validNec[DataApplicationValidationError].pure[F] // existence handled by cidIsFound
-        case Some(sm) =>
-          val oldPolicy = sm.definition.policy
-          val immutable = oldPolicy.map(_.effectiveUpgradePolicy).contains(UpgradePolicy.Immutable)
-          if (immutable)
-            (Errors.UpgradePolicyViolation(cid, "immutable: migrations are forbidden"): DataApplicationValidationError)
-              .invalidNec[Unit]
-              .pure[F]
-          else
-            FiberPolicy.tightens(oldPolicy, newDefinition.policy) match {
-              case Left(dial) =>
-                (Errors.UpgradePolicyViolation(
-                  cid,
-                  s"dial '$dial' may only tighten, never loosen, across a migration"
-                ): DataApplicationValidationError).invalidNec[Unit].pure[F]
-              case Right(_) => ().validNec[DataApplicationValidationError].pure[F]
-            }
-      }
+    // ── UpgradeFiber L0 stateful checks REMOVED (audit M1 residual) ──────────────────────────────────
+    // `bindingNameMatches` (same-package), `currentStateInDefinition` (state preserved) and
+    // `upgradePolicyPermits` (tighten-only / Immutable) each read the MUTABLE `CalculatedState.stateMachines`.
+    // Running them in `validateSignedUpdate` (the block-acceptance gate) was a same-fiber block-poisoning
+    // hazard (the narrow sibling of CLAUDE.md rule #3 / audit C3): a concurrent same-fiber update (archive,
+    // a competing upgrade that advances/re-binds, a sequence bump) flips them Valid->Invalid between DL1 block
+    // formation and ML0 re-validation, dropping the ENTIRE block (tessellation all-or-nothing). They are
+    // re-enforced GRACEFULLY as CombineRejected / abort -> RejectionReceipt: same-package by
+    // `FiberCombiner.upgradeFiber`, current-state-preserved by the engine `migrateStateMachineGated`, and
+    // tighten-only / Immutable / Governed / AppendOnly by the engine `UpgradeGate.check`. Do NOT reintroduce a
+    // stateful-`stateMachines` read here — see `FiberValidator.L0.upgrade`.
   }
 
   // ============================================================================
