@@ -1,0 +1,8 @@
+{
+  "baseRate": 0.04,
+  "availableCapital": 1000000,
+  "activeLoans": 0,
+  "loanPortfolio": 0,
+  "totalPaymentsReceived": 0,
+  "status": "operating"
+}

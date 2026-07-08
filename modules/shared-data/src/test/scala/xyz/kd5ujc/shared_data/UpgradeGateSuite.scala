@@ -53,7 +53,7 @@ object UpgradeGateSuite extends FunSuite {
     SchemaBinding(pkg, v, Hash("schemaHash"), Hash("logicHash"))
 
   private def smRecord(
-    policy:  Option[FiberPolicy],
+    policy:  FiberPolicy,
     state:   JsonLogicValue = MapValue(Map.empty),
     binding: Option[SchemaBinding] = None,
     id:      UUID = uuid(1)
@@ -86,37 +86,36 @@ object UpgradeGateSuite extends FunSuite {
   // ── Arbitrary / absent ───────────────────────────────────────────────────────────────────────────
 
   test("absent upgradePolicy (≡ Arbitrary) admits any migration") {
-    val old = smRecord(None)
+    val old = smRecord(FiberPolicy.Unconstrained)
     expect(UpgradeGate.check(old, baseDef, binding(SemVer(2, 0, 0)), stateOf(old), Set(alice)).isEmpty)
   }
 
   test("explicit Arbitrary admits any migration") {
-    val old = smRecord(Some(FiberPolicy(upgradePolicy = Some(UpgradePolicy.Arbitrary))))
+    val old = smRecord(FiberPolicy.constrained(upgradePolicy = Some(UpgradePolicy.Arbitrary)))
     expect(UpgradeGate.check(old, baseDef, binding(SemVer(2, 0, 0)), stateOf(old), Set(alice)).isEmpty)
   }
 
   // ── Immutable ────────────────────────────────────────────────────────────────────────────────────
 
   test("Immutable denies ALL migrations (even an identity re-bind with verified signers)") {
-    val pol = Some(FiberPolicy(upgradePolicy = Some(UpgradePolicy.Immutable)))
+    val pol = FiberPolicy.constrained(upgradePolicy = Some(UpgradePolicy.Immutable))
     val old = smRecord(pol)
     val r = UpgradeGate.check(old, baseDef.copy(policy = pol), binding(SemVer(2, 0, 0)), stateOf(old), Set(alice))
     expect(isPolicyViolation(r, "upgradePolicy"))
   }
 
   test("Immutable cannot be escaped by a migration that drops the dial (tighten-only also denies)") {
-    val old = smRecord(Some(FiberPolicy(upgradePolicy = Some(UpgradePolicy.Immutable))))
+    val old = smRecord(FiberPolicy.constrained(upgradePolicy = Some(UpgradePolicy.Immutable)))
     // newDefinition tries to loosen to Arbitrary; gateByUpgradePolicy denies first regardless.
-    val newDef = baseDef.copy(policy = None)
+    val newDef = baseDef.copy(policy = FiberPolicy.Unconstrained)
     expect(UpgradeGate.check(old, newDef, binding(SemVer(2, 0, 0)), stateOf(old), Set(alice)).isDefined)
   }
 
   // ── Governed.Signers ─────────────────────────────────────────────────────────────────────────────
 
   test("Governed.Signers admits when a verified signer is in the authority set; denies otherwise") {
-    val pol = Some(
-      FiberPolicy(upgradePolicy = Some(UpgradePolicy.Governed(MigrationAuthority.Signers(Set(alice)))))
-    )
+    val pol =
+      FiberPolicy.constrained(upgradePolicy = Some(UpgradePolicy.Governed(MigrationAuthority.Signers(Set(alice)))))
     val old = smRecord(pol)
     val ok = UpgradeGate.check(old, baseDef.copy(policy = pol), binding(SemVer(2, 0, 0)), stateOf(old), Set(alice))
     val no = UpgradeGate.check(old, baseDef.copy(policy = pol), binding(SemVer(2, 0, 0)), stateOf(old), Set(bob))
@@ -124,7 +123,8 @@ object UpgradeGateSuite extends FunSuite {
   }
 
   test("Governed.Signers with an empty authority set denies everyone (soft-Immutable)") {
-    val pol = Some(FiberPolicy(upgradePolicy = Some(UpgradePolicy.Governed(MigrationAuthority.Signers(Set.empty)))))
+    val pol =
+      FiberPolicy.constrained(upgradePolicy = Some(UpgradePolicy.Governed(MigrationAuthority.Signers(Set.empty))))
     val old = smRecord(pol)
     expect(
       isPolicyViolation(
@@ -138,14 +138,15 @@ object UpgradeGateSuite extends FunSuite {
 
   test("Governed.Role admits when a verified signer keys the role map; fail-closed on missing fiber/map") {
     val registryId = uuid(99)
-    val pol = Some(
-      FiberPolicy(upgradePolicy = Some(UpgradePolicy.Governed(MigrationAuthority.Role(registryId, "admins"))))
-    )
+    val pol =
+      FiberPolicy.constrained(upgradePolicy =
+        Some(UpgradePolicy.Governed(MigrationAuthority.Role(registryId, "admins")))
+      )
     val old = smRecord(pol, id = uuid(1))
     // registry fiber whose stateData.admins = { <alice.show>: true } (the gate keys on the Base58 `show`)
     val roleMap: JsonLogicValue =
       MapValue(Map("admins" -> MapValue(Map(alice.show -> BoolValue(true)))))
-    val registryFiber = smRecord(None, state = roleMap, id = registryId)
+    val registryFiber = smRecord(FiberPolicy.Unconstrained, state = roleMap, id = registryId)
 
     val present = stateOf(old, registryFiber)
     val ok = UpgradeGate.check(old, baseDef.copy(policy = pol), binding(SemVer(2, 0, 0)), present, Set(alice))
@@ -160,12 +161,14 @@ object UpgradeGateSuite extends FunSuite {
 
   test("Governed.Role denies when the role field is missing or not a map (fail-closed)") {
     val registryId = uuid(99)
-    val pol = Some(
-      FiberPolicy(upgradePolicy = Some(UpgradePolicy.Governed(MigrationAuthority.Role(registryId, "admins"))))
-    )
+    val pol =
+      FiberPolicy.constrained(upgradePolicy =
+        Some(UpgradePolicy.Governed(MigrationAuthority.Role(registryId, "admins")))
+      )
     val old = smRecord(pol, id = uuid(1))
-    val noRoleField = smRecord(None, state = MapValue(Map("other" -> BoolValue(true))), id = registryId)
-    val nonMapState = smRecord(None, state = BoolValue(true), id = registryId)
+    val noRoleField =
+      smRecord(FiberPolicy.Unconstrained, state = MapValue(Map("other" -> BoolValue(true))), id = registryId)
+    val nonMapState = smRecord(FiberPolicy.Unconstrained, state = BoolValue(true), id = registryId)
     val r1 = UpgradeGate.check(
       old,
       baseDef.copy(policy = pol),
@@ -188,7 +191,7 @@ object UpgradeGateSuite extends FunSuite {
   test("AppendOnly admits an additive field (new number) and denies a dropped/retyped/non-strict delta") {
     val v1 = SemVer(1, 0, 0)
     val v2 = SemVer(2, 0, 0)
-    val pol = Some(FiberPolicy(upgradePolicy = Some(UpgradePolicy.AppendOnly)))
+    val pol = FiberPolicy.constrained(upgradePolicy = Some(UpgradePolicy.AppendOnly))
     val old = smRecord(pol, binding = Some(binding(v1)))
 
     val oldShape = MachineShape(
@@ -245,7 +248,7 @@ object UpgradeGateSuite extends FunSuite {
   test("AppendOnly denies when a command message is removed") {
     val v1 = SemVer(1, 0, 0)
     val v2 = SemVer(2, 0, 0)
-    val pol = Some(FiberPolicy(upgradePolicy = Some(UpgradePolicy.AppendOnly)))
+    val pol = FiberPolicy.constrained(upgradePolicy = Some(UpgradePolicy.AppendOnly))
     val old = smRecord(pol, binding = Some(binding(v1)))
 
     val stateMsg = msg(FieldShape("x", 1, "int64", repeated = false, optional = false))
@@ -277,9 +280,10 @@ object UpgradeGateSuite extends FunSuite {
   // ── compatBridge ─────────────────────────────────────────────────────────────────────────────────
 
   test("compatBridge: a target inside the OLD declared window admits; outside denies") {
-    val pol = Some(
-      FiberPolicy(compatibleWith = Some(VersionRange(min = Some(SemVer(2, 0, 0)), max = Some(SemVer(3, 0, 0)))))
-    )
+    val pol =
+      FiberPolicy.constrained(compatibleWith =
+        Some(VersionRange(min = Some(SemVer(2, 0, 0)), max = Some(SemVer(3, 0, 0))))
+      )
     val old = smRecord(pol)
     val inside = UpgradeGate.check(old, baseDef.copy(policy = pol), binding(SemVer(2, 5, 0)), stateOf(old), Set(alice))
     val below = UpgradeGate.check(old, baseDef.copy(policy = pol), binding(SemVer(1, 9, 0)), stateOf(old), Set(alice))
@@ -298,10 +302,17 @@ object UpgradeGateSuite extends FunSuite {
   // ── tighten-only (also enforced inside the gate) ─────────────────────────────────────────────────
 
   test("gate rejects a loosening migration via the tighten lattice") {
-    val oldPol = Some(FiberPolicy(allowedEffects = Some(Set(EffectKind.Emit))))
+    val oldPol = FiberPolicy.constrained(allowedEffects = Some(Set(EffectKind.Emit)))
     val old = smRecord(oldPol)
-    // new drops allowedEffects ⇒ loosening
-    val r = UpgradeGate.check(old, baseDef.copy(policy = None), binding(SemVer(2, 0, 0)), stateOf(old), Set(alice))
+    // new drops allowedEffects (⇒ Unconstrained) ⇒ loosening
+    val r =
+      UpgradeGate.check(
+        old,
+        baseDef.copy(policy = FiberPolicy.Unconstrained),
+        binding(SemVer(2, 0, 0)),
+        stateOf(old),
+        Set(alice)
+      )
     expect(isPolicyViolation(r, "tighten"))
   }
 }

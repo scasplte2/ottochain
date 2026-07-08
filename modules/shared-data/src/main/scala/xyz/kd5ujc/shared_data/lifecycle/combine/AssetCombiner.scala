@@ -444,7 +444,7 @@ class AssetCombiner[F[_]: Async: SecurityProvider](
       // recipient class ⇒ that class is unconstrained; absent policy ⇒ legacy (any recipient).
       _ <- st.calculated.stateMachines
         .get(emittingFiberId)
-        .flatMap(_.definition.policy)
+        .flatMap(_.definition.policy.dials)
         .flatMap(_.transferPolicy)
         .fold(Async[F].unit) { tp =>
           val (permitted, who) = transfer.recipient match {

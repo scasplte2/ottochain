@@ -7,11 +7,14 @@ const NODE_TIMEOUT_MS = Number(process.env.DL1_TIMEOUT_MS) || 30_000;
 
 /** One-line summary of an outbound update: its message type + a truncated target id. */
 function describeUpdate(message: unknown): string {
-  const value = (message as { value?: Record<string, unknown> } | null)?.value;
-  if (!value || typeof value !== 'object') return 'update';
-  const msgType = Object.keys(value)[0] ?? 'update';
-  const inner = value[msgType] as Record<string, unknown> | undefined;
-  const rawId = inner?.fiberId ?? inner?.machineId ?? inner?.name ?? '';
+  // The message handed to send is the UNWRAPPED generator output — a single-key envelope like
+  // `{ TransitionStateMachine: { fiberId, … } }` / `{ MintAsset: { assetId, … } }` — NOT a `{ value }`
+  // wrapper. Read the top-level key as the message type and dig the id out of its inner object.
+  if (!message || typeof message !== 'object') return 'update';
+  const msgType = Object.keys(message as Record<string, unknown>)[0];
+  if (!msgType) return 'update';
+  const inner = (message as Record<string, unknown>)[msgType] as Record<string, unknown> | undefined;
+  const rawId = inner?.fiberId ?? inner?.assetId ?? inner?.name ?? inner?.machineId ?? '';
   const id = typeof rawId === 'string' ? rawId : String(rawId ?? '');
   const shortId = id.length > 8 ? id.slice(0, 8) : id;
   return shortId ? `${msgType} ${shortId}` : msgType;
@@ -104,9 +107,13 @@ export default async function sendSignedUpdate(
     // Keepalive / background traffic: suppress the per-send line so ~hundreds of throwaway
     // creates don't bury the flow output. The outcome is still returned to the caller.
   } else if (consensus) {
-    console.log(
-      `${tag} ${what} → \x1b[32m${ok.length}/${dl1Urls.length}\x1b[0m ✓ ${[...hashes][0].slice(0, 8)}`
-    );
+    // Healthy 3/3 send: quiet by default (the flow logger already reports the step). The per-send
+    // `[dl1] … ✓` line is opt-in via E2E_VERBOSE; DIVERGENCE / failure below ALWAYS prints.
+    if (process.env.E2E_VERBOSE) {
+      console.log(
+        `${tag} ${what} → \x1b[32m${ok.length}/${dl1Urls.length}\x1b[0m ✓ ${[...hashes][0].slice(0, 8)}`
+      );
+    }
   } else {
     // Divergence: spell out each node so a split hash, a slow/timed-out node, or a lone rejecter is
     // visible rather than averaged away.

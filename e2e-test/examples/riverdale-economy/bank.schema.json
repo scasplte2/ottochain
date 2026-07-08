@@ -1,0 +1,34 @@
+{
+  "stateMessage": {
+    "typeName": "Bank",
+    "fields": [
+      { "name": "baseRate", "number": 1, "typeName": "double", "repeated": false, "optional": true },
+      { "name": "availableCapital", "number": 2, "typeName": "int64", "repeated": false, "optional": false },
+      { "name": "activeLoans", "number": 3, "typeName": "int64", "repeated": false, "optional": true },
+      { "name": "loanPortfolio", "number": 4, "typeName": "int64", "repeated": false, "optional": true },
+      { "name": "totalPaymentsReceived", "number": 5, "typeName": "int64", "repeated": false, "optional": true },
+      { "name": "status", "number": 6, "typeName": "string", "repeated": false, "optional": true }
+    ]
+  },
+  "commands": {
+    "rate_adjustment": {
+      "typeName": "RateAdjustment",
+      "fields": [{ "name": "newBaseRate", "number": 1, "typeName": "double", "repeated": false, "optional": false }]
+    },
+    "underwrite": {
+      "typeName": "Underwrite",
+      "fields": [
+        { "name": "consumerId", "number": 1, "typeName": "string", "repeated": false, "optional": false },
+        { "name": "amount", "number": 2, "typeName": "int64", "repeated": false, "optional": false },
+        { "name": "loanAssetId", "number": 3, "typeName": "string", "repeated": false, "optional": false }
+      ]
+    },
+    "payment_received": {
+      "typeName": "PaymentReceived",
+      "fields": [
+        { "name": "borrowerId", "number": 1, "typeName": "string", "repeated": false, "optional": true },
+        { "name": "amount", "number": 2, "typeName": "int64", "repeated": false, "optional": false }
+      ]
+    }
+  }
+}

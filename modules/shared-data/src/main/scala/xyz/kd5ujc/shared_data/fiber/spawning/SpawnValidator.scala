@@ -110,7 +110,7 @@ object SpawnValidator {
 
       /** `Some(digest)` iff the parent has opted into self-reproduction; `None` otherwise (no hashing cost). */
       private def maybeSelfHash(parent: Records.StateMachineFiberRecord): G[Option[Hash]] =
-        if (parent.definition.policy.exists(_.isSelfReproducing))
+        if (parent.definition.policy.isSelfReproducing)
           parent.definition.computeDigest.liftTo[G].map(_.some)
         else none[Hash].pure[G]
 
@@ -229,7 +229,7 @@ object SpawnValidator {
         parent:   Records.StateMachineFiberRecord,
         resolved: ValidatedNel[FailureReason, Set[Address]]
       ): ValidatedNel[FailureReason, Set[Address]] =
-        parent.definition.policy.flatMap(_.spawnOwnerPolicy) match {
+        parent.definition.policy.dials.flatMap(_.spawnOwnerPolicy) match {
           case Some(SpawnOwnerPolicy.InheritParent) => resolved.map(_ => parent.owners)
           case None | Some(SpawnOwnerPolicy.Explicit) | Some(SpawnOwnerPolicy.SubsetOfParent) =>
             resolved.andThen(subsetOfParentFloor(parent, _))
@@ -335,7 +335,7 @@ object SpawnValidator {
         // maxSpawnsPerTransition. Same fail-closed abort path. Distinct FailureReason (PolicyViolation) so an
         // observer/test can tell a policy breach from the engine bound.
         val fanoutErrors: List[FailureReason] =
-          parent.definition.policy.flatMap(_.maxSpawnFanout) match {
+          parent.definition.policy.dials.flatMap(_.maxSpawnFanout) match {
             case Some(cap) if spawns.size > cap =>
               List(
                 FailureReason.PolicyViolation("maxSpawnFanout", s"transition emitted ${spawns.size} spawns (max: $cap)")

@@ -1,0 +1,10 @@
+{
+  "balance": 100000,
+  "loanBalance": 0,
+  "purchaseCount": 0,
+  "paymentsMade": 0,
+  "activeListings": 0,
+  "marketplaceSales": 0,
+  "taxesPaid": 0,
+  "status": "ACTIVE"
+}

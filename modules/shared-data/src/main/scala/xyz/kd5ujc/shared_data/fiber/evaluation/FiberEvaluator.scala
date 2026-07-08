@@ -149,7 +149,7 @@ object FiberEvaluator {
         fiber:  Records.StateMachineFiberRecord,
         caller: Option[UUID]
       ): Option[FailureReason] = {
-        val policy = fiber.definition.policy
+        val policy = fiber.definition.policy.dials
         val sealedHit =
           policy.flatMap(_.sealedStates).filter(_.contains(fiber.currentState)).map { _ =>
             FailureReason.PolicyViolation("sealedStates", s"state '${fiber.currentState.value}' is sealed")
@@ -189,8 +189,13 @@ object FiberEvaluator {
                   input,
                   proofs,
                   // machines context = this transition's STATIC dependencies ∪ the fiber's ACTIVE
-                  // runtime (dynamic) dependencies. (#24)
-                  transition.dependencies ++ DependencyLedger.activeIds(fiber.dynamicDependencies)
+                  // runtime (dynamic) dependencies (#24) ∪ the F6 AUTO-DECLARED static `machines.<uuid>`
+                  // references scanned from the guard/effect AST (03-cross-fiber-and-authorization.md §2a).
+                  // The auto set augments the RUNTIME dep set ONLY — it NEVER mutates the signed, hash-pinned
+                  // `transition.dependencies` (rule #1); the projection stays bounded (finite, parse-time-known).
+                  transition.dependencies ++
+                  DependencyLedger.activeIds(fiber.dynamicDependencies) ++
+                  StaticDependencyScan.staticMachineRefs(transition)
                 )
                 .liftTo[G]
               result <- evaluateGuardAndApply(
@@ -271,7 +276,7 @@ object FiberEvaluator {
                   transition,
                   effectResult,
                   contextData,
-                  fiber.definition.policy.flatMap(_.allowedEffects)
+                  fiber.definition.policy.dials.flatMap(_.allowedEffects)
                 )
             }
 
@@ -327,7 +332,7 @@ object FiberEvaluator {
           fiberGasConfig <- A.reader(_.fiberGasConfig)
           limits         <- ExecutionOps.askLimits[G]
 
-          effects <- EffectExtractor.extractEffects[F, G](effectResult, transition.effect, contextData, fiberId)
+          effects <- EffectExtractor.extractEffects[F, G](transition.effect, contextData, fiberId)
           allTriggers = effects.collect { case FiberEffect.Triggered(t) => t }
           spawnMachines = effects.collect { case FiberEffect.Spawned(d) => d }
           emittedEvents = effects.collect { case FiberEffect.Emitted(ev) => ev }

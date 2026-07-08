@@ -31,4 +31,28 @@ object AssetHolder {
 
   /** Custody by a live fiber (escrow / pool / vault). Liveness is checked in the combiner (Phase 4). */
   final case class Fiber(fiberId: UUID) extends AssetHolder
+
+  /**
+   * The magnolia wire-form keys — the variant discriminators (`Fiber`/`Wallet`) and their field names
+   * (`fiberId`/`address`). The SINGLE SOURCE for any tooling that must reason about an `AssetHolder`'s static
+   * shape WITHOUT a concrete value (e.g. the DefinitionLinter's `_transferAsset` recipient-shape check, which
+   * sees an unresolved expression it cannot decode). Pinned to the actual codec output by a golden round-trip
+   * test (`AssetHolderWireKeysSuite`), so renaming a case class / field can't silently drift these.
+   */
+  object WireKeys {
+    val FiberVariant: String = "Fiber"
+    val WalletVariant: String = "Wallet"
+    val FiberIdField: String = "fiberId"
+    val AddressField: String = "address"
+
+    /** The two variant discriminator keys. */
+    val variants: Set[String] = Set(FiberVariant, WalletVariant)
+
+    /** The required inner field for a given variant discriminator, if known. */
+    def fieldFor(variant: String): Option[String] = variant match {
+      case FiberVariant  => Some(FiberIdField)
+      case WalletVariant => Some(AddressField)
+      case _             => None
+    }
+  }
 }

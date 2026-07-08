@@ -1,0 +1,19 @@
+{
+  "name": "rvd.asset",
+  "version": "1.0.0",
+  "behavior": 28,
+  "supply": {
+    "mintPolicy": { "==": [1, 1] },
+    "burnPolicy": { "==": [1, 1] }
+  },
+  "morphisms": {
+    "TRANSFER": { "visibility": "PUBLIC" },
+    "FRACTIONALIZE": { "visibility": "PUBLIC" },
+    "BURN": { "visibility": "PUBLIC" },
+    "STAKE": { "visibility": "PUBLIC" }
+  },
+  "stateShape": {
+    "typeName": "RvdState",
+    "fields": []
+  }
+}

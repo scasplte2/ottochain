@@ -24,6 +24,7 @@ import xyz.kd5ujc.schema.{CalculatedState, OnChain, Records, Updates}
 import xyz.kd5ujc.shared_data.fiber.core._
 import xyz.kd5ujc.shared_data.fiber.evaluation.EffectExtractor
 import xyz.kd5ujc.shared_data.lifecycle.Combiner
+import xyz.kd5ujc.shared_data.lifecycle.combine.CombineRejected
 import xyz.kd5ujc.shared_test.Participant._
 import xyz.kd5ujc.shared_test.TestFixture
 
@@ -39,7 +40,8 @@ import weaver.SimpleIOSuite
  *   (2) HOLDER DEFENSE (R1) — a fiber that emits `_transferAsset` for an asset it does NOT hold is
  *       gracefully rejected (RejectionReceipt) and the asset is unchanged,
  *   (3) heldAssets — a transition guard that reads `heldAssets.<id>.amount` evaluates correctly,
- *   (4) EffectExtractor — `_transferAsset` parses into `AssetTransferred` with gas charged; malformed drops.
+ *   (4) EffectExtractor — `_transferAsset` (object-form recipient) parses into `AssetTransferred` with gas
+ *       charged; a malformed directive is REJECTED (graceful CombineRejected), never silently dropped.
  */
 object AssetFiberTransferSuite extends SimpleIOSuite {
 
@@ -64,9 +66,15 @@ object AssetFiberTransferSuite extends SimpleIOSuite {
       latestUpdateOrdinal = ordinal
     )
 
+  // Object-form AssetHolder recipient literals for embedding in a `_transferAsset` effect — the recipient is
+  // the canonical `{"Fiber":{"fiberId":..}}` / `{"Wallet":{"address":..}}` form ONLY (no bare strings).
+  private def fiberHolderJson(fiberId:  String): String = s"""{ "Fiber": { "fiberId": "$fiberId" } }"""
+  private def walletHolderJson(address: String): String = s"""{ "Wallet": { "address": "$address" } }"""
+
   // An escrow state machine: HOLDING -> RELEASED on a "release" event whose effect emits _transferAsset.
-  // `$asset` is the held asset id, `$recipient` is the destination wallet/fiber id string.
-  private def escrowJson(assetId: UUID, recipient: String): String =
+  // `$assetId` is the held asset id; `recipientJson` is the destination AssetHolder OBJECT literal
+  // (fiberHolderJson(..) / walletHolderJson(..)).
+  private def escrowJson(assetId: UUID, recipientJson: String): String =
     s"""
     {
       "states": {
@@ -82,7 +90,7 @@ object AssetFiberTransferSuite extends SimpleIOSuite {
           "guard": true,
           "effect": {
             "_transferAsset": [
-              { "assetId": "$assetId", "recipient": "$recipient" }
+              { "assetId": "$assetId", "recipient": $recipientJson }
             ],
             "released": true
           },
@@ -128,7 +136,7 @@ object AssetFiberTransferSuite extends SimpleIOSuite {
       val bobStr = bobAddr.value.value
 
       for {
-        escrow <- buildEscrow(escrowId, escrowJson(assetId, bobStr), fixture.ordinal)
+        escrow <- buildEscrow(escrowId, escrowJson(assetId, walletHolderJson(bobStr)), fixture.ordinal)
         asset = heldAsset(assetId, escrowId, ordinal = fixture.ordinal)
         genesis = DataState(
           OnChain.genesis,
@@ -164,8 +172,9 @@ object AssetFiberTransferSuite extends SimpleIOSuite {
       val assetId = UUID.fromString("a55e7000-0000-4000-8000-000000000010")
 
       for {
-        escrow <- buildEscrow(escrowId, escrowJson(assetId, vaultId.toString), fixture.ordinal)
-        vault  <- buildEscrow(vaultId, escrowJson(assetId, "unused"), fixture.ordinal)
+        escrow <- buildEscrow(escrowId, escrowJson(assetId, fiberHolderJson(vaultId.toString)), fixture.ordinal)
+        // the vault never releases, so its recipient is never evaluated — any valid object literal suffices
+        vault <- buildEscrow(vaultId, escrowJson(assetId, fiberHolderJson(vaultId.toString)), fixture.ordinal)
         asset = heldAsset(assetId, escrowId, ordinal = fixture.ordinal)
         genesis = DataState(
           OnChain.genesis,
@@ -198,7 +207,7 @@ object AssetFiberTransferSuite extends SimpleIOSuite {
 
       for {
         // the attacker fiber's transition tries to transfer an asset HELD BY ownerId
-        attacker <- buildEscrow(attackerId, escrowJson(assetId, bobStr), fixture.ordinal)
+        attacker <- buildEscrow(attackerId, escrowJson(assetId, walletHolderJson(bobStr)), fixture.ordinal)
         asset = heldAsset(assetId, ownerId, ordinal = fixture.ordinal) // held by ownerId, NOT attackerId
         genesis = DataState(
           OnChain.genesis,
@@ -233,7 +242,7 @@ object AssetFiberTransferSuite extends SimpleIOSuite {
       val bobStr = fixture.registry.addresses(Bob).value.value
 
       for {
-        escrow <- buildEscrow(escrowId, escrowJson(assetId, bobStr), fixture.ordinal)
+        escrow <- buildEscrow(escrowId, escrowJson(assetId, walletHolderJson(bobStr)), fixture.ordinal)
         asset = heldAsset(assetId, escrowId, behavior = TokenBehavior.Soulbound, ordinal = fixture.ordinal)
         genesis = DataState(
           OnChain.genesis,
@@ -277,7 +286,7 @@ object AssetFiberTransferSuite extends SimpleIOSuite {
             "eventName": "release",
             "guard": { ">": [{ "var": "heldAssets.$assetId.amount" }, 50] },
             "effect": {
-              "_transferAsset": [ { "assetId": "$assetId", "recipient": "$bobStr" } ],
+              "_transferAsset": [ { "assetId": "$assetId", "recipient": ${walletHolderJson(bobStr)} } ],
               "released": true
             },
             "dependencies": []
@@ -329,7 +338,7 @@ object AssetFiberTransferSuite extends SimpleIOSuite {
             "eventName": "release",
             "guard": { ">": [{ "var": "heldAssets.$assetId.amount" }, 50] },
             "effect": {
-              "_transferAsset": [ { "assetId": "$assetId", "recipient": "$bobStr" } ],
+              "_transferAsset": [ { "assetId": "$assetId", "recipient": ${walletHolderJson(bobStr)} } ],
               "released": true
             },
             "dependencies": []
@@ -358,7 +367,7 @@ object AssetFiberTransferSuite extends SimpleIOSuite {
     }
   }
 
-  // ── (4) EffectExtractor: _transferAsset parses into AssetTransferred, gas charged, malformed drops ──
+  // ── (4) EffectExtractor: _transferAsset parses into AssetTransferred, gas charged, malformed REJECTED ──
 
   // A tiny harness to drive EffectExtractor.extractAssetTransfers in the same FiberT MTL stack the engine uses.
   import xyz.kd5ujc.shared_data.fiber.core.FiberTInstances._
@@ -396,8 +405,10 @@ object AssetFiberTransferSuite extends SimpleIOSuite {
           List(
             MapValue(
               Map(
-                ReservedKeys.ASSET_ID  -> StrValue(assetId.toString),
-                ReservedKeys.RECIPIENT -> StrValue(fiberRecipient.toString)
+                ReservedKeys.ASSET_ID -> StrValue(assetId.toString),
+                ReservedKeys.RECIPIENT -> MapValue(
+                  Map("Fiber" -> MapValue(Map("fiberId" -> StrValue(fiberRecipient.toString))))
+                )
               )
             )
           )
@@ -421,8 +432,10 @@ object AssetFiberTransferSuite extends SimpleIOSuite {
           List(
             MapValue(
               Map(
-                ReservedKeys.ASSET_ID  -> MapValue(Map(ReservedKeys.VAR -> StrValue("aid"))),
-                ReservedKeys.RECIPIENT -> MapValue(Map(ReservedKeys.VAR -> StrValue("rcp")))
+                ReservedKeys.ASSET_ID -> MapValue(Map(ReservedKeys.VAR -> StrValue("aid"))),
+                ReservedKeys.RECIPIENT -> MapValue(
+                  Map("Fiber" -> MapValue(Map("fiberId" -> MapValue(Map(ReservedKeys.VAR -> StrValue("rcp"))))))
+                )
               )
             )
           )
@@ -435,7 +448,7 @@ object AssetFiberTransferSuite extends SimpleIOSuite {
     }
   }
 
-  test("EffectExtractor: a recipient DAG-address string resolves to a Wallet holder") {
+  test("EffectExtractor: an object-form Wallet recipient resolves to a Wallet holder") {
     TestFixture.resource(Set(Bob)).use { fixture =>
       val assetId = UUID.fromString("a55e7000-0000-4000-8000-0000000000aa")
       val bobAddr: Address = fixture.registry.addresses(Bob)
@@ -445,8 +458,10 @@ object AssetFiberTransferSuite extends SimpleIOSuite {
             List(
               MapValue(
                 Map(
-                  ReservedKeys.ASSET_ID  -> StrValue(assetId.toString),
-                  ReservedKeys.RECIPIENT -> StrValue(bobAddr.value.value)
+                  ReservedKeys.ASSET_ID -> StrValue(assetId.toString),
+                  ReservedKeys.RECIPIENT -> MapValue(
+                    Map("Wallet" -> MapValue(Map("address" -> StrValue(bobAddr.value.value))))
+                  )
                 )
               )
             )
@@ -459,15 +474,17 @@ object AssetFiberTransferSuite extends SimpleIOSuite {
     }
   }
 
-  test("EffectExtractor: a malformed _transferAsset directive (non-UUID assetId, junk recipient) is dropped") {
+  test("EffectExtractor: a malformed _transferAsset directive is REJECTED (not silently dropped)") {
     val effectBadAsset = MapValue(
       Map(
         ReservedKeys.TRANSFER_ASSET -> ArrayValue(
           List(
             MapValue(
               Map(
-                ReservedKeys.ASSET_ID  -> StrValue("not-a-uuid"),
-                ReservedKeys.RECIPIENT -> StrValue("also-not-anything")
+                ReservedKeys.ASSET_ID -> StrValue("not-a-uuid"),
+                ReservedKeys.RECIPIENT -> MapValue(
+                  Map("Fiber" -> MapValue(Map("fiberId" -> StrValue(UUID.randomUUID().toString))))
+                )
               )
             )
           )
@@ -481,10 +498,12 @@ object AssetFiberTransferSuite extends SimpleIOSuite {
         )
       )
     )
+    def rejected(io: IO[(List[FiberEffect.AssetTransferred], Long)]): IO[Boolean] =
+      io.attempt.map(_.left.toOption.exists(_.isInstanceOf[CombineRejected]))
     for {
-      bad     <- runExtract(effectBadAsset).map(_._1)
-      missing <- runExtract(effectMissingRecipient).map(_._1)
-      none    <- runExtract(MapValue(Map.empty)).map(_._1)
-    } yield expect(bad.isEmpty) and expect(missing.isEmpty) and expect(none.isEmpty)
+      badRejected     <- rejected(runExtract(effectBadAsset))
+      missingRejected <- rejected(runExtract(effectMissingRecipient))
+      none            <- runExtract(MapValue(Map.empty)).map(_._1) // absent directive: no transfer, no error
+    } yield expect(badRejected) and expect(missingRejected) and expect(none.isEmpty)
   }
 }

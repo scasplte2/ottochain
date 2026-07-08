@@ -1466,7 +1466,7 @@
                   "var": "event.rewardAssetId"
                 },
                 "recipient": {
-                  "var": "event.agent"
+                  "Wallet": { "address": { "var": "event.agent" } }
                 }
               }
             ]
@@ -1564,7 +1564,7 @@
                   "var": "event.rewardAssetId"
                 },
                 "recipient": {
-                  "var": "event.agent"
+                  "Wallet": { "address": { "var": "event.agent" } }
                 }
               }
             ]
@@ -1648,7 +1648,7 @@
                   ]
                 },
                 "recipient": {
-                  "var": "event.agent"
+                  "Wallet": { "address": { "var": "event.agent" } }
                 }
               }
             ]
@@ -1732,7 +1732,7 @@
                   ]
                 },
                 "recipient": {
-                  "var": "event.agent"
+                  "Wallet": { "address": { "var": "event.agent" } }
                 }
               }
             ]

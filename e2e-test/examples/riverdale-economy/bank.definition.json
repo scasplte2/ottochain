@@ -1,0 +1,70 @@
+{
+  "states": {
+    "operating": { "id": "operating", "isFinal": false },
+    "loan_servicing": { "id": "loan_servicing", "isFinal": false }
+  },
+  "initialState": "operating",
+  "transitions": [
+    {
+      "from": "operating",
+      "to": "operating",
+      "eventName": "rate_adjustment",
+      "guard": { "==": [1, 1] },
+      "effect": {
+        "status": "operating",
+        "baseRate": { "var": "event.newBaseRate" }
+      },
+      "dependencies": []
+    },
+    {
+      "from": "loan_servicing",
+      "to": "loan_servicing",
+      "eventName": "rate_adjustment",
+      "guard": { "==": [1, 1] },
+      "effect": {
+        "status": "loan_servicing",
+        "baseRate": { "var": "event.newBaseRate" }
+      },
+      "dependencies": []
+    },
+    {
+      "from": "operating",
+      "to": "loan_servicing",
+      "eventName": "underwrite",
+      "guard": { "==": [1, 1] },
+      "effect": {
+        "_triggers": [
+          {
+            "targetMachineId": { "var": "event.consumerId" },
+            "eventName": "loan_funded",
+            "payload": {
+              "amount": { "var": "event.amount" },
+              "loanId": { "var": "machineId" }
+            }
+          }
+        ],
+        "_transferAsset": [
+          {
+            "assetId": { "var": "event.loanAssetId" },
+            "recipient": { "Fiber": { "fiberId": { "var": "event.consumerId" } } }
+          }
+        ],
+        "status": "loan_servicing",
+        "activeLoans": { "+": [{ "var": "state.activeLoans" }, 1] },
+        "loanPortfolio": { "+": [{ "var": "state.loanPortfolio" }, { "var": "event.amount" }] }
+      },
+      "dependencies": []
+    },
+    {
+      "from": "loan_servicing",
+      "to": "loan_servicing",
+      "eventName": "payment_received",
+      "guard": { "==": [1, 1] },
+      "effect": {
+        "status": "loan_servicing",
+        "totalPaymentsReceived": { "+": [{ "var": "state.totalPaymentsReceived" }, { "var": "event.amount" }] }
+      },
+      "dependencies": []
+    }
+  ]
+}

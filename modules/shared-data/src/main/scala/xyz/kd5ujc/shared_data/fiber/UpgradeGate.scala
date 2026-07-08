@@ -63,13 +63,13 @@ object UpgradeGate {
    * [[UpgradePolicy.Arbitrary]] (legacy) ⇒ always admit.
    */
   def gateByUpgradePolicy(
-    oldP:       Option[FiberPolicy],
+    oldP:       FiberPolicy,
     old:        Records.StateMachineFiberRecord,
     newBinding: SchemaBinding,
     state:      CalculatedState,
     addrs:      Set[Address]
   ): Option[FailureReason] =
-    oldP.map(_.effectiveUpgradePolicy).getOrElse(UpgradePolicy.default) match {
+    oldP.effectiveUpgradePolicy match {
       case UpgradePolicy.Arbitrary => None
 
       case UpgradePolicy.Immutable =>
@@ -220,8 +220,8 @@ object UpgradeGate {
    * If the OLD policy declares a `compatibleWith` bridge window, the NEW (verified) binding version must fall
    * inside it; otherwise unconstrained. The predecessor declares which successor versions it will bridge TO.
    */
-  private def compatBridge(oldP: Option[FiberPolicy], newBinding: SchemaBinding): Option[FailureReason] =
-    oldP.flatMap(_.compatibleWith).flatMap { window =>
+  private def compatBridge(oldP: FiberPolicy, newBinding: SchemaBinding): Option[FailureReason] =
+    oldP.dials.flatMap(_.compatibleWith).flatMap { window =>
       if (window.contains(newBinding.version)) None
       else
         Some(

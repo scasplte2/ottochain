@@ -1,0 +1,19 @@
+{
+  "stateMessage": {
+    "typeName": "Fed",
+    "fields": [
+      { "name": "rateChangeCount", "number": 1, "typeName": "int64", "repeated": false, "optional": false },
+      { "name": "status", "number": 2, "typeName": "string", "repeated": false, "optional": true },
+      { "name": "baseRate", "number": 3, "typeName": "double", "repeated": false, "optional": true }
+    ]
+  },
+  "commands": {
+    "set_rate": {
+      "typeName": "SetRate",
+      "fields": [
+        { "name": "bankId", "number": 1, "typeName": "string", "repeated": false, "optional": false },
+        { "name": "newBaseRate", "number": 2, "typeName": "double", "repeated": false, "optional": false }
+      ]
+    }
+  }
+}

@@ -254,10 +254,10 @@ object FiberEngine {
        * ASSERTED commute-law obligation; `Arbitrary`/absent imply none. Read from the OLD (hash-pinned)
        * policy of the migrating fiber.
        */
-      private def commuteObligationFor(policy: Option[FiberPolicy]): Boolean =
-        policy.map(_.effectiveUpgradePolicy) match {
-          case Some(UpgradePolicy.AppendOnly) | Some(UpgradePolicy.Governed(_)) => true
-          case _                                                                => false
+      private def commuteObligationFor(policy: FiberPolicy): Boolean =
+        policy.effectiveUpgradePolicy match {
+          case UpgradePolicy.AppendOnly | UpgradePolicy.Governed(_) => true
+          case _                                                    => false
         }
 
       private def migrateStateMachine(
@@ -573,7 +573,7 @@ object FiberEngine {
         sm:        Records.StateMachineFiberRecord,
         mutations: List[FiberEffect.DependencyMutated]
       ): Option[FailureReason] =
-        sm.definition.policy.flatMap(_.dependencyPolicy).flatMap { dp =>
+        sm.definition.policy.dials.flatMap(_.dependencyPolicy).flatMap { dp =>
           dp.mode match {
             case DependencyMode.Open => None
             case DependencyMode.Allowlist =>
@@ -652,7 +652,7 @@ object FiberEngine {
       private def checkMaxGenerations(
         fiber: Records.StateMachineFiberRecord
       ): FiberT[F, Either[FailureReason, Unit]] =
-        fiber.definition.policy.flatMap(_.maxGenerations) match {
+        fiber.definition.policy.dials.flatMap(_.maxGenerations) match {
           case None => ().asRight[FailureReason].pure[FiberT[F, *]]
           case Some(cap) =>
             fiber.definition.computeDigest.liftFiber.flatMap { selfDigest =>

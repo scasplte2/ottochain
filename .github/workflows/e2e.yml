@@ -26,7 +26,7 @@ jobs:
       matrix:
         lane:
           - name: core
-            filter: '--exclude sigma-mixer,rule110,staked-oracle-pool,tictactoe'
+            filter: '--exclude sigma-mixer,rule110,staked-oracle-pool,tictactoe,riverdale-economy'
             concurrency: ''
             ordinalThreshold: ''
             maxResubmits: ''
@@ -89,6 +89,22 @@ jobs:
             ordinalThreshold: '30'
             maxResubmits: '1'
             timeout: 45
+          # riverdale-economy: the full 6-party economy e2e (REAL asset custody + multi-fiber orchestration).
+          # FLOW 1 (concurrency 1, ~60 steps, one causal narrative) over 6 party-owned fibers
+          # (alice=manufacturer, bob=retailer, carol=consumer, dave=bank, erin=fed, frank=gov): cross-fiber
+          # _triggers, real `_transferAsset` RVD/GOODS custody between fibers, two verified-bound versioned
+          # package upgrades (retailer.machine + fed.machine v1->v2 + migration + v2-only transitions), a
+          # broadcast Gov tax sweep, a spawned child auction, and a wallet-context STAKE morphism. FLOW 2 is
+          # the negative-test flow (wrong-party / replay / mint-over-cap / non-monotonic publish — all
+          # graceful ML0 rejections). Needs all 6 distinct party wallets (a step's `signers` ARE its
+          # owners/authorizers). Higher timeout: ~70 mutating + assert steps over committed reads.
+          - name: riverdale-economy
+            filter: '--only riverdale-economy'
+            concurrency: '1'
+            wallets: 'alice,bob,carol,dave,erin,frank'
+            ordinalThreshold: '15'
+            maxResubmits: '2'
+            timeout: 55
 
     steps:
       - uses: actions/checkout@v7
@@ -149,6 +165,12 @@ jobs:
           fi
           echo "tessellation=${TESS_VER}" >> $GITHUB_OUTPUT
 
+          # Compute the release TAG to fetch — the v4.0.0 → rc.10 asset-availability mapping lives here so
+          # the JAR cache key (below) matches exactly what is downloaded.
+          TESS_TAG="v${TESS_VER}"
+          [ "$TESS_TAG" = "v4.0.0" ] && TESS_TAG="v4.0.0-rc.10"
+          echo "tess_tag=${TESS_TAG}" >> $GITHUB_OUTPUT
+
       # Clone tessellation develop for Docker infrastructure (compose-runner, Dockerfiles, scripts).
       # Develop has the latest compose-runner with SKIP_ASSEMBLY support for pre-staged JARs.
       # We do NOT build tessellation — all deps resolve from Maven Central.
@@ -157,36 +179,45 @@ jobs:
           git clone --depth 1 --branch develop \
             https://github.com/Constellation-Labs/tessellation.git tessellation
 
-      # Download pre-built GL0/GL1/keytool/wallet JARs from tessellation GitHub release.
-      # metakit and tessellation-sdk resolve from Maven Central via sbt — no publishLocal needed.
-      - name: Download tessellation release JARs
-        run: |
-          TESS_TAG="v${{ steps.versions.outputs.tessellation }}"
-          # The v4.0.0 git tag has no GitHub release with jar assets (the asset
-          # pipeline only runs on tessellation's release/* branches). v4.0.0-rc.10
-          # carries the full asset set and is version-stamp-only away from final.
-          # Remove this mapping once Constellation publishes v4.0.0 release assets.
-          [ "$TESS_TAG" = "v4.0.0" ] && TESS_TAG="v4.0.0-rc.10"
-          REPO="Constellation-Labs/tessellation"
-          BASE_URL="https://github.com/${REPO}/releases/download/${TESS_TAG}"
-          JARS_DIR="tessellation/docker/jars"
-          mkdir -p "$JARS_DIR"
+      # Cache the pre-built tessellation release JARs — they are immutable per release tag, so fetch them
+      # from the GitHub release ONCE and reuse across runs. A cache HIT also makes the lane immune to a
+      # transient release-download 404/5xx (the download step is skipped entirely).
+      - name: Cache tessellation release JARs
+        id: cache-tess-jars
+        uses: actions/cache@v6
+        with:
+          path: tess-jars
+          key: tessellation-jars-${{ steps.versions.outputs.tess_tag }}
 
-          echo "Downloading tessellation JARs from release ${TESS_TAG}..."
+      # Download pre-built GL0/GL1/keytool/wallet JARs from the tessellation GitHub release (cache MISS only).
+      # metakit + tessellation-sdk resolve from Maven Central via sbt — no publishLocal needed.
+      - name: Download tessellation release JARs
+        if: steps.cache-tess-jars.outputs.cache-hit != 'true'
+        run: |
+          BASE_URL="https://github.com/Constellation-Labs/tessellation/releases/download/${{ steps.versions.outputs.tess_tag }}"
+          mkdir -p tess-jars
+          echo "Downloading tessellation JARs from release ${{ steps.versions.outputs.tess_tag }}..."
           declare -A JAR_MAP=(
             ["cl-node.jar"]="gl0.jar"
             ["cl-dag-l1.jar"]="gl1.jar"
             ["cl-keytool.jar"]="keytool.jar"
             ["cl-wallet.jar"]="wallet.jar"
           )
-
           for release_name in "${!JAR_MAP[@]}"; do
             local_name="${JAR_MAP[$release_name]}"
             echo "  ${release_name} → ${local_name}"
-            curl -fsSL -o "${JARS_DIR}/${local_name}" "${BASE_URL}/${release_name}"
-            echo "    ✓ $(stat -c%s "${JARS_DIR}/${local_name}") bytes"
+            # --retry + --retry-all-errors rides out a TRANSIENT release-CDN 404/5xx on a cache miss
+            curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors \
+              -o "tess-jars/${local_name}" "${BASE_URL}/${release_name}"
+            echo "    ✓ $(stat -c%s "tess-jars/${local_name}") bytes"
           done
-          ls -la "$JARS_DIR"
+
+      # Stage the (cached or freshly-downloaded) tessellation JARs into the compose-runner jars dir.
+      - name: Stage tessellation JARs
+        run: |
+          mkdir -p tessellation/docker/jars
+          cp tess-jars/*.jar tessellation/docker/jars/
+          ls -la tessellation/docker/jars
 
       # Only build ottochain metagraph JARs from source.
       # metakit + tessellation-sdk are resolved from Maven Central.
