@@ -26,6 +26,7 @@ import xyz.kd5ujc.schema.fiber.{
   SpawnOwnerPolicy
 }
 import xyz.kd5ujc.shared_data.fiber.core._
+import xyz.kd5ujc.shared_data.fiber.evaluation.ValueKind
 import xyz.kd5ujc.shared_data.syntax.all._
 
 import eu.timepit.refined.refineV
@@ -179,9 +180,11 @@ object SpawnValidator {
                         )
                     }
                   case other =>
+                    // COMMITTED (audit L1): describe the offending value by OttoChain's stable `ValueKind`, never
+                    // by a metakit value's `toString` (a case-class rename/field-change would fork a rejected tx).
                     Validated.invalidNel(
                       FailureReason.InvalidChildIdFormat(
-                        other.toString.take(50),
+                        s"<${ValueKind.of(other)}>",
                         "Expected string value"
                       )
                     )
@@ -284,9 +287,11 @@ object SpawnValidator {
                                   Validated.invalidNel(FailureReason.InvalidOwnerAddress(addr, err))
                               }
                             case other =>
+                              // COMMITTED (audit L1): describe by OttoChain's stable `ValueKind`, never by a
+                              // metakit value's `toString` (a rename would fork a mixed-version set on a rejected tx).
                               Validated.invalidNel(
                                 FailureReason.InvalidOwnerAddress(
-                                  other.toString.take(30),
+                                  s"<${ValueKind.of(other)}>",
                                   "Expected string address"
                                 )
                               )

@@ -21,6 +21,8 @@ import xyz.kd5ujc.schema.{CalculatedState, Records}
 import xyz.kd5ujc.shared_data.fiber.core._
 import xyz.kd5ujc.shared_data.syntax.all._
 
+import org.typelevel.log4cats.slf4j.Slf4jLogger
+
 /**
  * Unified evaluator for both state machine and script fibers.
  *
@@ -61,7 +63,8 @@ object FiberEvaluator {
     S:    Stateful[G, ExecutionState],
     A:    Ask[G, FiberContext],
     lift: F ~> G
-  ): FiberEvaluator[G] =
+  ): FiberEvaluator[G] = {
+    val logger = Slf4jLogger.getLogger[F]
     new FiberEvaluator[G] {
 
       def evaluate(
@@ -230,15 +233,21 @@ object FiberEvaluator {
               tryTransitions(fiber, input, proofs, rest, attemptedGuards + 1, caller)
 
             case Right(EvaluationResult(other, _, _, _)) =>
+              // COMMITTED (audit L1): render the value kind through OttoChain's own stable `ValueKind`, never
+              // metakit's `getClass.getSimpleName` (a class rename would fork a mixed-version set on a rejected tx).
               FailureReason
                 .EvaluationError(
                   GasExhaustionPhase.Guard,
-                  s"Guard returned non-boolean: ${other.getClass.getSimpleName}"
+                  s"Guard returned non-boolean: ${ValueKind.of(other)}"
                 )
                 .pureOutcome[G]
 
             case Left(ex) =>
-              ex.toFailureReason[G](GasExhaustionPhase.Guard).map(_.asOutcome)
+              // The committed reason (via `toFailureReason`) is version-stable and carries NO exception text;
+              // keep the rich metakit detail alive in LOGS only (audit L1).
+              lift(
+                logger.warn(ex)(s"guard evaluation raised for fiber ${fiber.fiberId}: ${ex.getMessage}")
+              ) >> ex.toFailureReason[G](GasExhaustionPhase.Guard).map(_.asOutcome)
           }
         } yield result
 
@@ -427,4 +436,5 @@ object FiberEvaluator {
             }
         } yield result
     }
+  }
 }

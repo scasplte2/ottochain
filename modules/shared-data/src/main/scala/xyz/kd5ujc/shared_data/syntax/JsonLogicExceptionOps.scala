@@ -29,8 +29,13 @@ trait JsonLogicExceptionOps {
           gasUsed <- ExecutionOps.getGasUsed[G]
           limits  <- ExecutionOps.askLimits[G]
         } yield FailureReason.GasExhaustedFailure(gasUsed, limits.maxGas, phase)
-      case other =>
-        (FailureReason.EvaluationError(phase, other.getMessage): FailureReason).pure[G]
+      case _ =>
+        // COMMITTED via `EventReceipt.errorMessage` (-> `lastReceipt` in CalculatedState): the reason must be a
+        // pure function of OttoChain-controlled data, so we DROP the metakit exception's `getMessage` (a metakit
+        // reword would fork a mixed-version validator set on a rejected tx — audit L1). The stable phase + code
+        // are committed; the raw exception detail is logged at the evaluation seams (MeteredEvaluator / the
+        // FiberEvaluator guard / AssetCombiner), never here.
+        (FailureReason.EvaluationError(phase, FailureReason.EvaluationErrorCode): FailureReason).pure[G]
     }
   }
 }

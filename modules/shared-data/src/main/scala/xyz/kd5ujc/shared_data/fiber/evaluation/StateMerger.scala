@@ -51,9 +51,11 @@ object StateMerger {
           mergeArrayUpdates(currentState, updates)
 
         case _ =>
+          // COMMITTED (audit L1): render the value kind through OttoChain's own stable `ValueKind`, never
+          // metakit's `getClass.getSimpleName` (a class rename would fork a mixed-version set on a rejected tx).
           (FailureReason.EvaluationError(
             GasExhaustionPhase.Effect,
-            s"Effect must return MapValue or ArrayValue, got: ${effectResult.getClass.getSimpleName}"
+            s"Effect must return MapValue or ArrayValue, got: ${ValueKind.of(effectResult)}"
           ): FailureReason)
             .asLeft[MapValue]
             .pure[F]
@@ -93,9 +95,12 @@ object StateMerger {
             err.asLeft[Map[String, JsonLogicValue]].pure[F]
 
           case (_, other) =>
+            // COMMITTED (audit L1): describe the offending element by OttoChain's stable `ValueKind`, never by
+            // interpolating the metakit value's `toString` (a case-class rename/field-change would fork a
+            // mixed-version set on a rejected tx).
             (FailureReason.EvaluationError(
               GasExhaustionPhase.Effect,
-              s"Invalid effect update format, expected [key, value] array: $other"
+              s"Invalid effect update format, expected [key, value] array (got: ${ValueKind.of(other)})"
             ): FailureReason)
               .asLeft[Map[String, JsonLogicValue]]
               .pure[F]

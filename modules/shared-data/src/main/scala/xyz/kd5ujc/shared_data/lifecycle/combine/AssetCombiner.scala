@@ -24,6 +24,7 @@ import xyz.kd5ujc.schema.asset._
 import xyz.kd5ujc.schema.fiber.{ExecutionLimits, FiberEffect, FiberOrdinal, FiberStatus}
 import xyz.kd5ujc.schema.registry._
 import xyz.kd5ujc.schema.{AssetCommit, CalculatedState, OnChain, Updates}
+import xyz.kd5ujc.shared_data.fiber.evaluation.ValueKind
 import xyz.kd5ujc.shared_data.syntax.all._
 
 import io.circe.syntax.EncoderOps
@@ -1088,9 +1089,14 @@ class AssetCombiner[F[_]: Async: SecurityProvider](
         case Right(EvaluationResult(BoolValue(false), _, _, _)) =>
           Async[F].raiseError(CombineRejected(reason))
         case Right(EvaluationResult(other, _, _, _)) =>
-          Async[F].raiseError(CombineRejected(s"$reason (guard returned non-boolean ${other.tag})"))
+          // COMMITTED via RejectionReceipt.reason (audit L1): the value kind is rendered through OttoChain's own
+          // stable `ValueKind`, not metakit's `.tag` (byte-neutral today, but pins us against a metakit re-tag).
+          Async[F].raiseError(CombineRejected(s"$reason (guard returned non-boolean ${ValueKind.of(other)})"))
         case Left(ex) =>
-          Async[F].raiseError(CombineRejected(s"$reason (guard evaluation failed: ${ex.getMessage})"))
+          // The committed reason carries NO exception text (audit L1 — a metakit reword must not change a
+          // rejected tx's committed hash); the raw metakit detail is preserved in LOGS only.
+          Slf4jLogger.getLogger[F].warn(ex)(s"$reason (guard evaluation raised: ${ex.getMessage})") >>
+          Async[F].raiseError(CombineRejected(s"$reason (guard evaluation failed)"))
       }
 
   /** Context for a mint guard: the requested holder, amount, signers, ordinal, derived supply. */
