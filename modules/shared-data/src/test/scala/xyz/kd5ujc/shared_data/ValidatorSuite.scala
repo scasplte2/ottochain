@@ -605,7 +605,11 @@ object ValidatorSuite extends SimpleIOSuite {
     }
   }
 
-  test("fiberIsActive: archived fiber rejects events") {
+  // audit M1 / CLAUDE.md rule #3: the block-acceptance gate no longer reads the mutable fiber status
+  // (`fiberIsActive`). A transition against an archived fiber PASSES `validateSignedUpdate` — otherwise a
+  // concurrent same-fiber archive would flip it Invalid at ML0 re-validation and poison the WHOLE DL1 block.
+  // The combiner is the authoritative gate: the engine aborts the non-active fiber and does not advance it.
+  test("archived fiber: transition passes validateSignedUpdate (no block poisoning); combiner does not advance it") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
@@ -627,9 +631,14 @@ object ValidatorSuite extends SimpleIOSuite {
 
         processUpdate = Updates.TransitionStateMachine(fiberId, "advance", MapValue(Map.empty), FiberOrdinal.MinValue)
         processProof <- fixture.registry.generateProofs(processUpdate, Set(Alice))
-        result       <- validator.validateSignedUpdate(stateAfterArchive, Signed(processUpdate, processProof))
-      } yield expect(result.isInvalid) and
-      expect(result.swap.exists(_.exists(_.message.toLowerCase.contains("not active"))))
+        // ML0 block-acceptance gate: no longer rejects on mutable status (would poison the block)
+        gateResult <- validator.validateSignedUpdate(stateAfterArchive, Signed(processUpdate, processProof))
+        // combiner (authoritative): engine aborts the archived fiber — status stays Archived, no state advance
+        combined <- combiner.insert(stateAfterArchive, Signed(processUpdate, processProof))
+        fiber = combined.calculated.stateMachines.get(fiberId)
+      } yield expect(gateResult.isValid) and
+      expect(fiber.map(_.status).contains(FiberStatus.Archived)) and
+      expect(fiber.map(_.currentState).contains(StateId("stateA")))
     }
   }
 
@@ -707,7 +716,10 @@ object ValidatorSuite extends SimpleIOSuite {
     }
   }
 
-  test("transitionExists: undefined transition rejected") {
+  // audit M1: the block-acceptance gate no longer reads `transitionExists` (a mutable read — a concurrent
+  // same-fiber state advance can change which `(currentState,event)` resolves). An undefined-transition event
+  // PASSES `validateSignedUpdate`; the combiner's engine aborts it (NoTransitionFound) without advancing.
+  test("undefined transition: passes validateSignedUpdate (no block poisoning); combiner does not advance it") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
@@ -726,9 +738,49 @@ object ValidatorSuite extends SimpleIOSuite {
         processUpdate = Updates
           .TransitionStateMachine(fiberId, "nonexistent", MapValue(Map.empty), FiberOrdinal.MinValue)
         processProof <- fixture.registry.generateProofs(processUpdate, Set(Alice))
-        result       <- validator.validateSignedUpdate(stateAfterCreate, Signed(processUpdate, processProof))
-      } yield expect(result.isInvalid) and
-      expect(result.swap.exists(_.exists(_.message.toLowerCase.contains("transition"))))
+        gateResult   <- validator.validateSignedUpdate(stateAfterCreate, Signed(processUpdate, processProof))
+        combined     <- combiner.insert(stateAfterCreate, Signed(processUpdate, processProof))
+        fiber = combined.calculated.stateMachines.get(fiberId)
+      } yield expect(gateResult.isValid) and
+      expect(fiber.map(_.currentState).contains(StateId("stateA")))
+    }
+  }
+
+  // audit M1: a STALE-sequence transition (target seq behind the fiber's current seq) must PASS the gate —
+  // a concurrent same-fiber advance that lands first would otherwise flip it Invalid and poison the block.
+  // Replay protection is preserved by the combiner's exact-sequence check + atomic bump (graceful
+  // CombineRejected -> RejectionReceipt), which leaves the fiber untouched.
+  test("stale-sequence transition: passes validateSignedUpdate (no block poisoning); combiner rejects gracefully") {
+    TestFixture.resource().use { fixture =>
+      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
+      implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
+      for {
+        combiner  <- Combiner.make[IO]().pure[IO]
+        validator <- Validator.make[IO]
+        fiberId   <- UUIDGen.randomUUID[IO]
+
+        createUpdate = Updates
+          .CreateStateMachine(fiberId, Fixtures.simpleDefinitionWithTransition(), MapValue(Map.empty))
+        createProof <- fixture.registry.generateProofs(createUpdate, Set(Alice))
+        stateAfterCreate <- combiner
+          .insert(DataState(OnChain.genesis, CalculatedState.genesis), Signed(createUpdate, createProof))
+
+        // advance once: fiber moves stateA -> stateB and its sequence number bumps past MinValue
+        advance = Updates.TransitionStateMachine(fiberId, "advance", MapValue(Map.empty), FiberOrdinal.MinValue)
+        advanceProof      <- fixture.registry.generateProofs(advance, Set(Alice))
+        stateAfterAdvance <- combiner.insert(stateAfterCreate, Signed(advance, advanceProof))
+
+        // replay the SAME (now stale, target=MinValue) transition against the advanced state
+        gateResult <- validator.validateSignedUpdate(stateAfterAdvance, Signed(advance, advanceProof))
+        combined   <- combiner.insert(stateAfterAdvance, Signed(advance, advanceProof))
+        rejections = combined.onChain.latestLogs.values.flatten.collect { case r: FiberLogEntry.RejectionReceipt =>
+          r.reason
+        }.toList
+        fiber = combined.calculated.stateMachines.get(fiberId)
+      } yield expect(gateResult.isValid) and
+      expect(rejections.exists(_.toLowerCase.contains("sequence"))) and
+      expect(fiber.map(_.currentState).contains(StateId("stateB")))
     }
   }
 

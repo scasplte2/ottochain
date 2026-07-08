@@ -10,8 +10,9 @@ import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.Signed
 
 import xyz.kd5ujc.schema.fiber.{FiberOrdinal, _}
+import xyz.kd5ujc.schema.registry.{RegistryName, SchemaRef, VersionReq}
 import xyz.kd5ujc.schema.{CalculatedState, OnChain, Updates}
-import xyz.kd5ujc.shared_data.lifecycle.Combiner
+import xyz.kd5ujc.shared_data.lifecycle.{Combiner, Validator}
 import xyz.kd5ujc.shared_test.Participant._
 import xyz.kd5ujc.shared_test.TestFixture
 
@@ -166,6 +167,45 @@ object ScriptValidationSuite extends SimpleIOSuite {
           )
           .contains(false)
       )
+    }
+  }
+
+  // audit C3 / CLAUDE.md rule #3: `validateSignedUpdate` (the block-acceptance gate) no longer reads the
+  // registry version lineage for a bound CreateScript. A ref that does not resolve PASSES the gate — a
+  // concurrent third-party publish/yank must NOT be able to flip a once-valid CreateScript to Invalid and
+  // poison the WHOLE DL1 block (tessellation all-or-nothing). The ref+hash bind is re-verified GRACEFULLY in
+  // `ScriptCombiner.resolveScriptBinding` (CombineRejected -> RejectionReceipt); the script is not created.
+  test("C3: bound CreateScript with an unresolvable registry ref passes validateSignedUpdate; combiner rejects") {
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
+      for {
+        combiner  <- Combiner.make[IO]().pure[IO]
+        validator <- Validator.make[IO]
+        fiberId   <- IO.randomUUID
+
+        createUpdate = Updates.CreateScript(
+          fiberId = fiberId,
+          scriptProgram = ConstExpression(MapValue(Map("result" -> IntValue(1)))),
+          initialState = None,
+          accessControl = AccessControlPolicy.Public,
+          // points at a registry name that does not exist in state — combiner will reject the bind
+          schemaRef = Some(SchemaRef(RegistryName.unsafe("ghost.script"), VersionReq.Latest))
+        )
+        createProof <- fixture.registry.generateProofs(createUpdate, Set(Alice))
+        genesis = DataState(OnChain.genesis, CalculatedState.genesis)
+
+        // ML0 gate: does NOT resolve the ref (no lineage read) -> valid, block not poisoned
+        gateResult <- validator.validateSignedUpdate(genesis, Signed(createUpdate, createProof))
+        // combiner (authoritative): unresolvable bind -> graceful CombineRejected, script not created
+        combined <- combiner.insert(genesis, Signed(createUpdate, createProof))
+        rejected = combined.onChain.latestLogs.values.flatten.exists {
+          case _: FiberLogEntry.RejectionReceipt => true
+          case _                                 => false
+        }
+      } yield expect(gateResult.isValid) and
+      expect(combined.calculated.scripts.get(fiberId).isEmpty) and
+      expect(rejected)
     }
   }
 }
