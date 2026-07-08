@@ -125,6 +125,22 @@ object FiberEvaluator {
        *     `$caller`) whose id is not in the allowlist is rejected before the guard. A user/wallet-origin
        *     transition (`caller = None`) is governed by the existing `proofs`/`authorizedSigners` path, NOT by
        *     `acceptedCallers`, so it is intentionally unaffected here.
+       *
+       * ══ SCOPE & FOOTGUNS (audit 2026-07-07, findings M2 / M3 — READ BEFORE RELYING ON `acceptedCallers`) ══
+       *   - M2 (cascade is the only gate): on the CASCADE path (`caller = Some(id)`), this short-circuit — the
+       *     guard plus `acceptedCallers` — is the ENTIRE authorization boundary. The cascade does NOT run the
+       *     owner/participant gate that the direct wallet path enforces (`FiberValidator.L0`), so with
+       *     `acceptedCallers` unset (default OPEN) any fiber can drive this transition. See
+       *     `TriggerHandler.handleStateMachine` for the full asymmetry note and app-author guidance.
+       *   - M3a (scope): `acceptedCallers` gates ONLY fiber-origin (cascade) callers. It is NEVER consulted for
+       *     a wallet-origin transition (`caller = None`) — those remain owner/participant-gated. It is thus a
+       *     cascade-caller allowlist, not a general "who may call me" ACL.
+       *   - M3b (front-run): `acceptedCallers` matches fiber UUIDs, and `CreateStateMachine.fiberId` is
+       *     CREATOR-CHOSEN. Authorizing a not-yet-created id is front-runnable: any account can
+       *     `CreateStateMachine` with exactly that id and thereby satisfy the allowlist. Prefer authorizing
+       *     ids of already-existing fibers, or pin trust to the guard's `$caller`/`$proofs` checks. (Rejecting
+       *     unresolved `acceptedCallers` entries at set-time / linting them is a possible additive follow-up;
+       *     the signed `acceptedCallers` semantics are intentionally left unchanged here per CLAUDE.md rule #1.)
        */
       private def policyShortCircuit(
         fiber:  Records.StateMachineFiberRecord,

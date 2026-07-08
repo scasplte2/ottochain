@@ -139,6 +139,9 @@ object SpawnProcessor {
             stateData = initialData,
             stateDataHash = initialDataHash,
             sequenceNumber = FiberOrdinal.MinValue,
+            // `resolvedOwners` is the value produced by SpawnValidator, which now applies a FAIL-CLOSED subset
+            // floor (audit 2026-07-07, H1): it is guaranteed ⊆ parent.owners regardless of the spawnOwnerPolicy
+            // dial. A child can therefore never be minted "owned by" an address outside its parent's lineage.
             owners = spawn.resolvedOwners,
             status = FiberStatus.Active,
             parentFiberId = Some(parent.fiberId)
