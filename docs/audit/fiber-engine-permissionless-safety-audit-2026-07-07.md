@@ -53,7 +53,8 @@ io/constellationnetwork/metagraph_sdk/std/{JsonBinaryCodec,JsonBinaryHasher,Json
 | C3 | Critical | Script create/upgrade reads registry lineage in `validateSignedUpdate` (Rule #3) | **Remediated** 2026-07-07 (tested; pending commit) |
 | H1 | High | Spawn owner-forgery + fiber-origin `_scriptCall` = script access bypass | **Remediated** 2026-07-07 (tested; pending commit) |
 | H2 | High | Un-metered O(chain-state) host work amplifies spam | **Deferred** (execution-cost design owned) |
-| M1 | Medium | Fiber/script own-record stateful checks in the block-acceptance gate | **Remediated** 2026-07-07 (tested; pending commit; fiber-upgrade residual left as fast-follow) |
+| M1 | Medium | Fiber/script own-record stateful checks in the block-acceptance gate | **Remediated** 2026-07-07 (tested; committed; fiber-upgrade residual now also closed) |
+| L1 | Low | Version-dependent text in committed failure receipts (mixed-version fork risk) | **Remediated** 2026-07-07 (tested; committed — `ValueKind` + stable `reasonCode`) |
 | M2 | Medium | Cascade transitions unauthenticated (direct-vs-cascade auth asymmetry) | **Documented** 2026-07-07 (pending commit; closed-default deferred) |
 | M3 | Medium | `acceptedCallers` semantic footguns + not-yet-created-UUID front-run | **Documented** 2026-07-07 (pending commit) |
 | L1–L6 | Low | Hardening notes (see below) | Open |
@@ -390,7 +391,8 @@ and MUST be identical across all validators.
 | C2 | _pending commit_ | `AssetCombiner`: `consumeComposeConsent` (per-counterparty signer-owned OR nonce-authorized, mandatory) + `requireDistinctCounterParties` (dedup/self-exclusion) on Compose & Pool. 6 new Σ-conservation tests. Residual: single `nonce` field caps multi-party cross-holder compose (pre-existing shape limit). |
 | C3 | _pending commit_ | `ScriptValidator.L0`: dropped `scriptRefResolvesAndMatches` from create/upgrade (combiner `resolveScriptBinding` re-verifies gracefully). |
 | H1 | _pending commit_ | `SpawnValidator`: child owners forced ⊆ parent owners under ALL dials (fail-closed floor). `TriggerHandler`: deterministic `owners.toList.sortBy(...).headOption` caller. Residual: fiber-caller-as-distinct-principal redesign (follow-up). |
-| M1 | _pending commit_ | `FiberValidator`/`ScriptValidator` `CombinedValidator`: ML0 gate now structural + immutable-owner-signature only; dropped `fiberIsActive`/`scriptIsActive`/`transitionExists`/`sequenceNumberMatches` (combiner enforces gracefully). DL1 `L1Validator` unchanged. Residual: fiber-upgrade `bindingNameMatches`/`currentStateInDefinition`/`upgradePolicyPermits` left in gate (fast-follow). |
+| M1 | _committed_ | `FiberValidator`/`ScriptValidator` `CombinedValidator`: ML0 gate now structural + immutable-owner-signature only; dropped `fiberIsActive`/`scriptIsActive`/`transitionExists`/`sequenceNumberMatches` (combiner enforces gracefully). DL1 `L1Validator` unchanged. Residual CLOSED: fiber-upgrade `bindingNameMatches`/`currentStateInDefinition`/`upgradePolicyPermits` removed too (re-enforced in combiner/`UpgradeGate`). |
+| L1 | _committed_ | New `ValueKind.of` (ottochain-pinned value-kind vocabulary) + `FailureReason.reasonCode`; committed receipts no longer embed exception `getMessage`/metakit `getClass.getSimpleName`/`.tag`/`toString`; raw text → logs. Sites: `JsonLogicExceptionOps`, `FiberEvaluator`, `StateMerger`, `MeteredEvaluator`, `AssetCombiner`, `SpawnValidator`. `FailureReasonCanonicalSuite` guards it. |
 | M2 | _pending commit_ | Docs: cascade auth asymmetry at `TriggerHandler.handleStateMachine`. Closed cascade-default deferred (needs a new omit-safe `cascadePosture` dial). |
 | M3 | _pending commit_ | Docs: `acceptedCallers` gates cascade callers only + not-yet-created-UUID front-run, at `FiberEvaluator.policyShortCircuit`. |
 | C1, H2 | _deferred_ | fee/execution-cost design owned by team (H2 approach documented in-finding). |
