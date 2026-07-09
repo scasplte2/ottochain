@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import type {
   OttochainMessage,
-  SchemaShape,
+  MachineShape,
   StateMachineDefinition,
   CalculatedState,
 } from '@ottochain/sdk/core';
@@ -22,7 +22,7 @@ export interface PublishVersionOptions {
   name: string;
   version: string;
   definition: string | StateMachineDefinition;
-  schemaShape: string | SchemaShape;
+  schemaShape: string | MachineShape;
   schemaB64?: string;
   strict?: boolean;
   metadata?: Record<string, string>;
@@ -39,14 +39,14 @@ function loadMaybe<T>(v: string | T): T {
 }
 
 export const generator = ({ options }: { cid?: string; wallets?: unknown; options: PublishVersionOptions }): OttochainMessage => {
-  // NOTE: chain renamed PublishVersion -> PublishMachineVersion and `schemaShape` -> `machineShape`
-  // (machine/script registry symmetry). The @ottochain/sdk types are not regenerated yet, so this is
-  // typed loosely and runs under tsx (no compile-time check) — "force past" until the SDK is updated.
+  // The chain renamed PublishVersion -> PublishMachineVersion and `schemaShape` -> `machineShape`
+  // (machine/script registry symmetry); the SDK's `MachineShape` supersedes the old `SchemaShape`.
+  // As of @ottochain/sdk 2.5.0 the types are aligned, so this now type-checks (no more tsx "force past").
   const msg = {
     name: options.name,
     version: options.version,
     schemaB64: options.schemaB64 ?? Buffer.from(`descriptor:${options.name}:${options.version}`).toString('base64'),
-    machineShape: loadMaybe<SchemaShape>(options.schemaShape),
+    machineShape: loadMaybe<MachineShape>(options.schemaShape),
     definition: loadMaybe<StateMachineDefinition>(options.definition),
     // `strict` is required on the chain (no default) — always send it so the signed canonical matches
     // what the chain re-derives. `metadata` is Option (omit-safe), so it stays conditional.
