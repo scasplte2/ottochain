@@ -40,6 +40,11 @@ jobs:
           #   rule110        light per-step; concurrency 3 is the intra-lane contention probe.
           #   staked-oracle  quorum-3 pool; webhook-confirmed; needs 3 distinct joiners.
           #   riverdale-economy  full 6-party economy, REAL asset custody + multi-fiber — the HEAVY lane.
+          #     Highest confirm budget (ordinalThreshold 30 × maxResubmits 4 = 150 ordinals): at its
+          #     deepest cross-fiber contention point a VALID transition can be excluded from every DL1
+          #     block by one trailing DL1 node (no apply, no reject — "not included") until it catches
+          #     up. Observed twice on run 28912533047; result=VALID at all DL1 nodes, zero ML0
+          #     rejections — a block-inclusion timing issue, not a validation bug. The wide window rides it out.
           ALL="$(cat <<'JSON'
           [
             {"name":"core","filter":"--exclude sigma-mixer,rule110,staked-oracle-pool,tictactoe,riverdale-economy","concurrency":"","ordinalThreshold":"","maxResubmits":"","wallets":"","timeout":30},
@@ -47,7 +52,7 @@ jobs:
             {"name":"sigma-mixer","filter":"--only sigma-mixer","concurrency":"2","ordinalThreshold":"10","maxResubmits":"4","wallets":"","timeout":25},
             {"name":"rule110","filter":"--only rule110","concurrency":"3","ordinalThreshold":"10","maxResubmits":"4","wallets":"","timeout":30},
             {"name":"staked-oracle","filter":"--only staked-oracle-pool","concurrency":"1","ordinalThreshold":"30","maxResubmits":"1","wallets":"alice,bob,carol","timeout":45},
-            {"name":"riverdale-economy","filter":"--only riverdale-economy","concurrency":"1","ordinalThreshold":"15","maxResubmits":"2","wallets":"alice,bob,carol,dave,erin,frank","timeout":55}
+            {"name":"riverdale-economy","filter":"--only riverdale-economy","concurrency":"1","ordinalThreshold":"30","maxResubmits":"4","wallets":"alice,bob,carol,dave,erin,frank","timeout":55}
           ]
           JSON
           )"
