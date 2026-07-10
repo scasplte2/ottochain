@@ -102,8 +102,15 @@ jobs:
             filter: '--only riverdale-economy'
             concurrency: '1'
             wallets: 'alice,bob,carol,dave,erin,frank'
-            ordinalThreshold: '15'
-            maxResubmits: '2'
+            # Heaviest lane: at the deepest cross-fiber contention point (the commerce→servicing→tax→
+            # auction phase) a VALID transition can be excluded from every DL1 data block by a single
+            # trailing DL1 node — no apply, no reject, "transaction not included" — until a resubmit
+            # window lets the lagging node catch up. Confirmed twice (runs 28912533047 attempt 1 & 3):
+            # the update was `result=VALID` at all 3 DL1 nodes with zero ML0 rejections, just never
+            # combined. So this is a block-inclusion timing issue, NOT a validation bug. A 30-ordinal
+            # patience window (as the staked-oracle pool lane uses) + more resubmits rides it out.
+            ordinalThreshold: '30'
+            maxResubmits: '4'
             timeout: 55
 
     steps:
