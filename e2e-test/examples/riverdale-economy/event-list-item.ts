@@ -5,9 +5,12 @@
  *
  * `auctionOwners` becomes the spawned child's `owners` (SpawnProcessor: child.owners = resolvedOwners).
  * A spawned fiber's transitions are gated by `owners ∪ authorizedSigners` (FiberRules.updateSignedBy-
- * OwnerOrParticipant), so BOTH carol (seller) and bob (bidder) are listed — otherwise bob's `place_bid`
- * / `accept_bid` would be rejected `NotSignedByAuthorizedParty` at ML0. (The PHASE2 contract sketch said
- * `[carol]`; bob is REQUIRED here because the bid + accept are signed by bob.)
+ * OwnerOrParticipant), and a spawn CANNOT set `authorizedSigners` — so BOTH carol (seller) and bob
+ * (bidder) must be `owners`, otherwise bob's `place_bid` / `accept_bid` would be rejected
+ * `NotSignedByAuthorizedParty` at ML0. Under the H1 fail-closed subset floor the child owners must be
+ * ⊆ the parent consumer's owners, so the consumer is created co-owned by [carol, bob] to match (see
+ * example.ts). This models a CLOSED auction (bidder set fixed at spawn); an open/public auction would
+ * instead rely on `transitionPolicy: Open` (not yet wired end-to-end).
  */
 import { AUCTION_CHILD_ID } from './ids.ts';
 
