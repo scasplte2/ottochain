@@ -86,6 +86,30 @@ object TransitionPolicy {
   /** The default tier for an absent dial — `Open` (today's live guard-only behaviour). Use everywhere `None`. */
   val default: TransitionPolicy = Open
 
+  /**
+   * THE binding signer gate: does `policy` admit a transition signed by `signers`, given the fiber's
+   * `owners` and `authorizedSigners`? `Open` ⇒ any signer (the transition guard is the sole gate).
+   *
+   * Enforced ONLY on the authoritative apply path ([[xyz.kd5ujc.shared_data.lifecycle.combine.FiberCombiner]]
+   * `processFiberEvent`), as a graceful `CombineRejected` — NEVER at the ML0 block-acceptance validator. A
+   * policy read at block-acceptance would consult the fiber's `definition.policy`, which is UPGRADE-MUTABLE:
+   * a concurrent upgrade flips it between DL1 block formation and ML0 re-validation, turning an `Invalid` that
+   * drops the ENTIRE all-or-nothing snapshot block (CLAUDE.md rule #3 — the same TOCTOU class as the M1
+   * removals). `owners`/`authorizedSigners` are themselves immutable, but the POLICY that selects among them
+   * is not — so the whole gate must live in the combiner.
+   */
+  def authorizes(
+    policy:            TransitionPolicy,
+    signers:           Set[Address],
+    owners:            Set[Address],
+    authorizedSigners: Set[Address]
+  ): Boolean =
+    policy match {
+      case Open                 => true
+      case OwnersOrParticipants => signers.intersect(owners ++ authorizedSigners).nonEmpty
+      case Owners               => signers.intersect(owners).nonEmpty
+    }
+
   // Bare, self-documenting string tags (mirrors UpgradePolicy's bare-object branch + FiberPolicy.Immutable's
   // "Immutable"): total, fail-closed. The canonical/signing paths `dropNulls`, so an absent dial is stripped
   // and a pre-dial definition stays byte-identical (rule #1); a set dial round-trips through the tag.

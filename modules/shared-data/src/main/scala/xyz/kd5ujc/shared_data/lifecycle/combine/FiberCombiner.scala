@@ -122,24 +122,25 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
       .whenA(fiberRecord.sequenceNumber =!= update.targetSequenceNumber)
 
     // F7 signer-authorization, enforced HERE on the AUTHORITATIVE apply path (03-cross-fiber-and-
-    // authorization.md §3) — the binding gate, not the validator. Graceful `CombineRejected` (rule #2: never a
-    // block-acceptance Invalid; a stateful Invalid would drop the whole all-or-nothing snapshot). Reads ONLY
-    // the fiber's own hash-pinned `definition.policy` dial + the stable `owners`/`authorizedSigners` record
-    // fields — NO registry/asset lineage (rule #3 — outside the TOCTOU hazard class). The absent dial defaults
-    // to `Open` (today's LIVE guard-only behaviour), so every existing fiber is UNCHANGED and apps opt UP
-    // explicitly (the §3.4 / §6 Q1 default-Open decision). Verified signer resolution mirrors the create path
-    // (:50) and `FiberRules.L0.updateSignedByOwnerOrParticipant`.
+    // authorization.md §3) — the SOLE binding transition-signer gate. The former ML0 block-acceptance mirror
+    // (`FiberValidator.processEvent → updateSignedByOwnerOrParticipant`) was REMOVED (#205): being the one
+    // block-acceptance check with NO DL1 non-fatal pre-filter behind it (DL1 has no proofs), a non-owner
+    // transition reached ML0, went Invalid, and dropped the ENTIRE all-or-nothing block; and it could never be
+    // made `transitionPolicy`-aware without reading the upgrade-MUTABLE `definition.policy` at block-acceptance
+    // (TOCTOU → block poison, CLAUDE.md rule #3). Here it is a graceful `CombineRejected` (rule #2), reading
+    // ONLY the fiber's own hash-pinned `definition.policy` dial + stable `owners`/`authorizedSigners` record
+    // fields — NO registry/asset lineage. The absent dial defaults to `Open` (LIVE guard-only behaviour), so
+    // every existing fiber is UNCHANGED and apps opt UP explicitly (the §3.4 / §6 Q1 default-Open decision).
     signerAddresses <- update.proofs.toList.traverse(_.id.toAddress).map(_.toSet)
     effectivePolicy = fiberRecord.definition.policy.dials
       .flatMap(_.transitionPolicy)
       .getOrElse(TransitionPolicy.default)
-    transitionAuthorized = effectivePolicy match {
-      case TransitionPolicy.Open => true
-      case TransitionPolicy.OwnersOrParticipants =>
-        signerAddresses.intersect(fiberRecord.owners ++ fiberRecord.authorizedSigners).nonEmpty
-      case TransitionPolicy.Owners =>
-        signerAddresses.intersect(fiberRecord.owners).nonEmpty
-    }
+    transitionAuthorized = TransitionPolicy.authorizes(
+      effectivePolicy,
+      signerAddresses,
+      fiberRecord.owners,
+      fiberRecord.authorizedSigners
+    )
     _ <- Async[F]
       .raiseError(
         CombineRejected(

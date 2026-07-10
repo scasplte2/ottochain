@@ -667,7 +667,11 @@ object ValidatorSuite extends SimpleIOSuite {
     }
   }
 
-  test("updateSignedByOwners: non-owner signature rejected") {
+  // #205: a TRANSITION is no longer owner-gated at the ML0 block-acceptance validator — it is structural-only,
+  // so a non-owner's transition PASSES validation (an Invalid here would drop the whole all-or-nothing block).
+  // Signer authorization moved wholly to the combiner's F7 gate (`TransitionPolicy.authorizes`) as a graceful
+  // `CombineRejected`; that gating is proven in `TransitionValidatorGateSuite` / `TransitionPolicyEnforcementSuite`.
+  test("processEvent: a non-owner transition is ADMITTED by the validator (structural-only, #205)") {
     TestFixture.resource().use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
@@ -686,8 +690,7 @@ object ValidatorSuite extends SimpleIOSuite {
         processUpdate = Updates.TransitionStateMachine(fiberId, "advance", MapValue(Map.empty), FiberOrdinal.MinValue)
         processProof <- fixture.registry.generateProofs(processUpdate, Set(Bob))
         result       <- validator.validateSignedUpdate(stateAfterCreate, Signed(processUpdate, processProof))
-      } yield expect(result.isInvalid) and
-      expect(result.swap.exists(_.exists(_.message.toLowerCase.contains("owner"))))
+      } yield expect(result.isValid)
     }
   }
 
