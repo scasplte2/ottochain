@@ -9,7 +9,11 @@
  * runner features. All reads are poll-with-retry against ML0 (the committed read trails GL0
  * finalization, exactly like the rest of the runner).
  */
-import { HttpClient } from '@ottochain/sdk';
+import { HttpClient, OttoMetagraphClient } from '@ottochain/sdk';
+// The WIRE record types (from the `/core` subpath = ottochain/types) — the exact shapes the client's
+// typed getters return. Import from `/core`, NOT the root, whose `StateMachineFiberRecord` resolves to
+// the generated protobuf type (a different, incompatible shape).
+import type { StateMachineFiberRecord } from '@ottochain/sdk/core';
 import type { Wallets } from './types.ts';
 
 /**
@@ -87,23 +91,31 @@ export function holderMatches(
 
 type Rec = Record<string, unknown> | null;
 
-/** Poll a per-fiber ML0 read until `predicate` holds (or retries run out). Returns the record. */
+/**
+ * Poll a per-fiber ML0 read until `predicate` holds (or retries run out). Returns the record.
+ *
+ * Typed read: `getStateMachine` parses the `/state-machines/{id}` body into a
+ * `StateMachineFiberRecord` (or null on 404), so the assertState predicate reads typed fields
+ * (`currentState`/`sequenceNumber`/`stateData`) — a chain-side record-shape drift fails the typecheck
+ * here instead of silently reading `undefined`. 404 → null → predicate false → keep polling; a
+ * transient error throws → caught → keep polling (same "not yet present" semantics as before).
+ */
 export async function pollFiberRecord(
   ml0BaseUrl: string,
   cid: string,
-  predicate: (r: Rec) => boolean,
+  predicate: (r: StateMachineFiberRecord | null) => boolean,
   maxRetries: number,
   retryDelayMs: number,
   write?: (s: string) => void
-): Promise<Rec> {
-  const client = new HttpClient(`${ml0BaseUrl}/data-application/v1/state-machines/${cid}`);
-  let last: Rec = null;
+): Promise<StateMachineFiberRecord | null> {
+  const client = new OttoMetagraphClient({ ml0Url: ml0BaseUrl });
+  let last: StateMachineFiberRecord | null = null;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      last = (await client.get<unknown>('')) as Rec;
+      last = await client.getStateMachine(cid);
       if (predicate(last)) return last;
     } catch {
-      /* not yet present — keep polling */
+      /* transient/not-ready — keep polling */
     }
     write?.('.');
     if (attempt < maxRetries) await new Promise((r) => setTimeout(r, retryDelayMs));
@@ -114,6 +126,10 @@ export async function pollFiberRecord(
 /**
  * Poll an asset's committed custody record (via the `/assets/{id}/state-proof` endpoint, whose
  * `.record` is the `AssetRecord`) until `predicate` holds. Returns the record (or null on timeout).
+ *
+ * Kept as a raw read: this pulls the WHOLE record from a field-less `/state-proof` call, but the
+ * typed `getAssetStateProof(assetId, field)` unconditionally appends `?field=` and cannot fetch the
+ * bare record — so there is no drop-in typed equivalent for this endpoint shape.
  */
 export async function pollAssetRecord(
   ml0BaseUrl: string,

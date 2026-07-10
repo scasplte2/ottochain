@@ -1,4 +1,4 @@
-import { HttpClient } from '@ottochain/sdk';
+import { OttoMetagraphClient } from '@ottochain/sdk';
 import { vlog } from './verbose.ts';
 
 const TAG = '\x1b[33m[validateLogs]\x1b[0m';
@@ -21,18 +21,18 @@ export async function validateEventLogs(
   expectedEventName?: string
 ): Promise<void> {
   for (const ml0Url of ctx.ml0Urls) {
-    const client = new HttpClient(
-      `${ml0Url}/data-application/v1/state-machines/${ctx.fiberId}`
-    );
+    // Typed read: `getStateMachine` returns the parsed `StateMachineFiberRecord` (or null on 404),
+    // so `lastReceipt` below is a typed `EventReceipt` — a chain-side shape drift breaks here.
+    const client = new OttoMetagraphClient({ ml0Url });
 
-    const fiber = await client.get<Record<string, unknown>>('');
+    const fiber = await client.getStateMachine(ctx.fiberId);
     if (!fiber) {
       throw new Error(
         `${TAG} State machine not found for fiberId = ${ctx.fiberId} at ${ml0Url}`
       );
     }
 
-    const lastReceipt = fiber.lastReceipt as Record<string, unknown> | null;
+    const lastReceipt = fiber.lastReceipt;
     if (!lastReceipt) {
       throw new Error(
         `${TAG} No lastReceipt found on state machine for fiberId = ${ctx.fiberId} at ${ml0Url}`
@@ -70,18 +70,18 @@ export async function validateScriptLogs(
   expectedMethod?: string
 ): Promise<void> {
   for (const ml0Url of ctx.ml0Urls) {
-    const client = new HttpClient(
-      `${ml0Url}/data-application/v1/scripts/${ctx.fiberId}`
-    );
+    // Typed read: `getScript` returns the parsed `ScriptFiberRecord` (or null on 404),
+    // so `lastInvocation` below is a typed `ScriptInvocation`.
+    const client = new OttoMetagraphClient({ ml0Url });
 
-    const script = await client.get<Record<string, unknown>>('');
+    const script = await client.getScript(ctx.fiberId);
     if (!script) {
       throw new Error(
         `${TAG} Script not found for fiberId = ${ctx.fiberId} at ${ml0Url}`
       );
     }
 
-    const lastInvocation = script.lastInvocation as Record<string, unknown> | null;
+    const lastInvocation = script.lastInvocation;
     if (!lastInvocation) {
       throw new Error(
         `${TAG} No lastInvocation found on script for fiberId = ${ctx.fiberId} at ${ml0Url}`
