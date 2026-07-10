@@ -33,8 +33,12 @@
  *  • A cross-fiber trigger needs NO declared dependency; the gate is FiberPolicy.acceptedCallers (UNSET =
  *    Unconstrained here), so any caller is accepted (TriggerDispatcher routes by targetMachineId).
  *  • Spawned child `owners = event.auctionOwners` (SpawnProcessor); a child's transitions are gated by
- *    `owners ∪ authorizedSigners` (FiberRules.updateSignedByOwnerOrParticipant), so the bidder bob is
- *    listed in auctionOwners — else his place_bid/accept_bid are rejected at ML0.
+ *    `owners ∪ authorizedSigners` (FiberRules.updateSignedByOwnerOrParticipant), and a spawn cannot set
+ *    `authorizedSigners` — so the bidder bob must be an OWNER of the child to place_bid/accept_bid. Under the
+ *    H1 fail-closed subset floor (child.owners ⊆ parent.owners), that in turn requires bob ∈ the PARENT
+ *    consumer's owners; hence the consumer is created co-owned by [carol, bob]. This is a CLOSED auction
+ *    (bidders fixed at spawn). A public/eBay-style open auction needs `transitionPolicy: Open` end-to-end,
+ *    which is only half-wired today (combiner honours it, ML0 validate gate does not) — see follow-up.
  *  • Signers ARE the party model: a step's `signers` are the proofs ⇒ owners/authorizers.
  *
  * Signed-message discipline (CLAUDE.md #1): the `.ts` mint/event/morphism files return only present fields;
@@ -136,7 +140,11 @@ export default {
         phase('P1  create the six party fibers'),
         { action: 'create', as: 'manufacturer', definition: 'manufacturer.definition.json', initialData: 'manufacturer.initial.json', signers: ['alice'], parallel: true },
         { action: 'create', as: 'retailer', definition: 'retailer-v1.definition.json', initialData: 'retailer.initial.json', schemaRef: { name: RETAILER_PKG, version: '1.0.0' }, signers: ['bob'], parallel: true },
-        { action: 'create', as: 'consumer', definition: 'consumer.definition.json', initialData: 'consumer.initial.json', signers: ['carol'], parallel: true },
+        // consumer is co-owned by carol (buyer) AND bob (auction bidder): the P11 auction is _spawned FROM
+        // the consumer, and the H1 fail-closed floor requires the child's owners ⊆ the PARENT's owners. bob
+        // must bid on the spawned child (owner-gated, no authorizedSigners on a spawn), so bob must be in the
+        // consumer's lineage. carol still signs every consumer transition; bob only signs the child's bids.
+        { action: 'create', as: 'consumer', definition: 'consumer.definition.json', initialData: 'consumer.initial.json', signers: ['carol', 'bob'], parallel: true },
         { action: 'create', as: 'bank', definition: 'bank.definition.json', initialData: 'bank.initial.json', signers: ['dave'], parallel: true },
         { action: 'create', as: 'fed', definition: 'fed-v1.definition.json', initialData: 'fed.initial.json', schemaRef: { name: FED_PKG, version: '1.0.0' }, signers: ['erin'], parallel: true },
         { action: 'create', as: 'gov', definition: 'gov.definition.json', initialData: 'gov.initial.json', signers: ['frank'], parallel: true },

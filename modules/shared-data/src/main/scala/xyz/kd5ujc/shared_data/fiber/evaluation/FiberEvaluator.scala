@@ -21,6 +21,8 @@ import xyz.kd5ujc.schema.{CalculatedState, Records}
 import xyz.kd5ujc.shared_data.fiber.core._
 import xyz.kd5ujc.shared_data.syntax.all._
 
+import org.typelevel.log4cats.slf4j.Slf4jLogger
+
 /**
  * Unified evaluator for both state machine and script fibers.
  *
@@ -61,7 +63,8 @@ object FiberEvaluator {
     S:    Stateful[G, ExecutionState],
     A:    Ask[G, FiberContext],
     lift: F ~> G
-  ): FiberEvaluator[G] =
+  ): FiberEvaluator[G] = {
+    val logger = Slf4jLogger.getLogger[F]
     new FiberEvaluator[G] {
 
       def evaluate(
@@ -125,6 +128,22 @@ object FiberEvaluator {
        *     `$caller`) whose id is not in the allowlist is rejected before the guard. A user/wallet-origin
        *     transition (`caller = None`) is governed by the existing `proofs`/`authorizedSigners` path, NOT by
        *     `acceptedCallers`, so it is intentionally unaffected here.
+       *
+       * ══ SCOPE & FOOTGUNS (audit 2026-07-07, findings M2 / M3 — READ BEFORE RELYING ON `acceptedCallers`) ══
+       *   - M2 (cascade is the only gate): on the CASCADE path (`caller = Some(id)`), this short-circuit — the
+       *     guard plus `acceptedCallers` — is the ENTIRE authorization boundary. The cascade does NOT run the
+       *     owner/participant gate that the direct wallet path enforces (`FiberValidator.L0`), so with
+       *     `acceptedCallers` unset (default OPEN) any fiber can drive this transition. See
+       *     `TriggerHandler.handleStateMachine` for the full asymmetry note and app-author guidance.
+       *   - M3a (scope): `acceptedCallers` gates ONLY fiber-origin (cascade) callers. It is NEVER consulted for
+       *     a wallet-origin transition (`caller = None`) — those remain owner/participant-gated. It is thus a
+       *     cascade-caller allowlist, not a general "who may call me" ACL.
+       *   - M3b (front-run): `acceptedCallers` matches fiber UUIDs, and `CreateStateMachine.fiberId` is
+       *     CREATOR-CHOSEN. Authorizing a not-yet-created id is front-runnable: any account can
+       *     `CreateStateMachine` with exactly that id and thereby satisfy the allowlist. Prefer authorizing
+       *     ids of already-existing fibers, or pin trust to the guard's `$caller`/`$proofs` checks. (Rejecting
+       *     unresolved `acceptedCallers` entries at set-time / linting them is a possible additive follow-up;
+       *     the signed `acceptedCallers` semantics are intentionally left unchanged here per CLAUDE.md rule #1.)
        */
       private def policyShortCircuit(
         fiber:  Records.StateMachineFiberRecord,
@@ -219,15 +238,21 @@ object FiberEvaluator {
               tryTransitions(fiber, input, proofs, rest, attemptedGuards + 1, caller)
 
             case Right(EvaluationResult(other, _, _, _)) =>
+              // COMMITTED (audit L1): render the value kind through OttoChain's own stable `ValueKind`, never
+              // metakit's `getClass.getSimpleName` (a class rename would fork a mixed-version set on a rejected tx).
               FailureReason
                 .EvaluationError(
                   GasExhaustionPhase.Guard,
-                  s"Guard returned non-boolean: ${other.getClass.getSimpleName}"
+                  s"Guard returned non-boolean: ${ValueKind.of(other)}"
                 )
                 .pureOutcome[G]
 
             case Left(ex) =>
-              ex.toFailureReason[G](GasExhaustionPhase.Guard).map(_.asOutcome)
+              // The committed reason (via `toFailureReason`) is version-stable and carries NO exception text;
+              // keep the rich metakit detail alive in LOGS only (audit L1).
+              lift(
+                logger.warn(ex)(s"guard evaluation raised for fiber ${fiber.fiberId}: ${ex.getMessage}")
+              ) >> ex.toFailureReason[G](GasExhaustionPhase.Guard).map(_.asOutcome)
           }
         } yield result
 
@@ -416,4 +441,5 @@ object FiberEvaluator {
             }
         } yield result
     }
+  }
 }

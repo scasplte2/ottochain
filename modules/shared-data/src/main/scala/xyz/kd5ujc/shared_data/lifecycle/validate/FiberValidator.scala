@@ -111,33 +111,47 @@ object FiberValidator {
         parentActive <- FiberRules.L0.parentFiberActive(update.parentFiberId, state.calculated)
       } yield List(hasProofs, parentActive).combineAll
 
-    /** Validates a ProcessFiberEvent update (L0 specific checks) */
+    /**
+     * Validates a ProcessFiberEvent update (L0): ONLY the immutable-auth signer gate.
+     *
+     * `updateSignedByOwnerOrParticipant` reads `owners`/`authorizedSigners`, both fixed at creation
+     * (TOCTOU-safe), and the combiner does NOT re-check transition signers — so this gate MUST stay at ML0.
+     * The mutable-state checks `fiberIsActive` and `transitionExists` were removed (audit M1): a concurrent
+     * same-fiber update (an archive, or a state advance that changes `(currentState,event)` resolution) can
+     * flip them Valid->Invalid between DL1 block formation and ML0 re-validation, dropping the ENTIRE block
+     * (tessellation all-or-nothing). Both are enforced GRACEFULLY downstream — the engine aborts a non-active
+     * fiber (FiberNotActive) or a missing transition (NoTransitionFound), surfaced by the combiner.
+     */
     def processEvent(update: TransitionStateMachine): F[ValidationResult] =
-      for {
-        fiberActive <- FiberRules.L0.fiberIsActive(update.fiberId, state.calculated)
-        // Relaxed: owners OR authorized participants (declared in CreateStateMachine.participants)
-        signedOk     <- FiberRules.L0.updateSignedByOwnerOrParticipant(update.fiberId, proofs, state.calculated)
-        transitionOk <- FiberRules.L0.transitionExists(update.fiberId, update.eventName, state.calculated)
-      } yield List(fiberActive, signedOk, transitionOk).combineAll
+      FiberRules.L0.updateSignedByOwnerOrParticipant(update.fiberId, proofs, state.calculated)
 
-    /** Validates an ArchiveFiber update (L0 specific checks) */
+    /**
+     * Validates an ArchiveFiber update (L0): ONLY the immutable-auth owner-signature gate. The mutable
+     * `fiberIsActive` check was removed (audit M1) — a concurrent archive flips it and poisons the block;
+     * the combiner is authoritative (exact-sequence gated, and re-archiving is a graceful outcome).
+     */
     def archiveFiber(update: ArchiveStateMachine): F[ValidationResult] =
-      for {
-        fiberActive   <- FiberRules.L0.fiberIsActive(update.fiberId, state.calculated)
-        signedByOwner <- FiberRules.L0.updateSignedByOwners(update.fiberId, proofs, state.calculated)
-      } yield List(fiberActive, signedByOwner).combineAll
+      FiberRules.L0.updateSignedByOwners(update.fiberId, proofs, state.calculated)
 
-    /** Validates an UpgradeFiber update (active, owner, same-package re-bind + verified hash, state preserved) */
+    /**
+     * Validates an UpgradeFiber update (L0): ONLY the immutable-auth owner-signature gate.
+     *
+     * `updateSignedByOwners` reads `owners`, fixed at creation (TOCTOU-safe), and the combiner does NOT
+     * re-check upgrade signers — so this gate MUST stay at ML0. The former fail-fast mirrors of the engine
+     * UpgradeGate — same-package (`bindingNameMatches`), current-state-preserved (`currentStateInDefinition`)
+     * and tighten-only (`upgradePolicyPermits`) — were REMOVED (audit M1 residual): each reads mutable
+     * `CalculatedState.stateMachines`, so a concurrent same-fiber update (an archive, a competing upgrade that
+     * advances/re-binds, a sequence bump) can flip them Valid->Invalid between DL1 block formation and ML0
+     * re-validation, dropping the ENTIRE block (tessellation all-or-nothing — the same-fiber sibling of C3).
+     * All three are re-enforced GRACEFULLY downstream as CombineRejected / abort -> RejectionReceipt:
+     * same-package by `FiberCombiner.upgradeFiber` (`b.name === targetRef.name`), current-state-preserved by
+     * the engine `migrateStateMachineGated` (`newDefinition.states.contains(currentState)` false ->
+     * ValidationFailed), and tighten-only / Immutable / Governed / AppendOnly by the engine `UpgradeGate.check`.
+     * The engine + combiner remain the authority. The DL1 `L1Validator.upgrade` path is unchanged — a DL1
+     * rejection does not poison a block.
+     */
     def upgrade(update: UpgradeFiber): F[ValidationResult] =
-      for {
-        fiberActive   <- FiberRules.L0.fiberIsActive(update.fiberId, state.calculated)
-        signedByOwner <- FiberRules.L0.updateSignedByOwners(update.fiberId, proofs, state.calculated)
-        bindingOk     <- FiberRules.L0.bindingNameMatches(update.fiberId, update.targetRef.name, state.calculated)
-        stateOk       <- FiberRules.L0.currentStateInDefinition(update.fiberId, update.newDefinition, state.calculated)
-        // version-compat-family §3.5: fail-fast mirror of the cheap, signer-independent UpgradeGate checks
-        // (Immutable rejection + tighten-only). The engine UpgradeGate stays the authority and re-runs all.
-        policyOk <- FiberRules.L0.upgradePolicyPermits(update.fiberId, update.newDefinition, state.calculated)
-      } yield List(fiberActive, signedByOwner, bindingOk, stateOk, policyOk).combineAll
+      FiberRules.L0.updateSignedByOwners(update.fiberId, proofs, state.calculated)
   }
 
   /**
@@ -159,25 +173,50 @@ object FiberValidator {
         l0Result <- l0.createFiber(update)
       } yield l1Result |+| l0Result
 
-    /** Validates a ProcessFiberEvent update (all checks) */
+    /**
+     * Validates a ProcessFiberEvent update at the ML0 block-acceptance gate: structural L1 checks (existence,
+     * payload not-null / size / structure) MINUS the mutable `FiberRules.L1.sequenceNumberMatches` (audit M1:
+     * a concurrent same-fiber update bumps the sequence and flips this Valid->Invalid, poisoning the whole
+     * block; the combiner does the exact-sequence check + atomic bump as CombineRejected, preserving replay
+     * protection) PLUS the immutable-auth signer gate (in `l0.processEvent`). The DL1
+     * `L1Validator.processEvent` path keeps the sequence pre-filter — DL1 rejection does not poison a block.
+     */
     def processEvent(update: TransitionStateMachine): F[ValidationResult] =
       for {
-        l1Result <- l1.processEvent(update)
-        l0Result <- l0.processEvent(update)
-      } yield l1Result |+| l0Result
+        cidExists        <- CommonRules.cidIsFound(update.fiberId, state.onChain)
+        payloadNotNull   <- CommonRules.isNotNull(update.payload, "payload")
+        payloadSize      <- CommonRules.valueWithinSizeLimit(update.payload, Limits.MaxEventPayloadBytes, "payload")
+        payloadStructure <- CommonRules.payloadStructureValid(update.payload, "payload")
+        l0Result         <- l0.processEvent(update)
+      } yield List(cidExists, payloadNotNull, payloadSize, payloadStructure, l0Result).combineAll
 
-    /** Validates an ArchiveFiber update (all checks) */
+    /**
+     * Validates an ArchiveFiber update at the ML0 block-acceptance gate: existence check MINUS the mutable
+     * `FiberRules.L1.sequenceNumberMatches` (audit M1) PLUS the immutable-auth owner-signature check (in
+     * `l0.archiveFiber`).
+     */
     def archiveFiber(update: ArchiveStateMachine): F[ValidationResult] =
       for {
-        l1Result <- l1.archiveFiber(update)
-        l0Result <- l0.archiveFiber(update)
-      } yield l1Result |+| l0Result
+        cidExists <- CommonRules.cidIsFound(update.fiberId, state.onChain)
+        l0Result  <- l0.archiveFiber(update)
+      } yield List(cidExists, l0Result).combineAll
 
-    /** Validates an UpgradeFiber update (all checks) */
+    /**
+     * Validates an UpgradeFiber update at the ML0 block-acceptance gate: structural L1 checks (existence,
+     * new-definition structure/limits/depth/reserved-keys) MINUS the mutable `FiberRules.L1.sequenceNumberMatches`
+     * (audit M1) PLUS the L0 immutable-auth owner-signature gate (in `l0.upgrade`). The former fail-fast
+     * UpgradeGate mirrors (same-package / current-state / tighten-only) were REMOVED from this gate — they read
+     * mutable `stateMachines` and are re-enforced gracefully by the engine + combiner (audit M1 residual; see
+     * `l0.upgrade`).
+     */
     def upgrade(update: UpgradeFiber): F[ValidationResult] =
       for {
-        l1Result <- l1.upgrade(update)
-        l0Result <- l0.upgrade(update)
-      } yield l1Result |+| l0Result
+        cidExists     <- CommonRules.cidIsFound(update.fiberId, state.onChain)
+        definitionOk  <- FiberRules.L1.validStateMachineDefinition(update.newDefinition)
+        limitsOk      <- FiberRules.L1.definitionWithinLimits(update.newDefinition)
+        expressionsOk <- FiberRules.L1.definitionExpressionsWithinDepthLimits(update.newDefinition)
+        reservedOk    <- FiberRules.L1.noReservedOperatorFieldNames(update.newDefinition)
+        l0Result      <- l0.upgrade(update)
+      } yield List(cidExists, definitionOk, limitsOk, expressionsOk, reservedOk, l0Result).combineAll
   }
 }

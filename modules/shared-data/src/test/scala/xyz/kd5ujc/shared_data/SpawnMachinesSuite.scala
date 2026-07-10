@@ -1514,9 +1514,11 @@ object SpawnMachinesSuite extends SimpleIOSuite {
 
         charlieAddress = fixture.registry.addresses(Charlie)
 
-        // Parent with Alice and Bob as owners
-        // Spawn directive specifies Charlie as the explicit owner via ownersExpr
-        // The ownersExpr uses a var expression that reads from event payload
+        // Parent with Alice, Bob and Charlie as owners.
+        // Spawn directive specifies ONLY Charlie as the explicit owner via ownersExpr — a proper, non-trivial
+        // subset of the parent's owners (so it is clearly NOT the inherited full set, yet respects the H1
+        // fail-closed subset floor: child.owners ⊆ parent.owners regardless of the spawnOwnerPolicy dial).
+        // The ownersExpr uses a var expression that reads from event payload.
         parentJson = s"""
         {
           "states": {
@@ -1556,9 +1558,9 @@ object SpawnMachinesSuite extends SimpleIOSuite {
         parentDef <- IO.fromEither(decode[StateMachineDefinition](parentJson))
         parentData = MapValue(Map("status" -> StrValue("init")))
 
-        // Create parent with Alice and Bob as owners
+        // Create parent with Alice, Bob and Charlie as owners
         createParent = Updates.CreateStateMachine(parentfiberId, parentDef, parentData)
-        parentProof <- fixture.registry.generateProofs(createParent, Set(Alice, Bob))
+        parentProof <- fixture.registry.generateProofs(createParent, Set(Alice, Bob, Charlie))
         stateAfterParent <- combiner.insert(
           DataState(OnChain.genesis, CalculatedState.genesis),
           Signed(createParent, parentProof)
@@ -1592,6 +1594,99 @@ object SpawnMachinesSuite extends SimpleIOSuite {
       // Should NOT have inherited owners
       expect(child.map(_.owners.contains(aliceAddress)).contains(false)) and
       expect(child.map(_.owners.contains(bobAddress)).contains(false))
+    }
+  }
+
+  test("H1 owner-forgery floor: ownersExpr NOT ⊆ parent is rejected even under the DEFAULT policy") {
+    // Core H1 remediation. With NO spawnOwnerPolicy set (the default/absent = today's `Explicit`), a `_spawn`
+    // could previously assign arbitrary UNSIGNED child owners, letting an attacker mint a child "owned by" a
+    // victim and pass a script's Whitelist/FiberOwned access AS the victim via a fiber-origin `_scriptCall`.
+    // The fail-closed subset floor now aborts any spawn whose resolved owners are not ⊆ the parent's owners,
+    // regardless of the dial. Here the parent owns only Alice; the spawn tries to hand the child a victim
+    // address the parent does not own ⇒ PolicyViolation("spawnOwnerPolicy") abort, no child created.
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val s: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
+      for {
+        implicit0(jle: JsonLogicEvaluator[IO]) <- JsonLogicEvaluator.tailRecursive[IO].pure[IO]
+
+        parentfiberId <- UUIDGen.randomUUID[IO]
+        childfiberId  <- UUIDGen.randomUUID[IO]
+
+        aliceAddress = fixture.registry.addresses(Alice)
+        // A DAG address the parent does NOT own — the "victim" an attacker would try to forge ownership of.
+        victimAddress = "DAG2BAUcXKujRhzk4XZ6RDYL2ifXWMgfw1v7YxZu"
+
+        parentJson = s"""
+        {
+          "states": {
+            "init": { "id": "init", "isFinal": false },
+            "spawned": { "id": "spawned", "isFinal": false }
+          },
+          "initialState": "init",
+          "transitions": [
+            {
+              "from": "init",
+              "to": "spawned",
+              "eventName": "spawn_child",
+              "guard": true,
+              "effect": {
+                "_spawn": [
+                  {
+                    "childId": "$childfiberId",
+                    "definition": {
+                      "states": {
+                        "ACTIVE": { "id": "ACTIVE", "isFinal": false }
+                      },
+                      "initialState": "ACTIVE",
+                      "transitions": []
+                    },
+                    "initialData": { "status": "ACTIVE" },
+                    "owners": [ "$victimAddress" ]
+                  }
+                ],
+                "status": "spawned"
+              },
+              "dependencies": []
+            }
+          ]
+        }
+        """
+
+        parentDef <- IO.fromEither(decode[StateMachineDefinition](parentJson))
+        parentData = MapValue(Map("status" -> StrValue("init")))
+        parentHash <- (parentData: JsonLogicValue).computeDigest
+
+        parentFiber = Records.StateMachineFiberRecord(
+          fiberId = parentfiberId,
+          creationOrdinal = fixture.ordinal,
+          previousUpdateOrdinal = fixture.ordinal,
+          latestUpdateOrdinal = fixture.ordinal,
+          definition = parentDef, // NB: no policy set ⇒ default/absent spawnOwnerPolicy
+          currentState = StateId("init"),
+          stateData = parentData,
+          stateDataHash = parentHash,
+          sequenceNumber = FiberOrdinal.MinValue,
+          owners = Set(aliceAddress),
+          status = FiberStatus.Active
+        )
+
+        calculatedState = CalculatedState(SortedMap(parentfiberId -> parentFiber), SortedMap.empty)
+        input = FiberInput.Transition("spawn_child", MapValue(Map.empty))
+
+        limits = ExecutionLimits(maxDepth = 10, maxGas = 100_000L)
+        orchestrator = FiberEngine.make[IO](calculatedState, fixture.ordinal, limits)
+
+        result <- orchestrator.process(parentfiberId, input, List.empty)
+
+      } yield result match {
+        case TransactionResult.Aborted(FailureReason.PolicyViolation(dial, _), _, _) =>
+          expect(dial == "spawnOwnerPolicy", s"Expected spawnOwnerPolicy PolicyViolation, got dial=$dial")
+        case TransactionResult.Aborted(reason, _, _) =>
+          failure(s"Expected PolicyViolation(spawnOwnerPolicy), got: ${reason.getClass.getSimpleName}")
+        case TransactionResult.Committed(_, _, _, _, _, _, _) =>
+          failure("Expected Aborted: a child owned by a non-parent address must be rejected by the subset floor")
+      }
     }
   }
 

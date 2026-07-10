@@ -373,6 +373,62 @@ object RegistryCombinerSuite extends SimpleIOSuite {
     }
   }
 
+  // M1 residual (audit 2026-07-07): the ML0 upgrade gate no longer runs the mutable `currentStateInDefinition`
+  // check — a same-fiber block-poisoning surface (a concurrent same-fiber advance/archive could flip it
+  // Valid->Invalid at ML0 re-validation and drop the ENTIRE DL1 block). An upgrade whose newDefinition DROPS the
+  // fiber's current state now PASSES `validateSignedUpdate` (structural + owner-signature only) and is rejected
+  // GRACEFULLY by the engine+combiner (`migrateStateMachineGated` -> ValidationFailed -> RejectionReceipt),
+  // leaving the fiber untouched (no partial apply).
+  test("upgrade dropping the current state passes validateSignedUpdate (no block poisoning); combiner rejects") {
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val p1 = publish("escrow", SemVer(1, 0, 0)) // minimalDef, initialState = "initial"
+      val p2 = publishWith("escrow", SemVer(2, 0, 0), otherDef) // otherDef states = { "different" } — drops "initial"
+      val create = CreateStateMachine(
+        fiberA,
+        minimalDef,
+        emptyData,
+        schemaRef = Some(SchemaRef(pkg("escrow"), VersionReq.Exact(SemVer(1, 0, 0))))
+      )
+      // Same package, monotonic (2.0.0 > 1.0.0), hash-verified (== otherDef); the ONLY problem is that the
+      // preserved current state "initial" is absent from otherDef — historically a `currentStateInDefinition`
+      // Invalid at the ML0 gate, now a graceful engine abort.
+      val upgrade = UpgradeFiber(
+        fiberA,
+        SchemaRef(pkg("escrow"), VersionReq.Exact(SemVer(2, 0, 0))),
+        otherDef,
+        migration = None,
+        targetSequenceNumber = FiberOrdinal.MinValue
+      )
+      for {
+        validator <- Validator.make[IO]
+        pr1       <- fixture.registry.generateProofs(p1, Set(Alice))
+        s1        <- combiner.insert(genesis, Signed(p1, pr1))
+        pr2       <- fixture.registry.generateProofs(p2, Set(Alice))
+        s2        <- combiner.insert(s1, Signed(p2, pr2))
+        prC       <- fixture.registry.generateProofs(create, Set(Alice))
+        s3        <- combiner.insert(s2, Signed(create, prC))
+        prU       <- fixture.registry.generateProofs(upgrade, Set(Alice))
+        // ML0 block-acceptance gate: PASSES (structural + owner-signature only; the mutable current-state read
+        // was removed — audit M1 residual)
+        valid <- validator.validateSignedUpdate(s3, Signed(upgrade, prU))
+        // combiner (authoritative): the engine aborts (current state not in new definition) and records a
+        // FAILURE receipt without applying the upgrade
+        s4 <- combiner.insert(s3, Signed(upgrade, prU))
+        sm = s4.calculated.stateMachines.get(fiberA)
+        receipt = sm.flatMap(_.lastReceipt)
+      } yield expect(valid.isValid) and
+      // the engine gracefully aborted with a failure receipt (no snapshot abort, no block poisoning)
+      expect(receipt.exists(!_.success)) and
+      expect(receipt.flatMap(_.errorMessage).exists(_.contains("is not present in the new definition"))) and
+      // no partial apply: the fiber is still bound to 1.0.0 with the original definition
+      expect(sm.flatMap(_.schemaBinding).map(_.version).contains(SemVer(1, 0, 0))) and
+      expect(sm.map(_.definition).contains(minimalDef))
+    }
+  }
+
   test("a mid-batch rejection records a receipt and does NOT abort the rest of the batch") {
     TestFixture.resource(Set(Alice)).use { fixture =>
       implicit val sp: SecurityProvider[IO] = fixture.securityProvider

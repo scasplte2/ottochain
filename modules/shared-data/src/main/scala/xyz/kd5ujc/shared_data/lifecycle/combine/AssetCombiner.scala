@@ -24,6 +24,7 @@ import xyz.kd5ujc.schema.asset._
 import xyz.kd5ujc.schema.fiber.{ExecutionLimits, FiberEffect, FiberOrdinal, FiberStatus}
 import xyz.kd5ujc.schema.registry._
 import xyz.kd5ujc.schema.{AssetCommit, CalculatedState, OnChain, Updates}
+import xyz.kd5ujc.shared_data.fiber.evaluation.ValueKind
 import xyz.kd5ujc.shared_data.syntax.all._
 
 import io.circe.syntax.EncoderOps
@@ -495,7 +496,7 @@ class AssetCombiner[F[_]: Async: SecurityProvider](
       case MorphismKind.Transfer      => applyTransfer(a, source, ordinal)
       case MorphismKind.Burn          => applyBurn(a, source, policy, ordinal)
       case MorphismKind.Fractionalize => applyFractionalize(a, source, ordinal)
-      case MorphismKind.Compose       => applyCompose(a, source, counterParties, ordinal)
+      case MorphismKind.Compose       => applyCompose(a, source, counterParties, signers, ordinal)
       case MorphismKind.Decompose     => applyDecompose(a, source, ordinal)
       case MorphismKind.Pool          => applyPool(a, source, counterParties, signers, ordinal)
       case MorphismKind.Wrap          => applyWrap(a, source, ordinal)
@@ -601,8 +602,11 @@ class AssetCombiner[F[_]: Async: SecurityProvider](
     a:              Updates.ApplyMorphism,
     source:         AssetRecord,
     counterParties: List[AssetRecord],
+    signers:        Set[Address],
     ordinal:        SnapshotOrdinal
   ): F[DataState[OnChain, CalculatedState]] =
+    // (C2) integrity precheck: no duplicate / self counter-party ids (they would double-count amount).
+    requireDistinctCounterParties(a.assetId, a.otherAssetIds.getOrElse(Nil)) *>
     a.compositeId.fold(
       Async[F].raiseError[DataState[OnChain, CalculatedState]](
         CombineRejected(s"Compose of ${a.assetId} requires a compositeId")
@@ -636,9 +640,10 @@ class AssetCombiner[F[_]: Async: SecurityProvider](
             componentsCommitment = Some(commit), // the FAITHFUL component-state commitment
             parentCompositeId = None
           )
-          // Consume the commit-reveal nonce (if present) atomically within this pass, BEFORE consuming the
-          // components, so a failure raises before any state mutation.
-          consumeNonce(current, a.nonce, counterParties).flatMap { stateAfterNonce =>
+          // Establish per-counter-party consent (signer-owned OR nonce-authorized) and consume any revealed
+          // nonces atomically within this pass, BEFORE consuming the components, so a failure raises before
+          // any state mutation.
+          consumeComposeConsent(current, a.nonce, counterParties, signers).flatMap { stateAfterNonce =>
             // Mark each component consumed: remove from the live set (its full state is committed in the
             // composite's componentsCommitment for the FAITHFUL Decompose retraction).
             val consumed = componentIds.foldLeft(stateAfterNonce) { case (st, id) => removeAsset(st, id) }
@@ -649,32 +654,56 @@ class AssetCombiner[F[_]: Async: SecurityProvider](
     }
 
   /**
-   * Consume a commit-reveal nonce: find a counter-party whose `usedNonces` set contains `n` (the LIVE
-   * pending authorization), then remove it (linear, one-time). Absent `nonce` is a no-op (a same-holder
-   * Compose needs no consent). A referenced-but-absent nonce → reject ("not found / already consumed").
+   * MANDATORY per-counter-party consent for a Compose (audit C2 — cross-holder theft + amount conservation).
+   *
+   * A counter-party may be consumed into the composite ONLY with its holder's consent, established one of
+   * two ways:
+   *   (i)  SIGNER-OWNED — `cp.holder = Wallet(addr)` with `addr ∈ signers` (a same-holder compose of the
+   *        signer's OWN assets); NO nonce required, OR
+   *   (ii) NONCE-AUTHORIZED — the counter-party's holder recorded a live `AuthorizeCompose` nonce under
+   *        `usedNonces(cp.assetId)`, which this Compose reveals via `a.nonce`. The nonce is consumed LINEARLY
+   *        (removed here, one-time) — a second Compose finds it absent and is rejected.
+   *
+   * Consent is MANDATORY, never opt-in: a counter-party that is neither signer-owned NOR covered by a nonce
+   * authorizing THAT counter-party is a graceful [[CombineRejected]]. This closes the C2 hole where the old
+   * `consumeNonce(None, …)` no-op silently let a nonce-less cross-holder Compose pull a victim's asset into a
+   * signer-held composite. A same-holder compose (every counter-party signer-owned) still works with NO
+   * nonce, so the legitimate path is unaffected.
+   *
+   * Determinism: counter-parties are folded in the supplied list order, and each one looks up only its OWN
+   * `usedNonces(cp.assetId)` set, so accept/reject/consumption never depends on map/set iteration order.
    */
-  private def consumeNonce(
+  private def consumeComposeConsent(
     st:             DataState[OnChain, CalculatedState],
     nonce:          Option[Long],
-    counterParties: List[AssetRecord]
+    counterParties: List[AssetRecord],
+    signers:        Set[Address]
   ): F[DataState[OnChain, CalculatedState]] =
-    nonce match {
-      case None => st.pure[F]
-      case Some(n) =>
-        counterParties.find(cp =>
-          st.calculated.usedNonces.getOrElse(cp.assetId, SortedSet.empty[Long]).contains(n)
-        ) match {
-          case None =>
-            Async[F].raiseError(
-              CombineRejected(s"compose nonce $n not found among counter-party authorizations (or already consumed)")
-            )
-          case Some(authorizer) =>
-            val updatedSet = st.calculated.usedNonces.getOrElse(authorizer.assetId, SortedSet.empty[Long]) - n
+    counterParties.foldLeftM(st) { (acc, cp) =>
+      val signerOwned = cp.holder match {
+        case AssetHolder.Wallet(addr) => signers.contains(addr)
+        case AssetHolder.Fiber(_)     => false
+      }
+      if (signerOwned) acc.pure[F]
+      else {
+        val live = acc.calculated.usedNonces.getOrElse(cp.assetId, SortedSet.empty[Long])
+        nonce match {
+          case Some(n) if live.contains(n) =>
+            // Consume linearly: remove the revealed nonce from THIS counter-party's authorization set.
+            val updatedSet = live - n
             val updatedNonces =
-              if (updatedSet.isEmpty) st.calculated.usedNonces - authorizer.assetId
-              else st.calculated.usedNonces.updated(authorizer.assetId, updatedSet)
-            st.focus(_.calculated.usedNonces).replace(updatedNonces).pure[F]
+              if (updatedSet.isEmpty) acc.calculated.usedNonces - cp.assetId
+              else acc.calculated.usedNonces.updated(cp.assetId, updatedSet)
+            acc.focus(_.calculated.usedNonces).replace(updatedNonces).pure[F]
+          case _ =>
+            Async[F].raiseError[DataState[OnChain, CalculatedState]](
+              CombineRejected(
+                s"compose counter-party ${cp.assetId} (holder ${cp.holder}) is neither signer-owned nor " +
+                s"covered by a live AuthorizeCompose nonce — cross-holder consent is required"
+              )
+            )
         }
+      }
     }
 
   /**
@@ -777,6 +806,9 @@ class AssetCombiner[F[_]: Async: SecurityProvider](
     signers:        Set[Address],
     ordinal:        SnapshotOrdinal
   ): F[DataState[OnChain, CalculatedState]] =
+    // (C2) integrity precheck: no duplicate / self counter-party ids (they would double-count amount, even
+    // though every part is separately signer-owned via requireWalletHolder below).
+    requireDistinctCounterParties(a.assetId, a.otherAssetIds.getOrElse(Nil)) *>
     a.compositeId.fold(
       Async[F].raiseError[DataState[OnChain, CalculatedState]](
         CombineRejected(s"Pool of ${a.assetId} requires a compositeId (the pooled-output id)")
@@ -994,6 +1026,28 @@ class AssetCombiner[F[_]: Async: SecurityProvider](
         )(_.pure[F])
     }
 
+  /**
+   * Integrity precheck for a Compose/Pool counter-party id list (audit C2 — amount conservation).
+   *
+   * `applyCompose`/`applyPool` consume `parts = source :: counterParties`, summing `parts.map(_.amount)`,
+   * but `removeAsset` deletes each id at most ONCE. Naming the source itself as a counter-party, or listing
+   * any id more than once, therefore DOUBLE-COUNTS that id's amount into the output while consuming it a
+   * single time — a repeatable mint-from-nothing that breaks `Σ amount`. Reject both, naming the offending
+   * id(s). Deterministic: offenders are sorted, never surfaced in map/set iteration order.
+   */
+  private def requireDistinctCounterParties(sourceId: UUID, otherIds: List[UUID]): F[Unit] = {
+    val self = otherIds.exists(_ == sourceId)
+    val dupes = otherIds.groupBy(identity).collect { case (id, occ) if occ.size > 1 => id }.toList.sorted
+    raiseRejected(
+      !self,
+      s"compose/pool counter-parties may not include the source $sourceId (would double-count its amount)"
+    ) *>
+    raiseRejected(
+      dupes.isEmpty,
+      s"compose/pool counter-parties contain duplicate ids: ${dupes.mkString(", ")}"
+    )
+  }
+
   /** Run the strict-version conformance gate on the produced asset state (asset-model §5d). */
   private def conformOrReject(rv: RegisteredVersion, record: AssetRecord): F[Unit] =
     if (!rv.strict) Async[F].unit
@@ -1035,9 +1089,14 @@ class AssetCombiner[F[_]: Async: SecurityProvider](
         case Right(EvaluationResult(BoolValue(false), _, _, _)) =>
           Async[F].raiseError(CombineRejected(reason))
         case Right(EvaluationResult(other, _, _, _)) =>
-          Async[F].raiseError(CombineRejected(s"$reason (guard returned non-boolean ${other.tag})"))
+          // COMMITTED via RejectionReceipt.reason (audit L1): the value kind is rendered through OttoChain's own
+          // stable `ValueKind`, not metakit's `.tag` (byte-neutral today, but pins us against a metakit re-tag).
+          Async[F].raiseError(CombineRejected(s"$reason (guard returned non-boolean ${ValueKind.of(other)})"))
         case Left(ex) =>
-          Async[F].raiseError(CombineRejected(s"$reason (guard evaluation failed: ${ex.getMessage})"))
+          // The committed reason carries NO exception text (audit L1 — a metakit reword must not change a
+          // rejected tx's committed hash); the raw metakit detail is preserved in LOGS only.
+          Slf4jLogger.getLogger[F].warn(ex)(s"$reason (guard evaluation raised: ${ex.getMessage})") >>
+          Async[F].raiseError(CombineRejected(s"$reason (guard evaluation failed)"))
       }
 
   /** Context for a mint guard: the requested holder, amount, signers, ordinal, derived supply. */

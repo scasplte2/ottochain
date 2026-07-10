@@ -66,9 +66,55 @@ sealed trait FailureReason {
     case FailureReason.PolicyViolation(dial, detail) =>
       s"FiberPolicy violation [$dial]: $detail"
   }
+
+  /**
+   * A stable, OttoChain-owned discriminator token for this failure — INDEPENDENT of any free-text detail and,
+   * critically, of any metakit/exception text. Adding a new variant adds a new token, but an existing token
+   * NEVER changes with a metakit reword/class-rename (audit L1). Safe to surface in committed receipts and
+   * cross-version APIs. Every committed rendering (`toMessage` → `EventReceipt.errorMessage`) is likewise built
+   * only from this discriminator plus already-stable typed fields (ids / phases / gasUsed / amounts / dials /
+   * state ids) — see `FailureReasonCanonicalSuite`.
+   */
+  def reasonCode: String = this match {
+    case _: FailureReason.NoTransitionFound       => "NO_TRANSITION_FOUND"
+    case _: FailureReason.NoGuardMatched          => "NO_GUARD_MATCHED"
+    case _: FailureReason.EvaluationError         => "EVALUATION_ERROR"
+    case _: FailureReason.CycleDetected           => "CYCLE_DETECTED"
+    case _: FailureReason.ValidationFailed        => "VALIDATION_FAILED"
+    case _: FailureReason.TriggerTargetNotFound   => "TRIGGER_TARGET_NOT_FOUND"
+    case _: FailureReason.AccessDenied            => "ACCESS_DENIED"
+    case _: FailureReason.GasExhaustedFailure     => "GAS_EXHAUSTED"
+    case _: FailureReason.FiberInputMismatch      => "FIBER_INPUT_MISMATCH"
+    case _: FailureReason.FiberNotFound           => "FIBER_NOT_FOUND"
+    case _: FailureReason.FiberNotActive          => "FIBER_NOT_ACTIVE"
+    case _: FailureReason.DepthExceeded           => "DEPTH_EXCEEDED"
+    case _: FailureReason.ScriptInvocationFailed  => "SCRIPT_INVOCATION_FAILED"
+    case _: FailureReason.CallerResolutionFailed  => "CALLER_RESOLUTION_FAILED"
+    case _: FailureReason.MissingProof            => "MISSING_PROOF"
+    case _: FailureReason.StateSizeTooLarge       => "STATE_SIZE_TOO_LARGE"
+    case _: FailureReason.InvalidChildIdFormat    => "INVALID_CHILD_ID_FORMAT"
+    case _: FailureReason.DuplicateChildId        => "DUPLICATE_CHILD_ID"
+    case _: FailureReason.ChildIdCollision        => "CHILD_ID_COLLISION"
+    case _: FailureReason.InvalidOwnersExpression => "INVALID_OWNERS_EXPRESSION"
+    case _: FailureReason.InvalidOwnerAddress     => "INVALID_OWNER_ADDRESS"
+    case _: FailureReason.ChildIdEvaluationFailed => "CHILD_ID_EVALUATION_FAILED"
+    case _: FailureReason.OwnersEvaluationFailed  => "OWNERS_EVALUATION_FAILED"
+    case _: FailureReason.DependencyLimitExceeded => "DEPENDENCY_LIMIT_EXCEEDED"
+    case _: FailureReason.SpawnLimitExceeded      => "SPAWN_LIMIT_EXCEEDED"
+    case _: FailureReason.PolicyViolation         => "POLICY_VIOLATION"
+  }
 }
 
 object FailureReason {
+
+  /**
+   * Stable, OttoChain-owned COMMITTED detail for an evaluation exception. The raw metakit exception message
+   * (`JsonLogicException.getMessage`) MUST NOT reach committed state — a metakit reword would fork a
+   * mixed-version validator set on a rejected tx (audit L1). The raw message is preserved in LOGS at the
+   * evaluation seams (`MeteredEvaluator` / the `FiberEvaluator` guard / `AssetCombiner`), never here.
+   */
+  val EvaluationErrorCode: String = "expression evaluation failed"
+
   case class NoTransitionFound(fromState: StateId, eventName: String) extends FailureReason
   case class NoGuardMatched(fromState: StateId, eventName: String, attemptedGuards: Int) extends FailureReason
   case class EvaluationError(phase: GasExhaustionPhase, message: String) extends FailureReason

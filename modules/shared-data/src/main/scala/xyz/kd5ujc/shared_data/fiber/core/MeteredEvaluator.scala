@@ -12,6 +12,8 @@ import io.constellationnetwork.metagraph_sdk.json_logic.runtime.JsonLogicEvaluat
 import xyz.kd5ujc.schema.fiber.{FailureReason, FiberContext, GasExhaustionPhase}
 import xyz.kd5ujc.shared_data.syntax.all._
 
+import org.typelevel.log4cats.slf4j.Slf4jLogger
+
 /**
  * Single boundary between the fiber engine and the metakit JSON-Logic VM.
  *
@@ -57,7 +59,11 @@ object MeteredEvaluator {
         case Right(EvaluationResult(value, gasUsed, _, _)) =>
           ExecutionOps.chargeGas[G](gasUsed.amount).as(value.asRight[FailureReason])
         case Left(ex) =>
-          ex.toFailureReason[G](phase).map(_.asLeft[JsonLogicValue])
+          // The committed reason (via `toFailureReason`) carries NO exception text (audit L1 — a metakit reword
+          // must not change a rejected tx's committed hash); keep the rich metakit detail alive in LOGS only.
+          lift(
+            Slf4jLogger.getLogger[F].warn(ex)(s"JLVM ${phase.entryName} evaluation raised: ${ex.getMessage}")
+          ) >> ex.toFailureReason[G](phase).map(_.asLeft[JsonLogicValue])
       }
     } yield out
 

@@ -76,6 +76,29 @@ class StateMachineTriggerHandler[F[_]: Async: SecurityProvider, G[_]: Monad](
         ): TriggerHandlerResult).pure[G]
     }
 
+  /**
+   * The CASCADE (fiber→fiber) transition path — driven by a `_triggers` directive from another fiber, NOT by a
+   * wallet-signed `TransitionStateMachine`.
+   *
+   * ══ AUTHORIZATION ASYMMETRY (audit 2026-07-07, finding M2 — READ BEFORE CHANGING) ══
+   * A DIRECT (wallet-origin) transition is owner/participant-gated at block acceptance
+   * (`FiberValidator.L0` → `FiberRules.updateSignedByOwnerOrParticipant`). This cascade path passes
+   * `proofs = List.empty` and does NOT run that owner gate. On the cascade the ONLY gates are:
+   *   1. the target fiber's guard expression, and
+   *   2. the target's `FiberPolicy.acceptedCallers` allowlist (checked in `FiberEvaluator.policyShortCircuit`),
+   *      which DEFAULTS TO OPEN when unset.
+   * Consequently ANY account can drive ANY fiber's transition through a one-hop `_triggers` unless the target
+   * fiber constrains it. An app author who assumes "only owners can advance my machine" (true on the direct
+   * path) and omits `$caller`/`$proofs` checks in the guard is fully drivable by an arbitrary cascade caller.
+   *
+   * App-author guidance: on any transition reachable via `_triggers`, treat the GUARD + `acceptedCallers` as
+   * the sole authorization boundary — inspect the engine-stamped, non-spoofable `$caller` (surfaced below) and,
+   * where relevant, `$proofs`. Do NOT rely on the direct-path owner gate for cascade-reachable transitions.
+   *
+   * The default is intentionally left OPEN here (flipping it to closed would break every existing
+   * cross-fiber composition, and the default is a signed/omit-safe field per CLAUDE.md rule #1); the fix is to
+   * make the asymmetry explicit and give authors `$caller`/`acceptedCallers` to opt into a tighter posture.
+   */
   private def handleStateMachine(
     trigger: FiberTrigger,
     sm:      Records.StateMachineFiberRecord,
@@ -164,9 +187,17 @@ class ScriptTriggerHandler[F[_]: Async, G[_]: Monad]()(implicit
     type ScriptET[A] = EitherT[G, TriggerHandlerResult, A]
 
     val computation: ScriptET[TriggerHandlerResult] = for {
+      // Fiber-origin `_scriptCall` caller resolution (audit 2026-07-07, finding H1 — amplifier hardening / L4).
+      // A `Set[Address]` has arbitrary iteration order, so `owners.headOption` picked a non-deterministic owner
+      // as the committed `invokedBy` / access principal. Sort by the canonical address string and take the min
+      // so the chosen caller is well-defined and identical across all validators. The forgery vector this
+      // amplified is closed at its source by the spawn-owner subset floor (SpawnValidator.subsetOfParentFloor):
+      // a child can no longer be owned by an address its parent does not own, so this owner is a genuine
+      // parent-lineage owner, not an attacker-planted victim. FOLLOW-UP: representing a fiber caller as a
+      // distinct fiber-principal (rather than impersonating one of its owner wallets) is out of scope here.
       callerAddress <- EitherT.fromOption[G](
         trigger.sourceFiberId.flatMap { fiberId =>
-          state.getFiber(fiberId).flatMap(_.owners.headOption)
+          state.getFiber(fiberId).flatMap(_.owners.toList.sortBy(_.value.value).headOption)
         },
         TriggerHandlerResult.Failed(
           FailureReason.CallerResolutionFailed(script.fiberId, trigger.sourceFiberId)

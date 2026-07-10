@@ -26,6 +26,7 @@ import xyz.kd5ujc.schema.fiber.{
   SpawnOwnerPolicy
 }
 import xyz.kd5ujc.shared_data.fiber.core._
+import xyz.kd5ujc.shared_data.fiber.evaluation.ValueKind
 import xyz.kd5ujc.shared_data.syntax.all._
 
 import eu.timepit.refined.refineV
@@ -179,9 +180,11 @@ object SpawnValidator {
                         )
                     }
                   case other =>
+                    // COMMITTED (audit L1): describe the offending value by OttoChain's stable `ValueKind`, never
+                    // by a metakit value's `toString` (a case-class rename/field-change would fork a rejected tx).
                     Validated.invalidNel(
                       FailureReason.InvalidChildIdFormat(
-                        other.toString.take(50),
+                        s"<${ValueKind.of(other)}>",
                         "Expected string value"
                       )
                     )
@@ -203,28 +206,54 @@ object SpawnValidator {
 
       /**
        * FiberPolicy dial `spawnOwnerPolicy` — constrain a child's resolved owners against the parent's.
-       * `InheritParent` FORCES the child owners to the parent's (ignoring any expr); `SubsetOfParent` REJECTS
-       * (fail-closed abort) a child whose owners are not ⊆ the parent's; `Explicit`/absent is today's behaviour
-       * (unchanged). Applied AFTER resolution so it governs whatever the owners expression produced.
+       *
+       * FAIL-CLOSED SUBSET FLOOR (audit 2026-07-07, finding H1 — root fix). A `_spawn` may assign UNSIGNED
+       * child `owners` from an attacker-controlled `ownersExpr`, and a fiber-origin `_scriptCall` resolves the
+       * script caller as the emitting fiber's owner (`TriggerHandler.handleScript`). Composed, that let an
+       * attacker mint a child "owned by" an arbitrary VICTIM address and route a `_scriptCall` through it to
+       * pass a script's `Whitelist`/`FiberOwned` access policy AS the victim, with no victim signature. The
+       * floor blocks the forgery at spawn time: a spawned child's resolved owners MUST be a subset of the
+       * PARENT's owners, so a child can never be owned by an address the parent does not already own. This
+       * holds REGARDLESS of the dial — even the default/absent policy and `Explicit` are floored.
+       *
+       * The dial then only chooses HOW owners are derived, always WITHIN that floor:
+       *   - `InheritParent` FORCES child owners := parent.owners (ignoring any expr) — trivially within-floor.
+       *   - `Explicit`/absent and `SubsetOfParent` take whatever the owners expression produced, subject to the
+       *     subset floor. With the floor now applied unconditionally the two are behaviourally identical;
+       *     `SubsetOfParent` is retained as an explicit, self-documenting intent on the tighten-only lattice.
+       * Applied AFTER resolution so it governs whatever the owners expression produced. `resolved.andThen`
+       * short-circuits an already-Invalid resolution (e.g. a malformed owner address), so the floor never
+       * masks the more specific `InvalidOwnerAddress`/`InvalidOwnersExpression` failure.
        */
       private def applySpawnOwnerPolicy(
         parent:   Records.StateMachineFiberRecord,
         resolved: ValidatedNel[FailureReason, Set[Address]]
       ): ValidatedNel[FailureReason, Set[Address]] =
         parent.definition.policy.dials.flatMap(_.spawnOwnerPolicy) match {
-          case None | Some(SpawnOwnerPolicy.Explicit) => resolved
-          case Some(SpawnOwnerPolicy.InheritParent)   => resolved.map(_ => parent.owners)
-          case Some(SpawnOwnerPolicy.SubsetOfParent) =>
-            resolved.andThen { owners =>
-              if (owners.subsetOf(parent.owners)) Validated.validNel(owners)
-              else
-                Validated.invalidNel(
-                  FailureReason.PolicyViolation(
-                    "spawnOwnerPolicy",
-                    s"child owners $owners are not a subset of parent owners ${parent.owners}"
-                  )
-                )
-            }
+          case Some(SpawnOwnerPolicy.InheritParent) => resolved.map(_ => parent.owners)
+          case None | Some(SpawnOwnerPolicy.Explicit) | Some(SpawnOwnerPolicy.SubsetOfParent) =>
+            resolved.andThen(subsetOfParentFloor(parent, _))
+        }
+
+      /**
+       * The fail-closed subset floor: `owners ⊆ parent.owners`, else a `PolicyViolation("spawnOwnerPolicy", …)`
+       * abort. The accept/reject decision (`subsetOf`) is set-membership and independent of iteration order;
+       * the detail string sorts both address sets by their canonical string so the committed rejection receipt
+       * text is deterministic (no Set-iteration-order dependence) across validators.
+       */
+      private def subsetOfParentFloor(
+        parent: Records.StateMachineFiberRecord,
+        owners: Set[Address]
+      ): ValidatedNel[FailureReason, Set[Address]] =
+        if (owners.subsetOf(parent.owners)) Validated.validNel(owners)
+        else {
+          def show(as: Set[Address]): String = as.toList.map(_.value.value).sorted.mkString("{", ",", "}")
+          Validated.invalidNel(
+            FailureReason.PolicyViolation(
+              "spawnOwnerPolicy",
+              s"child owners ${show(owners)} are not a subset of parent owners ${show(parent.owners)}"
+            )
+          )
         }
 
       private def resolveOwners(
@@ -258,9 +287,11 @@ object SpawnValidator {
                                   Validated.invalidNel(FailureReason.InvalidOwnerAddress(addr, err))
                               }
                             case other =>
+                              // COMMITTED (audit L1): describe by OttoChain's stable `ValueKind`, never by a
+                              // metakit value's `toString` (a rename would fork a mixed-version set on a rejected tx).
                               Validated.invalidNel(
                                 FailureReason.InvalidOwnerAddress(
-                                  other.toString.take(30),
+                                  s"<${ValueKind.of(other)}>",
                                   "Expected string address"
                                 )
                               )

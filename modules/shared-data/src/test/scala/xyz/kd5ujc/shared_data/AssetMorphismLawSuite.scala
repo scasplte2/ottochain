@@ -1036,4 +1036,252 @@ object AssetMorphismLawSuite extends SimpleIOSuite {
       expect(assetOf(s4, a2).map(_.holder).contains(fiberHolder))
     }
   }
+
+  // ── C2 hardening: mandatory compose consent + dedup / self-exclusion (audit finding C2) ─────────
+  // The consumed multiset is `parts = source :: counterParties`; the amount is `Σ parts.amount` but each id
+  // is removed at most ONCE, so a self / duplicate id double-counts (mint-from-nothing), and a nonce-less
+  // cross-holder counter-party would be pulled without consent (theft). Both must now reject gracefully.
+
+  test("Compose naming the SOURCE as a counter-party is CombineRejected (no self-inflation); Σ conserved") {
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      // Compose(S, otherAssetIds=[S]) → parts=[S,S] → amount 2·s but S removed once (the audit inflation).
+      val selfCompose =
+        ApplyMorphism(
+          a1,
+          MorphismKind.Compose,
+          FiberOrdinal.MinValue,
+          otherAssetIds = Some(List(a1)),
+          compositeId = Some(composite)
+        )
+      for {
+        s2 <- setupOne(fixture, Alice, 50L) // a1 "gold" 50, held by Alice
+        supplyBefore = totalSupply(s2, "gold")
+        pr <- fixture.registry.generateProofs(selfCompose, Set(Alice))
+        s3 <- combiner.insert(s2, Signed(selfCompose, pr))
+      } yield expect(wasRejected(s3)) and
+      expect(assetOf(s3, composite).isEmpty) and // no mint-from-nothing composite
+      expect(assetOf(s3, a1).map(_.amount).contains(50L)) and // source untouched
+      expect(supplyBefore == 50L) and
+      expect(totalSupply(s3, "gold") == 50L) // Σ conserved (NOT doubled to 100)
+    }
+  }
+
+  test("Compose with a DUPLICATE counter-party id is CombineRejected (no dup-inflation); Σ conserved") {
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val holder = AssetHolder.Wallet(fixture.registry.addresses(Alice))
+      val mint2 = mintTo(a2, "gold", holder, 30L)
+      // otherAssetIds=[a2,a2] → a2 counted twice in Σ but removed once.
+      val dupCompose =
+        ApplyMorphism(
+          a1,
+          MorphismKind.Compose,
+          FiberOrdinal.MinValue,
+          otherAssetIds = Some(List(a2, a2)),
+          compositeId = Some(composite)
+        )
+      for {
+        s2   <- setupOne(fixture, Alice, 50L) // a1 "gold" 50
+        prM2 <- fixture.registry.generateProofs(mint2, Set(Alice))
+        s3   <- combiner.insert(s2, Signed(mint2, prM2)) // a2 "gold" 30
+        supplyBefore = totalSupply(s3, "gold")
+        prC <- fixture.registry.generateProofs(dupCompose, Set(Alice))
+        s4  <- combiner.insert(s3, Signed(dupCompose, prC))
+      } yield expect(wasRejected(s4)) and
+      expect(assetOf(s4, composite).isEmpty) and
+      expect(assetOf(s4, a1).map(_.amount).contains(50L)) and
+      expect(assetOf(s4, a2).map(_.amount).contains(30L)) and
+      expect(supplyBefore == 80L) and
+      expect(totalSupply(s4, "gold") == 80L) // NOT inflated to 110
+    }
+  }
+
+  test("cross-holder Compose with NO nonce is CombineRejected (theft blocked); victim custody + Σ intact") {
+    TestFixture.resource(Set(Alice, Bob)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val aliceHolder = AssetHolder.Wallet(fixture.registry.addresses(Alice))
+      val bobHolder = AssetHolder.Wallet(fixture.registry.addresses(Bob))
+      // Attacker (Alice) holds dust a1; victim (Bob) holds a2 (100). Compose is signed by Alice with NO nonce.
+      val pGold = policyOp("gold", TokenBehavior.Fungible)
+      val pSilver = policyOp("silver", TokenBehavior.Fungible)
+      val mintDust = mintTo(a1, "gold", aliceHolder, 1L)
+      val mintVictim = mintTo(a2, "silver", bobHolder, 100L)
+      val theft =
+        ApplyMorphism(
+          a1,
+          MorphismKind.Compose,
+          FiberOrdinal.MinValue,
+          otherAssetIds = Some(List(a2)),
+          compositeId = Some(composite)
+          // nonce = None — the opt-out the old consumeNonce no-op permitted
+        )
+      for {
+        prPg <- fixture.registry.generateProofs(pGold, Set(Alice))
+        s1   <- combiner.insert(genesis, Signed(pGold, prPg))
+        prPs <- fixture.registry.generateProofs(pSilver, Set(Bob))
+        s2   <- combiner.insert(s1, Signed(pSilver, prPs))
+        prMd <- fixture.registry.generateProofs(mintDust, Set(Alice))
+        s3   <- combiner.insert(s2, Signed(mintDust, prMd))
+        prMv <- fixture.registry.generateProofs(mintVictim, Set(Bob))
+        s4   <- combiner.insert(s3, Signed(mintVictim, prMv))
+        prT  <- fixture.registry.generateProofs(theft, Set(Alice))
+        s5   <- combiner.insert(s4, Signed(theft, prT))
+      } yield expect(wasRejected(s5)) and
+      expect(assetOf(s5, composite).isEmpty) and // no signer-held composite
+      expect(assetOf(s5, a2).map(_.holder).contains(bobHolder)) and // victim keeps custody
+      expect(assetOf(s5, a2).map(_.amount).contains(100L)) and
+      expect(assetOf(s5, a1).map(_.holder).contains(aliceHolder)) and
+      expect(totalSupply(s5, "gold") == 1L) and
+      expect(totalSupply(s5, "silver") == 100L)
+    }
+  }
+
+  test("same-holder Compose with NO nonce STILL succeeds and conserves Σ amount") {
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val holder = AssetHolder.Wallet(fixture.registry.addresses(Alice))
+      val p = policyOp("gold", TokenBehavior.Fungible)
+      val mint1 = mintTo(a1, "gold", holder, 40L)
+      val mint2 = mintTo(a2, "gold", holder, 60L)
+      // All parts are Alice's own → signer-owned consent, no nonce needed (the legitimate path must survive).
+      val compose =
+        ApplyMorphism(
+          a1,
+          MorphismKind.Compose,
+          FiberOrdinal.MinValue,
+          otherAssetIds = Some(List(a2)),
+          compositeId = Some(composite)
+        )
+      for {
+        prP  <- fixture.registry.generateProofs(p, Set(Alice))
+        s1   <- combiner.insert(genesis, Signed(p, prP))
+        prM1 <- fixture.registry.generateProofs(mint1, Set(Alice))
+        s2   <- combiner.insert(s1, Signed(mint1, prM1))
+        prM2 <- fixture.registry.generateProofs(mint2, Set(Alice))
+        s3   <- combiner.insert(s2, Signed(mint2, prM2))
+        prC  <- fixture.registry.generateProofs(compose, Set(Alice))
+        s4   <- combiner.insert(s3, Signed(compose, prC))
+        comp = assetOf(s4, composite)
+      } yield expect(!wasRejected(s4)) and
+      expect(comp.exists(_.amount == 100L)) and // 40+60 conserved into the composite
+      expect(assetOf(s4, a1).isEmpty) and expect(assetOf(s4, a2).isEmpty) and
+      expect(totalSupply(s4, "gold") == 100L)
+    }
+  }
+
+  test("cross-holder Compose WITH a valid AuthorizeCompose nonce STILL succeeds and conserves Σ") {
+    TestFixture.resource(Set(Alice, Bob)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val aliceHolder = AssetHolder.Wallet(fixture.registry.addresses(Alice))
+      val bobHolder = AssetHolder.Wallet(fixture.registry.addresses(Bob))
+      val pGold = policyOp("gold", TokenBehavior.Fungible)
+      val pUsd = policyOp("usd", TokenBehavior.Fungible)
+      val mintAlice = mintTo(a1, "gold", aliceHolder, 40L)
+      val mintBob = mintTo(a2, "usd", bobHolder, 60L)
+      val farFuture = SnapshotOrdinal.unsafeApply(Long.MaxValue)
+      // Bob (holder of the counter-party a2) authorizes the compose — nonce recorded under a2.
+      val bobAuth = AuthorizeCompose(a2, asset("gold"), nonce = 13L, expiresAt = farFuture, FiberOrdinal.MinValue)
+      // Alice (source-holder) composes her a1 with Bob's a2, revealing nonce 13 → consent granted + consumed.
+      val compose =
+        ApplyMorphism(
+          a1,
+          MorphismKind.Compose,
+          FiberOrdinal.MinValue,
+          otherAssetIds = Some(List(a2)),
+          compositeId = Some(composite),
+          nonce = Some(13L)
+        )
+      for {
+        prPg   <- fixture.registry.generateProofs(pGold, Set(Alice))
+        s1     <- combiner.insert(genesis, Signed(pGold, prPg))
+        prPu   <- fixture.registry.generateProofs(pUsd, Set(Bob))
+        s2     <- combiner.insert(s1, Signed(pUsd, prPu))
+        prMA   <- fixture.registry.generateProofs(mintAlice, Set(Alice))
+        s3     <- combiner.insert(s2, Signed(mintAlice, prMA))
+        prMB   <- fixture.registry.generateProofs(mintBob, Set(Bob))
+        s4     <- combiner.insert(s3, Signed(mintBob, prMB))
+        prAuth <- fixture.registry.generateProofs(bobAuth, Set(Bob))
+        s5     <- combiner.insert(s4, Signed(bobAuth, prAuth))
+        nonceRecorded = s5.calculated.usedNonces
+          .getOrElse(a2, scala.collection.immutable.SortedSet.empty[Long])
+          .contains(13L)
+        prC <- fixture.registry.generateProofs(compose, Set(Alice))
+        s6  <- combiner.insert(s5, Signed(compose, prC))
+        comp = assetOf(s6, composite)
+        nonceConsumed = !s6.calculated.usedNonces
+          .getOrElse(a2, scala.collection.immutable.SortedSet.empty[Long])
+          .contains(13L)
+      } yield expect(nonceRecorded) and
+      expect(!wasRejected(s6)) and
+      expect(comp.exists(_.amount == 100L)) and // 40+60 conserved
+      expect(assetOf(s6, a1).isEmpty) and expect(assetOf(s6, a2).isEmpty) and
+      expect(nonceConsumed) and
+      // the composite is bound to the SOURCE policy ("gold"); the usd counter-party is fully consumed
+      expect(totalSupply(s6, "gold") == 100L) and
+      expect(totalSupply(s6, "usd") == 0L)
+    }
+  }
+
+  test("Pool naming the SOURCE or a DUPLICATE counter-party is CombineRejected (no pool-inflation); Σ conserved") {
+    TestFixture.resource(Set(Alice)).use { fixture =>
+      implicit val sp: SecurityProvider[IO] = fixture.securityProvider
+      implicit val l0: L0NodeContext[IO] = fixture.l0Context
+      val combiner = Combiner.make[IO]()
+      val holder = AssetHolder.Wallet(fixture.registry.addresses(Alice))
+      val p = policyOp("usdc", TokenBehavior.Fungible)
+      val mint1 = mintTo(a1, "usdc", holder, 40L)
+      val mint2 = mintTo(a2, "usdc", holder, 35L)
+      // Pool(a1, [a1]) — self; Pool(a1, [a2,a2]) — duplicate. Both would double-count under the old code.
+      val poolSelf =
+        ApplyMorphism(
+          a1,
+          MorphismKind.Pool,
+          FiberOrdinal.MinValue,
+          otherAssetIds = Some(List(a1)),
+          compositeId = Some(pooled)
+        )
+      val poolDup =
+        ApplyMorphism(
+          a1,
+          MorphismKind.Pool,
+          FiberOrdinal.MinValue,
+          otherAssetIds = Some(List(a2, a2)),
+          compositeId = Some(pooled)
+        )
+      for {
+        prP  <- fixture.registry.generateProofs(p, Set(Alice))
+        s1   <- combiner.insert(genesis, Signed(p, prP))
+        prM1 <- fixture.registry.generateProofs(mint1, Set(Alice))
+        s2   <- combiner.insert(s1, Signed(mint1, prM1))
+        prM2 <- fixture.registry.generateProofs(mint2, Set(Alice))
+        s3   <- combiner.insert(s2, Signed(mint2, prM2))
+        supplyBefore = totalSupply(s3, "usdc")
+        prSelf <- fixture.registry.generateProofs(poolSelf, Set(Alice))
+        sSelf  <- combiner.insert(s3, Signed(poolSelf, prSelf))
+        prDup  <- fixture.registry.generateProofs(poolDup, Set(Alice))
+        sDup   <- combiner.insert(s3, Signed(poolDup, prDup))
+      } yield expect(wasRejected(sSelf)) and expect(wasRejected(sDup)) and
+      // no pooled output produced in either branch
+      expect(assetOf(sSelf, pooled).isEmpty) and expect(assetOf(sDup, pooled).isEmpty) and
+      // parts intact
+      expect(assetOf(sSelf, a1).map(_.amount).contains(40L)) and
+      expect(assetOf(sDup, a1).map(_.amount).contains(40L)) and
+      expect(assetOf(sDup, a2).map(_.amount).contains(35L)) and
+      // Σ conserved (NOT inflated to 80 / 110)
+      expect(supplyBefore == 75L) and
+      expect(totalSupply(sSelf, "usdc") == 75L) and
+      expect(totalSupply(sDup, "usdc") == 75L)
+    }
+  }
 }

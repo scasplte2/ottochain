@@ -5,13 +5,13 @@ import cats.data.NonEmptySet
 import cats.effect.Async
 import cats.syntax.all._
 
-import io.constellationnetwork.currency.dataApplication.DataState
+import io.constellationnetwork.currency.dataApplication.{DataApplicationValidationError, DataState}
 import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.signature.SignatureProof
 
 import xyz.kd5ujc.schema.Updates.{CreateScript, InvokeScript, UpgradeScript}
 import xyz.kd5ujc.schema.{CalculatedState, OnChain}
-import xyz.kd5ujc.shared_data.lifecycle.validate.rules.{CommonRules, RegistryRules, ScriptRules}
+import xyz.kd5ujc.shared_data.lifecycle.validate.rules.{CommonRules, ScriptRules}
 
 /**
  * Validators for script operations.
@@ -82,26 +82,37 @@ object ScriptValidator {
     proofs: NonEmptySet[SignatureProof]
   ) {
 
-    /** Validates a CreateScript update (L0 specific checks) */
+    /**
+     * Validates a CreateScript update (L0 specific checks).
+     *
+     * NO-OP at the block-acceptance gate. The former `RegistryRules.L0.scriptRefResolvesAndMatches` read the
+     * registry version lineage (`state.registry.get(name)` -> `lineage.resolve(...)`), which a concurrent
+     * third-party publish/yank can flip between DL1 block formation and ML0 re-validation. An `Invalid` here
+     * drops the ENTIRE DL1 block (tessellation all-or-nothing) — CLAUDE.md rule #3 / audit C3. The ref+hash
+     * bind is re-verified GRACEFULLY in `ScriptCombiner.resolveScriptBinding` (CombineRejected ->
+     * RejectionReceipt), so nothing is lost.
+     */
     def createScript(update: CreateScript): F[ValidationResult] =
-      RegistryRules.L0.scriptRefResolvesAndMatches(update.schemaRef, update.scriptProgram, state.calculated)
+      ().validNec[DataApplicationValidationError].pure[F]
 
-    /** Validates an InvokeScript update (L0 specific checks) */
+    /** Validates an InvokeScript update (L0 specific checks) — immutable access-control policy only */
     def invokeScript(update: InvokeScript): F[ValidationResult] =
       ScriptRules.L0.accessControlCheck(update.fiberId, proofs, state.calculated)
 
-    /** Validates an UpgradeScript update (active, owner, same-package re-bind + verified hash) */
+    /**
+     * Validates an UpgradeScript update (L0): ONLY the immutable-auth owner-signature gate.
+     *
+     * `scriptSignedByOwners` reads `owners`, fixed at creation (TOCTOU-safe), and the combiner does NOT
+     * re-check upgrade signers — so this gate MUST stay at ML0. Everything else was removed as a
+     * block-poisoning hazard and is re-enforced GRACEFULLY in `ScriptCombiner.upgradeScript` (exact-sequence
+     * + same-package + verified re-bind, all CombineRejected):
+     *   - `scriptIsActive` — mutable status a concurrent same-script update can flip (audit M1);
+     *   - `bindingNameMatchesScript` — reads the script's current (mutable) binding name;
+     *   - `scriptRefResolvesAndMatches` — the registry lineage read (audit C3, CLAUDE.md rule #3) a
+     *     concurrent same-package publish/yank can flip.
+     */
     def upgradeScript(update: UpgradeScript): F[ValidationResult] =
-      for {
-        scriptActive  <- ScriptRules.L0.scriptIsActive(update.fiberId, state.calculated)
-        signedByOwner <- ScriptRules.L0.scriptSignedByOwners(update.fiberId, proofs, state.calculated)
-        bindingOk <- ScriptRules.L0.bindingNameMatchesScript(update.fiberId, update.targetRef.name, state.calculated)
-        targetOk <- RegistryRules.L0.scriptRefResolvesAndMatches(
-          Some(update.targetRef),
-          update.newProgram,
-          state.calculated
-        )
-      } yield List(scriptActive, signedByOwner, bindingOk, targetOk).combineAll
+      ScriptRules.L0.scriptSignedByOwners(update.fiberId, proofs, state.calculated)
   }
 
   /**
@@ -123,18 +134,32 @@ object ScriptValidator {
         l0Result <- l0.createScript(update)
       } yield l1Result |+| l0Result
 
-    /** Validates an InvokeScript update (all checks) */
+    /**
+     * Validates an InvokeScript update at the ML0 block-acceptance gate: structural L1 checks (existence,
+     * args structure/size) MINUS the mutable `ScriptRules.L1.sequenceNumberMatches` (audit M1: a concurrent
+     * same-script invoke bumps the sequence and flips this Valid->Invalid, poisoning the whole block; the
+     * combiner does the exact-sequence check + atomic bump as CombineRejected, preserving replay protection)
+     * PLUS the immutable-auth access-control check (in `l0.invokeScript`). The DL1 `L1Validator.invokeScript`
+     * path keeps the sequence pre-filter — DL1 rejection does not poison an ML0 block.
+     */
     def invokeScript(update: InvokeScript): F[ValidationResult] =
       for {
-        l1Result <- l1.invokeScript(update)
-        l0Result <- l0.invokeScript(update)
-      } yield l1Result |+| l0Result
+        cidExists     <- CommonRules.cidIsFound(update.fiberId, state.onChain)
+        argsStructure <- CommonRules.payloadStructureValid(update.args, "args")
+        argsSize      <- CommonRules.valueWithinSizeLimit(update.args, Limits.MaxEventPayloadBytes, "args")
+        l0Result      <- l0.invokeScript(update)
+      } yield List(cidExists, argsStructure, argsSize, l0Result).combineAll
 
-    /** Validates an UpgradeScript update (all checks) */
+    /**
+     * Validates an UpgradeScript update at the ML0 block-acceptance gate: structural L1 checks (existence,
+     * new-program depth) MINUS the mutable `ScriptRules.L1.sequenceNumberMatches` (audit M1, same rationale
+     * as `invokeScript`) PLUS the immutable-auth owner-signature check (in `l0.upgradeScript`).
+     */
     def upgradeScript(update: UpgradeScript): F[ValidationResult] =
       for {
-        l1Result <- l1.upgradeScript(update)
-        l0Result <- l0.upgradeScript(update)
-      } yield l1Result |+| l0Result
+        cidExists <- CommonRules.cidIsFound(update.fiberId, state.onChain)
+        programOk <- CommonRules.expressionWithinDepthLimit(update.newProgram, "newProgram", Limits.MaxExpressionDepth)
+        l0Result  <- l0.upgradeScript(update)
+      } yield List(cidExists, programOk, l0Result).combineAll
   }
 }
