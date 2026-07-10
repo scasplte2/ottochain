@@ -5,7 +5,7 @@
  * If N ordinals pass without the transaction appearing in state, it resubmits.
  * This adapts to ML0's actual consensus speed rather than arbitrary timeouts.
  */
-import { HttpClient } from '@ottochain/sdk';
+import { HttpClient, OttoMetagraphClient } from '@ottochain/sdk';
 
 const TAG = '\x1b[33m[ordinalConfirm]\x1b[0m';
 
@@ -72,26 +72,21 @@ export interface OrdinalConfirmationOptions {
 
 interface OrdinalSnapshot {
   ordinal: number;
-  hash: string;
 }
 
 /**
  * Fetch the current ML0 snapshot ordinal.
+ *
+ * Typed read: `getLatestOrdinal()` reads `/snapshots/latest` and returns `value.ordinal`, throwing
+ * on an unreachable node or malformed body — the surrounding try/catch preserves the "return null on
+ * failure" contract this poller depends on.
  */
 async function getCurrentOrdinal(ml0BaseUrl: string): Promise<OrdinalSnapshot | null> {
   try {
-    const client = new HttpClient(`${ml0BaseUrl}/snapshots/latest`);
-    const snapshot = await client.get<unknown>('');
-    if (!snapshot || typeof snapshot !== 'object') return null;
-
-    // Handle both wrapped and unwrapped response formats
-    const s = snapshot as Record<string, unknown>;
-    const value = (s.value as Record<string, unknown>) ?? s;
-    const ordinal = value.ordinal as number | undefined;
-    const hash = (value.hash as string) ?? '';
-
+    const client = new OttoMetagraphClient({ ml0Url: ml0BaseUrl });
+    const ordinal = await client.getLatestOrdinal();
     if (typeof ordinal !== 'number') return null;
-    return { ordinal, hash };
+    return { ordinal };
   } catch {
     return null;
   }
@@ -99,6 +94,10 @@ async function getCurrentOrdinal(ml0BaseUrl: string): Promise<OrdinalSnapshot | 
 
 /**
  * Check if the entity exists and satisfies the predicate.
+ *
+ * Kept as a raw read: `entityPath` is a caller-supplied, dynamic path (state-machines/{id},
+ * scripts/{id}, registry/{name}, assets/{id}/state-proof, …), so no single typed client method spans
+ * it. The predicate already treats the body opaquely, so there is no typed shape to guard here.
  */
 async function checkEntity(
   ml0BaseUrl: string,

@@ -18,7 +18,10 @@ import generateWallet from './lib/generateWallet.ts';
 import sendSignedUpdate from './lib/sendDataTransaction.ts';
 import getMetagraphEnv from './lib/metagraphEnv.ts';
 import type { StatesMap, Wallets, GeneratorFn, ValidatorFn } from './lib/types.ts';
-import { HttpClient } from '@ottochain/sdk';
+import { HttpClient, OttoMetagraphClient } from '@ottochain/sdk';
+// WIRE record types (from `/core` = ottochain/types) — the exact shapes the client's typed getters
+// return. NOT the root's same-named exports, which resolve to the generated protobuf types.
+import type { StateMachineFiberRecord, ScriptFiberRecord, OnChain, RegistryEntry } from '@ottochain/sdk/core';
 import { waitForOrdinalConfirmation, waitForOrdinalAdvance } from './lib/ordinalConfirmation.ts';
 import { WebhookListener } from './lib/webhookListener.ts';
 import { ChainKeepalive } from './lib/keepalive.ts';
@@ -34,6 +37,22 @@ import type { HolderRef } from './lib/assertHelpers.ts';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const examplesDir = path.join(__dirname, 'examples');
+
+/**
+ * Typed read of a fiber's current record from ML0 — a state machine or a script per `isScript`.
+ * Returns the parsed record (or null on 404) so callers read typed `.sequenceNumber` / `.status`
+ * (a `FiberStatus`) instead of casting an `unknown` body — a chain-side record-shape drift then fails
+ * the typecheck here. Both record types carry `sequenceNumber` and `status`, so the union suffices for
+ * the confirmation reads that key off those two fields.
+ */
+async function readFiberRecord(
+  ml0Url: string,
+  cid: string,
+  isScript: boolean
+): Promise<StateMachineFiberRecord | ScriptFiberRecord | null> {
+  const client = new OttoMetagraphClient({ ml0Url });
+  return isScript ? client.getScript(cid) : client.getStateMachine(cid);
+}
 
 // ---------------------------------------------------------------------------
 // CLI arguments (minimal — no commander needed)
@@ -189,6 +208,10 @@ async function renderEconomy(
   let machines: Record<string, SmRec> = {};
   let assets: Record<string, AsRec> = {};
   try {
+    // Raw read by design: this is a DISPLAY-ONLY economy table that projects the checkpoint into the
+    // loose local `SmRec`/`AsRec` view-types (a subset of the typed `CalculatedState` records), and it
+    // swallows any read error into a "checkpoint unavailable" line — so it is not a drift-guarding
+    // confirmation read. The confirmation-critical reads above/below use the typed client.
     const cp = (await new HttpClient(`${ml0BaseUrl}/data-application/v1/checkpoint`).get<unknown>(
       ''
     )) as { state?: { stateMachines?: Record<string, SmRec>; assets?: Record<string, AsRec> } } | null;
@@ -305,6 +328,9 @@ async function loadFileOrModule(
   throw new Error(`File not found: ${filePath} (tried .ts, .js, .json)`);
 }
 
+// Raw read by design: the body flows OPAQUELY into the example validator functions (compared as raw
+// JSON) and into `JSON.stringify` output — none of which are typed against `Checkpoint` — so there is
+// no typed shape to thread through here without retyping the whole example-validator layer.
 async function getApplicationState(url: string): Promise<unknown> {
   const client = new HttpClient(url);
   return client.get<unknown>('');
@@ -387,6 +413,9 @@ async function waitForMl0Confirmation(
   log?: FlowLogger
 ): Promise<void> {
   const url = `${ml0BaseUrl}/data-application/v1/${entityPath}`;
+  // Raw read by design: `entityPath` is a caller-supplied dynamic path (fiber / script / registry /
+  // asset-state-proof), so no single typed client method spans it; the predicate treats the body as
+  // `unknown`. Callers that know the concrete shape (e.g. registry) cast inside their own predicate.
   const client = new HttpClient(url);
   const w = log ? (s: string) => log.write(s) : (s: string) => process.stdout.write(s);
   w(`\n      ⏳ ML0 confirm ${label}`);
@@ -446,14 +475,14 @@ async function waitForDl1Sync(
       dl1BaseUrls.map(async (base, i) => {
         if (ready[i]) return;
         try {
-          const onChain = (await new HttpClient(`${base}/data-application/v1/onchain`).get<unknown>(
-            ''
-          )) as { fiberCommits?: Record<string, { sequenceNumber?: number }> } | null;
-          const commit = onChain?.fiberCommits?.[fiberId];
+          // Typed OnChain read against this DL1 node (path is identical on DL1); getOnChain throws on
+          // an unready node, caught below. `fiberCommits[id]` is a typed `FiberCommit`.
+          const onChain: OnChain = await new OttoMetagraphClient({ ml0Url: base }).getOnChain();
+          const commit = onChain.fiberCommits?.[fiberId];
           if (!commit) return;
           if (expectedSeqNum === null) {
             ready[i] = true;
-          } else if (commit.sequenceNumber !== undefined && commit.sequenceNumber >= expectedSeqNum) {
+          } else if (commit.sequenceNumber >= expectedSeqNum) {
             ready[i] = true;
           }
         } catch {
@@ -505,10 +534,9 @@ async function waitForDl1AssetSync(
       dl1BaseUrls.map(async (base, i) => {
         if (ready[i]) return;
         try {
-          const onChain = (await new HttpClient(`${base}/data-application/v1/onchain`).get<unknown>(
-            ''
-          )) as { assetCommits?: Record<string, unknown> } | null;
-          if (onChain?.assetCommits && onChain.assetCommits[assetId] != null) ready[i] = true;
+          // Typed OnChain read against this DL1 node; `assetCommits[id]` is a typed `AssetCommit`.
+          const onChain: OnChain = await new OttoMetagraphClient({ ml0Url: base }).getOnChain();
+          if (onChain.assetCommits[assetId] != null) ready[i] = true;
         } catch {
           // node not ready yet — retry next attempt
         }
@@ -796,10 +824,12 @@ async function runFlow(
         };
         const regMessage = regLib.generator({ cid: resolveFiber(step.fiber), wallets: signWallets, options: regOptions });
         const regPath = `registry/${encodeURIComponent(regName)}`;
-        // Did the op land in the registry? (per-action predicate on the /registry/{name} response)
-        const landed = (d: unknown): boolean => {
-          const e = d as { target?: { SchemaPackage?: { versions?: { versions?: Record<string, { status?: string }> } } } } | null;
-          const vs = e?.target?.SchemaPackage?.versions?.versions;
+        // Did the op land in the registry? Typed predicate over the `/registry/{name}` RegistryEntry —
+        // a drift in the target/version-lineage shape fails the typecheck instead of reading undefined.
+        const landed = (e: RegistryEntry | null): boolean => {
+          const target = e?.target;
+          // Narrow the RegistryTarget union to the SchemaPackage variant to reach its version lineage.
+          const vs = target && 'SchemaPackage' in target ? target.SchemaPackage.versions.versions : undefined;
           if (step.action === 'publishVersion') return !!vs && (step.version as string) in vs;
           if (step.action === 'setVersionStatus') return vs?.[step.version as string]?.status === step.status;
           return e != null; // registerAlias
@@ -820,12 +850,12 @@ async function runFlow(
         if (step.expectRejected === 'ml0') {
           // Admitted by DL1 (structurally valid) but rejected at ML0 combine -> never lands.
           await sendSignedUpdate(regMessage, signWallets, dl1Urls).catch(() => undefined);
-          const client = new HttpClient(`${ml0Urls[0]}/data-application/v1/${regPath}`);
+          const client = new OttoMetagraphClient({ ml0Url: ml0Urls[0] });
           for (let attempt = 0; attempt < 8; attempt++) {
             await new Promise((r) => setTimeout(r, retryDelayMs));
-            let data: unknown = null;
+            let data: RegistryEntry | null = null;
             try {
-              data = await client.get<unknown>('');
+              data = await client.getRegistryEntry(regName);
             } catch {
               /* entry may not exist — fine */
             }
@@ -849,9 +879,7 @@ async function runFlow(
         for (let attempt = 0; attempt <= regResubmits && !regConfirmed; attempt++) {
           if (attempt > 0) {
             try {
-              const cur = await new HttpClient(
-                `${ml0Urls[0]}/data-application/v1/${regPath}`
-              ).get<unknown>('');
+              const cur = await new OttoMetagraphClient({ ml0Url: ml0Urls[0] }).getRegistryEntry(regName);
               if (landed(cur)) {
                 regConfirmed = true;
                 break;
@@ -865,7 +893,9 @@ async function runFlow(
             await waitForMl0Confirmation(
               ml0Urls[0],
               regPath,
-              landed,
+              // The generic entityPath poller hands back an untyped body; in this context it IS the
+              // `/registry/{name}` RegistryEntry, so cast at the boundary and reuse the typed predicate.
+              (d) => landed(d as RegistryEntry | null),
               regBudget,
               retryDelayMs,
               `${step.action} ${regName}`,
@@ -918,6 +948,10 @@ async function runFlow(
           morphismKind = String(morphism.kind ?? '').toUpperCase();
           fracFirstShard = Array.isArray(morphism.shardIds) ? String((morphism.shardIds as unknown[])[0]) : undefined;
           // Morphisms are sequenced by (assetId, targetSequenceNumber): target the asset's current seq.
+          // Raw read by design (as are the other `assets/{id}/state-proof` reads in this asset block):
+          // the whole `AssetRecord` is pulled from a FIELD-LESS state-proof, but the typed
+          // `getAssetStateProof(assetId, field)` unconditionally appends `?field=` and cannot fetch the
+          // bare record — so there is no drop-in typed equivalent for this endpoint shape.
           let curSeq = 0;
           try {
             const resp = (await new HttpClient(`${ml0Urls[0]}/data-application/v1/assets/${assetId}/state-proof`).get<unknown>('')) as { record?: { sequenceNumber?: number } } | null;
@@ -1070,13 +1104,8 @@ async function runFlow(
       let preSendSeqNum = -1;
       if (!isCreateStep) {
         try {
-          const ml0Client = new HttpClient(
-            `${ml0Urls[0]}/data-application/v1/${entityPath}`
-          );
-          const existing = (await ml0Client.get<unknown>('')) as Record<string, unknown> | null;
-          if (existing && typeof existing === 'object') {
-            preSendSeqNum = (existing as { sequenceNumber?: number }).sequenceNumber ?? -1;
-          }
+          const existing = await readFiberRecord(ml0Urls[0], activeCid, isScriptStep);
+          preSendSeqNum = existing?.sequenceNumber ?? -1;
         } catch {
           // Entity doesn't exist yet (expected for create steps)
         }
@@ -1242,15 +1271,10 @@ async function runFlow(
       const regenerateMessage = async () => {
         if (!isCreateStep) {
           try {
-            const ml0Client = new HttpClient(
-              `${ml0Urls[0]}/data-application/v1/${entityPath}`
-            );
-            const existing = (await ml0Client.get<unknown>('')) as Record<string, unknown> | null;
-            if (existing && typeof existing === 'object') {
-              const freshSeqNum = (existing as { sequenceNumber?: number }).sequenceNumber ?? -1;
-              if (freshSeqNum >= 0) {
-                (stepOptions as Record<string, unknown>).targetSequenceNumber = freshSeqNum;
-              }
+            const existing = await readFiberRecord(ml0Urls[0], activeCid, isScriptStep);
+            const freshSeqNum = existing?.sequenceNumber ?? -1;
+            if (freshSeqNum >= 0) {
+              (stepOptions as Record<string, unknown>).targetSequenceNumber = freshSeqNum;
             }
           } catch {
             // Entity might not exist yet — keep current options
@@ -1297,9 +1321,7 @@ async function runFlow(
         });
         let afterSeq = -1;
         try {
-          const rec = (await new HttpClient(
-            `${ml0Urls[0]}/data-application/v1/${entityPath}`
-          ).get<unknown>('')) as { sequenceNumber?: number } | null;
+          const rec = await readFiberRecord(ml0Urls[0], activeCid, isScriptStep);
           afterSeq = rec?.sequenceNumber ?? -1;
         } catch {
           // The fiber may legitimately not exist (e.g. a rejected create) — treat as unchanged.
@@ -1345,9 +1367,7 @@ async function runFlow(
           // route from reader.committed, so an applied update stays invisible for a few ordinals):
           //   1. committed read — catches applications old enough to have finalized.
           try {
-            const rec = (await new HttpClient(
-              `${ml0Urls[0]}/data-application/v1/${entityPath}`
-            ).get<unknown>('')) as { sequenceNumber?: number; status?: string } | null;
+            const rec = await readFiberRecord(ml0Urls[0], activeCid, isScriptStep);
             const landed = isCreateStep
               ? rec?.status === 'ACTIVE'
               : (rec?.sequenceNumber ?? -1) > preSendSeqNum;
@@ -1413,12 +1433,7 @@ async function runFlow(
         // Fetch the expected sequence number from ML0 (the source of truth)
         let expectedSeqNum: number | null = null;
         try {
-          const ml0Client = new HttpClient(
-            `${ml0Urls[0]}/data-application/v1/${entityPath}`
-          );
-          const record = (await ml0Client.get<unknown>('')) as {
-            sequenceNumber?: number;
-          } | null;
+          const record = await readFiberRecord(ml0Urls[0], activeCid, isScriptStep);
           expectedSeqNum = record?.sequenceNumber ?? null;
         } catch {
           // If we can't fetch from ML0, fall back to existence check only
