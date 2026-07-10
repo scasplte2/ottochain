@@ -199,8 +199,10 @@ jobs:
           for release_name in "${!JAR_MAP[@]}"; do
             local_name="${JAR_MAP[$release_name]}"
             echo "  ${release_name} → ${local_name}"
-            # --retry + --retry-all-errors rides out a TRANSIENT release-CDN 404/5xx on a cache miss
-            curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors \
+            # --retry + --retry-all-errors rides out a TRANSIENT release-CDN 404/5xx on a cache miss.
+            # A cache HIT skips this step entirely; the warm-tess-cache workflow keeps main's cache
+            # populated so PRs hit and never reach this download at all.
+            curl -fsSL --retry 8 --retry-delay 3 --retry-all-errors --retry-max-time 120 \
               -o "tess-jars/${local_name}" "${BASE_URL}/${release_name}"
             echo "    ✓ $(stat -c%s "tess-jars/${local_name}") bytes"
           done

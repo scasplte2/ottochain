@@ -1,0 +1,115 @@
+# Warm the tessellation release-JAR cache on the DEFAULT branch (main).
+#
+# WHY: the tessellation GL0/GL1/keytool/wallet JARs are STATIC per release tag, but GitHub Actions
+# caches are BRANCH-SCOPED — a cache saved on a feature branch is invisible to other PRs. The e2e
+# lanes only save the cache as a side-effect of a *successful* (and occasionally CDN-flaky) run, so
+# without a guaranteed populated cache on `main`, every PR MISSES → re-downloads → is exposed to a
+# transient release-CDN 404/5xx. PRs can read caches from the DEFAULT branch, so populating the cache
+# here — on push to main and daily (before the 07:00 nightly, ahead of the 7-day eviction window) —
+# gives every PR a cache HIT and it never downloads at all.
+#
+# The cache KEY (`tessellation-jars-<tess_tag>`) and the version-resolve logic below MUST stay
+# byte-identical to the `Resolve tessellation version` + `Cache tessellation release JARs` steps in
+# `e2e.yml`, or the keys diverge and PRs miss again. Both read the same source (project/Dependencies.scala
+# → metakit POM → tessellation-sdk version), so they resolve the same tag automatically; keep the scripts
+# in sync if either is edited.
+name: Warm tessellation JAR cache
+
+on:
+  push:
+    branches: [main]
+    # The resolved version is a pure function of the metakit pin + this workflow, so only re-warm when
+    # one of those changes (plus the daily schedule below catches metakit's own upstream drift).
+    paths:
+      - 'project/Dependencies.scala'
+      - '.github/workflows/warm-tess-cache.yml'
+  schedule:
+    # Daily at 06:00 UTC — an hour before the nightly e2e, and well inside the 7-day cache-eviction window.
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      tessellation_version:
+        description: 'Tessellation version override (e.g., v4.0.0-rc.6)'
+        required: false
+        type: string
+
+concurrency:
+  group: warm-tess-cache
+  cancel-in-progress: false
+
+jobs:
+  warm:
+    name: Warm tessellation release-JAR cache
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # ── KEEP IN SYNC with e2e.yml `Resolve tessellation version` ──────────────────────────────────
+      - name: Resolve tessellation version
+        id: versions
+        run: |
+          METAKIT_VER=$(grep 'val metakit =' project/Dependencies.scala | head -1 | grep -o '"[^"]*"' | tr -d '"')
+          echo "metakit=${METAKIT_VER}" >> $GITHUB_OUTPUT
+
+          if [ -n "${{ inputs.tessellation_version }}" ]; then
+            TESS_VER="${{ inputs.tessellation_version }}"
+            TESS_VER="${TESS_VER#v}"
+            echo "Dependency chain: ottochain → metakit ${METAKIT_VER} → tessellation ${TESS_VER} (override)"
+          else
+            TESS_VER=$(curl -sf "https://repo1.maven.org/maven2/io/constellationnetwork/metakit_2.13/${METAKIT_VER}/metakit_2.13-${METAKIT_VER}.pom" \
+              | grep -A1 'tessellation-sdk' | grep '<version>' | grep -o '[0-9][^<]*' | head -1)
+            echo "Dependency chain: ottochain → metakit ${METAKIT_VER} → tessellation ${TESS_VER}"
+          fi
+
+          # Same TEMPORARY PATCH as e2e.yml: fall back to the latest published <major.minor>.x release when
+          # the resolved version has no published GitHub release JARs yet.
+          if ! curl -sf "https://api.github.com/repos/Constellation-Labs/tessellation/releases/tags/v${TESS_VER}" >/dev/null 2>&1; then
+            MM=$(echo "$TESS_VER" | grep -oE '^[0-9]+\.[0-9]+')
+            FALLBACK=$(curl -sf "https://api.github.com/repos/Constellation-Labs/tessellation/releases?per_page=50" \
+              | grep -oE '"tag_name": *"v[^"]+"' | grep -oE 'v[0-9][^"]*' | sed 's/^v//' \
+              | grep "^${MM}\\." | sort -V | tail -1)
+            echo "::warning::tessellation v${TESS_VER} has no published release; falling back to latest published ${MM}.x release: ${FALLBACK}"
+            TESS_VER="${FALLBACK}"
+          fi
+          echo "tessellation=${TESS_VER}" >> $GITHUB_OUTPUT
+
+          TESS_TAG="v${TESS_VER}"
+          [ "$TESS_TAG" = "v4.0.0" ] && TESS_TAG="v4.0.0-rc.10"
+          echo "tess_tag=${TESS_TAG}" >> $GITHUB_OUTPUT
+          echo "Warming cache key: tessellation-jars-${TESS_TAG}"
+
+      # ── KEEP IN SYNC with e2e.yml `Cache tessellation release JARs` (same key = shared cache) ──────
+      - name: Cache tessellation release JARs
+        id: cache-tess-jars
+        uses: actions/cache@v6
+        with:
+          path: tess-jars
+          key: tessellation-jars-${{ steps.versions.outputs.tess_tag }}
+
+      - name: Download tessellation release JARs
+        if: steps.cache-tess-jars.outputs.cache-hit != 'true'
+        run: |
+          BASE_URL="https://github.com/Constellation-Labs/tessellation/releases/download/${{ steps.versions.outputs.tess_tag }}"
+          mkdir -p tess-jars
+          echo "Downloading tessellation JARs from release ${{ steps.versions.outputs.tess_tag }}..."
+          declare -A JAR_MAP=(
+            ["cl-node.jar"]="gl0.jar"
+            ["cl-dag-l1.jar"]="gl1.jar"
+            ["cl-keytool.jar"]="keytool.jar"
+            ["cl-wallet.jar"]="wallet.jar"
+          )
+          for release_name in "${!JAR_MAP[@]}"; do
+            local_name="${JAR_MAP[$release_name]}"
+            echo "  ${release_name} → ${local_name}"
+            curl -fsSL --retry 8 --retry-delay 3 --retry-all-errors --retry-max-time 120 \
+              -o "tess-jars/${local_name}" "${BASE_URL}/${release_name}"
+            echo "    ✓ $(stat -c%s "tess-jars/${local_name}") bytes"
+          done
+
+      - name: Cache status
+        run: |
+          if [ "${{ steps.cache-tess-jars.outputs.cache-hit }}" = "true" ]; then
+            echo "Cache already warm for ${{ steps.versions.outputs.tess_tag }} — nothing to do."
+          else
+            echo "Downloaded + will save cache for ${{ steps.versions.outputs.tess_tag }} on main scope."
+          fi
