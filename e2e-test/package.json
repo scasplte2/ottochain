@@ -8,13 +8,14 @@
     "terminal:help": "npx tsx terminal.ts --help",
     "terminal:list": "npx tsx terminal.ts list",
     "test": "npx tsx runner.ts",
-    "test:ci": "npx tsx runner.ts --target ci"
+    "test:ci": "npx tsx runner.ts --target ci",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@ottochain/sdk": "github:ottobot-ai/ottochain-sdk#main",
+    "@ottochain/sdk": "^2.6.0",
     "commander": "13.1.0",
     "dotenv": "^16.4.7"
   },

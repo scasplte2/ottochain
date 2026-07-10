@@ -5,6 +5,9 @@ on:
     branches: [main]
   push:
     branches: [main]
+  schedule:
+    # Nightly at 07:00 UTC — runs the full lane set, including the heavy riverdale-economy e2e.
+    - cron: '0 7 * * *'
   workflow_dispatch:
     inputs:
       tessellation_version:
@@ -13,105 +16,88 @@ on:
         type: string
 
 jobs:
+  # Select which e2e lanes run. The 5 fast/medium lanes gate every PR; the heavy riverdale-economy
+  # lane (full 6-party economy, REAL asset custody, ~30-55m) is included ONLY on the nightly
+  # schedule, on push to main (post-merge safety net), on manual dispatch, or when a PR carries the
+  # 'e2e-riverdale' label (opt-in for asset / multi-fiber changes). This keeps PR feedback fast
+  # without letting the heavy path drift between merges.
+  prepare:
+    name: Select e2e lanes
+    runs-on: ubuntu-latest
+    outputs:
+      lanes: ${{ steps.select.outputs.lanes }}
+    steps:
+      - id: select
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          # Empty/false on non-PR events; the event check below covers schedule/push/dispatch.
+          RIVERDALE_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'e2e-riverdale') }}
+        run: |
+          # Canonical lane set. Per-lane rationale (kept from the previous static matrix):
+          #   core           light examples, full parallelism — the primary green signal.
+          #   tictactoe      own cluster; read-lag canary (~9 sequential moves per flow).
+          #   sigma-mixer    gas-heavy sigma_verify; concurrency 2 stresses the chain keepalive.
+          #   rule110        light per-step; concurrency 3 is the intra-lane contention probe.
+          #   staked-oracle  quorum-3 pool; webhook-confirmed; needs 3 distinct joiners.
+          #   riverdale-economy  full 6-party economy, REAL asset custody + multi-fiber — the HEAVY lane.
+          #     Highest confirm budget (ordinalThreshold 30 × maxResubmits 4 = 150 ordinals): at its
+          #     deepest cross-fiber contention point a VALID transition can be excluded from every DL1
+          #     block by one trailing DL1 node (no apply, no reject — "not included") until it catches
+          #     up. Observed twice on run 28912533047; result=VALID at all DL1 nodes, zero ML0
+          #     rejections — a block-inclusion timing issue, not a validation bug. The wide window rides it out.
+          ALL="$(cat <<'JSON'
+          [
+            {"name":"core","filter":"--exclude sigma-mixer,rule110,staked-oracle-pool,tictactoe,riverdale-economy","concurrency":"","ordinalThreshold":"","maxResubmits":"","wallets":"","timeout":30},
+            {"name":"tictactoe","filter":"--only tictactoe","concurrency":"","ordinalThreshold":"","maxResubmits":"","wallets":"","timeout":30},
+            {"name":"sigma-mixer","filter":"--only sigma-mixer","concurrency":"2","ordinalThreshold":"10","maxResubmits":"4","wallets":"","timeout":25},
+            {"name":"rule110","filter":"--only rule110","concurrency":"3","ordinalThreshold":"10","maxResubmits":"4","wallets":"","timeout":30},
+            {"name":"staked-oracle","filter":"--only staked-oracle-pool","concurrency":"1","ordinalThreshold":"30","maxResubmits":"1","wallets":"alice,bob,carol","timeout":45},
+            {"name":"riverdale-economy","filter":"--only riverdale-economy","concurrency":"1","ordinalThreshold":"30","maxResubmits":"4","wallets":"alice,bob,carol,dave,erin,frank","timeout":55}
+          ]
+          JSON
+          )"
+          if [ "$EVENT_NAME" = "schedule" ] || [ "$EVENT_NAME" = "push" ] || [ "$EVENT_NAME" = "workflow_dispatch" ] || [ "$RIVERDALE_LABEL" = "true" ]; then
+            LANES="$(echo "$ALL" | jq -c '.')"
+            echo "Including the heavy riverdale-economy lane (event=$EVENT_NAME, label=$RIVERDALE_LABEL)."
+          else
+            LANES="$(echo "$ALL" | jq -c '[.[] | select(.name != "riverdale-economy")]')"
+            echo "PR run: 5 fast lanes only — riverdale-economy is gated (add the 'e2e-riverdale' label to include it)."
+          fi
+          echo "lanes=$LANES" >>"$GITHUB_OUTPUT"
+          echo "Selected lanes:"; echo "$LANES" | jq -r '.[].name'
+
+  # Lightweight, cluster-free gate: type-check the e2e harness against the PUBLISHED @ottochain/sdk.
+  # The harness runs under tsx (which erases types), so without this a drift between the SDK's export
+  # surface and the harness (e.g. a renamed/removed type) would silently pass CI and only bite a user.
+  # This is the circular-dep guard: an SDK change that breaks the harness's contract fails here.
+  typecheck:
+    name: E2E Typecheck (published SDK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+      - name: Install E2E dependencies
+        working-directory: e2e-test
+        run: npm ci
+      - name: Type-check harness against @ottochain/sdk
+        working-directory: e2e-test
+        run: npm run typecheck
+
   e2e:
     name: E2E Tests (${{ matrix.lane.name }})
+    needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: ${{ matrix.lane.timeout }}
     strategy:
-      # Independent lanes, each its own job/cluster. "core" (light examples, full parallelism) is the
-      # primary green signal; the three heavy examples (sigma-mixer/rule110/staked-oracle-pool —
-      # expensive sigma_verify / cellular-automaton / trimmed-mean) get one serial job each so they
-      # run in parallel without sharing a mempool. fail-fast: false so one lane's failure isn't fatal.
+      # Lanes are computed by the `prepare` job (above) so the heavy riverdale-economy lane can be
+      # gated off ordinary PRs. Each lane is its own job/cluster; fail-fast: false so one lane's
+      # failure isn't fatal to the others.
       fail-fast: false
       matrix:
-        lane:
-          - name: core
-            filter: '--exclude sigma-mixer,rule110,staked-oracle-pool,tictactoe,riverdale-economy'
-            concurrency: ''
-            ordinalThreshold: ''
-            maxResubmits: ''
-            timeout: 30
-          # tictactoe runs as its OWN parallel lane (own cluster). It is the read-lag canary: its
-          # flows are the longest (~9 sequential moves each), so under the shared core lane's full
-          # concurrency (~27 fibers) the GL0-FINALIZED confirmation read trails the live combine far
-          # enough that a step's 20-ordinal budget exhausts AFTER the move actually committed
-          # (partial-block-acceptance means the move applies — the combine sees the fiber advance —
-          # the runner's read just can't keep up). Isolated on its own near-empty cluster, GL0
-          # finalization keeps pace and the reads confirm. (Robust complement, deferred: treat a
-          # SequenceNumberMismatch with actual>target as success — the non-lagging "already advanced"
-          # signal — which makes confirmation contention-independent for every lane.)
-          - name: tictactoe
-            filter: '--only tictactoe'
-            concurrency: ''
-            ordinalThreshold: ''
-            maxResubmits: ''
-            timeout: 30
-          # Heavy examples each get their OWN job/cluster, run in PARALLEL. Two facts forced this:
-          # (1) concurrency>1 chokes DL1 data-block formation when gas-heavy flows flood one mempool
-          #     (valid updates pile up, ML0 snapshots go out empty — the candidates=Set() stall), and
-          # (2) at concurrency 1 the chain is healthy but serializing ALL examples on one cluster is
-          #     ~40-50m of confirmation latency. Per-example isolation keeps each mempool small (no
-          #     choke) AND parallelises across examples, so wall-clock = the slowest single example,
-          #     not the sum. Each example is still trimmed (rule110 maxGen 3, oracle quorum-only +
-          #     submit-window removed, sigma 1 reject) and runs its flows serially (concurrency 1).
-          - name: sigma-mixer
-            filter: '--only sigma-mixer'
-            # Raised 1->2: the "concurrency>1 chokes DL1 (candidates=Set() stall)" hazard noted above
-            # IS the idle deadlock the chain keepalive now prevents. sigma_verify is the gas-heavy
-            # combine, so this is the real stress test of whether the keepalive holds the chain fed
-            # under gas pressure at concurrency. Revert to 1 if it regresses.
-            concurrency: '2'
-            ordinalThreshold: '10'
-            maxResubmits: '4'
-            timeout: 25
-          - name: rule110
-            filter: '--only rule110'
-            # Raised to 3 (all 3 flows at once) now that the chain keepalive prevents the idle
-            # deadlock that concurrency>1 used to trigger (the DL1 mempool no longer starves into a
-            # frozen finalization reference). rule110 is light per-step, so this is the clean probe
-            # of full intra-lane contention before the gas-heavy lanes follow.
-            concurrency: '3'
-            ordinalThreshold: '10'
-            maxResubmits: '4'
-            timeout: 30
-          - name: staked-oracle
-            filter: '--only staked-oracle-pool'
-            concurrency: '1'
-            # The pool needs THREE distinct joiners (quorum: 3). With the default single 'alice'
-            # wallet, the bob/carol joins fall back to alice's address and fail the
-            # not-already-a-participant guard, stranding the flow at the second join.
-            wallets: 'alice,bob,carol'
-            # Confirmation is webhook-driven (the runner subscribes to ML0 snapshot.finalized /
-            # transaction.rejected pushes and re-checks the instant state commits), so the lagging
-            # read is no longer the gate. The oracle's data blocks are still sparse, so a block can
-            # take a while to land; this high threshold + single resubmit keeps a premature duplicate
-            # (SequenceNumberMismatch) from poisoning the block before the push confirms it.
-            ordinalThreshold: '30'
-            maxResubmits: '1'
-            timeout: 45
-          # riverdale-economy: the full 6-party economy e2e (REAL asset custody + multi-fiber orchestration).
-          # FLOW 1 (concurrency 1, ~60 steps, one causal narrative) over 6 party-owned fibers
-          # (alice=manufacturer, bob=retailer, carol=consumer, dave=bank, erin=fed, frank=gov): cross-fiber
-          # _triggers, real `_transferAsset` RVD/GOODS custody between fibers, two verified-bound versioned
-          # package upgrades (retailer.machine + fed.machine v1->v2 + migration + v2-only transitions), a
-          # broadcast Gov tax sweep, a spawned child auction, and a wallet-context STAKE morphism. FLOW 2 is
-          # the negative-test flow (wrong-party / replay / mint-over-cap / non-monotonic publish — all
-          # graceful ML0 rejections). Needs all 6 distinct party wallets (a step's `signers` ARE its
-          # owners/authorizers). Higher timeout: ~70 mutating + assert steps over committed reads.
-          - name: riverdale-economy
-            filter: '--only riverdale-economy'
-            concurrency: '1'
-            wallets: 'alice,bob,carol,dave,erin,frank'
-            # Heaviest lane: at the deepest cross-fiber contention point (the commerce→servicing→tax→
-            # auction phase) a VALID transition can be excluded from every DL1 data block by a single
-            # trailing DL1 node — no apply, no reject, "transaction not included" — until a resubmit
-            # window lets the lagging node catch up. Confirmed twice (runs 28912533047 attempt 1 & 3):
-            # the update was `result=VALID` at all 3 DL1 nodes with zero ML0 rejections, just never
-            # combined. So this is a block-inclusion timing issue, NOT a validation bug. A 30-ordinal
-            # patience window (as the staked-oracle pool lane uses) + more resubmits rides it out.
-            ordinalThreshold: '30'
-            maxResubmits: '4'
-            timeout: 55
+        lane: ${{ fromJson(needs.prepare.outputs.lanes) }}
 
     steps:
       - uses: actions/checkout@v7
