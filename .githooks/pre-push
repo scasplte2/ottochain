@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+#
+# pre-push — local mirror of the CI "Validate Conventional Commits" gate
+# (wagoid/commitlint-github-action, rules in .commitlintrc.json).
+#
+# Purpose: catch commitlint violations — especially header-max-length:72,
+# which has failed CI more than once — BEFORE the push, not after.
+# Zero dependencies: pure bash, no node/npm/docker. Fast enough to be invisible.
+#
+# Enable (once per clone):   git config core.hooksPath .githooks
+# Bypass (discouraged):      git push --no-verify
+#
+set -u
+
+repo_root=$(git rev-parse --show-toplevel)
+config="$repo_root/.commitlintrc.json"
+
+# header-max-length straight from the CI config, so this can't drift (fallback 72).
+max_len=72
+if [ -f "$config" ]; then
+  n=$(grep 'header-max-length' "$config" | grep -oE '[0-9]+' | tail -1)
+  case "$n" in '' | *[!0-9]*) : ;; *) max_len=$n ;; esac
+fi
+
+# type-enum from .commitlintrc.json (kept in sync manually — these change ~never).
+allowed_types="feat fix docs style refactor perf test build ci chore revert"
+
+fail=0
+report() {
+  printf '  \033[31m✖\033[0m %s\n' "$1"
+  fail=1
+}
+
+is_zero() { case "$1" in *[!0]*) return 1 ;; *) return 0 ;; esac; }
+
+check_commit() {
+  sha=$1
+  # Skip merge commits — commitlint's defaultIgnores does the same.
+  if [ "$(git rev-list --parents -n1 "$sha" | wc -w)" -gt 2 ]; then return; fi
+
+  subject=$(git log -1 --format=%s "$sha")
+  short=$(git log -1 --format=%h "$sha")
+
+  # commitlint defaultIgnores: Merge / Revert / fixup! / squash! / Release-As.
+  case "$subject" in
+    Merge\ * | Revert\ * | fixup!\ * | squash!\ * | Release-As:*) return ;;
+  esac
+
+  header_bad=0
+
+  # header-max-length (the recurring failure)
+  if [ "${#subject}" -gt "$max_len" ]; then
+    report "$short  header is ${#subject} chars (max $max_len): $subject"
+    header_bad=1
+  fi
+
+  # Conventional header shape: type(scope)?!?: subject
+  if printf '%s' "$subject" | grep -qE '^[A-Za-z]+(\([^)]+\))?!?: .+'; then
+    type=$(printf '%s' "$subject" | sed -E 's/^([A-Za-z]+).*/\1/')
+    lower=$(printf '%s' "$type" | tr '[:upper:]' '[:lower:]')
+    if [ "$type" != "$lower" ]; then
+      report "$short  type must be lower-case: '$type'"
+    elif ! printf ' %s ' "$allowed_types" | grep -q " $type "; then
+      report "$short  type '$type' not in {${allowed_types// /, }}"
+    fi
+  elif [ "$header_bad" -eq 0 ]; then
+    report "$short  header is not 'type(scope): subject': $subject"
+  fi
+
+  # subject-full-stop
+  case "$subject" in *.) report "$short  subject must not end with '.'" ;; esac
+}
+
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+  is_zero "$local_sha" && continue # branch deletion — nothing to lint
+  if is_zero "$remote_sha"; then
+    range=$(git rev-list "$local_sha" --not --remotes) # new branch: only its new commits
+  else
+    range=$(git rev-list "$remote_sha..$local_sha") # update: the pushed range
+  fi
+  for c in $range; do check_commit "$c"; done
+done
+
+if [ "$fail" -ne 0 ]; then
+  printf '\n\033[31mpre-push blocked\033[0m — commitlint violations above (mirrors the CI gate).\n'
+  printf 'Fix the message(s), then re-push:\n'
+  printf '  git commit --amend            # the last commit\n'
+  printf '  git rebase -i <base>          # an earlier commit\n'
+  printf 'Emergency bypass: git push --no-verify\n\n'
+  exit 1
+fi
+exit 0
