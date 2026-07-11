@@ -2,7 +2,7 @@ package xyz.kd5ujc.metagraph_l0.openapi
 
 import xyz.kd5ujc.metagraph_l0.openapi.DomainSchemas._
 import xyz.kd5ujc.schema.OnChain
-import xyz.kd5ujc.schema.api.VersionInfo
+import xyz.kd5ujc.schema.api.{CommitIndexResponse, VersionInfo}
 
 import io.circe.Json
 import io.circe.syntax._
@@ -52,14 +52,24 @@ object DataL1ApiEndpoints {
     endpoint.get
       .in("data-application" / "v1" / "onchain")
       .out(jsonBody[OnChain])
-      .summary("Current on-chain state")
+      .summary("Current on-chain state (OnChain v2: this batch's delta — cumulative view is /commit-index)")
+      .tag("state")
+
+  val commitIndex: PublicEndpoint[Unit, Unit, CommitIndexResponse, Any] =
+    endpoint.get
+      .in("data-application" / "v1" / "commit-index")
+      .out(jsonBody[CommitIndexResponse])
+      .summary(
+        "This node's folded/healed cumulative commit maps — the DL1-sync surface " +
+        "(reading it drives the same refresh the ingestion gate uses)"
+      )
       .tag("state")
 
   /** Deterministic ON PURPOSE — see [[ApiEndpoints.contractVersion]]. */
   val contractVersion = "1.0.0"
 
   /** Every DL1 custom endpoint, in route order. */
-  val all: List[AnyEndpoint] = List(version, utilHash, onchain)
+  val all: List[AnyEndpoint] = List(version, utilHash, onchain, commitIndex)
 
   private def openApiDoc: OpenAPI =
     OpenAPIDocsInterpreter().toOpenAPI(all.map(_.tag("dl1")), "OttoChain Data L1 API", contractVersion)

@@ -29,10 +29,11 @@ object OpenApiDocSuite extends SimpleIOSuite {
     val dl1Json = DataL1ApiEndpoints.openApiJson
     val dl1Yaml = DataL1ApiEndpoints.openApiYaml
     expect.all(
-      DataL1ApiEndpoints.all.size == 3,
+      DataL1ApiEndpoints.all.size == 4,
       dl1Json.contains("3.1"),
       dl1Json.contains("/data-application/v1/version"),
       dl1Json.contains("/data-application/v1/onchain"),
+      dl1Json.contains("/data-application/v1/commit-index"),
       !dl1Json.contains("/data-application/v1/state-machines"), // ML0-only surface stays out
       dl1Yaml.contains("title: OttoChain Data L1 API"),
       dl1Yaml.contains("- dl1")

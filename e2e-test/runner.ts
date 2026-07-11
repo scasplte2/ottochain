@@ -21,7 +21,7 @@ import type { StatesMap, Wallets, GeneratorFn, ValidatorFn } from './lib/types.t
 import { HttpClient, OttoMetagraphClient } from '@ottochain/sdk';
 // WIRE record types (from `/core` = ottochain/types) — the exact shapes the client's typed getters
 // return. NOT the root's same-named exports, which resolve to the generated protobuf types.
-import type { StateMachineFiberRecord, ScriptFiberRecord, OnChain, RegistryEntry } from '@ottochain/sdk/core';
+import type { StateMachineFiberRecord, ScriptFiberRecord, RegistryEntry } from '@ottochain/sdk/core';
 import { waitForOrdinalConfirmation, waitForOrdinalAdvance } from './lib/ordinalConfirmation.ts';
 import { WebhookListener } from './lib/webhookListener.ts';
 import { ChainKeepalive } from './lib/keepalive.ts';
@@ -443,12 +443,30 @@ async function waitForMl0Confirmation(
 }
 
 /**
- * Wait until a DL1 node's OnChain state reflects a fiber commit that matches
+ * Minimal wire shape of `GET /v1/commit-index` (onchain-incrementals RFC §3.4) — typed locally
+ * until the published SDK ships the CommitIndexResponse type (Phase-3 alignment).
+ */
+interface CommitIndexWire {
+  fiberCommits?: Record<string, { sequenceNumber: number }>;
+  assetCommits?: Record<string, unknown>;
+}
+
+/** Fetch a node's folded/healed cumulative commit maps (DL1 and ML0 serve the same route). */
+async function fetchCommitIndex(baseUrl: string): Promise<CommitIndexWire> {
+  const res = await fetch(`${baseUrl}/data-application/v1/commit-index`);
+  if (!res.ok) throw new Error(`commit-index HTTP ${res.status}`);
+  const body = (await res.json()) as { index?: CommitIndexWire };
+  return body.index ?? {};
+}
+
+/**
+ * Wait until a DL1 node's commit index reflects a fiber commit that matches
  * the expected sequence number (or simply exists, for create steps).
  *
- * Compares the DL1's /v1/onchain fiberCommits against what ML0 has already
- * confirmed, ensuring snapshot propagation (ML0 → GL0 → DL1) has completed
- * before the runner sends the next step.
+ * OnChain v2 carries only per-batch deltas, so /v1/onchain is no longer a cumulative
+ * surface — the DL1's ingestion view is its folded/healed CommitIndex, served at
+ * /v1/commit-index (reading it drives the same fold/heal refresh the ingestion gate
+ * uses, so this poll observes exactly the state the gate will validate against).
  */
 async function waitForDl1Sync(
   dl1BaseUrls: string[],
@@ -463,7 +481,7 @@ async function waitForDl1Sync(
   const w = log ? (s: string) => log.write(s) : (s: string) => process.stdout.write(s);
   w(`      ⏳ DL1 sync ${fiberId.slice(0, 8)}… (${seqLabel}, ${dl1BaseUrls.length} nodes)`);
 
-  // Per-node readiness: a node is ready once its onchain fiberCommits reflect the prior commit.
+  // Per-node readiness: a node is ready once its commit index reflects the prior commit.
   // ALL nodes must be ready before we return, because the NEXT sequential transition fans out to
   // every DL1 node and each validates against its OWN cache — a single node still trailing rejects
   // that next update during block consensus, and it gets excluded from every block (no apply, no
@@ -475,10 +493,7 @@ async function waitForDl1Sync(
       dl1BaseUrls.map(async (base, i) => {
         if (ready[i]) return;
         try {
-          // Typed OnChain read against this DL1 node (path is identical on DL1); getOnChain throws on
-          // an unready node, caught below. `fiberCommits[id]` is a typed `FiberCommit`.
-          const onChain: OnChain = await new OttoMetagraphClient({ ml0Url: base }).getOnChain();
-          const commit = onChain.fiberCommits?.[fiberId];
+          const commit = (await fetchCommitIndex(base)).fiberCommits?.[fiberId];
           if (!commit) return;
           if (expectedSeqNum === null) {
             ready[i] = true;
@@ -510,9 +525,9 @@ async function waitForDl1Sync(
 }
 
 /**
- * Wait until every DL1 node's OnChain state carries an `assetCommits[assetId]` entry — the asset
- * analogue of waitForDl1Sync. An `applyMorphism` is structurally validated at DL1 against
- * `OnChain.assetCommits` (AssetRules.applyMorphismStructural: unknown asset is a HARD reject), so a
+ * Wait until every DL1 node's commit index carries an `assetCommits[assetId]` entry — the asset
+ * analogue of waitForDl1Sync. An `applyMorphism` is structurally validated at DL1 against the
+ * recreated CommitIndex (AssetRules.applyMorphismStructural: unknown asset is a HARD reject), so a
  * `mintAsset` → `applyMorphism` on the same asset races the snapshot's ML0→GL0→DL1 propagation: the
  * morphism reaches DL1 before the mint's commit does and is rejected HTTP 400. Gating on every DL1
  * node having the commit (existence is enough — STAKE/Transfer/Wrap keep the record; the seq bump is
@@ -534,9 +549,7 @@ async function waitForDl1AssetSync(
       dl1BaseUrls.map(async (base, i) => {
         if (ready[i]) return;
         try {
-          // Typed OnChain read against this DL1 node; `assetCommits[id]` is a typed `AssetCommit`.
-          const onChain: OnChain = await new OttoMetagraphClient({ ml0Url: base }).getOnChain();
-          if (onChain.assetCommits[assetId] != null) ready[i] = true;
+          if ((await fetchCommitIndex(base)).assetCommits?.[assetId] != null) ready[i] = true;
         } catch {
           // node not ready yet — retry next attempt
         }

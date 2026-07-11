@@ -15,13 +15,14 @@ import io.constellationnetwork.security.signature.Signed
 import xyz.kd5ujc.buildinfo.BuildInfo
 import xyz.kd5ujc.schema.OnChain
 import xyz.kd5ujc.schema.Updates.OttochainMessage
-import xyz.kd5ujc.schema.api.{HashResult, VersionInfo}
+import xyz.kd5ujc.schema.api.{CommitIndexResponse, HashResult, VersionInfo}
+import xyz.kd5ujc.shared_data.lifecycle.CommitIndexService
 
 import org.http4s.HttpRoutes
 import org.http4s.circe.CirceEntityCodec.{circeEntityDecoder, circeEntityEncoder}
 import org.http4s.server.Router
 
-class DataL1CustomRoutes[F[_]: Async](implicit
+class DataL1CustomRoutes[F[_]: Async](commitIndexService: CommitIndexService[F])(implicit
   context: L1NodeContext[F]
 ) extends MetagraphPublicRoutes[F] {
 
@@ -47,9 +48,17 @@ class DataL1CustomRoutes[F[_]: Async](implicit
       }
 
     case GET -> Root / "onchain" =>
-      // ML0 commits CommittedOnChain[OnChain]; unwrap .inner so this route returns the plain OnChain
-      // (clients and the e2e harness see the unchanged shape).
+      // ML0 commits CommittedOnChain[OnChain]; unwrap .inner so this route returns the plain OnChain.
+      // Under OnChain v2 this is the PER-BATCH delta — cumulative consumers use /v1/commit-index.
       context.getOnChainState[CommittedOnChain[OnChain]].map(_.map(_.inner)).toResponse
+
+    case GET -> Root / "commit-index" =>
+      // This node's OWN folded/healed cumulative view (onchain-incrementals RFC §3.3) — the surface
+      // the e2e harness/SDK polls for DL1 sync. Reading it drives the same fold/heal refresh the
+      // ingestion gate uses, so the two cannot disagree.
+      commitIndexService.refreshed
+        .map(_.map(cp => CommitIndexResponse(cp.ordinal, cp.state)))
+        .toResponse
   }
 
   protected val routes: HttpRoutes[F] = Router(

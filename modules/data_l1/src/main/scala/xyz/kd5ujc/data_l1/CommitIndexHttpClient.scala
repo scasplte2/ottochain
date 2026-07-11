@@ -21,6 +21,7 @@ object CommitIndexHttpClient {
     new CommitIndexHealClient[F] {
 
       def fetch: F[CommitIndexResponse] =
-        client.expect[CommitIndexResponse](ml0Base / "v1" / "commit-index")
+        // the framework mounts an app's custom routes under /data-application, ML0Routes adds /v1
+        client.expect[CommitIndexResponse](ml0Base / "data-application" / "v1" / "commit-index")
     }
 }

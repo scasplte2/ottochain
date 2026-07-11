@@ -12,7 +12,7 @@ import io.constellationnetwork.security.SecurityProvider
 
 import xyz.kd5ujc.schema.Updates.OttochainMessage
 import xyz.kd5ujc.schema.{CalculatedState, OnChain}
-import xyz.kd5ujc.shared_data.lifecycle.{CommitIndexHealClient, Validator}
+import xyz.kd5ujc.shared_data.lifecycle.{CommitIndexHealClient, CommitIndexService, Validator}
 
 import org.http4s._
 
@@ -26,12 +26,16 @@ object DataL1Service {
   def make[F[+_]: Async: Parallel: SecurityProvider](
     healClient: Option[CommitIndexHealClient[F]] = None
   ): F[BaseDataApplicationL1Service[F]] = for {
-    validator <- Validator.make[F](healClient)
-    l1Service <- makeBaseApplicationL1Service(validator).pure[F]
+    // one shared cache: the ingestion gate (validateUpdate) and the polled sync surface
+    // (GET /v1/commit-index) must observe the SAME folded view
+    commitIndexService <- CommitIndexService.make[F](healClient)
+    validator          <- Validator.make[F](commitIndexService)
+    l1Service          <- makeBaseApplicationL1Service(validator, commitIndexService).pure[F]
   } yield l1Service
 
   private def makeBaseApplicationL1Service[F[+_]: Async](
-    validator: ValidationService[F, OttochainMessage, OnChain, CalculatedState]
+    validator:          ValidationService[F, OttochainMessage, OnChain, CalculatedState],
+    commitIndexService: CommitIndexService[F]
   ): BaseDataApplicationL1Service[F] =
     BaseDataApplicationL1Service[F, OttochainMessage, OnChain, CalculatedState](
       new MetagraphCommonService[F, OttochainMessage, OnChain, CalculatedState, L1NodeContext[F]]
@@ -43,7 +47,7 @@ object DataL1Service {
           validator.validateUpdate(update)
 
         override def routes(implicit context: L1NodeContext[F]): HttpRoutes[F] =
-          new DataL1CustomRoutes[F].public
+          new DataL1CustomRoutes[F](commitIndexService).public
       }
     )
 }

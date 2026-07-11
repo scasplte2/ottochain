@@ -48,7 +48,8 @@ paths:
       tags:
       - state
       - dl1
-      summary: Current on-chain state
+      summary: 'Current on-chain state (OnChain v2: this batch''s delta — cumulative
+        view is /commit-index)'
       operationId: getData-applicationV1Onchain
       responses:
         '200':
@@ -57,6 +58,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OnChain'
+  /data-application/v1/commit-index:
+    get:
+      tags:
+      - state
+      - dl1
+      summary: This node's folded/healed cumulative commit maps — the DL1-sync surface
+        (reading it drives the same refresh the ingestion gate uses)
+      operationId: getData-applicationV1Commit-index
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommitIndexResponse'
 components:
   schemas:
     AssetCommit:
@@ -77,6 +93,32 @@ components:
           type: string
         origin:
           type: string
+    CommitIndex:
+      title: CommitIndex
+      type: object
+      required:
+      - fiberCommits
+      - assetCommits
+      - registryCommits
+      properties:
+        fiberCommits:
+          $ref: '#/components/schemas/Map_V'
+        assetCommits:
+          $ref: '#/components/schemas/Map_V'
+        registryCommits:
+          $ref: '#/components/schemas/Map_V'
+    CommitIndexResponse:
+      title: CommitIndexResponse
+      type: object
+      required:
+      - ordinal
+      - index
+      properties:
+        ordinal:
+          type: integer
+          format: int64
+        index:
+          $ref: '#/components/schemas/CommitIndex'
     FiberCommit:
       title: FiberCommit
       type: object
