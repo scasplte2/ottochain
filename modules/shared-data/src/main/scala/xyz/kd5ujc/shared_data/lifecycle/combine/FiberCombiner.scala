@@ -51,6 +51,16 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
     initialDataHash <- update.initialData.computeDigest
     binding         <- resolveBinding(update.schemaRef, update.definition)
 
+    // L6 (audit 2026-07-07): `CreateStateMachine.parentFiberId` is a self-declaration and is deliberately NOT
+    // owner-validated. It was considered for a `child.owners ⊆ parent.owners` floor (mirroring the H1 spawn
+    // path), but that would break the legitimate cross-owner "child observes parent" pattern (a child owned by
+    // B declaring a parent owned by A, to read the parent's state) for NO safety benefit: the traced
+    // consequences of a bogus parent claim are benign — `childFiberIds` is mutated only by `_spawn` (never by
+    // create), no capability is inherited across the link, and `maxGenerations` counting only TIGHTENS. Existence
+    // + active are already checked (`FiberRules.L1.parentFiberExistsInOnChain` / `L0.parentFiberActive`). If a
+    // future capability ever flows parent→child, this is the site to gate it — in the combiner (rule #3), never
+    // the block-acceptance validator.
+
     // #33 runtime conformance gate: if bound to a strict version, the initial state must conform.
     _ <- ConformanceChecker.violationsFor(binding, current.calculated, update.initialData) match {
       case Nil => Async[F].unit
