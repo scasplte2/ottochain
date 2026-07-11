@@ -13,7 +13,7 @@ import io.constellationnetwork.security.signature.Signed
 
 import xyz.kd5ujc.schema.CodecConfiguration._
 import xyz.kd5ujc.schema.asset._
-import xyz.kd5ujc.schema.fiber.{AccessControlPolicy, FiberOrdinal, StateMachineDefinition}
+import xyz.kd5ujc.schema.fiber.{AccessControlPolicy, FiberOrdinal, StateMachineDefinition, UpgradePolicy}
 import xyz.kd5ujc.schema.registry._
 
 import derevo.circe.magnolia.{customizableDecoder, customizableEncoder}
@@ -105,7 +105,13 @@ object Updates {
     scriptProgram: JsonLogicExpression,
     initialState:  Option[JsonLogicValue],
     accessControl: AccessControlPolicy,
-    schemaRef:     Option[SchemaRef] = None
+    schemaRef:     Option[SchemaRef] = None,
+    // L2 (audit 2026-07-07): the script's upgrade-path constitution, mirroring a state machine's
+    // FiberPolicy.upgradePolicy. Fixed AT CREATE and read from the OLD record at `UpgradeScript` (never
+    // re-suppliable on upgrade — closes the self-authorizing-authority hole by construction). `None`/`Arbitrary`
+    // is today's behaviour (any owner may re-point to any registered same-package version). `Immutable` freezes
+    // the script; `Governed` requires the migration authority's consent. Omit-safe (`Option`, signing rule #1).
+    upgradePolicy: Option[UpgradePolicy] = None
   ) extends ScriptFiberOp
       with OttochainMessage
 

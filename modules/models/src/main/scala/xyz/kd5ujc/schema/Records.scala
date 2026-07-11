@@ -61,7 +61,11 @@ object Records {
     owners:              Set[Address],
     status:              FiberStatus,
     lastInvocation:      Option[ScriptInvocation] = None,
-    schemaBinding:       Option[SchemaBinding] = None
+    schemaBinding:       Option[SchemaBinding] = None,
+    // L2 (audit 2026-07-07): the script's upgrade constitution, pinned at create from CreateScript.upgradePolicy
+    // and consulted by UpgradeGate at every UpgradeScript. `None` ⇒ Arbitrary (legacy). Server-derived record
+    // state — the `= None` default is fine (signing-canonical invariant #1 governs SIGNED messages only).
+    upgradePolicy: Option[UpgradePolicy] = None
   ) extends FiberRecord
 
   /**

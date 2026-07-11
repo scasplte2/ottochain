@@ -3,9 +3,17 @@ package xyz.kd5ujc.shared_data
 import cats.data.Validated.{Invalid, Valid}
 import cats.effect.IO
 
+import io.constellationnetwork.metagraph_sdk.json_logic.{BoolValue, ConstExpression}
+
 import xyz.kd5ujc.schema.Updates
 import xyz.kd5ujc.schema.Updates.OttochainMessage
-import xyz.kd5ujc.schema.fiber.{FiberPolicy, StateMachineDefinition, TransitionPolicy}
+import xyz.kd5ujc.schema.fiber.{
+  AccessControlPolicy,
+  FiberPolicy,
+  StateMachineDefinition,
+  TransitionPolicy,
+  UpgradePolicy
+}
 import xyz.kd5ujc.shared_data.lifecycle.validate.RegistryValidator
 
 import io.circe.parser.{decode, parse}
@@ -136,6 +144,36 @@ object PublishVersionSigningCanonicalSuite extends SimpleIOSuite {
       expect(dropNulls(encoded).noSpaces.contains("\"transitionPolicy\":\"Owners\"")) and
       // a SET dial does NOT collapse to Unconstrained — the `policy` key is present
       expect(dropNulls(encoded).noSpaces.contains("\"policy\""))
+    )
+  }
+
+  // ── L2 script upgradePolicy — the same rule #1 omit-safe guard on a NEW signed-message surface (CreateScript).
+  // The field is `Option[UpgradePolicy]`: an ABSENT dial encodes byte-identically to the pre-change canonical
+  // (None → null → stripped by dropNulls, so a pre-L2 client and the chain agree); a SET dial round-trips
+  // through its bare string tag. Without this, a client that omits it would InvalidSignature on every CreateScript.
+
+  private val scriptNoPolicy: Updates.CreateScript =
+    Updates.CreateScript(
+      fiberId = new java.util.UUID(0L, 7L),
+      scriptProgram = ConstExpression(BoolValue(true)),
+      initialState = None,
+      accessControl = AccessControlPolicy.Public
+    )
+
+  test("absent script upgradePolicy: decode->encode injects nothing (omit-safe canonical)") {
+    val encoded = (scriptNoPolicy: Updates.CreateScript).asJson
+    IO.pure(
+      expect(decode[Updates.CreateScript](encoded.noSpaces) == Right(scriptNoPolicy)) and
+      expect(!dropNulls(encoded).noSpaces.contains("upgradePolicy"))
+    )
+  }
+
+  test("set script upgradePolicy = Immutable round-trips and emits its bare string tag") {
+    val withPolicy = scriptNoPolicy.copy(upgradePolicy = Some(UpgradePolicy.Immutable))
+    val encoded = withPolicy.asJson
+    IO.pure(
+      expect(decode[Updates.CreateScript](encoded.noSpaces) == Right(withPolicy)) and
+      expect(dropNulls(encoded).noSpaces.contains("\"upgradePolicy\":\"immutable\""))
     )
   }
 }

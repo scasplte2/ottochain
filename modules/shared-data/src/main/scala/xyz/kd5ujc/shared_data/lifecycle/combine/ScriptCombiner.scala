@@ -13,8 +13,8 @@ import io.constellationnetwork.security.signature.Signed
 import xyz.kd5ujc.schema.fiber._
 import xyz.kd5ujc.schema.registry._
 import xyz.kd5ujc.schema.{CalculatedState, OnChain, Records, Updates}
-import xyz.kd5ujc.shared_data.fiber.FiberEngine
 import xyz.kd5ujc.shared_data.fiber.evaluation.ScriptProcessor
+import xyz.kd5ujc.shared_data.fiber.{FiberEngine, UpgradeGate}
 import xyz.kd5ujc.shared_data.syntax.all._
 
 /**
@@ -39,8 +39,19 @@ class ScriptCombiner[F[_]: Async: SecurityProvider](
     update: Signed[Updates.CreateScript]
   ): CombineResult[F] = for {
     currentOrdinal <- ctx.getCurrentOrdinal
-    binding        <- resolveScriptBinding(update.schemaRef, update.scriptProgram)
-    result         <- ScriptProcessor.createScript(current, update, currentOrdinal, binding)
+    // L2: `appendOnly` gates an additive protobuf-schema delta, which a raw JSON-Logic script has no shape for;
+    // reject it up front so an owner never pins an upgrade guarantee the chain cannot enforce for a script.
+    _ <- update.upgradePolicy match {
+      case Some(UpgradePolicy.AppendOnly) =>
+        Async[F].raiseError[Unit](
+          CombineRejected(
+            "script upgradePolicy 'appendOnly' requires a strict machine schema; not supported for scripts"
+          )
+        )
+      case _ => Async[F].unit
+    }
+    binding <- resolveScriptBinding(update.schemaRef, update.scriptProgram)
+    result  <- ScriptProcessor.createScript(current, update, currentOrdinal, binding)
   } yield result
 
   /**
@@ -139,6 +150,17 @@ class ScriptCombiner[F[_]: Async: SecurityProvider](
         )
       )
       .whenA(scriptRecord.sequenceNumber =!= update.targetSequenceNumber)
+
+    // L2 (audit 2026-07-07): the script's upgrade constitution gates the migration BEFORE any work. Immutable
+    // denies; Governed needs the migration authority's consent (authority pinned in the OLD record, never
+    // re-suppliable on UpgradeScript); Arbitrary/None is today's behaviour. Graceful CombineRejected (rule #2),
+    // reading only the record's own hash-pinned `upgradePolicy` + verified signer addresses — the Governed
+    // `Role` branch reads a registry FIBER's state (owner-set of a role map), never registry-lineage (rule #3).
+    upgraderAddrs <- update.proofs.toList.traverse(_.id.toAddress).map(_.toSet)
+    _ <- UpgradeGate.gateScriptUpgrade(scriptRecord.upgradePolicy, current.calculated, upgraderAddrs) match {
+      case None         => Async[F].unit
+      case Some(reason) => Async[F].raiseError[Unit](CombineRejected(s"script upgrade denied: ${reason.toMessage}"))
+    }
 
     // Must currently be bound, and the upgrade must target the SAME package.
     _ <- scriptRecord.schemaBinding match {

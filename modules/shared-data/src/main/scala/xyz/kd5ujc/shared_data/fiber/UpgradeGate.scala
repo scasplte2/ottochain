@@ -82,6 +82,39 @@ object UpgradeGate {
         gateAppendOnly(old.schemaBinding, newBinding, state)
     }
 
+  /**
+   * SCRIPT upgrade gate (audit 2026-07-07, finding L2). A script is a raw JSON-Logic program with no protobuf
+   * machine shape, so only the owner-constitution tiers apply: an absent dial / [[UpgradePolicy.Arbitrary]]
+   * admits (today's behaviour — any owner may re-point to any registered same-package version); [[UpgradePolicy.Immutable]]
+   * denies ALL upgrades; [[UpgradePolicy.Governed]] requires the migration authority's consent (reusing
+   * [[gateGoverned]] — the authority is read from the OLD record's pinned policy, never re-suppliable on
+   * `UpgradeScript`, so the self-authorizing `Role(registryFiberId = attacker)` hole is closed by construction).
+   * [[UpgradePolicy.AppendOnly]] needs a strict machine schema to verify an additive delta, which a script does
+   * NOT have — DENIED as unsupported (rejected at create, fail-closed here too). `addrs` are the VERIFIED signer
+   * addresses of the `UpgradeScript`. There is no `newDefinition` policy to tighten-check (the policy is fixed
+   * at create), so only `gateByUpgradePolicy`'s equivalent runs.
+   */
+  def gateScriptUpgrade(
+    policy: Option[UpgradePolicy],
+    state:  CalculatedState,
+    addrs:  Set[Address]
+  ): Option[FailureReason] =
+    policy.getOrElse(UpgradePolicy.default) match {
+      case UpgradePolicy.Arbitrary =>
+        None
+      case UpgradePolicy.Immutable =>
+        Some(FailureReason.PolicyViolation("upgradePolicy", "immutable: script migrations are forbidden"))
+      case UpgradePolicy.Governed(authority) =>
+        gateGoverned(authority, state, addrs)
+      case UpgradePolicy.AppendOnly =>
+        Some(
+          FailureReason.PolicyViolation(
+            "upgradePolicy",
+            "appendOnly requires a strict machine schema and is not supported for scripts"
+          )
+        )
+    }
+
   // ── Governed ────────────────────────────────────────────────────────────────────────────────────────
 
   /**

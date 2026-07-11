@@ -547,6 +547,12 @@ paths:
                 $ref: '#/components/schemas/SubscriberList'
 components:
   schemas:
+    AppendOnly:
+      title: AppendOnly
+      type: object
+    Arbitrary:
+      title: Arbitrary
+      type: object
     AssetCommit:
       title: AssetCommit
       type: object
@@ -744,11 +750,27 @@ components:
         sequenceNumber:
           type: integer
           format: int64
+    Governed:
+      title: Governed
+      type: object
+      required:
+      - authority
+      properties:
+        authority:
+          $ref: '#/components/schemas/MigrationAuthority'
+    Immutable:
+      title: Immutable
+      type: object
     Map_V:
       title: Map_V
       type: object
       additionalProperties:
         $ref: '#/components/schemas/FiberCommit'
+    MigrationAuthority:
+      title: MigrationAuthority
+      oneOf:
+      - $ref: '#/components/schemas/Role'
+      - $ref: '#/components/schemas/Signers'
     OnChain:
       title: OnChain
       type: object
@@ -802,6 +824,18 @@ components:
         target: {}
         metadata:
           $ref: '#/components/schemas/Map_V'
+    Role:
+      title: Role
+      type: object
+      required:
+      - registryFiberId
+      - roleField
+      properties:
+        registryFiberId:
+          type: string
+          format: uuid
+        roleField:
+          type: string
     SchemaBinding:
       title: SchemaBinding
       type: object
@@ -883,6 +917,8 @@ components:
           $ref: '#/components/schemas/ScriptInvocation'
         schemaBinding:
           $ref: '#/components/schemas/SchemaBinding'
+        upgradePolicy:
+          $ref: '#/components/schemas/UpgradePolicy'
     ScriptInvocation:
       title: ScriptInvocation
       type: object
@@ -910,6 +946,15 @@ components:
           format: int64
         invokedBy:
           type: string
+    Signers:
+      title: Signers
+      type: object
+      properties:
+        addresses:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
     StateMachineFiberRecord:
       title: StateMachineFiberRecord
       type: object
@@ -1112,6 +1157,13 @@ components:
           format: int32
         note:
           type: string
+    UpgradePolicy:
+      title: UpgradePolicy
+      oneOf:
+      - $ref: '#/components/schemas/AppendOnly'
+      - $ref: '#/components/schemas/Arbitrary'
+      - $ref: '#/components/schemas/Governed'
+      - $ref: '#/components/schemas/Immutable'
     VersionInfo:
       title: VersionInfo
       type: object

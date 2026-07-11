@@ -62,7 +62,8 @@ object ScriptProcessor {
       sequenceNumber = FiberOrdinal.MinValue,
       owners = owners,
       status = FiberStatus.Active,
-      schemaBinding = binding
+      schemaBinding = binding,
+      upgradePolicy = update.upgradePolicy // L2: pin the upgrade constitution at create
     )
 
     result <- current.withRecord[F](update.fiberId, scriptRecord)
