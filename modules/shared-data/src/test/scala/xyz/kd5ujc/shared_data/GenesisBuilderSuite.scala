@@ -50,10 +50,10 @@ object GenesisBuilderSuite extends SimpleIOSuite {
     for {
       genesis <- GenesisBuilder.withPackages[IO](List(spec("identity"), spec("governance")))
       entry = genesis.calculated.registry.get(idName)
-      commit = genesis.onChain.registryCommits.get(idName)
+      commit = genesis.calculated.registryCommits.get(idName)
       expectedCommit <- entry.traverse(_.computeDigest)
     } yield expect(genesis.calculated.registry.size == 2) and
-    expect(genesis.onChain.registryCommits.size == 2) and
+    expect(genesis.calculated.registryCommits.size == 2) and
     expect(commit == expectedCommit) and
     expect(entry.exists(_.target match {
       case RegistryTarget.SchemaPackage(lineage) => lineage.versions.contains(SemVer(1, 0, 0))
@@ -78,7 +78,7 @@ object GenesisBuilderSuite extends SimpleIOSuite {
 
   test("an empty spec list yields the empty genesis") {
     GenesisBuilder.withPackages[IO](Nil).map { g =>
-      expect(g.calculated.registry.isEmpty) and expect(g.onChain.registryCommits.isEmpty)
+      expect(g.calculated.registry.isEmpty) and expect(g.calculated.registryCommits.isEmpty)
     }
   }
 
@@ -94,7 +94,7 @@ object GenesisBuilderSuite extends SimpleIOSuite {
             case _                                => false
           })
       ) and
-      expect(g.onChain.registryCommits.contains(aliasName)) and
+      expect(g.calculated.registryCommits.contains(aliasName)) and
       expect(g.calculated.reverseNames.get(fid).contains(aliasName))
     }
   }
@@ -125,7 +125,7 @@ object GenesisBuilderSuite extends SimpleIOSuite {
     ) and
     expect(genesis.calculated.reverseNames.get(fid).contains(aliasName)) and
     expect(genesis.calculated.stateMachines.get(fid).contains(fiber)) and
-    expect(genesis.onChain.fiberCommits.get(fid).exists(_.recordHash == expectedCommit)) and
-    expect(genesis.onChain.registryCommits.contains(aliasName))
+    expect(genesis.calculated.fiberCommits.get(fid).exists(_.recordHash == expectedCommit)) and
+    expect(genesis.calculated.registryCommits.contains(aliasName))
   }
 }

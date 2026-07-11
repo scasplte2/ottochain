@@ -12,14 +12,21 @@ import io.constellationnetwork.security.SecurityProvider
 
 import xyz.kd5ujc.schema.Updates.OttochainMessage
 import xyz.kd5ujc.schema.{CalculatedState, OnChain}
-import xyz.kd5ujc.shared_data.lifecycle.Validator
+import xyz.kd5ujc.shared_data.lifecycle.{CommitIndexHealClient, Validator}
 
 import org.http4s._
 
 object DataL1Service {
 
-  def make[F[+_]: Async: Parallel: SecurityProvider]: F[BaseDataApplicationL1Service[F]] = for {
-    validator <- Validator.make[F]
+  /**
+   * @param healClient transport for re-seeding the commit-index cache from ML0 on ordinal gaps
+   *                   (OnChain v2 carries per-batch deltas only — onchain-incrementals RFC §3.3).
+   *                   `None` degrades gap handling to a loud, possibly-incomplete fold (dev only).
+   */
+  def make[F[+_]: Async: Parallel: SecurityProvider](
+    healClient: Option[CommitIndexHealClient[F]] = None
+  ): F[BaseDataApplicationL1Service[F]] = for {
+    validator <- Validator.make[F](healClient)
     l1Service <- makeBaseApplicationL1Service(validator).pure[F]
   } yield l1Service
 

@@ -93,4 +93,27 @@ object CommittedViewSuite extends SimpleIOSuite {
       expect(CalculatedState.committedView.entries(s).size == s.assets.size + s.usedNonces.size)
     )
   }
+
+  // ── commit/ projections (onchain-incrementals RFC §3.1) — the provable DL1 heal namespace ──
+
+  test("entries projects commit/f|a|r keys; over-long registry names take the hashed fallback") {
+    import xyz.kd5ujc.schema.{AssetCommit, FiberCommit}
+    import xyz.kd5ujc.schema.fiber.FiberOrdinal
+
+    val s = CalculatedState.genesis.copy(
+      fiberCommits = SortedMap(rid -> FiberCommit(Hash("rh"), Some(Hash("sh")), FiberOrdinal.MinValue)),
+      assetCommits = SortedMap(assetId -> AssetCommit(21, FiberOrdinal.MinValue, Hash("ah"))),
+      registryCommits = SortedMap(escrow -> Hash("eh"), longName -> Hash("lh"))
+    )
+    val keys = CalculatedState.committedView.entries(s).keySet.map(_.value)
+    IO.pure(
+      expect(keys.contains(s"commit/f/$rid")) and
+      expect(keys.contains(s"commit/a/$assetId")) and
+      expect(keys.contains("commit/r/escrow.package")) and
+      // key derivation stays TOTAL: the 79-char name overflows a segment -> hashed fallback
+      expect(keys.exists(k => k.startsWith("commit/r/h/") && k.stripPrefix("commit/r/h/").matches("[0-9a-f]{64}"))) and
+      // one leaf per commit entry, nothing dropped
+      expect(CalculatedState.committedView.entries(s).size == 1 + 1 + 2)
+    )
+  }
 }

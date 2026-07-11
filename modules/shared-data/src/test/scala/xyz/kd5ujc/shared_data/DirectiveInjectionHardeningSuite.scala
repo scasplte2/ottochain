@@ -170,7 +170,7 @@ object DirectiveInjectionHardeningSuite extends SimpleIOSuite {
       // and CRUCIALLY the asset never moved — still fiber-held by the victim at the original sequence
       expect(assetAfter.map(_.holder).contains(AssetHolder.Fiber(victimId))) and
       expect(assetAfter.map(_.sequenceNumber).contains(FiberOrdinal.MinValue)) and
-      expect(after.onChain.assetCommits.get(assetId).isEmpty)
+      expect(after.calculated.assetCommits.get(assetId).isEmpty)
     }
   }
 

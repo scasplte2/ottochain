@@ -45,6 +45,7 @@ object OpenApiDocSuite extends SimpleIOSuite {
       "/data-application/v1/util/hash",
       "/data-application/v1/onchain",
       "/data-application/v1/checkpoint",
+      "/data-application/v1/commit-index",
       "/data-application/v1/state-machines",
       "/data-application/v1/state-machines/{id}/estimate-fee",
       "/data-application/v1/state-machines/{id}/state-proof",
@@ -70,6 +71,6 @@ object OpenApiDocSuite extends SimpleIOSuite {
   }
 
   pureTest("endpoint catalog matches the documented count") {
-    expect.eql(22, ApiEndpoints.all.size)
+    expect.eql(23, ApiEndpoints.all.size)
   }
 }

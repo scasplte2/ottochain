@@ -279,7 +279,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
         update = Updates.CreateStateMachine(fiberId, Fixtures.minimalDefinition(), MapValue(Map.empty))
         result <- validator.validateUpdate(update)
@@ -294,7 +294,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
 
         createUpdate = Updates.CreateStateMachine(fiberId, Fixtures.minimalDefinition(), MapValue(Map.empty))
@@ -317,7 +317,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
         update = Updates.CreateStateMachine(fiberId, Fixtures.emptyDefinition(), MapValue(Map.empty))
         result <- validator.validateUpdate(update)
@@ -331,7 +331,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
         update = Updates.CreateStateMachine(fiberId, Fixtures.invalidInitialStateDefinition(), MapValue(Map.empty))
         result <- validator.validateUpdate(update)
@@ -345,7 +345,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
         update = Updates.CreateStateMachine(fiberId, Fixtures.invalidTransitionFromDefinition(), MapValue(Map.empty))
         result <- validator.validateUpdate(update)
@@ -359,7 +359,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
         update = Updates.CreateStateMachine(fiberId, Fixtures.invalidTransitionToDefinition(), MapValue(Map.empty))
         result <- validator.validateUpdate(update)
@@ -373,7 +373,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
         update = Updates.CreateStateMachine(fiberId, Fixtures.duplicateTransitionsDefinition(), MapValue(Map.empty))
         result <- validator.validateUpdate(update)
@@ -387,7 +387,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
         update = Updates.CreateStateMachine(fiberId, Fixtures.ambiguousTransitionsDefinition(), MapValue(Map.empty))
         result <- validator.validateUpdate(update)
@@ -403,7 +403,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
         update = Updates.CreateStateMachine(
           fiberId,
@@ -422,7 +422,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
         update = Updates.CreateStateMachine(
           fiberId,
@@ -441,7 +441,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
         // simpleDefinitionWithTransition uses "moved" as a field name which is not reserved
         update = Updates.CreateStateMachine(
@@ -461,7 +461,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
         update = Updates
           .CreateStateMachine(fiberId, Fixtures.minimalDefinition(), MapValue(Map("key" -> StrValue("value"))))
@@ -475,7 +475,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
         update = Updates.CreateStateMachine(fiberId, Fixtures.minimalDefinition(), ArrayValue(List(IntValue(1))))
         result <- validator.validateUpdate(update)
@@ -493,7 +493,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
 
         createUpdate = Updates
@@ -515,7 +515,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
 
         processUpdate = Updates.TransitionStateMachine(fiberId, "advance", MapValue(Map.empty), FiberOrdinal.MinValue)
@@ -539,7 +539,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
 
         createUpdate = Updates
@@ -563,7 +563,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
 
         createUpdate = Updates
@@ -589,7 +589,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
 
         createUpdate = Updates
@@ -616,7 +616,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
 
         createUpdate = Updates
@@ -651,7 +651,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
 
         createUpdate = Updates
@@ -678,7 +678,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
 
         createUpdate = Updates
@@ -703,7 +703,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
 
         createUpdate = Updates
@@ -729,7 +729,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
 
         createUpdate = Updates
@@ -760,7 +760,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
 
         createUpdate = Updates
@@ -794,7 +794,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
         update = Updates
           .CreateScript(fiberId, Fixtures.simpleScript(), None, AccessControlPolicy.Public)
@@ -808,7 +808,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
         update = Updates.CreateScript(
           fiberId,
@@ -826,7 +826,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
         update = Updates.CreateScript(
           fiberId,
@@ -847,7 +847,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
         parentId  <- UUIDGen.randomUUID[IO]
 
@@ -865,7 +865,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         parentId  <- UUIDGen.randomUUID[IO]
         childId   <- UUIDGen.randomUUID[IO]
 
@@ -894,7 +894,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         parentId  <- UUIDGen.randomUUID[IO]
         childId   <- UUIDGen.randomUUID[IO]
 
@@ -920,7 +920,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         scriptId  <- UUIDGen.randomUUID[IO]
 
         createScript = Updates
@@ -943,7 +943,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         scriptId  <- UUIDGen.randomUUID[IO]
         bobAddr   <- fixture.registry.addresses(Bob).pure[IO]
 
@@ -971,7 +971,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         scriptId  <- UUIDGen.randomUUID[IO]
         bobAddr   <- fixture.registry.addresses(Bob).pure[IO]
 
@@ -1000,7 +1000,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
         update = Updates.CreateStateMachine(fiberId, Fixtures.definitionWithStates(101), MapValue(Map.empty))
         result <- validator.validateUpdate(update)
@@ -1014,7 +1014,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
         update = Updates.CreateStateMachine(fiberId, Fixtures.definitionWithStates(100), MapValue(Map.empty))
         result <- validator.validateUpdate(update)
@@ -1027,7 +1027,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
         update = Updates.CreateStateMachine(fiberId, Fixtures.definitionWithTransitions(501), MapValue(Map.empty))
         result <- validator.validateUpdate(update)
@@ -1041,7 +1041,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
         update = Updates.CreateStateMachine(fiberId, Fixtures.definitionWithTransitions(500), MapValue(Map.empty))
         result <- validator.validateUpdate(update)
@@ -1054,7 +1054,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
         update = Updates
           .CreateStateMachine(fiberId, Fixtures.definitionWithTransitionsPerState(21), MapValue(Map.empty))
@@ -1069,7 +1069,7 @@ object ValidatorSuite extends SimpleIOSuite {
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val _l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
         update = Updates
           .CreateStateMachine(fiberId, Fixtures.definitionWithTransitionsPerState(20), MapValue(Map.empty))

@@ -24,7 +24,7 @@ import xyz.kd5ujc.schema.Updates.{
 import xyz.kd5ujc.schema.asset._
 import xyz.kd5ujc.schema.fiber.{FiberLogEntry, FiberOrdinal}
 import xyz.kd5ujc.schema.registry._
-import xyz.kd5ujc.schema.{AssetCommit, CalculatedState, OnChain}
+import xyz.kd5ujc.schema.{AssetCommit, CalculatedState, CommitIndex, OnChain}
 import xyz.kd5ujc.shared_data.lifecycle.validate.AssetValidator
 import xyz.kd5ujc.shared_data.lifecycle.{Combiner, Validator}
 import xyz.kd5ujc.shared_test.Participant._
@@ -94,9 +94,9 @@ object AssetOpCombinerSuite extends SimpleIOSuite {
       case _                                 => false
     }
 
-  // An OnChain carrying a single AssetCommit for `assetId` at sequence 0 with the given behavior bits.
-  private def onChainWithAsset(behavior: TokenBehavior, seq: FiberOrdinal = FiberOrdinal.MinValue): OnChain =
-    OnChain.genesis.copy(
+  // A CommitIndex carrying a single AssetCommit for `assetId` at sequence 0 with the given behavior bits.
+  private def onChainWithAsset(behavior: TokenBehavior, seq: FiberOrdinal = FiberOrdinal.MinValue): CommitIndex =
+    CommitIndex.empty.copy(
       assetCommits = SortedMap(assetId -> AssetCommit(behavior.bits, seq, Hash("asset-record-hash")))
     )
 
@@ -153,7 +153,7 @@ object AssetOpCombinerSuite extends SimpleIOSuite {
   }
 
   test("ApplyMorphism is INVALID when the asset is unknown (no on-chain commit)") {
-    val l1 = new AssetValidator.L1Validator[IO](OnChain.genesis) // empty assetCommits
+    val l1 = new AssetValidator.L1Validator[IO](CommitIndex.empty) // empty assetCommits
     l1.applyMorphism(ApplyMorphism(assetId, MorphismKind.Burn, FiberOrdinal.MinValue)).map { r =>
       expect(r.isInvalid)
     }
@@ -169,7 +169,7 @@ object AssetOpCombinerSuite extends SimpleIOSuite {
   }
 
   test("MintAsset is INVALID when amount <= 0, VALID when amount > 0") {
-    val l1 = new AssetValidator.L1Validator[IO](OnChain.genesis)
+    val l1 = new AssetValidator.L1Validator[IO](CommitIndex.empty)
     val zero = MintAsset(assetId, SchemaRef(asset("gold"), VersionReq.Latest), AssetHolder.Fiber(assetId), 0L)
     val pos = MintAsset(assetId, SchemaRef(asset("gold"), VersionReq.Latest), AssetHolder.Fiber(assetId), 1L)
     for {
@@ -217,7 +217,7 @@ object AssetOpCombinerSuite extends SimpleIOSuite {
       val p1 = createPolicy("gold", SemVer(1, 0, 0))
       val p2 = createPolicy("gold", SemVer(1, 1, 0))
       for {
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         pr1       <- fixture.registry.generateProofs(p1, Set(Alice))
         valid     <- validator.validateSignedUpdate(genesis, Signed(p1, pr1))
         s1        <- combiner.insert(genesis, Signed(p1, pr1))
@@ -231,7 +231,7 @@ object AssetOpCombinerSuite extends SimpleIOSuite {
           .exists(_.isInstanceOf[RegistryShape.AssetPolicy])
       } yield expect(valid.isValid) and
       expect(policyVersions(s2, "gold").contains(Set(SemVer(1, 0, 0), SemVer(1, 1, 0)))) and
-      expect(s2.onChain.registryCommits.contains(asset("gold"))) and
+      expect(s2.calculated.registryCommits.contains(asset("gold"))) and
       expect(shapeIsAssetPolicy)
     }
   }
@@ -244,7 +244,7 @@ object AssetOpCombinerSuite extends SimpleIOSuite {
       val p1 = createPolicy("gold", SemVer(1, 0, 0)) // Alice claims + owns
       val p2 = createPolicy("gold", SemVer(1, 1, 0)) // Bob (not an owner) tries to publish
       for {
-        validator     <- Validator.make[IO]
+        validator     <- Validator.make[IO]()
         pr1           <- fixture.registry.generateProofs(p1, Set(Alice))
         s1            <- combiner.insert(genesis, Signed(p1, pr1))
         pr2           <- fixture.registry.generateProofs(p2, Set(Bob))

@@ -10,7 +10,7 @@ import io.constellationnetwork.currency.dataApplication.DataApplicationValidatio
 import io.constellationnetwork.metagraph_sdk.json_logic._
 import io.constellationnetwork.metagraph_sdk.numerics.RatioOps.implicits._
 
-import xyz.kd5ujc.schema.OnChain
+import xyz.kd5ujc.schema.CommitIndex
 import xyz.kd5ujc.shared_data.lifecycle.validate.{Limits, ValidationResult}
 
 /**
@@ -24,20 +24,20 @@ object CommonRules {
   // ============== CID Rules ==============
 
   /** Validates that a CID is not already in use (for create operations) */
-  def cidNotUsed[F[_]: Applicative](cid: UUID, state: OnChain): F[ValidationResult] =
+  def cidNotUsed[F[_]: Applicative](cid: UUID, index: CommitIndex): F[ValidationResult] =
     Validated
       .condNec(
-        !state.fiberCommits.contains(cid),
+        !index.fiberCommits.contains(cid),
         (),
         Errors.CidAlreadyExists(cid): DataApplicationValidationError
       )
       .pure[F]
 
   /** Validates that a CID exists (for update operations) */
-  def cidIsFound[F[_]: Applicative](cid: UUID, state: OnChain): F[ValidationResult] =
+  def cidIsFound[F[_]: Applicative](cid: UUID, index: CommitIndex): F[ValidationResult] =
     Validated
       .condNec(
-        state.fiberCommits.contains(cid),
+        index.fiberCommits.contains(cid),
         (),
         Errors.CidNotFound(cid): DataApplicationValidationError
       )

@@ -15,7 +15,9 @@ See `docs/signing-canonical-and-validation.md` for the full rationale. The two r
    `CombineRejected` → `RejectionReceipt`, the authoritative deterministic gate). tessellation
    block acceptance is all-or-nothing, so a stateful Invalid on one tx drops the whole block.
    Registry stateful checks are combine-only (L1 can't see the version lineage); fiber stateful
-   checks stay at L1 (`OnChain.fiberCommits` has the seqNum).
+   checks stay at L1 (the recreated `CommitIndex` has the seqNum — OnChain v2 carries only
+   per-batch `touched*` deltas; the cumulative commit maps live in `CalculatedState` and the DL1
+   folds/heals them, see docs/proposals/onchain-incrementals.md).
 
 3. **`validateSignedUpdate` (block acceptance) must NEVER read `CalculatedState.registry` lineage.**
    Any validator that calls `lineageOf` / `refResolvesAndMatches` / `versionAppendable` inside
@@ -23,5 +25,8 @@ See `docs/signing-canonical-and-validation.md` for the full rationale. The two r
    returns `Invalid` → the entire block is dropped for ALL transactions in the snapshot.
    Rule: registry lineage checks belong ONLY in the combiner as graceful `CombineRejected`.
    `validateSignedUpdate` for fiber upgrade/create ops: structural checks only (field presence,
-   expression depth, sequence number against `OnChain`). Guarded by this comment — review every
-   new L0Validator method that takes a `SchemaRef` or `SchemaBinding` parameter.
+   expression depth, sequence number against the `CommitIndex`). Reading the RELOCATED commit
+   maps (`CalculatedState.fiberCommits/assetCommits` via `CommitIndex.fromCalculated`) is NOT a
+   violation — same safe triple as v1 `OnChain`, merely moved; the rule bars *lineage* reads.
+   Guarded by this comment — review every new L0Validator method that takes a `SchemaRef` or
+   `SchemaBinding` parameter.

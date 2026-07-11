@@ -151,23 +151,31 @@
         "title" : "OnChain",
         "type" : "object",
         "required" : [
-          "fiberCommits",
+          "touchedFiberCommits",
           "latestLogs",
-          "registryCommits",
-          "assetCommits"
+          "touchedRegistryCommits",
+          "touchedAssetCommits"
         ],
         "properties" : {
-          "fiberCommits" : {
+          "touchedFiberCommits" : {
             "$ref" : "#/components/schemas/Map_V"
           },
           "latestLogs" : {
             "$ref" : "#/components/schemas/Map_V"
           },
-          "registryCommits" : {
+          "touchedRegistryCommits" : {
             "$ref" : "#/components/schemas/Map_V"
           },
-          "assetCommits" : {
+          "touchedAssetCommits" : {
             "$ref" : "#/components/schemas/Map_V"
+          },
+          "burnedAssets" : {
+            "type" : "array",
+            "uniqueItems" : true,
+            "items" : {
+              "type" : "string",
+              "format" : "uuid"
+            }
           }
         }
       },

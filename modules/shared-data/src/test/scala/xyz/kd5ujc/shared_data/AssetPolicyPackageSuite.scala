@@ -134,7 +134,7 @@ object AssetPolicyPackageSuite extends SimpleIOSuite {
   }
 
   test("OnChain carrying an asset-policy registry commit round-trips") {
-    val oc = OnChain.genesis.copy(registryCommits = SortedMap(policyEntry.name -> Hash("assethash")))
+    val oc = OnChain.genesis.copy(touchedRegistryCommits = SortedMap(policyEntry.name -> Hash("assethash")))
     val json = oc.asJson.noSpaces
     IO.pure(expect(decode[OnChain](json) == Right(oc)))
   }

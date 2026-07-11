@@ -200,7 +200,7 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
 
         contractFiberId <- UUIDGen.randomUUID[IO]
 

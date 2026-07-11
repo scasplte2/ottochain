@@ -47,7 +47,7 @@ object GenesisDataSuite extends SimpleIOSuite {
 
   private val nonEmptyGenesis: GenesisData =
     GenesisData(
-      onChain = OnChain.genesis.copy(registryCommits = SortedMap(entry.name -> Hash("entryhash"))),
+      onChain = OnChain.genesis.copy(touchedRegistryCommits = SortedMap(entry.name -> Hash("entryhash"))),
       calculated = CalculatedState.genesis.copy(registry = SortedMap(entry.name -> entry))
     )
 

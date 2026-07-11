@@ -1167,7 +1167,12 @@ class AssetCombiner[F[_]: Async: SecurityProvider](
   // State write helpers (assets + assetCommits, atomic)
   // ════════════════════════════════════════════════════════════════════════════════════════════════
 
-  /** Write an `AssetRecord` into `CalculatedState.assets` and its `AssetCommit` into `OnChain.assetCommits`. */
+  /**
+   * Write an `AssetRecord` into `CalculatedState.assets`, its `AssetCommit` into the cumulative
+   * `CalculatedState.assetCommits`, and the same commit into the per-batch
+   * `OnChain.touchedAssetCommits` delta. A write also clears any same-batch burn of the id so the
+   * delta stays consistent (`touched`/`burned` disjoint — see `CommitIndex.fold`).
+   */
   private def writeAsset(
     st:     DataState[OnChain, CalculatedState],
     record: AssetRecord
@@ -1175,19 +1180,31 @@ class AssetCombiner[F[_]: Async: SecurityProvider](
     record.computeDigest.map { recordHash =>
       val commit = AssetCommit(record.behavior.bits, record.sequenceNumber, recordHash, origin = None)
       st
-        .focus(_.onChain.assetCommits)
+        .focus(_.onChain.touchedAssetCommits)
+        .modify(_.updated(record.assetId, commit))
+        .focus(_.onChain.burnedAssets)
+        .modify(_ - record.assetId)
+        .focus(_.calculated.assetCommits)
         .modify(_.updated(record.assetId, commit))
         .focus(_.calculated.assets)
         .modify(_.updated(record.assetId, record))
     }
 
-  /** Remove an asset from both `CalculatedState.assets` and `OnChain.assetCommits`. */
+  /**
+   * Remove an asset (burn / compose-consume): drop it from `CalculatedState.assets` + the
+   * cumulative `CalculatedState.assetCommits`, record the removal in the per-batch
+   * `OnChain.burnedAssets` delta, and clear any same-batch touch of the id.
+   */
   private def removeAsset(
     st:      DataState[OnChain, CalculatedState],
     assetId: UUID
   ): DataState[OnChain, CalculatedState] =
     st
-      .focus(_.onChain.assetCommits)
+      .focus(_.onChain.touchedAssetCommits)
+      .modify(_ - assetId)
+      .focus(_.onChain.burnedAssets)
+      .modify(_ + assetId)
+      .focus(_.calculated.assetCommits)
       .modify(_ - assetId)
       .focus(_.calculated.assets)
       .modify(_ - assetId)

@@ -2,7 +2,7 @@ package xyz.kd5ujc.shared_data.lifecycle.validate
 
 import cats.Applicative
 
-import xyz.kd5ujc.schema.OnChain
+import xyz.kd5ujc.schema.CommitIndex
 import xyz.kd5ujc.schema.Updates.{ApplyMorphism, AuthorizeCompose, CreateAssetPolicy, MintAsset}
 import xyz.kd5ujc.shared_data.lifecycle.validate.rules.AssetRules
 
@@ -19,8 +19,8 @@ import xyz.kd5ujc.shared_data.lifecycle.validate.rules.AssetRules
  */
 object AssetValidator {
 
-  /** L1 structural checks (OnChain only; no CalculatedState, no registry/asset lineage). */
-  class L1Validator[F[_]: Applicative](state: OnChain) {
+  /** L1 structural checks (recreated CommitIndex only; no registry/asset lineage). */
+  class L1Validator[F[_]: Applicative](index: CommitIndex) {
 
     def createAssetPolicy(update: CreateAssetPolicy): F[ValidationResult] =
       AssetRules.L1.createPolicyStructural(update)
@@ -29,7 +29,7 @@ object AssetValidator {
       AssetRules.L1.mintStructural(update)
 
     def applyMorphism(update: ApplyMorphism): F[ValidationResult] =
-      AssetRules.L1.applyMorphismStructural(update, state)
+      AssetRules.L1.applyMorphismStructural(update, index)
 
     def authorizeCompose(update: AuthorizeCompose): F[ValidationResult] =
       AssetRules.L1.authorizeComposeStructural(update)

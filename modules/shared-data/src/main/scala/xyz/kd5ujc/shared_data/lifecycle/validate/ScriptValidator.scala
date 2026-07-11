@@ -10,7 +10,7 @@ import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.signature.SignatureProof
 
 import xyz.kd5ujc.schema.Updates.{CreateScript, InvokeScript, UpgradeScript}
-import xyz.kd5ujc.schema.{CalculatedState, OnChain}
+import xyz.kd5ujc.schema.{CalculatedState, CommitIndex, OnChain}
 import xyz.kd5ujc.shared_data.lifecycle.validate.rules.{CommonRules, ScriptRules}
 
 /**
@@ -24,16 +24,17 @@ object ScriptValidator {
   /**
    * L1 Validator - Structural validations at Data-L1 layer.
    *
-   * These validations run during API ingestion with only OnChain state available.
+   * These validations run during API ingestion against the recreated [[CommitIndex]] (OnChain v2
+   * carries only per-batch deltas — onchain-incrementals RFC §3.3).
    *
-   * @param state The current OnChain state for existence checks
+   * @param index The recreated cumulative commit index for existence/sequence checks
    */
-  class L1Validator[F[_]: Monad](state: OnChain) {
+  class L1Validator[F[_]: Monad](index: CommitIndex) {
 
     /** Validates a CreateScript update */
     def createScript(update: CreateScript): F[ValidationResult] =
       for {
-        cidCheck       <- CommonRules.cidNotUsed(update.fiberId, state)
+        cidCheck       <- CommonRules.cidNotUsed(update.fiberId, index)
         initialStateOk <- CommonRules.isMapValueOrNull(update.initialState, "initialState")
         scriptDepthOk <- CommonRules.expressionWithinDepthLimit(
           update.scriptProgram,
@@ -50,8 +51,8 @@ object ScriptValidator {
     /** Validates an InvokeScript update */
     def invokeScript(update: InvokeScript): F[ValidationResult] =
       for {
-        cidExists     <- CommonRules.cidIsFound(update.fiberId, state)
-        seqNumOk      <- ScriptRules.L1.sequenceNumberMatches(update.fiberId, update.targetSequenceNumber, state)
+        cidExists     <- CommonRules.cidIsFound(update.fiberId, index)
+        seqNumOk      <- ScriptRules.L1.sequenceNumberMatches(update.fiberId, update.targetSequenceNumber, index)
         argsStructure <- CommonRules.payloadStructureValid(update.args, "args")
         argsSize <- CommonRules.valueWithinSizeLimit(
           update.args,
@@ -63,8 +64,8 @@ object ScriptValidator {
     /** Validates an UpgradeScript update (structural: script exists, new program depth, sequence) */
     def upgradeScript(update: UpgradeScript): F[ValidationResult] =
       for {
-        cidExists <- CommonRules.cidIsFound(update.fiberId, state)
-        seqNumOk  <- ScriptRules.L1.sequenceNumberMatches(update.fiberId, update.targetSequenceNumber, state)
+        cidExists <- CommonRules.cidIsFound(update.fiberId, index)
+        seqNumOk  <- ScriptRules.L1.sequenceNumberMatches(update.fiberId, update.targetSequenceNumber, index)
         programOk <- CommonRules.expressionWithinDepthLimit(update.newProgram, "newProgram", Limits.MaxExpressionDepth)
       } yield List(cidExists, seqNumOk, programOk).combineAll
   }
@@ -124,7 +125,10 @@ object ScriptValidator {
     state:  DataState[OnChain, CalculatedState],
     proofs: NonEmptySet[SignatureProof]
   ) {
-    private val l1 = new L1Validator[F](state.onChain)
+    // OnChain v2 carries only this batch's delta — the cumulative maps the structural checks need
+    // live in CalculatedState (same triple, same freshness as the v1 OnChain read; RFC §3.2).
+    private val index = CommitIndex.fromCalculated(state.calculated)
+    private val l1 = new L1Validator[F](index)
     private val l0 = new L0Validator[F](state, proofs)
 
     /** Validates a CreateScript update (all checks) */
@@ -144,7 +148,7 @@ object ScriptValidator {
      */
     def invokeScript(update: InvokeScript): F[ValidationResult] =
       for {
-        cidExists     <- CommonRules.cidIsFound(update.fiberId, state.onChain)
+        cidExists     <- CommonRules.cidIsFound(update.fiberId, index)
         argsStructure <- CommonRules.payloadStructureValid(update.args, "args")
         argsSize      <- CommonRules.valueWithinSizeLimit(update.args, Limits.MaxEventPayloadBytes, "args")
         l0Result      <- l0.invokeScript(update)
@@ -157,7 +161,7 @@ object ScriptValidator {
      */
     def upgradeScript(update: UpgradeScript): F[ValidationResult] =
       for {
-        cidExists <- CommonRules.cidIsFound(update.fiberId, state.onChain)
+        cidExists <- CommonRules.cidIsFound(update.fiberId, index)
         programOk <- CommonRules.expressionWithinDepthLimit(update.newProgram, "newProgram", Limits.MaxExpressionDepth)
         l0Result  <- l0.upgradeScript(update)
       } yield List(cidExists, programOk, l0Result).combineAll

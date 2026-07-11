@@ -32,7 +32,7 @@ object GenesisManifestLoaderSuite extends SimpleIOSuite {
       genesis  <- GenesisManifestLoader.fromManifest[IO](manifest)
     } yield expect(manifest.packages.size == 1) and
     expect(genesis.calculated.registry.contains(idName)) and
-    expect(genesis.onChain.registryCommits.contains(idName)) and
+    expect(genesis.calculated.registryCommits.contains(idName)) and
     expect(
       genesis.calculated.registry
         .get(idName)

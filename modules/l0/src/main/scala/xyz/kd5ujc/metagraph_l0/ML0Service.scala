@@ -5,8 +5,6 @@ import cats.data.NonEmptyList
 import cats.effect.{Async, Ref}
 import cats.syntax.all._
 
-import scala.collection.immutable.SortedMap
-
 import io.constellationnetwork.currency.dataApplication._
 import io.constellationnetwork.currency.dataApplication.dataApplication.DataApplicationValidationErrorOr
 import io.constellationnetwork.currency.schema.currency.CurrencyIncrementalSnapshot
@@ -62,7 +60,7 @@ object ML0Service {
     subscriberRegistry <- SubscriberRegistry.make[F]
     rejectionSink      <- Ref.of[F, List[FiberLogEntry.RejectionReceipt]](List.empty)
     combiner = Combiner.make[F]()
-    validator <- Validator.make[F]
+    validator <- Validator.make[F]()
 
     webhookDispatcher = httpClient.map(client => WebhookDispatcher.make[F](client, subscriberRegistry, metagraphId))
 
@@ -81,10 +79,12 @@ object ML0Service {
   } yield service
 
   /**
-   * Clear `latestLogs`, then sort the batch by the TOTAL `OttochainMessage.signedOrdering` (signature
-   * tiebreak lives in models) so every node folds the identical sequence — the surviving op on a tie
-   * is the same network-wide (no fork), the loser becomes a RejectionReceipt — then delegate to the
-   * registry/fiber combiner. No Hasher in the combine path now that the ordering is total.
+   * Clear the per-batch OnChain delta (`latestLogs` + `touched*` + `burnedAssets` — under OnChain v2
+   * EVERY OnChain field is per-batch; the cumulative maps live in CalculatedState), then sort the
+   * batch by the TOTAL `OttochainMessage.signedOrdering` (signature tiebreak lives in models) so
+   * every node folds the identical sequence — the surviving op on a tie is the same network-wide
+   * (no fork), the loser becomes a RejectionReceipt — then delegate to the registry/fiber combiner.
+   * No Hasher in the combine path now that the ordering is total.
    */
   private def orderedCombiner[F[+_]: Async](
     inner:         CombinerService[F, OttochainMessage, OnChain, CalculatedState],
@@ -104,7 +104,7 @@ object ML0Service {
       )(implicit ctx: L0NodeContext[F]): F[DataState[OnChain, CalculatedState]] =
         inner
           .foldLeft(
-            previous.focus(_.onChain.latestLogs).replace(SortedMap.empty),
+            previous.focus(_.onChain).replace(OnChain.genesis),
             batch.sorted(OttochainMessage.signedOrdering)
           )
           .flatTap { result =>

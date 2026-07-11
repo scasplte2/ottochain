@@ -10,7 +10,7 @@ import cats.effect.IO
 import io.constellationnetwork.metagraph_sdk.std.{JsonBinaryCodec, JsonCanonicalizer}
 
 import xyz.kd5ujc.schema.Updates._
-import xyz.kd5ujc.schema.{OnChain, Updates}
+import xyz.kd5ujc.schema.{CommitIndex, Updates}
 import xyz.kd5ujc.shared_data.lifecycle.validate.{FiberValidator, ScriptValidator}
 
 import io.circe.parser.parse
@@ -124,7 +124,7 @@ object E2eSignedPayloadCompatSuite extends SimpleIOSuite {
     val update = decodeMessage(votingCreateJson)
     update match {
       case u: CreateStateMachine =>
-        new FiberValidator.L1Validator[IO](OnChain.genesis).createFiber(u).map { result =>
+        new FiberValidator.L1Validator[IO](CommitIndex.empty).createFiber(u).map { result =>
           expect(
             result.isValid,
             s"L1 validation failed: ${result.fold(_.toNonEmptyList.toList.map(_.message).mkString("; "), _ => "")}"
@@ -138,7 +138,7 @@ object E2eSignedPayloadCompatSuite extends SimpleIOSuite {
     val update = decodeMessage(counterCreateScriptJson)
     update match {
       case u: CreateScript =>
-        new ScriptValidator.L1Validator[IO](OnChain.genesis).createScript(u).map { result =>
+        new ScriptValidator.L1Validator[IO](CommitIndex.empty).createScript(u).map { result =>
           expect(
             result.isValid,
             s"L1 validation failed: ${result.fold(_.toNonEmptyList.toList.map(_.message).mkString("; "), _ => "")}"

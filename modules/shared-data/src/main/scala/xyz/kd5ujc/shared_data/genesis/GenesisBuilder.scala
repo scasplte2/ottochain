@@ -98,8 +98,10 @@ object GenesisBuilder {
         val registry = SortedMap.from(built.map { case (n, e, _) => n -> e })
         val commits = SortedMap.from(built.map { case (n, _, h) => n -> h })
         DataState(
-          OnChain.genesis.copy(registryCommits = commits),
-          CalculatedState.genesis.copy(registry = registry)
+          // seed entries are also the genesis snapshot's touched* delta, so a from-genesis
+          // CommitIndex fold starts complete (onchain-incrementals RFC §3.4)
+          OnChain.genesis.copy(touchedRegistryCommits = commits),
+          CalculatedState.genesis.copy(registry = registry, registryCommits = commits)
         )
       }
 }

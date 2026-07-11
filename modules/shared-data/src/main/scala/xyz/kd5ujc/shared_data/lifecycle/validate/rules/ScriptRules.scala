@@ -14,7 +14,7 @@ import io.constellationnetwork.security.signature.signature.SignatureProof
 
 import xyz.kd5ujc.schema.fiber.{AccessControlPolicy, FiberOrdinal, FiberStatus}
 import xyz.kd5ujc.schema.registry.RegistryName
-import xyz.kd5ujc.schema.{CalculatedState, OnChain}
+import xyz.kd5ujc.schema.{CalculatedState, CommitIndex}
 import xyz.kd5ujc.shared_data.lifecycle.validate.ValidationResult
 import xyz.kd5ujc.shared_data.syntax.all._
 
@@ -37,9 +37,9 @@ object ScriptRules {
     def sequenceNumberMatches[F[_]: Applicative](
       fiberId:              UUID,
       targetSequenceNumber: FiberOrdinal,
-      state:                OnChain
+      index:                CommitIndex
     ): F[ValidationResult] =
-      FiberRules.L1.sequenceNumberMatches(fiberId, targetSequenceNumber, state)
+      FiberRules.L1.sequenceNumberMatches(fiberId, targetSequenceNumber, index)
   }
 
   // ============================================================================

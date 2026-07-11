@@ -10,11 +10,12 @@ import io.constellationnetwork.metagraph_sdk.lifecycle.committed.CommittedOnChai
 import io.constellationnetwork.metagraph_sdk.lifecycle.{CheckpointService, ValidationService}
 import io.constellationnetwork.metagraph_sdk.std.Checkpoint
 import io.constellationnetwork.metagraph_sdk.syntax.all.L1ContextOps
+import io.constellationnetwork.schema.SnapshotOrdinal
 import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.Signed
 
 import xyz.kd5ujc.schema.Updates._
-import xyz.kd5ujc.schema.{CalculatedState, OnChain}
+import xyz.kd5ujc.schema.{CalculatedState, CommitIndex, OnChain}
 import xyz.kd5ujc.shared_data.lifecycle.validate.{AssetValidator, FiberValidator, RegistryValidator, ScriptValidator}
 
 import org.typelevel.log4cats.SelfAwareStructuredLogger
@@ -48,11 +49,17 @@ object Validator {
   /**
    * Creates a ValidationService instance.
    *
+   * @param healClient DL1-only heal transport for the commit-index cache (RFC §3.3). `None` on
+   *                   ML0 (which never calls `validateUpdate`) and in transport-less dev setups —
+   *                   there a gap degrades to folding onto the possibly-incomplete index, loudly.
    * @return A ValidationService that validates OttochainMessage updates
    */
-  def make[F[_]: Async: Parallel: SecurityProvider]
-    : F[ValidationService[F, OttochainMessage, OnChain, CalculatedState]] =
-    CheckpointService.make[F, OnChain](OnChain.genesis).map { checkpointService =>
+  def make[F[_]: Async: Parallel: SecurityProvider](
+    healClient: Option[CommitIndexHealClient[F]] = None
+  ): F[ValidationService[F, OttochainMessage, OnChain, CalculatedState]] =
+    // `None` = never synced: OnChain v2 deltas can only be folded from a complete base, so the
+    // very first refresh must heal (or degrade) — the initial ordinal is a sentinel, not a base.
+    CheckpointService.make[F, Option[CommitIndex]](None).map { checkpointService =>
       new ValidationService[F, OttochainMessage, OnChain, CalculatedState] {
 
         private val logger: SelfAwareStructuredLogger[F] =
@@ -67,11 +74,12 @@ object Validator {
         override def validateUpdate(
           update: OttochainMessage
         )(implicit ctx: L1NodeContext[F]): F[DataApplicationValidationErrorOr[Unit]] =
-          withOnChainCache(ctx) { checkpoint =>
-            val fiberL1 = new FiberValidator.L1Validator[F](checkpoint.state)
-            val scriptL1 = new ScriptValidator.L1Validator[F](checkpoint.state)
+          withCommitIndexCache(ctx) { checkpoint =>
+            val index = checkpoint.state
+            val fiberL1 = new FiberValidator.L1Validator[F](index)
+            val scriptL1 = new ScriptValidator.L1Validator[F](index)
             val registryL1 = new RegistryValidator.L1Validator[F]
-            val assetL1 = new AssetValidator.L1Validator[F](checkpoint.state)
+            val assetL1 = new AssetValidator.L1Validator[F](index)
 
             val updateName = update.getClass.getSimpleName
             val fiberId = update match {
@@ -91,7 +99,7 @@ object Validator {
               case u: ApplyMorphism          => u.fiberId.toString
               case u: AuthorizeCompose       => u.fiberId.toString
             }
-            val cids = checkpoint.state.fiberCommits.keys.map(_.toString.take(8)).mkString(", ")
+            val cids = index.fiberCommits.keys.map(_.toString.take(8)).mkString(", ")
 
             for {
               _ <- logger.info(
@@ -158,8 +166,10 @@ object Validator {
           // block-poisoning hazard — a concurrent publish/mint/yank flips a once-valid op to Invalid at ML0
           // re-validation and tessellation drops the ENTIRE DL1 block (all-or-nothing). Those checks live
           // ONLY in the AssetCombiner (Phase 4) as graceful CombineRejected -> RejectionReceipt. ApplyMorphism
-          // L1 reads only OnChain.assetCommits (the safe behavior bitmask + sequence number), never lineage.
-          val assetL1 = new AssetValidator.L1Validator[F](current.onChain)
+          // L1 reads only the commit index (the safe behavior bitmask + sequence number), never lineage —
+          // under OnChain v2 the cumulative maps live in CalculatedState (same triple, same freshness as the
+          // v1 OnChain read; the relocation does NOT widen this gate's reads — RFC §3.2).
+          val assetL1 = new AssetValidator.L1Validator[F](CommitIndex.fromCalculated(current.calculated))
 
           signedUpdate.value match {
             case u: CreateStateMachine     => fiberCombined.createFiber(u)
@@ -181,44 +191,123 @@ object Validator {
         }
 
         /**
-         * Executes validation with cached on-chain state.
+         * Executes validation with the recreated commit-index cache (onchain-incrementals RFC §3.3).
          *
-         * The checkpoint is refreshed when a new snapshot is available,
-         * avoiding redundant state fetches during batch processing.
+         * OnChain v2 carries only per-batch deltas, so the cache can no longer be replaced from the
+         * latest snapshot — it is a FOLD over contiguous deltas:
+         *   - `snapshot.ordinal == cache.ordinal + 1` → fold the observed delta (no extra I/O);
+         *   - anything else (first sync, skipped ordinals, restart) → HEAL from ML0's
+         *     `/v1/commit-index`. Folding across a gap is never allowed: lost `touched*` writes make
+         *     the structural gate FAIL OPEN for unknown ids (create-dup passes, and transitions of
+         *     gap-created fibers get spuriously rejected).
+         *   - heal failure keeps the checkpoint UNCHANGED (stale-or-unsynced, retried on the next
+         *     call) rather than silently adopting an incomplete base; validation proceeds against
+         *     the stale index (empty if never synced), loudly logged. The combiner remains the
+         *     authoritative gate either way.
          */
-        private def withOnChainCache(context: L1NodeContext[F])(
-          f: Checkpoint[OnChain] => F[DataApplicationValidationErrorOr[Unit]]
+        private def withCommitIndexCache(context: L1NodeContext[F])(
+          f: Checkpoint[CommitIndex] => F[DataApplicationValidationErrorOr[Unit]]
         ): F[DataApplicationValidationErrorOr[Unit]] =
           checkpointService
             .evalModify[DataApplicationValidationError] { checkpoint =>
               context.getLatestCurrencySnapshot.flatMap {
-                case Right(snapshot) if snapshot.ordinal > checkpoint.ordinal =>
-                  logger.info(
-                    s"[DL1-cache] REFRESHING: snapshotOrdinal=${snapshot.ordinal} > cacheOrdinal=${checkpoint.ordinal}"
-                  ) *>
-                  // ML0 now commits CommittedOnChain[OnChain] (makeL0 wraps OnChain with the committed
-                  // breadcrumb); unwrap .inner to get the plain OnChain the fiber sequence checks need.
+                case Right(snapshot) if snapshot.ordinal > checkpoint.ordinal || checkpoint.state.isEmpty =>
+                  // ML0 commits CommittedOnChain[OnChain] (makeL0 wraps OnChain with the committed
+                  // breadcrumb); unwrap .inner to get the per-batch delta.
                   context.getOnChainState[CommittedOnChain[OnChain]].flatMap {
                     case Right(committed) =>
-                      val newState = committed.inner
-                      val cids = newState.fiberCommits.keys.map(_.toString.take(8)).mkString(", ")
-                      logger
-                        .info(
-                          s"[DL1-cache] REFRESHED: ordinal=${snapshot.ordinal} fiberCommits=${newState.fiberCommits.size} cids=[$cids]"
-                        )
-                        .as(Checkpoint(snapshot.ordinal, newState).asRight[DataApplicationValidationError])
+                      val delta = committed.inner
+                      checkpoint.state match {
+                        case Some(index) if snapshot.ordinal.value.value === checkpoint.ordinal.value.value + 1L =>
+                          val folded = CommitIndex.fold(index, delta)
+                          logger
+                            .info(
+                              s"[DL1-cache] FOLDED delta: ordinal=${snapshot.ordinal} " +
+                              s"touchedFibers=${delta.touchedFiberCommits.size} " +
+                              s"touchedAssets=${delta.touchedAssetCommits.size} burns=${delta.burnedAssets.size} " +
+                              s"indexFibers=${folded.fiberCommits.size}"
+                            )
+                            .as(
+                              Checkpoint(snapshot.ordinal, (folded: CommitIndex).some)
+                                .asRight[DataApplicationValidationError]
+                            )
+                        case Some(_) if snapshot.ordinal === checkpoint.ordinal =>
+                          // only reachable via the isEmpty guard, which excludes Some — keep as-is
+                          checkpoint.asRight[DataApplicationValidationError].pure[F]
+                        case _ =>
+                          heal(snapshot.ordinal, delta, checkpoint)
+                      }
                     case Left(err) =>
-                      logger.warn(s"[DL1-cache] REFRESH FAILED: $err").as(err.asLeft[Checkpoint[OnChain]])
+                      logger.warn(s"[DL1-cache] REFRESH FAILED: $err").as(err.asLeft[Checkpoint[Option[CommitIndex]]])
                   }
                 case Right(snapshot) =>
                   logger.debug(
                     s"[DL1-cache] NO REFRESH: snapshotOrdinal=${snapshot.ordinal} == cacheOrdinal=${checkpoint.ordinal}"
                   ) *> checkpoint.asRight[DataApplicationValidationError].pure[F]
                 case Left(err) =>
-                  logger.warn(s"[DL1-cache] SNAPSHOT ERROR: $err").as(err.asLeft[Checkpoint[OnChain]])
+                  logger.warn(s"[DL1-cache] SNAPSHOT ERROR: $err").as(err.asLeft[Checkpoint[Option[CommitIndex]]])
               }
             }
-            .flatMap(_.fold(_.invalidNec[Unit].pure[F], f))
+            .flatMap(
+              _.fold(
+                _.invalidNec[Unit].pure[F],
+                cp => f(Checkpoint(cp.ordinal, cp.state.getOrElse(CommitIndex.empty)))
+              )
+            )
+
+        /**
+         * Re-seed the index from ML0 (gap / first sync). Adoption cases relative to the locally
+         * observed `snapshotOrdinal`:
+         *   - healed at or ahead of it → adopt verbatim (the gate tolerates a fresher index);
+         *   - healed exactly one behind → adopt + fold the locally observed delta on top;
+         *   - healed further behind → adopt what we got and let the next refresh retry (ordinal
+         *     stays behind, so the `>` guard fires again).
+         */
+        private def heal(
+          snapshotOrdinal: SnapshotOrdinal,
+          observedDelta:   OnChain,
+          prev:            Checkpoint[Option[CommitIndex]]
+        ): F[Either[DataApplicationValidationError, Checkpoint[Option[CommitIndex]]]] =
+          healClient match {
+            case Some(client) =>
+              client.fetch.attempt.flatMap {
+                case Right(res) =>
+                  val adopted =
+                    if (res.ordinal.value.value + 1L === snapshotOrdinal.value.value)
+                      Checkpoint(snapshotOrdinal, (CommitIndex.fold(res.index, observedDelta): CommitIndex).some)
+                    else
+                      Checkpoint(res.ordinal, res.index.some)
+                  logger
+                    .info(
+                      s"[DL1-cache] HEALED: ml0Ordinal=${res.ordinal} localOrdinal=$snapshotOrdinal " +
+                      s"indexFibers=${adopted.state.map(_.fiberCommits.size).getOrElse(0)} " +
+                      s"(prev=${prev.ordinal}${if (prev.state.isEmpty) ", unsynced" else ""})"
+                    )
+                    .as(adopted.asRight[DataApplicationValidationError])
+                case Left(e) =>
+                  logger
+                    .error(
+                      s"[DL1-cache] HEAL FAILED (${e.getMessage}): keeping " +
+                      s"${if (prev.state.isEmpty) "UNSYNCED (validating against an empty index!)"
+                        else s"stale ordinal=${prev.ordinal}"}; " +
+                      "will retry on next update"
+                    )
+                    .as(prev.asRight[DataApplicationValidationError])
+              }
+            case None =>
+              // transport-less dev mode: fold onto whatever base we have and advance, accepting
+              // potential incompleteness — loudly, every gap.
+              val base = prev.state.getOrElse(CommitIndex.empty)
+              logger
+                .error(
+                  s"[DL1-cache] ORDINAL GAP with NO heal client: ${prev.ordinal} -> $snapshotOrdinal; " +
+                  "folding onto a possibly-incomplete index (structural gate degraded; dev mode only)"
+                )
+                .as(
+                  Checkpoint(snapshotOrdinal, (CommitIndex.fold(base, observedDelta): CommitIndex).some)
+                    .asRight[DataApplicationValidationError]
+                )
+          }
       }
     }
 }
