@@ -22,8 +22,9 @@ import weaver.SimpleIOSuite
  * F7 fix (03-cross-fiber-and-authorization.md §3): transition signer-authorization is now enforced on the
  * AUTHORITATIVE apply path (the combiner) via the opt-in `transitionPolicy` dial, as a graceful
  * `CombineRejected` (rule #2). The ABSENT-dial default is `Open` (today's live guard-only behaviour), so every
- * existing fiber is UNCHANGED — `TransitionOwnerGateDivergenceSuite` and `MultiPartyTransitionSigningSuite`
- * stay green. Apps opt UP explicitly: `OwnersOrParticipants` or `Owners`.
+ * existing fiber is UNCHANGED — `TransitionValidatorGateSuite` and `MultiPartyTransitionSigningSuite`
+ * stay green. Apps opt UP explicitly: `OwnersOrParticipants` or `Owners`. The validator no longer owner-gates
+ * a transition at all (#205, `TransitionValidatorGateSuite`); the combiner is the sole binding signer gate.
  */
 object TransitionPolicyEnforcementSuite extends SimpleIOSuite {
 

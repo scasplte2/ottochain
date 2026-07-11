@@ -4,7 +4,7 @@ import cats.effect.IO
 import cats.effect.std.UUIDGen
 import cats.syntax.all._
 
-import io.constellationnetwork.currency.dataApplication.{DataState, L0NodeContext, L1NodeContext}
+import io.constellationnetwork.currency.dataApplication.{DataState, L0NodeContext}
 import io.constellationnetwork.metagraph_sdk.json_logic._
 import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.Signed
@@ -194,11 +194,10 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
     }
   }
 
-  test("unauthorized third party CANNOT sign transitions") {
+  test("unauthorized third party CANNOT drive a CLOSED fiber (rejected at combine under OwnersOrParticipants)") {
     TestFixture.resource(Set(Alice, Bob, Charlie)).use { fixture =>
       implicit val s: SecurityProvider[IO] = fixture.securityProvider
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
-      implicit val l1ctx: L1NodeContext[IO] = fixture.l1Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
         validator <- Validator.make[IO]
@@ -227,7 +226,12 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
         }
         """
 
-        contractDef <- IO.fromEither(decode[StateMachineDefinition](contractJson))
+        baseContractDef <- IO.fromEither(decode[StateMachineDefinition](contractJson))
+        // A CLOSED contract: transitionPolicy = OwnersOrParticipants, so only owners/participants may drive
+        // it. Charlie is neither. (Default-Open contracts are guard-only — see the counterparty tests above.)
+        contractDef =
+          baseContractDef
+            .copy(policy = FiberPolicy.constrained(transitionPolicy = Some(TransitionPolicy.OwnersOrParticipants)))
         initialData = MapValue(Map("counterparty" -> StrValue("Bob")))
 
         // Alice creates the contract (only Alice is owner, no participants declared)
@@ -246,17 +250,18 @@ object MultiPartyTransitionSigningSuite extends SimpleIOSuite {
           FiberOrdinal.MinValue
         )
 
-        // Validator should reject Charlie — not owner and not in participants
         charlieProof <- fixture.registry.generateProofs(acceptEvent, Set(Charlie))
-        result       <- validator.validateSignedUpdate(stateAfterCreate, Signed(acceptEvent, charlieProof))
+        // #205: the ML0 validator is STRUCTURAL-ONLY and ADMITS Charlie (an Invalid here would poison the block)...
+        validated <- validator.validateSignedUpdate(stateAfterCreate, Signed(acceptEvent, charlieProof))
+        // ...but the combiner (the sole signer gate) gracefully REJECTS him — the fiber stays `pending`.
+        afterCharlie <- combiner.insert(stateAfterCreate, Signed(acceptEvent, charlieProof))
+        charlieRec = afterCharlie.calculated.stateMachines
+          .get(contractFiberId)
+          .collect { case r: Records.StateMachineFiberRecord => r }
 
-      } yield expect(result.isInvalid) and
-      expect(
-        result.swap
-          .exists(
-            _.exists(e => e.message.toLowerCase.contains("authorized") || e.message.toLowerCase.contains("owner"))
-          )
-      )
+      } yield expect(validated.isValid) and
+      expect(charlieRec.map(_.currentState).contains(StateId("pending"))) and
+      expect(charlieRec.exists(_.sequenceNumber === FiberOrdinal.MinValue))
     }
   }
 

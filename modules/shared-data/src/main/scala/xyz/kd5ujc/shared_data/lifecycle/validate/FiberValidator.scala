@@ -111,19 +111,13 @@ object FiberValidator {
         parentActive <- FiberRules.L0.parentFiberActive(update.parentFiberId, state.calculated)
       } yield List(hasProofs, parentActive).combineAll
 
-    /**
-     * Validates a ProcessFiberEvent update (L0): ONLY the immutable-auth signer gate.
-     *
-     * `updateSignedByOwnerOrParticipant` reads `owners`/`authorizedSigners`, both fixed at creation
-     * (TOCTOU-safe), and the combiner does NOT re-check transition signers — so this gate MUST stay at ML0.
-     * The mutable-state checks `fiberIsActive` and `transitionExists` were removed (audit M1): a concurrent
-     * same-fiber update (an archive, or a state advance that changes `(currentState,event)` resolution) can
-     * flip them Valid->Invalid between DL1 block formation and ML0 re-validation, dropping the ENTIRE block
-     * (tessellation all-or-nothing). Both are enforced GRACEFULLY downstream — the engine aborts a non-active
-     * fiber (FiberNotActive) or a missing transition (NoTransitionFound), surfaced by the combiner.
-     */
-    def processEvent(update: TransitionStateMachine): F[ValidationResult] =
-      FiberRules.L0.updateSignedByOwnerOrParticipant(update.fiberId, proofs, state.calculated)
+    // NOTE: a ProcessFiberEvent has NO L0 (signature) gate. The transition-signer authorization moved wholly
+    // to the combiner's F7 gate (`FiberCombiner.processFiberEvent` → `TransitionPolicy.authorizes`) as a
+    // graceful `CombineRejected` (#205). It was the one block-acceptance check with no DL1 non-fatal pre-filter
+    // behind it (DL1 has no proofs), so a non-owner transition reached ML0, went Invalid, and dropped the whole
+    // all-or-nothing block; and making it `transitionPolicy`-aware would require reading the upgrade-MUTABLE
+    // `definition.policy` at block-acceptance (TOCTOU → block poison, CLAUDE.md rule #3). Archive/Upgrade keep
+    // their L0 owner gate because those are `owners`-only (immutable, no policy dial) and TOCTOU-safe.
 
     /**
      * Validates an ArchiveFiber update (L0): ONLY the immutable-auth owner-signature gate. The mutable
@@ -174,12 +168,17 @@ object FiberValidator {
       } yield l1Result |+| l0Result
 
     /**
-     * Validates a ProcessFiberEvent update at the ML0 block-acceptance gate: structural L1 checks (existence,
+     * Validates a ProcessFiberEvent update at the ML0 block-acceptance gate: STRUCTURAL checks only (existence,
      * payload not-null / size / structure) MINUS the mutable `FiberRules.L1.sequenceNumberMatches` (audit M1:
      * a concurrent same-fiber update bumps the sequence and flips this Valid->Invalid, poisoning the whole
      * block; the combiner does the exact-sequence check + atomic bump as CombineRejected, preserving replay
-     * protection) PLUS the immutable-auth signer gate (in `l0.processEvent`). The DL1
-     * `L1Validator.processEvent` path keeps the sequence pre-filter — DL1 rejection does not poison a block.
+     * protection). The transition-signer gate was REMOVED from block-acceptance (#205): it is the ONE
+     * block-acceptance check with no DL1 non-fatal pre-filter behind it (DL1 has no proofs), so a non-owner
+     * transition reached ML0, went Invalid, and dropped the ENTIRE block; and it could not honour
+     * `transitionPolicy=Open` without reading the upgrade-mutable `definition.policy` at block-acceptance
+     * (TOCTOU → poison, rule #3). Signer authorization is now wholly the combiner's F7 gate
+     * (`TransitionPolicy.authorizes`), a graceful `CombineRejected`. The DL1 `L1Validator.processEvent` path
+     * keeps the sequence pre-filter — DL1 rejection does not poison a block.
      */
     def processEvent(update: TransitionStateMachine): F[ValidationResult] =
       for {
@@ -187,8 +186,7 @@ object FiberValidator {
         payloadNotNull   <- CommonRules.isNotNull(update.payload, "payload")
         payloadSize      <- CommonRules.valueWithinSizeLimit(update.payload, Limits.MaxEventPayloadBytes, "payload")
         payloadStructure <- CommonRules.payloadStructureValid(update.payload, "payload")
-        l0Result         <- l0.processEvent(update)
-      } yield List(cidExists, payloadNotNull, payloadSize, payloadStructure, l0Result).combineAll
+      } yield List(cidExists, payloadNotNull, payloadSize, payloadStructure).combineAll
 
     /**
      * Validates an ArchiveFiber update at the ML0 block-acceptance gate: existence check MINUS the mutable
