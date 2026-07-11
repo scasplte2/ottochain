@@ -315,4 +315,35 @@ object UpgradeGateSuite extends FunSuite {
       )
     expect(isPolicyViolation(r, "tighten"))
   }
+
+  // ── gateScriptUpgrade (L2) — scripts have no MachineShape, so only the owner-constitution tiers apply ──
+
+  test("gateScriptUpgrade: absent policy (≡ Arbitrary) and explicit Arbitrary both admit") {
+    expect(UpgradeGate.gateScriptUpgrade(None, stateOf(), Set(alice)).isEmpty) and
+    expect(UpgradeGate.gateScriptUpgrade(Some(UpgradePolicy.Arbitrary), stateOf(), Set(alice)).isEmpty)
+  }
+
+  test("gateScriptUpgrade: Immutable denies ALL script upgrades") {
+    expect(
+      isPolicyViolation(
+        UpgradeGate.gateScriptUpgrade(Some(UpgradePolicy.Immutable), stateOf(), Set(alice)),
+        "upgradePolicy"
+      )
+    )
+  }
+
+  test("gateScriptUpgrade: Governed.Signers admits an authorized signer, denies a stranger") {
+    val pol = UpgradePolicy.Governed(MigrationAuthority.Signers(Set(alice)))
+    expect(UpgradeGate.gateScriptUpgrade(Some(pol), stateOf(), Set(alice)).isEmpty) and
+    expect(isPolicyViolation(UpgradeGate.gateScriptUpgrade(Some(pol), stateOf(), Set(bob)), "upgradePolicy"))
+  }
+
+  test("gateScriptUpgrade: AppendOnly is unsupported for scripts (fail-closed deny)") {
+    expect(
+      isPolicyViolation(
+        UpgradeGate.gateScriptUpgrade(Some(UpgradePolicy.AppendOnly), stateOf(), Set(alice)),
+        "upgradePolicy"
+      )
+    )
+  }
 }

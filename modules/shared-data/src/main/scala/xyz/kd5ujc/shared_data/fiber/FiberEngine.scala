@@ -648,6 +648,16 @@ object FiberEngine {
        * append-only spawn tree never produces but crafted/migrated state could) is likewise unverifiable and
        * would otherwise loop forever, so a revisited id also fails closed (DoS-safe). Orthogonal to
        * `ExecutionLimits.maxDepth` (trigger-chain depth, a different axis). No-op (always Right) when unset.
+       *
+       * MIGRATION RESET (audit 2026-07-07, finding L3 — READ BEFORE relying on this cap as absolute). The
+       * lineage is counted by DEFINITION DIGEST (`selfDigest = fiber.definition.computeDigest`), so a
+       * migration (`UpgradeFiber`) that changes the definition changes the digest: post-migration ancestors
+       * no longer hash-equal `selfDigest`, the count restarts from 0, and a non-`Immutable` self-reproducing
+       * lineage can migrate and re-spawn `cap` MORE generations, repeatably (owner-funded + gas-metered — a
+       * cost-bounded amplifier, not a free exploit). To make `maxGenerations` an ABSOLUTE, migration-proof cap,
+       * pair it with `upgradePolicy = Immutable` (which `UpgradeGate` enforces by forbidding migration outright),
+       * so the digest can never change. A migration-surviving lineage anchor (counting by a stable lineage root
+       * rather than the mutable digest) is deferred — `Immutable` covers the guarantee today.
        */
       private def checkMaxGenerations(
         fiber: Records.StateMachineFiberRecord

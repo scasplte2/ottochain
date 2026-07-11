@@ -2,7 +2,6 @@ package xyz.kd5ujc.shared_data.fiber.evaluation
 
 import java.util.UUID
 
-import cats.data.OptionT
 import cats.effect.Async
 import cats.mtl.{Ask, Stateful}
 import cats.syntax.all._
@@ -136,11 +135,13 @@ object EffectExtractor {
         ctx =>
           extractSpawnDirectivesFromExpression(ctx.effectExpr).map(d => FiberEffect.Spawned(d): FiberEffect).pure[G]
 
-        // Fix (1): `extractEmittedEvents` stamps the EMITTING fiber id (`sourceFiberId`) into every emitted
-      // event — the emitter, distinct from any cross-fiber caller.
+        // `extractEmittedEvents` stamps the EMITTING fiber id (`sourceFiberId`) into every emitted event — the
+      // emitter, distinct from any cross-fiber caller. Loud on a malformed `_emit` item (audit L5).
       case FiberDirective.Emit =>
         ctx =>
-          extractEmittedEvents(ctx.authored, ctx.sourceFiberId).map(e => FiberEffect.Emitted(e): FiberEffect).pure[G]
+          extractEmittedEvents[F, G](ctx.authored, ctx.sourceFiberId).map(
+            _.map(e => FiberEffect.Emitted(e): FiberEffect)
+          )
 
       case FiberDirective.Transfer =>
         ctx => extractAssetTransfers[F, G](ctx.authored, ctx.contextData).map(_.map(x => x: FiberEffect))
@@ -335,37 +336,34 @@ object EffectExtractor {
     sourceFiberId: UUID
   )(implicit S: Stateful[G, ExecutionState], A: Ask[G, FiberContext], lift: F ~> G): G[List[FiberTrigger]] =
     extractArrayByKey(effectResult, ReservedKeys.TRIGGERS)
-      .flatTraverse { item =>
-        parseTriggerEvent[F, G](item, contextData, sourceFiberId)
-          .map(_.toList)
-      }
+      .traverse(parseTriggerEvent[F, G](_, contextData, sourceFiberId))
 
   private def parseTriggerEvent[F[_]: Async, G[_]: Monad](
     value:         JsonLogicValue,
     contextData:   JsonLogicValue,
     sourceFiberId: UUID
-  )(implicit S: Stateful[G, ExecutionState], A: Ask[G, FiberContext], lift: F ~> G): G[Option[FiberTrigger]] =
+  )(implicit S: Stateful[G, ExecutionState], A: Ask[G, FiberContext], lift: F ~> G): G[FiberTrigger] =
     value match {
       case MapValue(triggerMap) =>
-        (for {
-          targetIdStr <- OptionT.fromOption[G](
-            triggerMap.get(ReservedKeys.TARGET_MACHINE_ID).collect { case StrValue(id) => id }
-          )
-          targetId <- OptionT.fromOption[G](scala.util.Try(UUID.fromString(targetIdStr)).toOption)
-          eventType <- OptionT.fromOption[G](
-            triggerMap.get(ReservedKeys.EVENT_NAME).collect { case StrValue(et) => et }
-          )
-          payloadValue <- OptionT.fromOption[G](triggerMap.get(ReservedKeys.PAYLOAD))
-          payloadExpr = ExpressionParser.valueToExpression(payloadValue)
-          evaluatedPayload <- OptionT(
-            MeteredEvaluator.evalOpt[F, G](payloadExpr, contextData, GasExhaustionPhase.Trigger)
+        for {
+          targetIdStr <- requireString[F, G](triggerMap, ReservedKeys.TARGET_MACHINE_ID, "_triggers", "targetMachineId")
+          targetId    <- requireUuid[F, G](targetIdStr, "_triggers", "targetMachineId")
+          eventType   <- requireString[F, G](triggerMap, ReservedKeys.EVENT_NAME, "_triggers", "eventName")
+          payloadValue <- requireField[F, G](triggerMap, ReservedKeys.PAYLOAD, "_triggers", "payload")
+          evaluatedPayload <- evalOrReject[F, G](
+            payloadValue,
+            contextData,
+            GasExhaustionPhase.Trigger,
+            "_triggers",
+            "payload"
           )
         } yield FiberTrigger(
           targetFiberId = targetId,
           input = FiberInput.Transition(eventType, evaluatedPayload),
           sourceFiberId = Some(sourceFiberId)
-        )).value
-      case _ => none[FiberTrigger].pure[G]
+        )
+      case other =>
+        rejectDirective[F, G, FiberTrigger]("_triggers", s"malformed item (expected an object), got $other")
     }
 
   /**
@@ -385,21 +383,22 @@ object EffectExtractor {
     sourceFiberId: UUID
   )(implicit S: Stateful[G, ExecutionState], A: Ask[G, FiberContext], lift: F ~> G): G[Option[FiberTrigger]] =
     extractByKey(effectResult, ReservedKeys.SCRIPT_CALL) match {
+      case None => none[FiberTrigger].pure[G] // absent directive ⇒ no-op (not malformed)
       case Some(MapValue(scriptCallMap)) =>
-        (for {
-          cidStr <- OptionT.fromOption[G](scriptCallMap.get(ReservedKeys.FIBER_ID).collect { case StrValue(id) => id })
-          targetId  <- OptionT.fromOption[G](scala.util.Try(UUID.fromString(cidStr)).toOption)
-          method    <- OptionT.fromOption[G](scriptCallMap.get(ReservedKeys.METHOD).collect { case StrValue(m) => m })
-          argsValue <- OptionT.fromOption[G](scriptCallMap.get(ReservedKeys.ARGS))
-          argsExpr = ExpressionParser.valueToExpression(argsValue)
-          evaluatedArgs <- OptionT(MeteredEvaluator.evalOpt[F, G](argsExpr, contextData, GasExhaustionPhase.Trigger))
+        for {
+          cidStr        <- requireString[F, G](scriptCallMap, ReservedKeys.FIBER_ID, "_scriptCall", "fiberId")
+          targetId      <- requireUuid[F, G](cidStr, "_scriptCall", "fiberId")
+          method        <- requireString[F, G](scriptCallMap, ReservedKeys.METHOD, "_scriptCall", "method")
+          argsValue     <- requireField[F, G](scriptCallMap, ReservedKeys.ARGS, "_scriptCall", "args")
+          evaluatedArgs <- evalOrReject[F, G](argsValue, contextData, GasExhaustionPhase.Trigger, "_scriptCall", "args")
         } yield FiberTrigger(
           targetFiberId = targetId,
           input = FiberInput.Transition(method, evaluatedArgs),
           sourceFiberId = Some(sourceFiberId)
-        )).value
+        ).some
 
-      case _ => none[FiberTrigger].pure[G]
+      case Some(other) =>
+        rejectDirective[F, G, Option[FiberTrigger]]("_scriptCall", s"must be an object, got $other")
     }
 
   /**
@@ -452,52 +451,108 @@ object EffectExtractor {
     value match {
       case MapValue(transferMap) =>
         for {
-          assetIdValue     <- requireField[F, G](transferMap, ReservedKeys.ASSET_ID, "assetId")
-          evaluatedAssetId <- evalOrReject[F, G](assetIdValue, contextData, "assetId")
+          assetIdValue <- requireField[F, G](transferMap, ReservedKeys.ASSET_ID, "_transferAsset", "assetId")
+          evaluatedAssetId <- evalOrReject[F, G](
+            assetIdValue,
+            contextData,
+            GasExhaustionPhase.Morphism,
+            "_transferAsset",
+            "assetId"
+          )
           assetId <- evaluatedAssetId match {
             case StrValue(s) =>
               scala.util.Try(UUID.fromString(s)).toOption match {
                 case Some(uuid) => uuid.pure[G]
-                case None       => rejectTransfer[F, G, UUID](s"assetId is not a valid UUID: '$s'")
+                case None       => rejectDirective[F, G, UUID]("_transferAsset", s"assetId is not a valid UUID: '$s'")
               }
-            case other => rejectTransfer[F, G, UUID](s"assetId must be a UUID string, got $other")
+            case other => rejectDirective[F, G, UUID]("_transferAsset", s"assetId must be a UUID string, got $other")
           }
-          recipientValue     <- requireField[F, G](transferMap, ReservedKeys.RECIPIENT, "recipient")
-          evaluatedRecipient <- evalOrReject[F, G](recipientValue, contextData, "recipient")
+          recipientValue <- requireField[F, G](transferMap, ReservedKeys.RECIPIENT, "_transferAsset", "recipient")
+          evaluatedRecipient <- evalOrReject[F, G](
+            recipientValue,
+            contextData,
+            GasExhaustionPhase.Morphism,
+            "_transferAsset",
+            "recipient"
+          )
           recipient <- evaluatedRecipient match {
             case MapValue(_) =>
               evaluatedRecipient.asJson.as[AssetHolder] match {
                 case Right(holder) => holder.pure[G]
                 case Left(err) =>
-                  rejectTransfer[F, G, AssetHolder](
+                  rejectDirective[F, G, AssetHolder](
+                    "_transferAsset",
                     s"recipient is not a valid AssetHolder object {Fiber|Wallet}: ${err.getMessage}"
                   )
               }
             case other =>
-              rejectTransfer[F, G, AssetHolder](
+              rejectDirective[F, G, AssetHolder](
+                "_transferAsset",
                 s"""recipient must be an AssetHolder object {"Fiber":{"fiberId":..}} / {"Wallet":{"address":..}}, got $other"""
               )
           }
         } yield FiberEffect.AssetTransferred(assetId = assetId, recipient = recipient)
       case other =>
-        rejectTransfer[F, G, FiberEffect.AssetTransferred](s"malformed item (expected an object), got $other")
+        rejectDirective[F, G, FiberEffect.AssetTransferred](
+          "_transferAsset",
+          s"malformed item (expected an object), got $other"
+        )
     }
 
-  /** Look up a required `_transferAsset` field, or raise a graceful [[CombineRejected]] naming what is missing. */
+  // ── Loud directive parsing (audit 2026-07-07, finding L5) ─────────────────────────────────────────────
+  // A MALFORMED reserved directive (wrong type / missing required field / non-UUID / gas-or-eval failure) is
+  // NOT silently dropped — it raises a graceful [[CombineRejected]] naming the directive + what is wrong, the
+  // SAME loud mode `_transferAsset` already uses. Extraction runs ONLY on the combiner apply path
+  // (FiberEvaluator ← FiberEngine.process/migrate & TriggerHandler cascade ← Combiner.insert), so the raise
+  // surfaces as a `RejectionReceipt` (rule #2), NEVER a block-acceptance `Invalid`. An ABSENT directive is a
+  // no-op (empty array ⇒ no items ⇒ no raise); only a PRESENT-but-malformed item is loud — a silently-dropped
+  // trigger/scriptCall/dependency/emit is a latent value-safety bug, not a benign no-op.
+
+  /** Raise a graceful, combiner-caught [[CombineRejected]] for a malformed `directive`. */
+  private def rejectDirective[F[_]: Async, G[_], A](directive: String, reason: String)(implicit lift: F ~> G): G[A] =
+    lift(Async[F].raiseError[A](CombineRejected(s"$directive: $reason")))
+
+  /** Look up a required `directive` field, or raise a graceful [[CombineRejected]] naming what is missing. */
   private def requireField[F[_]: Async, G[_]: Monad](
-    map:   Map[String, JsonLogicValue],
-    key:   String,
-    label: String
+    map:       Map[String, JsonLogicValue],
+    key:       String,
+    directive: String,
+    label:     String
   )(implicit lift: F ~> G): G[JsonLogicValue] =
     map.get(key) match {
       case Some(v) => v.pure[G]
-      case None    => rejectTransfer[F, G, JsonLogicValue](s"missing $label")
+      case None    => rejectDirective[F, G, JsonLogicValue](directive, s"missing $label")
     }
 
-  /** Evaluate a `_transferAsset` sub-expression under the Morphism gas phase; a `Left` (gas/eval failure) is LOUD. */
+  /** A required string `directive` field, or a graceful [[CombineRejected]] (missing / not a string). */
+  private def requireString[F[_]: Async, G[_]: Monad](
+    map:       Map[String, JsonLogicValue],
+    key:       String,
+    directive: String,
+    label:     String
+  )(implicit lift: F ~> G): G[String] =
+    requireField[F, G](map, key, directive, label).flatMap {
+      case StrValue(s) => s.pure[G]
+      case other       => rejectDirective[F, G, String](directive, s"$label must be a string, got $other")
+    }
+
+  /** Parse a required UUID, or raise a graceful [[CombineRejected]] naming the offending value. */
+  private def requireUuid[F[_]: Async, G[_]: Monad](
+    raw:       String,
+    directive: String,
+    label:     String
+  )(implicit lift: F ~> G): G[UUID] =
+    scala.util.Try(UUID.fromString(raw)).toOption match {
+      case Some(u) => u.pure[G]
+      case None    => rejectDirective[F, G, UUID](directive, s"$label is not a valid UUID: '$raw'")
+    }
+
+  /** Evaluate a directive sub-expression under `phase`; a `Left` (gas/eval failure) is LOUD (rejects). */
   private def evalOrReject[F[_]: Async, G[_]: Monad](
     value:       JsonLogicValue,
     contextData: JsonLogicValue,
+    phase:       GasExhaustionPhase,
+    directive:   String,
     label:       String
   )(implicit
     S:    Stateful[G, ExecutionState],
@@ -505,15 +560,11 @@ object EffectExtractor {
     lift: F ~> G
   ): G[JsonLogicValue] =
     MeteredEvaluator
-      .eval[F, G](ExpressionParser.valueToExpression(value), contextData, GasExhaustionPhase.Morphism)
+      .eval[F, G](ExpressionParser.valueToExpression(value), contextData, phase)
       .flatMap {
         case Right(v)     => v.pure[G]
-        case Left(reason) => rejectTransfer[F, G, JsonLogicValue](s"$label did not evaluate: $reason")
+        case Left(reason) => rejectDirective[F, G, JsonLogicValue](directive, s"$label did not evaluate: $reason")
       }
-
-  /** Raise a graceful, combiner-caught [[CombineRejected]] for a malformed `_transferAsset` directive. */
-  private def rejectTransfer[F[_]: Async, G[_], A](reason: String)(implicit lift: F ~> G): G[A] =
-    lift(Async[F].raiseError[A](CombineRejected(s"_transferAsset: $reason")))
 
   /**
    * Extract dynamic-dependency mutations (`_addDependency` / `_setDependencyActive`) with gas metering.
@@ -535,59 +586,91 @@ object EffectExtractor {
   ): G[List[FiberEffect.DependencyMutated]] =
     for {
       adds <- extractArrayByKey(effectResult, ReservedKeys.ADD_DEPENDENCY)
-        .flatTraverse(item => parseDependencyMutation[F, G](item, contextData, forcedActive = Some(true)).map(_.toList))
+        .traverse(parseDependencyMutation[F, G](_, contextData, "_addDependency", forcedActive = Some(true)))
       sets <- extractArrayByKey(effectResult, ReservedKeys.SET_DEPENDENCY_ACTIVE)
-        .flatTraverse(item => parseDependencyMutation[F, G](item, contextData, forcedActive = None).map(_.toList))
+        .traverse(parseDependencyMutation[F, G](_, contextData, "_setDependencyActive", forcedActive = None))
     } yield adds ++ sets
 
   private def parseDependencyMutation[F[_]: Async, G[_]: Monad](
     value:        JsonLogicValue,
     contextData:  JsonLogicValue,
+    directive:    String,
     forcedActive: Option[Boolean]
   )(implicit
     S:    Stateful[G, ExecutionState],
     A:    Ask[G, FiberContext],
     lift: F ~> G
-  ): G[Option[FiberEffect.DependencyMutated]] =
+  ): G[FiberEffect.DependencyMutated] =
     value match {
       case MapValue(depMap) =>
-        (for {
-          fiberIdValue <- OptionT.fromOption[G](depMap.get(ReservedKeys.FIBER_ID))
-          fiberIdExpr = ExpressionParser.valueToExpression(fiberIdValue)
+        for {
+          fiberIdValue <- requireField[F, G](depMap, ReservedKeys.FIBER_ID, directive, "fiberId")
           // Charge gas for fiberId resolution under the DependencyMutation phase.
-          evaluatedFiberId <- OptionT(
-            MeteredEvaluator.evalOpt[F, G](fiberIdExpr, contextData, GasExhaustionPhase.DependencyMutation)
+          evaluatedFiberId <- evalOrReject[F, G](
+            fiberIdValue,
+            contextData,
+            GasExhaustionPhase.DependencyMutation,
+            directive,
+            "fiberId"
           )
-          fiberIdStr <- OptionT.fromOption[G](evaluatedFiberId match { case StrValue(s) => Some(s); case _ => None })
-          fiberId    <- OptionT.fromOption[G](scala.util.Try(UUID.fromString(fiberIdStr)).toOption)
-          active <- OptionT.fromOption[G](
-            forcedActive.orElse(depMap.get(ReservedKeys.ACTIVE).collect { case BoolValue(b) => b })
-          )
-        } yield FiberEffect.DependencyMutated(fiberId, active)).value
-      case _ => none[FiberEffect.DependencyMutated].pure[G]
+          fiberIdStr <- evaluatedFiberId match {
+            case StrValue(s) => s.pure[G]
+            case other       => rejectDirective[F, G, String](directive, s"fiberId must be a string, got $other")
+          }
+          fiberId <- requireUuid[F, G](fiberIdStr, directive, "fiberId")
+          active <- forcedActive match {
+            case Some(b) => b.pure[G]
+            case None =>
+              depMap.get(ReservedKeys.ACTIVE) match {
+                case Some(BoolValue(b)) => b.pure[G]
+                case Some(other) => rejectDirective[F, G, Boolean](directive, s"active must be a boolean, got $other")
+                case None        => rejectDirective[F, G, Boolean](directive, "missing active")
+              }
+          }
+        } yield FiberEffect.DependencyMutated(fiberId, active)
+      case other =>
+        rejectDirective[F, G, FiberEffect.DependencyMutated](
+          directive,
+          s"malformed item (expected an object), got $other"
+        )
     }
 
   /**
-   * Fix (1) — `_emit` emitter-stamping. `.zipWithIndex` runs over the RAW `_emit` array BEFORE the
-   * `flatMap`-drop, so `emissionIndex` is the true authoring-time position; a malformed sibling that
-   * `parseEmittedEvent` drops leaves a SPARSE gap (survivors keep their original positions). `emitterFiberId`
-   * is the engine-supplied id of the fiber whose transition ran `_emit` — never user-supplied, so the stamp
-   * cannot be forged from inside a guard/effect expression.
+   * `_emit` emitter-stamping. `.zipWithIndex` runs over the RAW `_emit` array, so `emissionIndex` is the true
+   * authoring-time position. A malformed sibling is now LOUD (audit L5): it raises a graceful [[CombineRejected]]
+   * rather than a silent drop, so the survivors are never sparse (the first malformed item aborts the whole
+   * transition). `emitterFiberId` is the engine-supplied id of the fiber whose transition ran `_emit` — never
+   * user-supplied, so the stamp cannot be forged from inside a guard/effect expression.
    */
-  def extractEmittedEvents(effectResult: JsonLogicValue, emitterFiberId: UUID): List[EmittedEvent] =
-    extractArrayByKey(effectResult, ReservedKeys.EMIT).zipWithIndex.flatMap { case (v, i) =>
-      parseEmittedEvent(v, emitterFiberId, i)
+  def extractEmittedEvents[F[_]: Async, G[_]: Monad](
+    effectResult:   JsonLogicValue,
+    emitterFiberId: UUID
+  )(implicit lift: F ~> G): G[List[EmittedEvent]] =
+    extractArrayByKey(effectResult, ReservedKeys.EMIT).zipWithIndex.traverse { case (v, i) =>
+      parseEmittedEvent[F, G](v, emitterFiberId, i)
     }
 
-  private def parseEmittedEvent(value: JsonLogicValue, emitterFiberId: UUID, emissionIndex: Int): Option[EmittedEvent] =
+  private def parseEmittedEvent[F[_]: Async, G[_]: Monad](
+    value:          JsonLogicValue,
+    emitterFiberId: UUID,
+    emissionIndex:  Int
+  )(implicit lift: F ~> G): G[EmittedEvent] =
     value match {
       case MapValue(m) =>
         for {
-          name <- m.get(ReservedKeys.NAME).collect { case StrValue(n) => n }
-          data <- m.get(ReservedKeys.DATA)
+          name <- m.get(ReservedKeys.NAME) match {
+            case Some(StrValue(n)) => n.pure[G]
+            case Some(other)       => rejectDirective[F, G, String]("_emit", s"name must be a string, got $other")
+            case None              => rejectDirective[F, G, String]("_emit", "missing name")
+          }
+          data <- m.get(ReservedKeys.DATA) match {
+            case Some(d) => d.pure[G]
+            case None    => rejectDirective[F, G, JsonLogicValue]("_emit", "missing data")
+          }
           destination = m.get(ReservedKeys.DESTINATION).collect { case StrValue(d) => d }
         } yield EmittedEvent(name, data, destination, emitterFiberId, emissionIndex)
-      case _ => None
+      case other =>
+        rejectDirective[F, G, EmittedEvent]("_emit", s"malformed item (expected an object), got $other")
     }
 
   def extractSpawnDirectivesFromExpression(effectExpr: JsonLogicExpression): List[SpawnDirective] =
