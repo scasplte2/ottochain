@@ -16,6 +16,7 @@ import io.constellationnetwork.security.SecurityProvider
 import xyz.kd5ujc.schema.fiber.{FiberOrdinal, _}
 import xyz.kd5ujc.schema.{CalculatedState, Records}
 import xyz.kd5ujc.shared_data.fiber.FiberEngine
+import xyz.kd5ujc.shared_data.lifecycle.combine.CombineRejected
 import xyz.kd5ujc.shared_test.TestFixture
 
 import weaver.SimpleIOSuite
@@ -412,10 +413,21 @@ object RollbackCompensationSuite extends SimpleIOSuite {
         limits = ExecutionLimits(maxDepth = 10, maxGas = 100_000L)
         orchestrator = FiberEngine.make[IO](calculatedState, ordinal, limits)
 
-        result <- orchestrator.process(parentId, input, List.empty)
+        // The `_triggers` directive here is MALFORMED — `targetMachineId "child-1"` is not a UUID. Since audit
+        // L5 that is LOUD: extraction raises a graceful `CombineRejected` instead of silently dropping the
+        // trigger, so `process` surfaces the rejection (in production it is caught at `Combiner.insert` →
+        // RejectionReceipt). Either way it is a ROLLBACK — nothing is applied and the source `calculatedState`
+        // is never mutated in place. (The `_spawn` here is independently inert: it uses the wrong
+        // `initializerData` key, so no child is produced regardless.)
+        result <- orchestrator.process(parentId, input, List.empty).attempt
 
       } yield result match {
-        case TransactionResult.Aborted(_, _, _) =>
+        case Left(err) =>
+          // Loud malformed-directive rejection = full rollback: the parent is untouched, no child created.
+          expect(err.isInstanceOf[CombineRejected]) and
+          expect(calculatedState.stateMachines.get(parentId).exists(_.currentState == StateId("ready"))) and
+          expect(calculatedState.stateMachines.size == 1)
+        case Right(TransactionResult.Aborted(_, _, _)) =>
           // Parent should remain unchanged
           expect(
             calculatedState.stateMachines.get(parentId).exists(_.currentState == StateId("ready"))
@@ -423,7 +435,7 @@ object RollbackCompensationSuite extends SimpleIOSuite {
           expect(calculatedState.stateMachines.get(parentId).exists(_.sequenceNumber == FiberOrdinal.MinValue)) and
           // No children should exist
           expect(calculatedState.stateMachines.size == 1)
-        case TransactionResult.Committed(machines, _, _, _, _, _, _) =>
+        case Right(TransactionResult.Committed(machines, _, _, _, _, _, _)) =>
           // If it committed, the child's trigger might have been handled differently
           // Document the actual behavior
           expect(machines.contains(parentId))
