@@ -66,3 +66,6 @@ relays SHAs + verification; James reviews and merges.
 
 ## Feedback entry (appended to docs/agents/feedback.md)
 - sbt thin-client death under concurrent worktree use (logged).
+
+
+**PRs:** scasplte2/ottochain#212, ottobot-ai/ottochain-sdk#253

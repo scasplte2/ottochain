@@ -29,6 +29,9 @@ Milestone tags are namespaced `ws/<slug>`:
 ```
 git tag ws/onchain-v2
 ```
+**Tag on `main` after the squash-merge, not on branch commits** — this repo squash-merges,
+so branch SHAs vanish; a tag applied pre-merge dangles.
+
 The `ws/` namespace is deliberate: `release.yml` fires ONLY on `v*` tags (verified), so a `ws/*` tag
 never triggers a release.
 
