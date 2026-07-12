@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+#
+# agent-review — run one review persona over a diff.
+# Assembles docs/agents/review-personas/<persona>.md + `git diff <range>` into a
+# single prompt and pipes it to `claude -p`. Use --dry-run to print the prompt
+# for another harness instead.
+#
+# Usage:
+#   bin/agent-review <persona> [range] [--dry-run]
+#
+#   persona: consensus-safety | wire-compat | state-growth-determinism
+#            | asset-economics | ai-smells-test-integrity
+#   range:   git diff range (default: origin/main...HEAD)
+#
+# Examples:
+#   bin/agent-review consensus-safety
+#   bin/agent-review wire-compat origin/main...HEAD --dry-run
+#
+set -euo pipefail
+
+case "${1:-}" in -h|--help|"") sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
+
+PERSONA="$1"; shift || true
+RANGE="origin/main...HEAD"
+DRY=0
+for a in "$@"; do
+  case "$a" in
+    --dry-run) DRY=1 ;;
+    *) RANGE="$a" ;;
+  esac
+done
+
+ROOT="$(git rev-parse --show-toplevel)"; cd "$ROOT"
+PFILE="docs/agents/review-personas/${PERSONA}.md"
+if [ ! -f "$PFILE" ]; then
+  echo "no such persona: $PFILE" >&2
+  echo "available:" >&2
+  ls docs/agents/review-personas/ 2>/dev/null | sed 's/\.md$//; s/^/  /' >&2
+  exit 2
+fi
+
+prompt="$(mktemp)"
+{
+  echo "You are the review persona defined below. Review ONLY the diff that follows it."
+  echo "Report findings as: SEVERITY (blocker/warn/nit) — file:line — what — why — fix."
+  echo "If the diff is clean against your checklist, say so plainly. Do not flag OUT OF SCOPE items."
+  echo ""
+  echo "================ PERSONA ================"
+  cat "$PFILE"
+  echo ""
+  echo "================ DIFF ($RANGE) ================"
+  git diff "$RANGE"
+} > "$prompt"
+
+if [ "$DRY" -eq 1 ]; then
+  cat "$prompt"; rm -f "$prompt"; exit 0
+fi
+
+if command -v claude >/dev/null 2>&1; then
+  claude -p < "$prompt"
+else
+  echo "claude CLI not found — printing assembled prompt instead:" >&2
+  cat "$prompt"
+fi
+rm -f "$prompt"

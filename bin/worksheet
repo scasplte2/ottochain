@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+#
+# worksheet — start a new committed session worksheet from the template.
+# Worksheets are resumable session traces. Open one FIRST, update it at every
+# stopping point. See docs/worksheets/README.md.
+#
+# Usage:
+#   bin/worksheet <slug>
+#
+# Creates docs/worksheets/YYYY-MM-DD-<slug>.md and prints the commit-trailer and
+# tag conventions.
+#
+set -euo pipefail
+
+case "${1:-}" in -h|--help|"") sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
+
+SLUG="$1"
+ROOT="$(git rev-parse --show-toplevel)"; cd "$ROOT"
+DATE="$(date +%Y-%m-%d)"
+FILE="docs/worksheets/${DATE}-${SLUG}.md"
+TEMPLATE="docs/worksheets/TEMPLATE.md"
+
+if [ -e "$FILE" ]; then echo "already exists: $FILE" >&2; exit 1; fi
+[ -f "$TEMPLATE" ] || { echo "missing template: $TEMPLATE" >&2; exit 1; }
+
+cp "$TEMPLATE" "$FILE"
+# stamp the title line
+sed -i "1s|.*|# ${DATE} — ${SLUG}|" "$FILE"
+
+echo "created $FILE"
+echo ""
+echo "Commit trailer (add to every commit for this work):"
+echo "    Worksheet: $FILE"
+echo ""
+echo "Milestone tag (namespaced so release.yml's v* trigger never fires):"
+echo "    git tag ws/${SLUG}"
