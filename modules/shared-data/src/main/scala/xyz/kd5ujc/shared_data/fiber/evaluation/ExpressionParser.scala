@@ -19,6 +19,10 @@ import xyz.kd5ujc.schema.fiber._
  */
 object ExpressionParser {
 
+  /** Parse a canonical UUID string; malformed → `None`. Shared by every UUID-bearing parse site. */
+  private[evaluation] def parseUuid(raw: String): Option[UUID] =
+    scala.util.Try(UUID.fromString(raw)).toOption
+
   def parseStateMachineDefinitionFromExpression(
     defExpr: JsonLogicExpression
   ): Option[StateMachineDefinition] =
@@ -31,10 +35,7 @@ object ExpressionParser {
           initialState     <- OptionT.fromOption[cats.Id](parseInitialState(initialStateExpr))
           transitionsExpr  <- OptionT.fromOption[cats.Id](defMap.get(ReservedKeys.TRANSITIONS))
           transitions      <- OptionT.fromOption[cats.Id](parseTransitionsFromExpression(transitionsExpr))
-          metadata = defMap.get(ReservedKeys.METADATA).flatMap {
-            case ConstExpression(v) => v.some
-            case _                  => none
-          }
+          metadata = defMap.get(ReservedKeys.METADATA).collect { case ConstExpression(v) => v }
         } yield StateMachineDefinition(states, initialState, transitions, metadata)).value
 
       case ConstExpression(v) =>
@@ -46,12 +47,8 @@ object ExpressionParser {
   private def parseInitialState(expr: JsonLogicExpression): Option[StateId] =
     expr match {
       case ConstExpression(StrValue(s)) => StateId(s).some
-      case MapExpression(m) =>
-        m.get(ReservedKeys.VALUE).flatMap {
-          case ConstExpression(StrValue(s)) => StateId(s).some
-          case _                            => none
-        }
-      case _ => none
+      case MapExpression(m) => m.get(ReservedKeys.VALUE).collect { case ConstExpression(StrValue(s)) => StateId(s) }
+      case _                => none
     }
 
   private def parseStatesFromExpression(
@@ -65,15 +62,9 @@ object ExpressionParser {
               case MapExpression(stateMap) =>
                 val isFinal = stateMap
                   .get(ReservedKeys.IS_FINAL)
-                  .flatMap {
-                    case ConstExpression(BoolValue(b)) => b.some
-                    case _                             => none
-                  }
+                  .collect { case ConstExpression(BoolValue(b)) => b }
                   .getOrElse(false)
-                val metadata = stateMap.get(ReservedKeys.METADATA).flatMap {
-                  case ConstExpression(v) => v.some
-                  case _                  => none
-                }
+                val metadata = stateMap.get(ReservedKeys.METADATA).collect { case ConstExpression(v) => v }
                 (StateId(stateId) -> State(
                   id = StateId(stateId),
                   isFinal = isFinal,
@@ -102,24 +93,16 @@ object ExpressionParser {
               eventName     <- OptionT.fromOption[cats.Id](parseEventName(eventNameExpr))
               guard         <- OptionT.fromOption[cats.Id](transMap.get(ReservedKeys.GUARD))
               effect        <- OptionT.fromOption[cats.Id](transMap.get(ReservedKeys.EFFECT))
-            } yield {
-              val dependencies = transMap
+              dependencies = transMap
                 .get(ReservedKeys.DEPENDENCIES)
-                .flatMap {
-                  case ArrayExpression(deps) =>
-                    deps
-                      .flatMap {
-                        case ConstExpression(StrValue(id)) => scala.util.Try(UUID.fromString(id)).toOption
-                        case _                             => none
-                      }
-                      .toSet
-                      .some
-                  case _ => none
+                .collect { case ArrayExpression(deps) =>
+                  deps.flatMap {
+                    case ConstExpression(StrValue(id)) => parseUuid(id)
+                    case _                             => none
+                  }.toSet
                 }
                 .getOrElse(Set.empty)
-
-              Transition(from, to, eventName, guard, effect, dependencies)
-            }).value
+            } yield Transition(from, to, eventName, guard, effect, dependencies)).value
           case _ => none
         }
       case _ => none
@@ -128,23 +111,15 @@ object ExpressionParser {
   private def parseStateId(expr: JsonLogicExpression): Option[StateId] =
     expr match {
       case ConstExpression(StrValue(s)) => StateId(s).some
-      case MapExpression(m) =>
-        m.get(ReservedKeys.VALUE).flatMap {
-          case ConstExpression(StrValue(s)) => StateId(s).some
-          case _                            => none
-        }
-      case _ => none
+      case MapExpression(m) => m.get(ReservedKeys.VALUE).collect { case ConstExpression(StrValue(s)) => StateId(s) }
+      case _                => none
     }
 
   private def parseEventName(expr: JsonLogicExpression): Option[String] =
     expr match {
       case ConstExpression(StrValue(et)) => et.some
-      case MapExpression(m) =>
-        m.get(ReservedKeys.VALUE).flatMap {
-          case ConstExpression(StrValue(et)) => et.some
-          case _                             => none
-        }
-      case _ => none
+      case MapExpression(m) => m.get(ReservedKeys.VALUE).collect { case ConstExpression(StrValue(et)) => et }
+      case _                => none
     }
 
   def parseStateMachineDefinition(defValue: JsonLogicValue): Option[StateMachineDefinition] =
@@ -226,26 +201,23 @@ object ExpressionParser {
               eventType      <- OptionT.fromOption[cats.Id](parseEventNameValue(eventTypeValue))
               guardValue     <- OptionT.fromOption[cats.Id](transMap.get(ReservedKeys.GUARD))
               effectValue    <- OptionT.fromOption[cats.Id](transMap.get(ReservedKeys.EFFECT))
-            } yield {
-              val dependencies = transMap
+              dependencies = transMap
                 .get(ReservedKeys.DEPENDENCIES)
                 .collect { case ArrayValue(deps) =>
                   deps.flatMap {
-                    case StrValue(id) => scala.util.Try(UUID.fromString(id)).toOption
+                    case StrValue(id) => parseUuid(id)
                     case _            => none
                   }.toSet
                 }
                 .getOrElse(Set.empty)
-
-              Transition(
-                from = from,
-                to = to,
-                eventName = eventType,
-                guard = valueToExpression(guardValue),
-                effect = valueToExpression(effectValue),
-                dependencies = dependencies
-              )
-            }).value
+            } yield Transition(
+              from = from,
+              to = to,
+              eventName = eventType,
+              guard = valueToExpression(guardValue),
+              effect = valueToExpression(effectValue),
+              dependencies = dependencies
+            )).value
           case _ => none
         }
       case _ => none
