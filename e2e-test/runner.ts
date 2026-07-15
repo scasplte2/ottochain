@@ -19,6 +19,10 @@ import sendSignedUpdate from './lib/sendDataTransaction.ts';
 import getMetagraphEnv from './lib/metagraphEnv.ts';
 import type { StatesMap, Wallets, GeneratorFn, ValidatorFn } from './lib/types.ts';
 import { HttpClient, OttoMetagraphClient } from '@ottochain/sdk';
+// JCS canonicalizer (serializeJcs ∘ dropNullFields) — the chain's content-hash rule. Used by
+// assertStateProof to verify Merkle-Patricia inclusion proofs client-side (light-client check).
+import { canonicalize } from '@constellation-network/metagraph-sdk';
+import { createHash } from 'crypto';
 // WIRE record types (from `/core` = ottochain/types) — the exact shapes the client's typed getters
 // return. NOT the root's same-named exports, which resolve to the generated protobuf types.
 import type { StateMachineFiberRecord, ScriptFiberRecord, RegistryEntry } from '@ottochain/sdk/core';
@@ -607,6 +611,10 @@ interface TestStep {
   minSequenceNumber?: number;
   /** assertAsset: the asset instance to inspect. */
   assetId?: string;
+  /** assertStateProof: the projected `stateData` field to prove (required for that action). */
+  field?: string;
+  /** assertStateProof: assert the proven projected field deep-equals this value. */
+  expectedFieldValue?: unknown;
   /** assertAsset: expected custody holder, e.g. { Fiber: "retailer" } or { Wallet: "carol" }. */
   expectedHolder?: HolderRef;
   /** assertAsset: expected `amount` on the asset record. */
@@ -815,6 +823,89 @@ async function runFlow(
               return '?';
             })();
         sl(` \x1b[32massertAsset ${assetName} → ${holderLabel}\x1b[0m ×${Number(rec.amount)}`);
+        return;
+      }
+
+      // assertStateProof: the LIGHT-CLIENT audit check. Fetches the committed state-proof for a
+      // fiber (`/state-machines/{id}/state-proof?field=`) and verifies the Merkle-Patricia
+      // inclusion proof CLIENT-SIDE against `mptRoot`, whose combined hash IS the snapshot's
+      // consensus-signed `calculatedStateProof` — no trust in the serving node. The fold mirrors
+      // metakit's MerklePatriciaVerifier exactly: walk the witness ROOT-first (response order is
+      // leaf-first), each node's digest = sha256(typePrefix ++ utf8(JCS(contents))) — the SUBTYPE (contents-only) encoding — with
+      // prefixes leaf=0x00 / branch=0x01 / extension=0x02; a Branch consumes one path nibble
+      // via pathsDigest, an Extension consumes its shared nibbles; the terminal Leaf must match
+      // the remaining path and bind dataDigest == sha256(JCS(record)). The trie path of a
+      // committed key is hex(utf8("fiber/<id>")) (CommitKey.toHex).
+      // Step fields: `fiber`, `field` (required), optional `expectedFieldValue`.
+      if (step.action === 'assertStateProof') {
+        const cid = resolveFiber(step.fiber);
+        const who = step.fiber ?? cid.slice(0, 8);
+        const field = step.field as string;
+        if (!field) throw new Error('assertStateProof requires a `field` (projected stateData field)');
+        sw(`\n      ⏳ assertStateProof ${who}.${field}`);
+        const client = new OttoMetagraphClient({ ml0Url: ml0Urls[0] });
+        // Poll: the committed read trails GL0 finalization by a snapshot or two.
+        let proofResp: Awaited<ReturnType<typeof client.getStateMachineStateProof>> | null = null;
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+          try {
+            const r = await client.getStateMachineStateProof(cid, field);
+            if (r?.record && r.fieldValue !== undefined && r.fieldValue !== null) { proofResp = r; break; }
+          } catch { /* 404 until committed */ }
+          sw('.');
+          await new Promise((res) => setTimeout(res, retryDelayMs));
+        }
+        if (!proofResp) throw new Error(`assertStateProof ${who}: no committed state-proof with field "${field}"`);
+        const jcsSha = (value: unknown, prefix?: number): string => {
+          const h = createHash('sha256');
+          if (prefix !== undefined) h.update(Buffer.from([prefix]));
+          return h.update(Buffer.from(canonicalize(value), 'utf8')).digest('hex');
+        };
+        const keyHex = Buffer.from(`fiber/${cid}`, 'utf8').toString('hex');
+        const rootHex = String(proofResp.mptRoot).replace(/^0x/, '').toLowerCase();
+        const proof = proofResp.proof as {
+          path: string;
+          witness: Array<{ type: string; contents: Record<string, unknown> }>;
+        };
+        const fail = (why: string): never => {
+          throw new Error(
+            `assertStateProof ${who}: inclusion proof REJECTED (${why}) against mptRoot ${rootHex.slice(0, 16)}… (ordinal ${proofResp.ordinal})`
+          );
+        };
+        if (proof.path.toLowerCase() !== keyHex) fail(`trie path != hex(utf8("fiber/${cid}"))`);
+        // Fold root → leaf (metakit MerklePatriciaVerifier semantics).
+        let digest = rootHex;
+        let path = proof.path.toLowerCase();
+        const nodes = [...proof.witness].reverse();
+        for (const [ni, node] of nodes.entries()) {
+          const isLast = ni === nodes.length - 1;
+          if (node.type === 'Branch') {
+            if (jcsSha(node.contents, 1) !== digest) fail(`branch commitment mismatch at depth ${ni}`);
+            const child = (node.contents.pathsDigest as Record<string, string>)[path[0]];
+            if (!child) fail(`branch has no child at nibble '${path[0]}' (depth ${ni})`);
+            digest = child.toLowerCase();
+            path = path.slice(1);
+          } else if (node.type === 'Extension') {
+            if (jcsSha(node.contents, 2) !== digest) fail(`extension commitment mismatch at depth ${ni}`);
+            const shared = String(node.contents.shared ?? '');
+            path = path.slice(shared.length);
+            digest = String(node.contents.childDigest).toLowerCase();
+          } else if (node.type === 'Leaf') {
+            if (!isLast) fail('leaf before end of witness');
+            if (jcsSha(node.contents, 0) !== digest) fail('leaf commitment mismatch');
+            if (String(node.contents.remaining).toLowerCase() !== path) fail('leaf remaining-path mismatch');
+            if (String(node.contents.dataDigest).toLowerCase() !== jcsSha(proofResp.record))
+              fail('leaf dataDigest != sha256(JCS(record))');
+          } else fail(`unknown witness node type '${node.type}'`);
+        }
+        if (nodes[nodes.length - 1]?.type !== 'Leaf') fail('witness does not terminate in a leaf');
+        if (step.expectedFieldValue !== undefined && !deepEqual(proofResp.fieldValue, step.expectedFieldValue))
+          throw new Error(
+            `assertStateProof ${who}: field "${field}" mismatch — got ${JSON.stringify(proofResp.fieldValue)} want ${JSON.stringify(step.expectedFieldValue)}`
+          );
+        sw(' ✓');
+        sl(
+          ` \x1b[32massertStateProof ${who}.${field}\x1b[0m verified vs committedRoot ${String(proofResp.committedRoot).slice(0, 12)}… @ ordinal ${proofResp.ordinal}`
+        );
         return;
       }
 
