@@ -1,0 +1,159 @@
+{
+  "states": {
+    "draft": {
+      "id": "draft",
+      "isFinal": false,
+      "metadata": null
+    },
+    "authorized": {
+      "id": "authorized",
+      "isFinal": true,
+      "metadata": null
+    }
+  },
+  "initialState": "draft",
+  "transitions": [
+    {
+      "from": "draft",
+      "to": "authorized",
+      "eventName": "authorize",
+      "guard": {
+        "and": [
+          {
+            "groth16_verify": [
+              "0x000a4493cdc5aa166c3eb1d12cd66c0ee2838750a5ca4e9eef6d0fec78fd9d65",
+              {
+                "var": "event.publicValues"
+              },
+              {
+                "var": "event.proof"
+              }
+            ]
+          },
+          {
+            "===": [
+              {
+                "cat": [
+                  "0x",
+                  {
+                    "substr": [
+                      {
+                        "var": "event.publicValues"
+                      },
+                      2,
+                      64
+                    ]
+                  }
+                ]
+              },
+              "0x3e5f989d90c975bb8e24da28e41b3483cabfabc7e87286701bca2bf935118805"
+            ]
+          },
+          {
+            "===": [
+              {
+                "cat": [
+                  "0x",
+                  {
+                    "substr": [
+                      {
+                        "var": "event.publicValues"
+                      },
+                      130,
+                      64
+                    ]
+                  }
+                ]
+              },
+              "0x6273151f959616268004b58dbb21e5c851b7b8d04498b4aabee12291d22fc034"
+            ]
+          },
+          {
+            "===": [
+              {
+                "var": "event.cosignMessage"
+              },
+              {
+                "cat": [
+                  "0x",
+                  {
+                    "substr": [
+                      {
+                        "var": "event.publicValues"
+                      },
+                      2
+                    ]
+                  },
+                  {
+                    "substr": [
+                      {
+                        "var": "state.rxId"
+                      },
+                      2
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "sigma_verify": [
+              {
+                "type": "threshold",
+                "k": 2,
+                "children": [
+                  {
+                    "type": "dlog",
+                    "pk": "0x2e6a7da32d2b9b0a6a89e8f3c85325fd19a4c8fdb38bbcfd63351270c4dc2f461070f882311870b8f3a2a451f0aaec568445374a329601e770ca3b1036cde2c0"
+                  },
+                  {
+                    "type": "dlog",
+                    "pk": "0x18e7aab6f036bcef2f41cb39a6427f57d3049bf917ccb69f861af37128e580462faa5f0c84e00835541a2ca99135752ca47a9dd21a22a8d43cc9b8905df7cb21"
+                  },
+                  {
+                    "type": "dlog",
+                    "pk": "0x1d82c48853a0449dbb12f55b1c843b217cf093067aa7438012e90acb6612f897288779aaf9c058122e772d7386ff29a06f2e1cf6b4e1328a8e9d41e7960847dc"
+                  }
+                ]
+              },
+              {
+                "var": "event.cosignProof"
+              },
+              {
+                "var": "event.cosignMessage"
+              }
+            ]
+          }
+        ]
+      },
+      "effect": {
+        "merge": [
+          {
+            "var": "state"
+          },
+          {
+            "status": "authorized",
+            "priorAuthDataHash": {
+              "cat": [
+                "0x",
+                {
+                  "substr": [
+                    {
+                      "var": "event.publicValues"
+                    },
+                    66,
+                    64
+                  ]
+                }
+              ]
+            },
+            "authorizedAt": {
+              "var": "$ordinal"
+            }
+          }
+        ]
+      },
+      "dependencies": []
+    }
+  ]
+}

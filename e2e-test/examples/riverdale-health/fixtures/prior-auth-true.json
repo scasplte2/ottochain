@@ -1,0 +1,44 @@
+{
+  "scheme": "groth16-bn254",
+  "vkey": "0x000a4493cdc5aa166c3eb1d12cd66c0ee2838750a5ca4e9eef6d0fec78fd9d65",
+  "publicValues": "0x3e5f989d90c975bb8e24da28e41b3483cabfabc7e87286701bca2bf935118805024fa4cf66ce118876624b244d6e81abe956b1a1ce433eed97e8fb4d8ba666ea6273151f959616268004b58dbb21e5c851b7b8d04498b4aabee12291d22fc0340000000000000000000000000000000000000000000000000000000000000001",
+  "proof": "0x4388a21c0000000000000000000000000000000000000000000000000000000000000000002f850ee998974d6cc00e50cd0814b098c05bfade466d28573240d057f25352000000000000000000000000000000000000000000000000000000000000000018cc48fec4b40d9157cd61574184e9cec943a034d2e95b204d26a08461a00eaa1c1620be13157bf1a1854089c11a6d8b921a3bdfe338e601537623af8f3dae641f0f364d586fe3b5dbb14dba9a0543d86c5725e201251d8a6ea3dbba31642ac51cffbd136bd15154a021a3ef62e5dc779b310908709771eb98e0aae2b2fba32e151da0f78144043fbfccebede1ceaa0078271610e5d7a80d726722c77c8ac0b029dc8bd8eaa077502a66454d0db9bc6d4e8e90bdc82866a228f0ada99229f61e096b3c148bef3a5a886e9e7596dd2078ef7162bfbd3702298a5461d38a12d4ec2566a00dab2752cc9d0d4e7f53c7ff6e65de032b0e8756d74e92688adcdbead4",
+  "expr": {
+    "and": [
+      {
+        ">=": [
+          {
+            "var": "failedFirstLine"
+          },
+          2
+        ]
+      },
+      {
+        "===": [
+          {
+            "var": "activeOpioidCount"
+          },
+          0
+        ]
+      }
+    ]
+  },
+  "data": {
+    "activeOpioidCount": 0,
+    "failedFirstLine": 2,
+    "treatments": [
+      {
+        "date": "2026-05-02",
+        "drug": "gabapentin",
+        "outcome": "failed",
+        "type": "treatment-outcome"
+      },
+      {
+        "date": "2026-06-10",
+        "drug": "duloxetine",
+        "outcome": "failed",
+        "type": "treatment-outcome"
+      }
+    ]
+  }
+}
