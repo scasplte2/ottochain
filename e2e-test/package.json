@@ -15,8 +15,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@constellation-network/metagraph-sdk": "1.8.0-rc.7",
-    "@ottochain/sdk": "^2.6.0",
+    "@ottochain/sdk": "^2.7.0",
     "commander": "13.1.0",
     "dotenv": "^16.4.7"
   },
