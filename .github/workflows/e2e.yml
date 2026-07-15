@@ -16,11 +16,12 @@ on:
         type: string
 
 jobs:
-  # Select which e2e lanes run. The 5 fast/medium lanes gate every PR; the heavy riverdale-economy
-  # lane (full 6-party economy, REAL asset custody, ~30-55m) is included ONLY on the nightly
-  # schedule, on push to main (post-merge safety net), on manual dispatch, or when a PR carries the
-  # 'e2e-riverdale' label (opt-in for asset / multi-fiber changes). This keeps PR feedback fast
-  # without letting the heavy path drift between merges.
+  # Select which e2e lanes run. The 5 fast/medium lanes gate every PR; the heavy gated lanes —
+  # riverdale-economy (full 6-party economy, REAL asset custody, ~30-55m) and riverdale-health
+  # (ZK medical privacy: groth16_verify/sigma_verify THRESHOLD/ring-nullifier guards, ~40m) — are
+  # included ONLY on the nightly schedule, on push to main (post-merge safety net), on manual
+  # dispatch, or when a PR carries their opt-in label ('e2e-riverdale' / 'e2e-health'). This keeps
+  # PR feedback fast without letting the heavy paths drift between merges.
   prepare:
     name: Select e2e lanes
     runs-on: ubuntu-latest
@@ -32,6 +33,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           # Empty/false on non-PR events; the event check below covers schedule/push/dispatch.
           RIVERDALE_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'e2e-riverdale') }}
+          HEALTH_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'e2e-health') }}
         run: |
           # Canonical lane set. Per-lane rationale (kept from the previous static matrix):
           #   core           light examples, full parallelism — the primary green signal.
@@ -52,16 +54,24 @@ jobs:
             {"name":"sigma-mixer","filter":"--only sigma-mixer","concurrency":"2","ordinalThreshold":"10","maxResubmits":"4","wallets":"","timeout":25},
             {"name":"rule110","filter":"--only rule110","concurrency":"3","ordinalThreshold":"10","maxResubmits":"4","wallets":"","timeout":30},
             {"name":"staked-oracle","filter":"--only staked-oracle-pool","concurrency":"1","ordinalThreshold":"30","maxResubmits":"1","wallets":"alice,bob,carol","timeout":45},
-            {"name":"riverdale-economy","filter":"--only riverdale-economy","concurrency":"1","ordinalThreshold":"30","maxResubmits":"4","wallets":"alice,bob,carol,dave,erin,frank","timeout":55}
+            {"name":"riverdale-economy","filter":"--only riverdale-economy","concurrency":"1","ordinalThreshold":"30","maxResubmits":"4","wallets":"alice,bob,carol,dave,erin,frank","timeout":55},
+            {"name":"riverdale-health","filter":"--only riverdale-health","concurrency":"1","ordinalThreshold":"30","maxResubmits":"4","wallets":"dr-adams,patient-blake,pharmacy-corner,pharmacy-mainst,auditor-dea","timeout":40}
           ]
           JSON
           )"
-          if [ "$EVENT_NAME" = "schedule" ] || [ "$EVENT_NAME" = "push" ] || [ "$EVENT_NAME" = "workflow_dispatch" ] || [ "$RIVERDALE_LABEL" = "true" ]; then
+          if [ "$EVENT_NAME" = "schedule" ] || [ "$EVENT_NAME" = "push" ] || [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             LANES="$(echo "$ALL" | jq -c '.')"
-            echo "Including the heavy riverdale-economy lane (event=$EVENT_NAME, label=$RIVERDALE_LABEL)."
+            echo "Including the heavy gated lanes (event=$EVENT_NAME): riverdale-economy + riverdale-health."
           else
-            LANES="$(echo "$ALL" | jq -c '[.[] | select(.name != "riverdale-economy")]')"
-            echo "PR run: 5 fast lanes only — riverdale-economy is gated (add the 'e2e-riverdale' label to include it)."
+            # PR run: gated lanes join only via their opt-in labels.
+            LANES="$(echo "$ALL" | jq -c \
+              --argjson riv "${RIVERDALE_LABEL:-false}" \
+              --argjson health "${HEALTH_LABEL:-false}" \
+              '[.[] | select(
+                 (.name == "riverdale-economy" and ($riv | not)) or
+                 (.name == "riverdale-health" and ($health | not))
+                 | not)]')"
+            echo "PR run: fast lanes + gated lanes by label (e2e-riverdale=$RIVERDALE_LABEL, e2e-health=$HEALTH_LABEL)."
           fi
           echo "lanes=$LANES" >>"$GITHUB_OUTPUT"
           echo "Selected lanes:"; echo "$LANES" | jq -r '.[].name'
