@@ -59,6 +59,27 @@ jobs:
           ]
           JSON
           )"
+          # ── SOP GUARD (enforced, not advisory) ─────────────────────────────────
+          # ADDING A NEW E2E LANE? Its example dir MUST also be added to core's
+          # --exclude list above. The core lane auto-discovers EVERY example not
+          # excluded and runs it with the default single wallet and full
+          # parallelism — a lane that needs its own wallets/limits/label will
+          # fail there (e.g. riverdale-health: 'signer patient-blake is not in
+          # the --wallets set', run 29463754811). This check fails the workflow
+          # at selection time so the mistake never reaches a cluster.
+          CORE_EXCLUDE="$(echo "$ALL" | jq -r '.[] | select(.name=="core") | .filter' | sed 's/^--exclude //')"
+          MISSING=""
+          for dir in $(echo "$ALL" | jq -r '.[] | select(.name!="core") | .filter' | grep -oP '(?<=--only )\S+'); do
+            case ",${CORE_EXCLUDE}," in
+              *",${dir},"*) ;;
+              *) MISSING="${MISSING} ${dir}" ;;
+            esac
+          done
+          if [ -n "$MISSING" ]; then
+            echo "::error::Lane example dir(s)${MISSING} are missing from the core lane's --exclude list. Every dedicated lane's example must be excluded from core (see SOP GUARD comment in e2e.yml)."
+            exit 1
+          fi
+          echo "SOP guard: all dedicated lanes are excluded from core."
           if [ "$EVENT_NAME" = "schedule" ] || [ "$EVENT_NAME" = "push" ] || [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             LANES="$(echo "$ALL" | jq -c '.')"
             echo "Including the heavy gated lanes (event=$EVENT_NAME): riverdale-economy + riverdale-health."
