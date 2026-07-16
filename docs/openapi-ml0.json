@@ -993,7 +993,8 @@
           "usedNonces",
           "fiberCommits",
           "assetCommits",
-          "registryCommits"
+          "registryCommits",
+          "nullifiers"
         ],
         "properties" : {
           "stateMachines" : {
@@ -1021,6 +1022,9 @@
             "$ref" : "#/components/schemas/Map_V"
           },
           "registryCommits" : {
+            "$ref" : "#/components/schemas/Map_V"
+          },
+          "nullifiers" : {
             "$ref" : "#/components/schemas/Map_V"
           }
         }
