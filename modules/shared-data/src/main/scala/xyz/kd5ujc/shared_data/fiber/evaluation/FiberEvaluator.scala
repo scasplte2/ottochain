@@ -103,9 +103,9 @@ object FiberEvaluator {
       ): G[FiberResult] = {
         val input = FiberInput.Transition(eventName, payload)
 
-        policyShortCircuit(fiber, caller) match {
-          case Some(reason) => reason.pureOutcome[G]
-          case None =>
+        policyShortCircuit(fiber, caller)
+          .map(_.pureOutcome[G])
+          .getOrElse(
             fiber.definition.transitionMap
               .get((fiber.currentState, eventName))
               .fold(
@@ -113,7 +113,7 @@ object FiberEvaluator {
               )(
                 tryTransitions(fiber, input, proofs, _, attemptedGuards = 0, caller)
               )
-        }
+          )
       }
 
       /**
@@ -267,18 +267,19 @@ object FiberEvaluator {
       ): G[FiberResult] =
         fiber.stateData match {
           case currentMap: MapValue =>
-            evaluateEffectExpression(transition, contextData).flatMap {
-              case Left(reason) => reason.pureOutcome[G]
-              case Right(effectResult) =>
+            evaluateEffectExpression(transition, contextData).flatMap(
+              _.fold(
+                _.pureOutcome[G],
                 processEffectResult(
                   fiber.fiberId,
                   currentMap,
                   transition,
-                  effectResult,
+                  _,
                   contextData,
                   fiber.definition.policy.dials.flatMap(_.allowedEffects)
                 )
-            }
+              )
+            )
 
           case _ =>
             FailureReason.EvaluationError(GasExhaustionPhase.Effect, "State data must be MapValue").pureOutcome[G]
@@ -301,11 +302,10 @@ object FiberEvaluator {
         for {
           limits    <- ExecutionOps.askLimits[G]
           sizeCheck <- validateStateSize(effectResult, limits).liftTo[G]
-          result <- sizeCheck match {
-            case Left(reason) => reason.pureOutcome[G]
-            case Right(_) =>
-              buildSuccessOutcome(fiberId, currentMap, transition, effectResult, contextData, allowedEffects)
-          }
+          result <- sizeCheck.fold(
+            _.pureOutcome[G],
+            _ => buildSuccessOutcome(fiberId, currentMap, transition, effectResult, contextData, allowedEffects)
+          )
         } yield result
 
       private def validateStateSize(
@@ -379,20 +379,26 @@ object FiberEvaluator {
                     .GasExhaustedFailure(totalGasUsed, limits.maxGas, GasExhaustionPhase.Effect)
                     .pureOutcome[G]
                 else
-                  StateMerger.make[F].mergeEffectIntoState(currentMap, effectResult).liftTo[G].map[FiberResult] {
-                    case Right(newStateData) =>
-                      FiberResult.Success(
-                        newStateData = newStateData,
-                        newStateId = Some(transition.to),
-                        triggers = allTriggers,
-                        spawns = spawnMachines,
-                        returnValue = None,
-                        emittedEvents = emittedEvents,
-                        assetTransfers = assetTransfers,
-                        dependencyMutations = depMutations
+                  StateMerger
+                    .make[F]
+                    .mergeEffectIntoState(currentMap, effectResult)
+                    .liftTo[G]
+                    .map(
+                      _.fold[FiberResult](
+                        _.asOutcome,
+                        newStateData =>
+                          FiberResult.Success(
+                            newStateData = newStateData,
+                            newStateId = Some(transition.to),
+                            triggers = allTriggers,
+                            spawns = spawnMachines,
+                            returnValue = None,
+                            emittedEvents = emittedEvents,
+                            assetTransfers = assetTransfers,
+                            dependencyMutations = depMutations
+                          )
                       )
-                    case Left(reason) => reason.asOutcome
-                  }
+                    )
             }
         } yield result
 

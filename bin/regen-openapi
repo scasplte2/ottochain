@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+#
+# regen-openapi — regenerate the OpenAPI contracts and report drift.
+# Mirrors the ci.yml code-quality drift gate. On a same-repo PR, CI auto-commits
+# the regen; locally you commit it yourself. A no-op diff on main is expected.
+#
+# Usage:
+#   bin/regen-openapi
+#
+# Writes: docs/openapi-ml0.{json,yaml}, docs/openapi-dl1.{json,yaml}
+#
+set -euo pipefail
+
+if ! command -v sbt >/dev/null 2>&1 && [ -f "$HOME/.sdkman/bin/sdkman-init.sh" ]; then
+  set +e; source "$HOME/.sdkman/bin/sdkman-init.sh" >/dev/null 2>&1; set -e
+fi
+
+case "${1:-}" in -h|--help) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
+
+ROOT="$(git rev-parse --show-toplevel)"; cd "$ROOT"
+
+echo "==> GenerateOpenApi docs"
+sbt "currencyL0/runMain xyz.kd5ujc.metagraph_l0.openapi.GenerateOpenApi docs"
+
+ml0=$(grep -oE '"/[^"]*": \{' docs/openapi-ml0.json 2>/dev/null | wc -l | tr -d ' ')
+dl1=$(grep -oE '"/[^"]*": \{' docs/openapi-dl1.json 2>/dev/null | wc -l | tr -d ' ')
+echo ""
+echo "endpoints (approx path count):  ML0=$ml0  DL1=$dl1"
+echo "(OpenApiDocSuite pins the exact counts — update it when adding endpoints)"
+echo ""
+
+if git diff --exit-code -- docs/openapi-*; then
+  echo "no drift — contract matches committed docs"
+else
+  echo ""
+  echo "DRIFT: the regenerated contract differs. If you changed routes/DTOs, commit it:"
+  echo "    git add docs/openapi-* && git commit -m 'docs(openapi): regen contract'"
+fi

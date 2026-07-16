@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+#
+# preflight — run every local gate CI will run, in CI's order, before you push.
+# A PR is not worth opening until this exits 0. See docs/agents/tools.md.
+#
+# Usage:
+#   bin/preflight [--fast]
+#
+#   --fast   test sharedData only (quick loop). Default: full `sbt test`.
+#
+# Gates, in order (mirrors .github/workflows/{ci,e2e}.yml):
+#   1. scalafmtCheckAll + scalafixAll --check   (format/lint, check-mode — no cache lies)
+#   2. tests                                     (--fast: sharedData; default: all modules)
+#   3. OpenAPI regen + git diff --exit-code      (drift gate; leaves the diff, does NOT restore)
+#   4. commitlint over origin/main..HEAD         (header<=72, lowercase subject, type-enum)
+#   5. e2e-test tsc --noEmit                      (skipped with a warning if node_modules absent)
+#
+set -euo pipefail
+
+if ! command -v sbt >/dev/null 2>&1 && [ -f "$HOME/.sdkman/bin/sdkman-init.sh" ]; then
+  set +e; source "$HOME/.sdkman/bin/sdkman-init.sh" >/dev/null 2>&1; set -e
+fi
+
+FAST=0
+for a in "$@"; do
+  case "$a" in
+    --fast) FAST=1 ;;
+    -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "unknown arg: $a (try --help)" >&2; exit 2 ;;
+  esac
+done
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+declare -a NAMES=() RESULTS=()
+record() { NAMES+=("$1"); RESULTS+=("$2"); }
+step()   { printf '\n\033[1m==> %s\033[0m\n' "$1"; }
+
+# ---- 1. format + lint (check-mode) --------------------------------------------
+step "1/5 scalafmtCheckAll + scalafixAll --check"
+if sbt "scalafmtCheckAll" "scalafixAll --check"; then
+  record "format+lint" PASS
+else
+  record "format+lint" FAIL
+fi
+
+# ---- 2. tests -----------------------------------------------------------------
+if [ "$FAST" -eq 1 ]; then
+  step "2/5 sharedData/test (--fast)"
+  TESTCMD='sharedData/test'
+else
+  step "2/5 sbt test (all modules)"
+  TESTCMD='test'
+fi
+if sbt "$TESTCMD"; then
+  record "tests" PASS
+else
+  record "tests" FAIL
+fi
+
+# ---- 3. OpenAPI drift gate -----------------------------------------------------
+step "3/5 OpenAPI regen + drift check"
+if sbt "currencyL0/runMain xyz.kd5ujc.metagraph_l0.openapi.GenerateOpenApi docs"; then
+  if git diff --exit-code -- docs/openapi-*; then
+    record "openapi-drift" PASS
+  else
+    echo ""
+    echo "OpenAPI contract drifted. The regenerated docs/openapi-* differ from what is committed."
+    echo "Commit the regenerated files (they ARE the new contract):"
+    echo "    git add docs/openapi-* && git commit -m 'docs(openapi): regen contract'"
+    echo "If you did NOT change any route/DTO, investigate before committing — this is a real diff."
+    record "openapi-drift" FAIL
+  fi
+else
+  record "openapi-drift" FAIL
+fi
+
+# ---- 4. commitlint over origin/main..HEAD -------------------------------------
+step "4/5 commitlint (origin/main..HEAD)"
+commitlint_bash() {
+  # dependency-free mirror of .githooks/pre-push + .commitlintrc.json rules.
+  local max_len=72 cfg=".commitlintrc.json" bad=0 sha subject short type first
+  if [ -f "$cfg" ]; then
+    local n; n=$(grep 'header-max-length' "$cfg" | grep -oE '[0-9]+' | tail -1)
+    case "$n" in ''|*[!0-9]*) : ;; *) max_len=$n ;; esac
+  fi
+  local allowed=" feat fix docs style refactor perf test build ci chore revert "
+  for sha in $(git rev-list origin/main..HEAD); do
+    [ "$(git rev-list --parents -n1 "$sha" | wc -w)" -gt 2 ] && continue  # skip merges
+    subject=$(git log -1 --format=%s "$sha"); short=$(git log -1 --format=%h "$sha")
+    case "$subject" in Merge\ *|Revert\ *|fixup!\ *|squash!\ *|Release-As:*) continue ;; esac
+    if [ "${#subject}" -gt "$max_len" ]; then
+      printf '  \033[31mx\033[0m %s header %d>%d: %s\n' "$short" "${#subject}" "$max_len" "$subject"; bad=1
+    fi
+    if printf '%s' "$subject" | grep -qE '^[A-Za-z]+(\([^)]+\))?!?: .+'; then
+      type=$(printf '%s' "$subject" | sed -E 's/^([A-Za-z]+).*/\1/' | tr '[:upper:]' '[:lower:]')
+      printf '%s' "$allowed" | grep -q " $type " || { printf '  \033[31mx\033[0m %s bad type: %s\n' "$short" "$type"; bad=1; }
+      first=$(printf '%s' "$subject" | sed -E 's/^[A-Za-z]+(\([^)]+\))?!?: (.).*/\2/')
+      case "$first" in [A-Z]) printf '  \033[31mx\033[0m %s subject must start lower-case: %s\n' "$short" "$subject"; bad=1 ;; esac
+    else
+      printf '  \033[31mx\033[0m %s not "type(scope): subject": %s\n' "$short" "$subject"; bad=1
+    fi
+    case "$subject" in *.) printf '  \033[31mx\033[0m %s subject ends with a period\n' "$short"; bad=1 ;; esac
+  done
+  return $bad
+}
+CL_OK=1
+npx_rc=1
+if timeout 40 npx --yes @commitlint/cli --version >/dev/null 2>&1; then
+  # commitlint reads the range from git via --from/--to; stdin unused.
+  timeout 90 npx --yes @commitlint/cli --config .commitlintrc.json --from origin/main --to HEAD
+  npx_rc=$?
+fi
+# On ANY npx failure (a real violation OR a tooling/offline/missing-config-conventional error) fall
+# back to the dependency-free bash mirror, which is authoritative. A real violation fails both.
+if [ "$npx_rc" -ne 0 ]; then
+  commitlint_bash || CL_OK=0
+fi
+if [ "$CL_OK" -eq 1 ]; then record "commitlint" PASS; else record "commitlint" FAIL; fi
+
+# ---- 5. e2e tsc ----------------------------------------------------------------
+step "5/5 e2e-test tsc --noEmit"
+if [ -d e2e-test/node_modules ]; then
+  if ( cd e2e-test && npx tsc --noEmit ); then record "e2e-tsc" PASS; else record "e2e-tsc" FAIL; fi
+else
+  echo "SKIP: e2e-test/node_modules absent (run: cd e2e-test && npm ci)"
+  record "e2e-tsc" SKIP
+fi
+
+# ---- summary -------------------------------------------------------------------
+printf '\n\033[1m==== preflight summary ====\033[0m\n'
+fail=0
+for i in "${!NAMES[@]}"; do
+  r="${RESULTS[$i]}"
+  case "$r" in
+    PASS) c='\033[32m' ;; FAIL) c='\033[31m'; fail=1 ;; *) c='\033[33m' ;;
+  esac
+  printf '  %b%-6s\033[0m %s\n' "$c" "$r" "${NAMES[$i]}"
+done
+echo ""
+[ "$fail" -eq 0 ] && echo "preflight OK" || { echo "preflight FAILED — fix the red rows above"; exit 1; }

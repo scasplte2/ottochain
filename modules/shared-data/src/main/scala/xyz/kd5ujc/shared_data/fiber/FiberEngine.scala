@@ -180,10 +180,9 @@ object FiberEngine {
       ): FiberT[F, TransactionResult] = {
         val currentState = script.stateData.getOrElse(NullValue)
         val evalMigration: FiberT[F, Either[FailureReason, JsonLogicValue]] =
-          migration match {
-            case None       => (currentState: JsonLogicValue).asRight[FailureReason].pure[FiberT[F, *]]
-            case Some(expr) => MeteredEvaluator.eval[F, FiberT[F, *]](expr, currentState, GasExhaustionPhase.Migration)
-          }
+          migration.fold(
+            currentState.asRight[FailureReason].pure[FiberT[F, *]]
+          )(MeteredEvaluator.eval[F, FiberT[F, *]](_, currentState, GasExhaustionPhase.Migration))
 
         evalMigration.flatMap {
           case Left(reason)     => aborted(reason)
@@ -295,10 +294,9 @@ object FiberEngine {
         // The migration is metered through the same boundary as every other JLVM evaluation (no direct
         // metakit call); identity (None) leaves the state untouched.
         val evalMigration: FiberT[F, Either[FailureReason, JsonLogicValue]] =
-          migration match {
-            case None       => sm.stateData.asRight[FailureReason].pure[FiberT[F, *]]
-            case Some(expr) => MeteredEvaluator.eval[F, FiberT[F, *]](expr, sm.stateData, GasExhaustionPhase.Migration)
-          }
+          migration.fold(
+            (sm.stateData: JsonLogicValue).asRight[FailureReason].pure[FiberT[F, *]]
+          )(MeteredEvaluator.eval[F, FiberT[F, *]](_, sm.stateData, GasExhaustionPhase.Migration))
 
         evalMigration.flatMap {
           case Left(reason) => aborted(reason)
@@ -496,67 +494,50 @@ object FiberEngine {
         for {
           limits <- ExecutionOps.askLimits[FiberT[F, *]]
           // FiberPolicy dial `dependencyPolicy`: gate WHICH fibers a `_addDependency` may target, BEFORE the
-          // bounded ledger upsert. FAIL-CLOSED (abort the transition). `None` ⇒ Open (legacy, unconstrained).
-          dependencyDenial = checkDependencyPolicy(sm, dependencyMutations)
-          // Apply the append-only dynamic-dependency ledger mutations: a policy denial OR a bounds breach
-          // aborts the transition (fail-closed) before any state or log is committed.
-          result <- dependencyDenial match {
-            case Some(reason) =>
-              ExecutionOps.getGasUsed[FiberT[F, *]].map(g => TransactionResult.Aborted(reason, g): TransactionResult)
-            case None =>
-              DependencyLedger.applyMutations(
-                sm.dynamicDependencies,
-                dependencyMutations,
-                ordinal,
-                limits
-              ) match {
-                case Left(reason) =>
-                  ExecutionOps
-                    .getGasUsed[FiberT[F, *]]
-                    .map(g => TransactionResult.Aborted(reason, g): TransactionResult)
+          // bounded ledger upsert. Then apply the append-only dynamic-dependency ledger mutations: a policy
+          // denial (`None` ⇒ Open, legacy, unconstrained) OR a bounds breach aborts the transition
+          // (fail-closed) before any state or log is committed.
+          ledgerOrDenied = checkDependencyPolicy(sm, dependencyMutations)
+            .toLeft(())
+            .flatMap(_ => DependencyLedger.applyMutations(sm.dynamicDependencies, dependencyMutations, ordinal, limits))
+          result <- ledgerOrDenied.fold(
+            aborted,
+            newLedger =>
+              for {
+                hash    <- newStateData.computeDigest.liftFiber
+                gasUsed <- ExecutionOps.getGasUsed[FiberT[F, *]]
 
-                case Right(newLedger) =>
-                  for {
-                    hash    <- newStateData.computeDigest.liftFiber
-                    gasUsed <- ExecutionOps.getGasUsed[FiberT[F, *]]
+                receipt = EventReceipt.success(
+                  sm = sm,
+                  eventName = input.key,
+                  ordinal = ordinal,
+                  gasUsed = gasUsed,
+                  newStateId = newStateId,
+                  triggers = triggers,
+                  emittedEvents = emittedEvents
+                )
 
-                    receipt = EventReceipt.success(
-                      sm = sm,
-                      eventName = input.key,
-                      ordinal = ordinal,
-                      gasUsed = gasUsed,
-                      newStateId = newStateId,
-                      triggers = triggers,
-                      emittedEvents = emittedEvents
-                    )
+                _ <- ExecutionOps.appendLog[FiberT[F, *]](receipt)
 
-                    _ <- ExecutionOps.appendLog[FiberT[F, *]](receipt)
+                updatedFiber = sm.copy(
+                  previousUpdateOrdinal = sm.latestUpdateOrdinal,
+                  latestUpdateOrdinal = ordinal,
+                  currentState = newStateId.getOrElse(sm.currentState),
+                  stateData = newStateData,
+                  stateDataHash = hash,
+                  sequenceNumber = sm.sequenceNumber.next,
+                  lastReceipt = Some(receipt),
+                  dynamicDependencies = newLedger
+                )
 
-                    updatedFiber = sm.copy(
-                      previousUpdateOrdinal = sm.latestUpdateOrdinal,
-                      latestUpdateOrdinal = ordinal,
-                      currentState = newStateId.getOrElse(sm.currentState),
-                      stateData = newStateData,
-                      stateDataHash = hash,
-                      sequenceNumber = sm.sequenceNumber.next,
-                      lastReceipt = Some(receipt),
-                      dynamicDependencies = newLedger
-                    )
+                spawnResult <- processSpawnsValidated(spawns, updatedFiber, input)
 
-                    spawnResult <- processSpawnsValidated(spawns, updatedFiber, input)
-
-                    r <- spawnResult match {
-                      case Left(errors) =>
-                        ExecutionOps
-                          .getGasUsed[FiberT[F, *]]
-                          .map(g => TransactionResult.Aborted(errors.head, g): TransactionResult)
-
-                      case Right(spawnedFibers) =>
-                        completeStateMachineTransaction(sm, updatedFiber, spawnedFibers, triggers, assetTransfers)
-                    }
-                  } yield r
-              }
-          }
+                r <- spawnResult.fold(
+                  errors => aborted(errors.head),
+                  completeStateMachineTransaction(sm, updatedFiber, _, triggers, assetTransfers)
+                )
+              } yield r
+          )
         } yield result
 
       /**
@@ -661,47 +642,38 @@ object FiberEngine {
        */
       private def checkMaxGenerations(
         fiber: Records.StateMachineFiberRecord
-      ): FiberT[F, Either[FailureReason, Unit]] =
-        fiber.definition.policy.dials.flatMap(_.maxGenerations) match {
-          case None => ().asRight[FailureReason].pure[FiberT[F, *]]
-          case Some(cap) =>
-            fiber.definition.computeDigest.liftFiber.flatMap { selfDigest =>
-              def walk(
-                currentParent: Option[UUID],
-                depth:         Int,
-                visited:       Set[UUID]
-              ): FiberT[F, Either[FailureReason, Unit]] =
-                currentParent match {
-                  case None                               => ().asRight[FailureReason].pure[FiberT[F, *]]
-                  case Some(pid) if visited.contains(pid) =>
-                    // A cycle in the parent chain ⇒ the lineage is unverifiable ⇒ fail closed (and never loop).
-                    (FailureReason
-                      .PolicyViolation("maxGenerations", s"ancestor chain forms a cycle at $pid"): FailureReason)
-                      .asLeft[Unit]
-                      .pure[FiberT[F, *]]
-                  case Some(pid) =>
-                    calculatedState.stateMachines.get(pid) match {
-                      case None =>
-                        (FailureReason
-                          .PolicyViolation("maxGenerations", s"ancestor chain incomplete at $pid"): FailureReason)
-                          .asLeft[Unit]
-                          .pure[FiberT[F, *]]
-                      case Some(ancestor) =>
-                        ancestor.definition.computeDigest.liftFiber.flatMap { ancDigest =>
-                          val nextDepth = if (ancDigest === selfDigest) depth + 1 else depth
-                          if (nextDepth >= cap)
-                            (FailureReason.PolicyViolation(
-                              "maxGenerations",
-                              s"self-definition lineage depth $nextDepth reached cap $cap"
-                            ): FailureReason).asLeft[Unit].pure[FiberT[F, *]]
-                          else walk(ancestor.parentFiberId, nextDepth, visited + pid)
-                        }
+      ): FiberT[F, Either[FailureReason, Unit]] = {
+        val lineageOk = ().asRight[FailureReason].pure[FiberT[F, *]]
+        def deny(detail: String): FiberT[F, Either[FailureReason, Unit]] =
+          (FailureReason.PolicyViolation("maxGenerations", detail): FailureReason).asLeft[Unit].pure[FiberT[F, *]]
+
+        fiber.definition.policy.dials.flatMap(_.maxGenerations).fold(lineageOk) { cap =>
+          fiber.definition.computeDigest.liftFiber.flatMap { selfDigest =>
+            def walk(
+              currentParent: Option[UUID],
+              depth:         Int,
+              visited:       Set[UUID]
+            ): FiberT[F, Either[FailureReason, Unit]] =
+              currentParent.fold(lineageOk) { pid =>
+                if (visited.contains(pid))
+                  // A cycle in the parent chain ⇒ the lineage is unverifiable ⇒ fail closed (and never loop).
+                  deny(s"ancestor chain forms a cycle at $pid")
+                else
+                  calculatedState.stateMachines
+                    .get(pid)
+                    .fold(deny(s"ancestor chain incomplete at $pid")) { ancestor =>
+                      ancestor.definition.computeDigest.liftFiber.flatMap { ancDigest =>
+                        val nextDepth = if (ancDigest === selfDigest) depth + 1 else depth
+                        if (nextDepth >= cap) deny(s"self-definition lineage depth $nextDepth reached cap $cap")
+                        else walk(ancestor.parentFiberId, nextDepth, visited + pid)
+                      }
                     }
-                }
-              // Seed `visited` with the spawning fiber's own id so a direct self-parent (A.parent = A) is caught.
-              walk(fiber.parentFiberId, 0, Set(fiber.fiberId))
-            }
+              }
+            // Seed `visited` with the spawning fiber's own id so a direct self-parent (A.parent = A) is caught.
+            walk(fiber.parentFiberId, 0, Set(fiber.fiberId))
+          }
         }
+      }
 
       private def completeStateMachineTransaction(
         originalFiber:  Records.StateMachineFiberRecord,

@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+#
+# pr-watch — poll a PR's checks until they settle; on failure, dump failing logs.
+#
+# THE RULE: a PR is not done until this exits 0. Never end a session with an
+# unmonitored PR (see docs/agents/process-observations.md — #210 shipped red).
+#
+# Usage:
+#   bin/pr-watch <pr#> [--interval 60] [--timeout 1800]
+#
+# Exit code mirrors the outcome: 0 all checks passed, 1 a check failed,
+# 2 timed out while still pending.
+#
+set -euo pipefail
+
+case "${1:-}" in -h|--help|"") sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
+
+PR="$1"; shift || true
+INTERVAL=60; TIMEOUT=1800
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --interval) INTERVAL="$2"; shift 2 ;;
+    --timeout)  TIMEOUT="$2";  shift 2 ;;
+    *) echo "unknown arg: $1" >&2; exit 2 ;;
+  esac
+done
+
+start=$(date +%s)
+prev=""
+while :; do
+  # gh pr checks exits nonzero when checks fail/pending; capture without tripping set -e.
+  out=$(gh pr checks "$PR" 2>/dev/null || true)
+  state=$(gh pr checks "$PR" --json state --jq '[.[].state] | unique | join(",")' 2>/dev/null || echo "")
+
+  if [ "$out" != "$prev" ]; then
+    printf '\n\033[1m[%s] PR #%s\033[0m\n' "$(date +%H:%M:%S)" "$PR"
+    echo "$out"
+    prev="$out"
+  fi
+
+  # Terminal states.
+  if ! echo "$state" | grep -qiE 'pending|queued|in_progress|waiting'; then
+    if echo "$state" | grep -qiE 'fail|error|cancel'; then
+      echo ""
+      echo "==> checks FAILED — fetching failing job logs"
+      gh pr checks "$PR" --json name,state,link --jq \
+        '.[] | select(.state|test("FAIL|ERROR|CANCEL";"i")) | "\(.name)\t\(.link)"' 2>/dev/null || true
+      # Try to tail the failing run's job logs.
+      run_id=$(gh run list --branch "$(gh pr view "$PR" --json headRefName --jq .headRefName)" \
+                 --json databaseId,conclusion --jq \
+                 'map(select(.conclusion=="failure"))[0].databaseId' 2>/dev/null || true)
+      if [ -n "${run_id:-}" ] && [ "$run_id" != "null" ]; then
+        echo "--- tail of failing run $run_id ---"
+        gh run view "$run_id" --log-failed 2>/dev/null | tail -60 || \
+          gh run view "$run_id" --log 2>/dev/null | tail -60 || true
+      fi
+      exit 1
+    fi
+    echo ""
+    echo "==> all checks passed"
+    exit 0
+  fi
+
+  now=$(date +%s)
+  if [ $((now - start)) -ge "$TIMEOUT" ]; then
+    echo ""
+    echo "==> TIMEOUT after ${TIMEOUT}s with checks still pending"
+    exit 2
+  fi
+  sleep "$INTERVAL"
+done

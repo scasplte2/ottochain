@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+#
+# test — run a module's sbt tests by friendly name, batch-mode (no thin client).
+#
+# Usage:
+#   bin/test <module|all> [testOnly-glob]
+#
+#   module: l0 | l1 | data_l1 | dl1 | shared | models   (or the raw sbt id)
+#   all:    root aggregate (every module)
+#   glob:   optional "testOnly" pattern, e.g. "*CommittedViewSuite*"
+#
+# Examples:
+#   bin/test shared                          # sharedData/test (the big suite)
+#   bin/test shared "*CommittedViewSuite*"   # one suite
+#   bin/test l0                              # currencyL0/test
+#   bin/test all                             # sbt test
+#
+# Name map: l0->currencyL0  l1->currencyL1  data_l1|dl1->dataL1  shared->sharedData  models->models
+#
+set -euo pipefail
+
+if ! command -v sbt >/dev/null 2>&1 && [ -f "$HOME/.sdkman/bin/sdkman-init.sh" ]; then
+  set +e; source "$HOME/.sdkman/bin/sdkman-init.sh" >/dev/null 2>&1; set -e
+fi
+
+case "${1:-}" in
+  -h|--help|"") sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+esac
+
+mod="$1"; shift || true
+glob="${1:-}"
+
+case "$mod" in
+  l0)            proj=currencyL0 ;;
+  l1)            proj=currencyL1 ;;
+  data_l1|dl1)   proj=dataL1 ;;
+  shared)        proj=sharedData ;;
+  models)        proj=models ;;
+  all)           proj=all ;;
+  *)             proj="$mod" ;;   # raw sbt id passthrough
+esac
+
+if [ "$proj" = "all" ]; then
+  cmd="test"
+elif [ -n "$glob" ]; then
+  cmd="$proj/testOnly $glob"
+else
+  cmd="$proj/test"
+fi
+
+ROOT="$(git rev-parse --show-toplevel)"; cd "$ROOT"
+echo "==> sbt \"$cmd\"  (batch mode)"
+
+log="$(mktemp)"
+set +e
+sbt "$cmd" 2>&1 | tee "$log"
+rc=${PIPESTATUS[0]}
+set -e
+
+if grep -qiE 'server was not detected|failed to connect|Could not connect to sbt server' "$log"; then
+  cat >&2 <<'EOF'
+
+--- stale sbt server detected -------------------------------------------------
+Two sessions/worktrees share one sbt thin client. Recover:
+  pkill -f 'sbt.*server' || true
+  rm -f project/target/active.json
+  # then re-run this command (batch mode, no --client)
+-------------------------------------------------------------------------------
+EOF
+fi
+rm -f "$log"
+exit "$rc"

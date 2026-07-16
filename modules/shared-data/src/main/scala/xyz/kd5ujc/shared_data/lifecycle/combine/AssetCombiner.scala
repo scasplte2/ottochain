@@ -687,22 +687,23 @@ class AssetCombiner[F[_]: Async: SecurityProvider](
       if (signerOwned) acc.pure[F]
       else {
         val live = acc.calculated.usedNonces.getOrElse(cp.assetId, SortedSet.empty[Long])
-        nonce match {
-          case Some(n) if live.contains(n) =>
-            // Consume linearly: remove the revealed nonce from THIS counter-party's authorization set.
-            val updatedSet = live - n
-            val updatedNonces =
-              if (updatedSet.isEmpty) acc.calculated.usedNonces - cp.assetId
-              else acc.calculated.usedNonces.updated(cp.assetId, updatedSet)
-            acc.focus(_.calculated.usedNonces).replace(updatedNonces).pure[F]
-          case _ =>
+        nonce
+          .filter(live.contains)
+          .fold(
             Async[F].raiseError[DataState[OnChain, CalculatedState]](
               CombineRejected(
                 s"compose counter-party ${cp.assetId} (holder ${cp.holder}) is neither signer-owned nor " +
                 s"covered by a live AuthorizeCompose nonce — cross-holder consent is required"
               )
             )
-        }
+          ) { n =>
+            // Consume linearly: remove the revealed nonce from THIS counter-party's authorization set.
+            val updatedSet = live - n
+            val updatedNonces =
+              if (updatedSet.isEmpty) acc.calculated.usedNonces - cp.assetId
+              else acc.calculated.usedNonces.updated(cp.assetId, updatedSet)
+            acc.focus(_.calculated.usedNonces).replace(updatedNonces).pure[F]
+          }
       }
     }
 
@@ -970,50 +971,47 @@ class AssetCombiner[F[_]: Async: SecurityProvider](
       .get(source.schemaBinding.name)
       .map(_.target)
       .collect { case RegistryTarget.AssetPolicyPackage(l) => l }
-      .flatMap(_.versions.get(source.schemaBinding.version)) match {
-      case Some(rv) =>
-        rv.shape match {
-          case ap: RegistryShape.AssetPolicy => ap.pure[F]
-          case other =>
-            Async[F].raiseError(
-              CombineRejected(
-                s"${source.schemaBinding.name.render} resolves to a non-asset shape ${other.getClass.getSimpleName}"
-              )
-            )
-        }
-      case None =>
-        Async[F].raiseError(
+      .flatMap(_.versions.get(source.schemaBinding.version))
+      .fold(
+        Async[F].raiseError[RegistryShape.AssetPolicy](
           CombineRejected(
             s"asset ${source.assetId} binding ${source.schemaBinding.name.render}@${source.schemaBinding.version.render} did not resolve"
           )
         )
-    }
+      )(rv => requireAssetPolicyShape(rv, source.schemaBinding.name))
 
   /** Resolve the `policyRef` of a mint to (name, version, shape). Missing/yanked → reject. */
   private def resolvePolicy(ref: SchemaRef): F[(RegistryName, RegisteredVersion, RegistryShape.AssetPolicy)] =
-    current.calculated.registry
-      .get(ref.name)
-      .map(_.target)
-      .collect { case RegistryTarget.AssetPolicyPackage(l) => l } match {
-      case None =>
-        Async[F].raiseError(CombineRejected(s"policyRef ${ref.name.render} is not a known asset-policy package"))
-      case Some(lineage) =>
-        lineage
-          .resolve(ref.version)
-          .fold(
-            e =>
-              Async[F].raiseError[(RegistryName, RegisteredVersion, RegistryShape.AssetPolicy)](
-                CombineRejected(s"policyRef unresolvable for ${ref.name.render}: $e")
-              ),
-            rv =>
-              rv.shape match {
-                case ap: RegistryShape.AssetPolicy => (ref.name, rv, ap).pure[F]
-                case other =>
-                  Async[F].raiseError[(RegistryName, RegisteredVersion, RegistryShape.AssetPolicy)](
-                    CombineRejected(s"${ref.name.render} resolves to a non-asset shape ${other.getClass.getSimpleName}")
-                  )
-              }
+    for {
+      lineage <- current.calculated.registry
+        .get(ref.name)
+        .map(_.target)
+        .collect { case RegistryTarget.AssetPolicyPackage(l) => l }
+        .fold(
+          Async[F].raiseError[VersionLineage](
+            CombineRejected(s"policyRef ${ref.name.render} is not a known asset-policy package")
           )
+        )(_.pure[F])
+      rv <- lineage
+        .resolve(ref.version)
+        .fold(
+          e =>
+            Async[F].raiseError[RegisteredVersion](
+              CombineRejected(s"policyRef unresolvable for ${ref.name.render}: $e")
+            ),
+          _.pure[F]
+        )
+      shape <- requireAssetPolicyShape(rv, ref.name)
+    } yield (ref.name, rv, shape)
+
+  /** Narrow a resolved registry version to the [[RegistryShape.AssetPolicy]] shape; anything else → reject. */
+  private def requireAssetPolicyShape(rv: RegisteredVersion, name: RegistryName): F[RegistryShape.AssetPolicy] =
+    rv.shape match {
+      case ap: RegistryShape.AssetPolicy => ap.pure[F]
+      case other =>
+        Async[F].raiseError(
+          CombineRejected(s"${name.render} resolves to a non-asset shape ${other.getClass.getSimpleName}")
+        )
     }
 
   /** Resolve all counter-party asset ids to their authoritative records; any missing → reject. */

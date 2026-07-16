@@ -1,4 +1,4 @@
-- keep the work log up to date in .workspace/ when we have reached a stopping point or completed a task
+- keep a worksheet up to date in committed `docs/worksheets/` when we reach a stopping point or complete a task (resumable session traces; `bin/worksheet <slug>` to start one). `.workspace/` remains optional private scratch.
 
 ## Data-application invariants (read before touching signed messages or validators)
 
@@ -30,3 +30,5 @@ See `docs/signing-canonical-and-validation.md` for the full rationale. The two r
    violation — same safe triple as v1 `OnChain`, merely moved; the rule bars *lineage* reads.
    Guarded by this comment — review every new L0Validator method that takes a `SchemaRef` or
    `SchemaBinding` parameter.
+
+Full agent guide: AGENTS.md
