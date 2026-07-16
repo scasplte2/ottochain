@@ -21,7 +21,10 @@ object TriggerHandlerResult {
   final case class Success(
     updatedState:    CalculatedState,
     cascadeTriggers: List[FiberTrigger],
-    assetTransfers:  List[FiberEffect.AssetTransferred] = List.empty
+    assetTransfers:  List[FiberEffect.AssetTransferred] = List.empty,
+    // `_consumeNullifier` consumptions emitted by THIS triggered transition; the dispatcher keys them by the
+    // triggered (emitting) fiber id — which IS the nullifier domain (protocol-nullifier-set.md).
+    nullifierConsumptions: List[FiberEffect.NullifierConsumed] = List.empty
   ) extends TriggerHandlerResult
 
   /**

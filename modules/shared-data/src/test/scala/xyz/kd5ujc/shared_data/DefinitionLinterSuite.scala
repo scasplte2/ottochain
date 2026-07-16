@@ -283,6 +283,50 @@ object DefinitionLinterSuite extends SimpleIOSuite {
   }
 
   // ---------------------------------------------------------------------------
+  // (b2b) _consumeNullifier value shape (bare 64-hex values)
+  // ---------------------------------------------------------------------------
+
+  private def nullifierDef(itemsJson: String): String =
+    s"""
+    {
+      "states": { "s0": { "id": "s0", "isFinal": false }, "s1": { "id": "s1", "isFinal": true } },
+      "initialState": "s0",
+      "transitions": [
+        {
+          "from": "s0", "to": "s1", "eventName": "fill", "guard": true,
+          "effect": { "_consumeNullifier": [ $itemsJson ], "filled": true },
+          "dependencies": []
+        }
+      ]
+    }
+    """
+
+  test("a well-formed 64-hex _consumeNullifier literal produces no nullifier diagnostic (0x form too)") {
+    val plain = DefinitionLinter.validate(parseDef(nullifierDef(s""""${"a" * 64}"""")))
+    val prefixed = DefinitionLinter.validate(parseDef(nullifierDef(s""""0x${"B" * 64}"""")))
+    IO.pure(
+      expect(plain.forall(_.code != "nullifier-literal-malformed")) and
+      expect(prefixed.forall(_.code != "nullifier-literal-malformed"))
+    )
+  }
+
+  test("an obviously-wrong _consumeNullifier literal is a nullifier-literal-malformed Warning") {
+    val badHex = DefinitionLinter.validate(parseDef(nullifierDef(""""definitely-not-hex"""")))
+    val tooShort = DefinitionLinter.validate(parseDef(nullifierDef(s""""${"a" * 32}"""")))
+    val nonString = DefinitionLinter.validate(parseDef(nullifierDef("42")))
+    IO.pure(
+      expect(warningsOf(badHex).exists(_.code == "nullifier-literal-malformed")) and
+      expect(warningsOf(tooShort).exists(_.code == "nullifier-literal-malformed")) and
+      expect(warningsOf(nonString).exists(_.code == "nullifier-literal-malformed"))
+    )
+  }
+
+  test("a dynamic _consumeNullifier item (var/cat) produces no nullifier diagnostic (checked at combine)") {
+    val dynamic = DefinitionLinter.validate(parseDef(nullifierDef("""{ "var": "event.nf" }""")))
+    IO.pure(expect(dynamic.forall(_.code != "nullifier-literal-malformed")))
+  }
+
+  // ---------------------------------------------------------------------------
   // (b3) directive-injection hazard: dynamic TOP-LEVEL effect keys
   // ---------------------------------------------------------------------------
 

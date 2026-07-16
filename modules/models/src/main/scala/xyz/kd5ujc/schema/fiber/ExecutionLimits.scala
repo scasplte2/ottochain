@@ -31,13 +31,19 @@ package xyz.kd5ujc.schema.fiber
  *                          (the same source-of-truth pattern `maxAssetMutations` etc. use), NOT per-operator
  *                          config. Value chosen: 16 (greenfield — no live pinned-constitution fibers to brick;
  *                          ordered between maxAssetMutations=32 and maxActiveDependencies=64).
+ * @param maxNullifierConsumptions Maximum number of `_consumeNullifier` items applied per emitting fiber per
+ *                          transition (protocol-nullifier-set.md). Bounds nullifier-set growth per transaction
+ *                          independently of gas, mirroring `maxAssetMutations` (same value, same
+ *                          consensus-constant discipline: enforced in `NullifierCombiner` as a graceful
+ *                          CombineRejected, never at block acceptance).
  */
 final case class ExecutionLimits(
-  maxDepth:               Int = 10,
-  maxGas:                 Long = 10_000_000L,
-  maxStateSizeBytes:      Int = 1_048_576, // 1MB
-  maxAssetMutations:      Int = 32,
-  maxActiveDependencies:  Int = 64,
-  maxDependencyLedger:    Int = 256,
-  maxSpawnsPerTransition: Int = 16
+  maxDepth:                 Int = 10,
+  maxGas:                   Long = 10_000_000L,
+  maxStateSizeBytes:        Int = 1_048_576, // 1MB
+  maxAssetMutations:        Int = 32,
+  maxActiveDependencies:    Int = 64,
+  maxDependencyLedger:      Int = 256,
+  maxSpawnsPerTransition:   Int = 16,
+  maxNullifierConsumptions: Int = 32
 )

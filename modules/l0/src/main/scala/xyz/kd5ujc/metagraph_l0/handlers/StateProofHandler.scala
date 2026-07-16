@@ -6,9 +6,11 @@ import cats.effect.Async
 import cats.syntax.all._
 
 import io.constellationnetwork.metagraph_sdk.lifecycle.committed.{CommitKey, CommittedReader}
+import io.constellationnetwork.security.hash.Hash
 
 import xyz.kd5ujc.schema.CalculatedState
 import xyz.kd5ujc.schema.api.{ErrorResponse, StateProofResponse}
+import xyz.kd5ujc.schema.fiber.NullifierHex
 
 import io.circe.Json
 import io.circe.syntax.EncoderOps
@@ -36,6 +38,23 @@ class StateProofHandler[F[_]: Async](reader: CommittedReader[F, CalculatedState]
   /** Custody proof for an asset instance — mirrors `stateMachine`/`script` against the `asset/<id>` key. */
   def asset(id: UUID, field: Option[String]): F[Response[F]] =
     proofFor(s"asset/$id", field)(_.assets.get(id).map(_.asJson))
+
+  /**
+   * Spent-nullifier presence proof (protocol-nullifier-set.md Phase A) against the
+   * `nullifier/<domain>/<nf>` committed key; the proven record is the spend ordinal. `nf` is normalized
+   * through [[NullifierHex]] (the same normalizer the combiner-side extractor enforces) so the queried key is
+   * byte-identical to the committed one; a value that cannot normalize is a BadRequest. An UNSPENT nullifier
+   * is a 404 like the other handlers (MPT absence proofs are Phase B — metakit rc.8).
+   */
+  def nullifier(domain: UUID, nf: String): F[Response[F]] =
+    NullifierHex.normalize(nf) match {
+      case None =>
+        Response[F](Status.BadRequest)
+          .withEntity(ErrorResponse(s"nullifier must be 64 hex chars (optionally 0x-prefixed), got '$nf'"))
+          .pure[F]
+      case Some(hex) =>
+        proofFor(s"nullifier/$domain/$hex", None)(_.nullifiers.get(domain).flatMap(_.get(Hash(hex))).map(_.asJson))
+    }
 
   private def proofFor(keyStr: String, field: Option[String])(
     recordOf: CalculatedState => Option[Json]

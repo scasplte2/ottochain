@@ -8,6 +8,7 @@ import scala.collection.immutable.{SortedMap, SortedSet}
 
 import io.constellationnetwork.currency.dataApplication.DataCalculatedState
 import io.constellationnetwork.metagraph_sdk.lifecycle.committed.{CommitKey, CommittedView}
+import io.constellationnetwork.schema.SnapshotOrdinal
 import io.constellationnetwork.security.hash.Hash
 
 import xyz.kd5ujc.schema.CodecConfiguration._
@@ -35,7 +36,13 @@ case class CalculatedState(
   // deltas — the two cannot diverge. Projected as commit/f|a|r/<id> leaves for provable DL1 healing.
   fiberCommits:    SortedMap[UUID, FiberCommit] = SortedMap.empty,
   assetCommits:    SortedMap[UUID, AssetCommit] = SortedMap.empty,
-  registryCommits: SortedMap[RegistryName, Hash] = SortedMap.empty
+  registryCommits: SortedMap[RegistryName, Hash] = SortedMap.empty,
+  // Protocol nullifier set (protocol-nullifier-set.md): domain (= consuming fiber id) -> nf (normalized
+  // 64-hex Hash) -> the ordinal it was spent at. MONOTONIC — never pruned (pruning re-enables a
+  // double-spend); unbounded growth is accepted here (CalculatedState is rooted, never wire-shipped) and the
+  // set is EXCLUDED from /v1/checkpoint (the only whole-state JSON path — see MetaHandler). Sole writer:
+  // NullifierCombiner (combiner-only enforcement, CLAUDE.md rules #2/#3).
+  nullifiers: SortedMap[UUID, SortedMap[Hash, SnapshotOrdinal]] = SortedMap.empty
 ) extends DataCalculatedState
 
 object CalculatedState {
@@ -68,6 +75,10 @@ object CalculatedState {
    *   - `commit/a/<uuid>` from `assetCommits`     these small leaves are what a DL1 heals its CommitIndex
    *   - `commit/r/<name>` from `registryCommits`  from, batch-proof-verified against the breadcrumb mptRoot
    *                        (over-long names fall back to `commit/r/h/<sha256>` like `registry/`)
+   *   - `nullifier/<uuid>/<nf>` from `nullifiers`; the leaf value is the spend-ordinal JSON. TOTAL: the
+   *                        domain is a UUID and the nf is exactly 64 lowercase hex chars (NullifierHex
+   *                        normalization is enforced before any insert), so the key always fits
+   *                        (9 + 36 + 1 + 64 = 110 chars, 3 segments each <= 64, charset-valid)
    *
    * Asset POLICIES need no projection of their own — they live in `registry` as `RegistryEntry`s
    * (`AssetPolicyPackage`) and are already covered by the `registry/<name>` key.
@@ -94,9 +105,12 @@ object CalculatedState {
         val fiberCommits = s.fiberCommits.toList.map { case (id, c) => CommitKey.unsafe(s"commit/f/$id") -> c.asJson }
         val assetCommits = s.assetCommits.toList.map { case (id, c) => CommitKey.unsafe(s"commit/a/$id") -> c.asJson }
         val registryCommits = s.registryCommits.toList.map { case (n, h) => commitRegistryKey(n) -> h.asJson }
+        val nullifiers = s.nullifiers.toList.flatMap { case (dom, nfs) =>
+          nfs.toList.map { case (nf, ord) => CommitKey.unsafe(s"nullifier/$dom/${nf.value}") -> ord.asJson }
+        }
         SortedMap.from(
           fibers ::: scripts ::: registry ::: reverse ::: assets ::: nonces :::
-          fiberCommits ::: assetCommits ::: registryCommits
+          fiberCommits ::: assetCommits ::: registryCommits ::: nullifiers
         )
       }
     }

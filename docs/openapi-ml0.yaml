@@ -648,6 +648,7 @@ components:
       - fiberCommits
       - assetCommits
       - registryCommits
+      - nullifiers
       properties:
         stateMachines:
           $ref: '#/components/schemas/Map_V'
@@ -666,6 +667,8 @@ components:
         assetCommits:
           $ref: '#/components/schemas/Map_V'
         registryCommits:
+          $ref: '#/components/schemas/Map_V'
+        nullifiers:
           $ref: '#/components/schemas/Map_V'
     Checkpoint_CalculatedState:
       title: Checkpoint_CalculatedState

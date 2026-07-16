@@ -529,7 +529,7 @@ object FiberPolicyEnforcementSuite extends SimpleIOSuite {
 
   /** The commuteObligation flag of the single UpgradeReceipt in a committed migration (None if not committed). */
   private def commuteObligationOf(r: TransactionResult): Option[Boolean] = r match {
-    case TransactionResult.Committed(_, _, logs, _, _, _, _) =>
+    case TransactionResult.Committed(_, _, logs, _, _, _, _, _) =>
       logs.collectFirst { case u: FiberLogEntry.UpgradeReceipt => u.commuteObligation }
     case _ => None
   }

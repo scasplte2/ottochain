@@ -21,6 +21,9 @@ object ReservedKeys {
   val ADD_DEPENDENCY = "_addDependency" // Runtime-add/re-activate a dynamic cross-fiber dependency (append-only ledger)
   val SET_DEPENDENCY_ACTIVE = "_setDependencyActive" // Toggle a dynamic dependency's active flag (never removed)
 
+  val CONSUME_NULLIFIER =
+    "_consumeNullifier" // Protocol nullifier consumption (protocol-nullifier-set.md); items are bare nf values
+
   /** Every reserved directive key — derived from [[FiberDirective]] so a new directive updates all consumers. */
   val directiveKeys: Set[String] = FiberDirective.values.flatMap(_.keys).toSet
 

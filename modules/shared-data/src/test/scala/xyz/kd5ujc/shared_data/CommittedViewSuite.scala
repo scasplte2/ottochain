@@ -96,6 +96,39 @@ object CommittedViewSuite extends SimpleIOSuite {
 
   // ── commit/ projections (onchain-incrementals RFC §3.1) — the provable DL1 heal namespace ──
 
+  // ── nullifier/ projections (protocol-nullifier-set.md) — one TOTAL leaf per spent nullifier ──
+
+  test("entries projects nullifier/<uuid>/<hex> keys with ordinal values; empty projects nothing") {
+    import io.circe.syntax.EncoderOps
+    import io.constellationnetwork.security.hash.Hash
+
+    val domA = UUID.fromString("00000000-0000-0000-0000-0000000000d1")
+    val domB = UUID.fromString("00000000-0000-0000-0000-0000000000d2")
+    val nf1 = Hash("a" * 64)
+    val nf2 = Hash("b" * 64)
+    val ord = SnapshotOrdinal.unsafeApply(7L)
+
+    val s = CalculatedState.genesis.copy(
+      nullifiers = SortedMap(
+        domA -> SortedMap(nf1 -> ord, nf2 -> SnapshotOrdinal.MinValue),
+        domB -> SortedMap(nf1 -> ord) // same nf under a second domain: distinct leaf (domain isolation)
+      )
+    )
+    val entries = CalculatedState.committedView.entries(s)
+    val keys = entries.keySet.map(_.value)
+    IO.pure(
+      expect(keys.contains(s"nullifier/$domA/${nf1.value}")) and
+      expect(keys.contains(s"nullifier/$domA/${nf2.value}")) and
+      expect(keys.contains(s"nullifier/$domB/${nf1.value}")) and
+      // the leaf value is the spend-ordinal JSON (the spent-at receipt)
+      expect(entries.find(_._1.value == s"nullifier/$domA/${nf1.value}").map(_._2).contains(ord.asJson)) and
+      // one leaf per spent nf, nothing else projected
+      expect(entries.size == 3) and
+      // an empty nullifier map projects nothing
+      expect(CalculatedState.committedView.entries(CalculatedState.genesis).isEmpty)
+    )
+  }
+
   test("entries projects commit/f|a|r keys; over-long registry names take the hashed fallback") {
     import xyz.kd5ujc.schema.{AssetCommit, FiberCommit}
     import xyz.kd5ujc.schema.fiber.FiberOrdinal

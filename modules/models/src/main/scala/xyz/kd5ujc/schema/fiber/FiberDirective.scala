@@ -34,6 +34,12 @@ object FiberDirective extends Enum[FiberDirective] {
         EffectKind.Dependency
       )
 
+  // Protocol nullifier consumption (protocol-nullifier-set.md): the effect's `_consumeNullifier` array items
+  // are bare nf VALUES (strings / evaluated sub-expressions), not objects — the domain is ALWAYS the emitting
+  // fiber's own id, stamped by the engine, never authored. Appended last, so nullifier effects emit after the
+  // pre-existing families (emission order = declaration order, see the scaladoc above).
+  case object ConsumeNullifier extends FiberDirective(Set(ReservedKeys.CONSUME_NULLIFIER), EffectKind.Nullifier)
+
   /**
    * Reserved keys honoured from the post-evaluation RESULT position — i.e. every directive EXCEPT `_spawn`,
    * which is sourced from the authored effect EXPRESSION (and so was already injection-immune). The

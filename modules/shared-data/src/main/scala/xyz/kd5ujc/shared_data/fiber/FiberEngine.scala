@@ -398,7 +398,8 @@ object FiberEngine {
                   returnValue,
                   emittedEvents,
                   assetTransfers,
-                  dependencyMutations
+                  dependencyMutations,
+                  nullifierConsumptions
                 ) =>
               fiber match {
                 case sm: Records.StateMachineFiberRecord =>
@@ -411,7 +412,8 @@ object FiberEngine {
                     spawns,
                     emittedEvents,
                     assetTransfers,
-                    dependencyMutations
+                    dependencyMutations,
+                    nullifierConsumptions
                   )
 
                 case script: Records.ScriptFiberRecord =>
@@ -452,15 +454,16 @@ object FiberEngine {
         }
 
       private def processStateMachineSuccess(
-        sm:                  Records.StateMachineFiberRecord,
-        input:               FiberInput,
-        newStateData:        JsonLogicValue,
-        newStateId:          Option[StateId],
-        triggers:            List[FiberTrigger],
-        spawns:              List[SpawnDirective],
-        emittedEvents:       List[EmittedEvent],
-        assetTransfers:      List[FiberEffect.AssetTransferred],
-        dependencyMutations: List[FiberEffect.DependencyMutated]
+        sm:                    Records.StateMachineFiberRecord,
+        input:                 FiberInput,
+        newStateData:          JsonLogicValue,
+        newStateId:            Option[StateId],
+        triggers:              List[FiberTrigger],
+        spawns:                List[SpawnDirective],
+        emittedEvents:         List[EmittedEvent],
+        assetTransfers:        List[FiberEffect.AssetTransferred],
+        dependencyMutations:   List[FiberEffect.DependencyMutated],
+        nullifierConsumptions: List[FiberEffect.NullifierConsumed]
       ): FiberT[F, TransactionResult] =
         // #33 runtime conformance gate: a strict-bound fiber's produced state must conform, else abort.
         ConformanceChecker.violationsFor(sm.schemaBinding, calculatedState, newStateData) match {
@@ -476,20 +479,22 @@ object FiberEngine {
               spawns,
               emittedEvents,
               assetTransfers,
-              dependencyMutations
+              dependencyMutations,
+              nullifierConsumptions
             )
         }
 
       private def commitStateMachineSuccess(
-        sm:                  Records.StateMachineFiberRecord,
-        input:               FiberInput,
-        newStateData:        JsonLogicValue,
-        newStateId:          Option[StateId],
-        triggers:            List[FiberTrigger],
-        spawns:              List[SpawnDirective],
-        emittedEvents:       List[EmittedEvent],
-        assetTransfers:      List[FiberEffect.AssetTransferred],
-        dependencyMutations: List[FiberEffect.DependencyMutated]
+        sm:                    Records.StateMachineFiberRecord,
+        input:                 FiberInput,
+        newStateData:          JsonLogicValue,
+        newStateId:            Option[StateId],
+        triggers:              List[FiberTrigger],
+        spawns:                List[SpawnDirective],
+        emittedEvents:         List[EmittedEvent],
+        assetTransfers:        List[FiberEffect.AssetTransferred],
+        dependencyMutations:   List[FiberEffect.DependencyMutated],
+        nullifierConsumptions: List[FiberEffect.NullifierConsumed]
       ): FiberT[F, TransactionResult] =
         for {
           limits <- ExecutionOps.askLimits[FiberT[F, *]]
@@ -534,7 +539,7 @@ object FiberEngine {
 
                 r <- spawnResult.fold(
                   errors => aborted(errors.head),
-                  completeStateMachineTransaction(sm, updatedFiber, _, triggers, assetTransfers)
+                  completeStateMachineTransaction(sm, updatedFiber, _, triggers, assetTransfers, nullifierConsumptions)
                 )
               } yield r
           )
@@ -676,11 +681,12 @@ object FiberEngine {
       }
 
       private def completeStateMachineTransaction(
-        originalFiber:  Records.StateMachineFiberRecord,
-        updatedFiber:   Records.StateMachineFiberRecord,
-        spawnedFibers:  List[Records.StateMachineFiberRecord],
-        triggers:       List[FiberTrigger],
-        assetTransfers: List[FiberEffect.AssetTransferred]
+        originalFiber:         Records.StateMachineFiberRecord,
+        updatedFiber:          Records.StateMachineFiberRecord,
+        spawnedFibers:         List[Records.StateMachineFiberRecord],
+        triggers:              List[FiberTrigger],
+        assetTransfers:        List[FiberEffect.AssetTransferred],
+        nullifierConsumptions: List[FiberEffect.NullifierConsumed]
       ): FiberT[F, TransactionResult] = {
         val parentWithChildren = updatedFiber.copy(
           childFiberIds = updatedFiber.childFiberIds ++ spawnedFibers.map(_.fiberId)
@@ -698,26 +704,40 @@ object FiberEngine {
           if (assetTransfers.isEmpty) Map.empty
           else Map(originalFiber.fiberId -> assetTransfers)
 
+        // The primary fiber's _consumeNullifier effects, keyed by the EMITTING fiber id — this stamp IS the
+        // nullifier DOMAIN (protocol-nullifier-set.md decision #3): an effect can never name another app's
+        // namespace because the key is engine-supplied, never authored.
+        val primaryNullifierConsumptions: Map[UUID, List[FiberEffect.NullifierConsumed]] =
+          if (nullifierConsumptions.isEmpty) Map.empty
+          else Map(originalFiber.fiberId -> nullifierConsumptions)
+
         triggers.isEmpty
           .pure[FiberT[F, *]]
           .ifM(
-            ifTrue =
-              commitWithoutTriggers(originalFiber.fiberId, parentWithChildren, spawnedFibers, primaryAssetTransfers),
+            ifTrue = commitWithoutTriggers(
+              originalFiber.fiberId,
+              parentWithChildren,
+              spawnedFibers,
+              primaryAssetTransfers,
+              primaryNullifierConsumptions
+            ),
             ifFalse = dispatchTriggers(
               originalFiber.fiberId,
               spawnedFibers,
               triggers,
               stateWithSpawns,
-              primaryAssetTransfers
+              primaryAssetTransfers,
+              primaryNullifierConsumptions
             )
           )
       }
 
       private def commitWithoutTriggers(
-        primaryFiberId: UUID,
-        updatedFiber:   Records.StateMachineFiberRecord,
-        spawnedFibers:  List[Records.StateMachineFiberRecord],
-        assetTransfers: Map[UUID, List[FiberEffect.AssetTransferred]]
+        primaryFiberId:        UUID,
+        updatedFiber:          Records.StateMachineFiberRecord,
+        spawnedFibers:         List[Records.StateMachineFiberRecord],
+        assetTransfers:        Map[UUID, List[FiberEffect.AssetTransferred]],
+        nullifierConsumptions: Map[UUID, List[FiberEffect.NullifierConsumed]]
       ): FiberT[F, TransactionResult] =
         for {
           gasUsed    <- ExecutionOps.getGasUsed[FiberT[F, *]]
@@ -731,29 +751,42 @@ object FiberEngine {
             logEntries = logEntries.toList,
             totalGasUsed = gasUsed,
             maxDepth = depth,
-            assetTransfers = assetTransfers
+            assetTransfers = assetTransfers,
+            nullifierConsumptions = nullifierConsumptions
           ): TransactionResult
         }
 
       private def dispatchTriggers(
-        primaryFiberId:        UUID,
-        spawnedFibers:         List[Records.StateMachineFiberRecord],
-        triggers:              List[FiberTrigger],
-        stateWithSpawns:       CalculatedState,
-        primaryAssetTransfers: Map[UUID, List[FiberEffect.AssetTransferred]]
+        primaryFiberId:               UUID,
+        spawnedFibers:                List[Records.StateMachineFiberRecord],
+        triggers:                     List[FiberTrigger],
+        stateWithSpawns:              CalculatedState,
+        primaryAssetTransfers:        Map[UUID, List[FiberEffect.AssetTransferred]],
+        primaryNullifierConsumptions: Map[UUID, List[FiberEffect.NullifierConsumed]]
       ): FiberT[F, TransactionResult] = {
         val _ = primaryFiberId
         TriggerDispatcher
           .make[F, FiberT[F, *]]
           .dispatch(triggers, stateWithSpawns)
           .flatMap {
-            case TransactionResult.Committed(machines, scripts, _, totalGas, maxDepth, opCount, cascadeTransfers) =>
+            case TransactionResult.Committed(
+                  machines,
+                  scripts,
+                  _,
+                  totalGas,
+                  maxDepth,
+                  opCount,
+                  cascadeTransfers,
+                  cascadeNullifiers
+                ) =>
               ExecutionOps.getLogs[FiberT[F, *]].map { logs =>
                 val allMachines = spawnedFibers.map(f => f.fiberId -> f).toMap ++ machines
                 // Merge the primary fiber's transfers with the cascade's per-fiber maps. The keys are the
                 // EMITTING fiber ids; a fiber that emits in both its own transition and a re-entered cascade
                 // gets its lists concatenated (single combiner pass still applies them once each — R20).
                 val mergedTransfers = mergeAssetTransfers(primaryAssetTransfers, cascadeTransfers)
+                // Same merge for nullifier consumptions: emitter-keyed (= domain-keyed) lists concatenate.
+                val mergedNullifiers = mergeNullifierConsumptions(primaryNullifierConsumptions, cascadeNullifiers)
                 TransactionResult.Committed(
                   updatedStateMachines = allMachines,
                   updatedScripts = scripts,
@@ -761,7 +794,8 @@ object FiberEngine {
                   totalGasUsed = totalGas,
                   maxDepth = maxDepth,
                   operationCount = opCount,
-                  assetTransfers = mergedTransfers
+                  assetTransfers = mergedTransfers,
+                  nullifierConsumptions = mergedNullifiers
                 ): TransactionResult
               }
 
@@ -777,6 +811,15 @@ object FiberEngine {
       ): Map[UUID, List[FiberEffect.AssetTransferred]] =
         b.foldLeft(a) { case (acc, (fid, ts)) =>
           acc.updated(fid, acc.getOrElse(fid, List.empty) ++ ts)
+        }
+
+      /** Merge two emitter-keyed (= domain-keyed) nullifier-consumption maps by concatenating per-fiber lists. */
+      private def mergeNullifierConsumptions(
+        a: Map[UUID, List[FiberEffect.NullifierConsumed]],
+        b: Map[UUID, List[FiberEffect.NullifierConsumed]]
+      ): Map[UUID, List[FiberEffect.NullifierConsumed]] =
+        b.foldLeft(a) { case (acc, (fid, ns)) =>
+          acc.updated(fid, acc.getOrElse(fid, List.empty) ++ ns)
         }
 
       private def processScriptSuccess(

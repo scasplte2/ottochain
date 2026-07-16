@@ -50,9 +50,10 @@ object TriggerDispatcher {
    * Pending uses List for O(1) prepend (depth-first processing).
    */
   final private case class QueueState(
-    pending:        List[FiberTrigger],
-    txnState:       CalculatedState,
-    assetTransfers: Map[UUID, List[FiberEffect.AssetTransferred]]
+    pending:               List[FiberTrigger],
+    txnState:              CalculatedState,
+    assetTransfers:        Map[UUID, List[FiberEffect.AssetTransferred]],
+    nullifierConsumptions: Map[UUID, List[FiberEffect.NullifierConsumed]]
   )
 
   def make[F[_]: Async: SecurityProvider, G[_]: Monad](implicit
@@ -72,7 +73,7 @@ object TriggerDispatcher {
         triggers:  List[FiberTrigger],
         baseState: CalculatedState
       ): G[TransactionResult] = {
-        val initialQueue = QueueState(triggers, baseState, Map.empty)
+        val initialQueue = QueueState(triggers, baseState, Map.empty, Map.empty)
 
         Monad[G].tailRecM(initialQueue)(processNext)
       }
@@ -101,12 +102,13 @@ object TriggerDispatcher {
                   logEntries = logEntries.toList,
                   totalGasUsed = gasUsed,
                   maxDepth = depth,
-                  assetTransfers = qs.assetTransfers
+                  assetTransfers = qs.assetTransfers,
+                  nullifierConsumptions = qs.nullifierConsumptions
                 ): TransactionResult).asRight[QueueState]
 
               case trigger :: rest =>
                 processSingleTrigger(trigger, qs.txnState).flatMap {
-                  case Right((nextState, moreTriggers, transfers)) =>
+                  case Right((nextState, moreTriggers, transfers, consumptions)) =>
                     // Accumulate the triggered fiber's _transferAsset effects keyed by the EMITTING (triggered)
                     // fiber id — the holder-defense key the combiner uses (R1).
                     val nextTransfers =
@@ -116,10 +118,20 @@ object TriggerDispatcher {
                           trigger.targetFiberId,
                           qs.assetTransfers.getOrElse(trigger.targetFiberId, List.empty) ++ transfers
                         )
+                    // Same accumulation for _consumeNullifier: keyed by the EMITTING (triggered) fiber id,
+                    // which IS the nullifier domain (protocol-nullifier-set.md).
+                    val nextConsumptions =
+                      if (consumptions.isEmpty) qs.nullifierConsumptions
+                      else
+                        qs.nullifierConsumptions.updated(
+                          trigger.targetFiberId,
+                          qs.nullifierConsumptions.getOrElse(trigger.targetFiberId, List.empty) ++ consumptions
+                        )
                     QueueState(
                       pending = moreTriggers ++ rest,
                       txnState = nextState,
-                      assetTransfers = nextTransfers
+                      assetTransfers = nextTransfers,
+                      nullifierConsumptions = nextConsumptions
                     ).asLeft[TransactionResult].pure[G]
 
                   case Left(reason) =>
@@ -132,7 +144,12 @@ object TriggerDispatcher {
         }
 
       private type TriggerResult =
-        (CalculatedState, List[FiberTrigger], List[FiberEffect.AssetTransferred])
+        (
+          CalculatedState,
+          List[FiberTrigger],
+          List[FiberEffect.AssetTransferred],
+          List[FiberEffect.NullifierConsumed]
+        )
 
       private def processSingleTrigger(
         trigger: FiberTrigger,
@@ -182,10 +199,10 @@ object TriggerDispatcher {
           _             <- ExecutionOps.markProcessed[G](fiber.fiberId, trigger.input.key)
           handlerResult <- handler.handle(trigger, fiber, state)
           result <- handlerResult match {
-            case TriggerHandlerResult.Success(updatedState, cascadeTriggers, assetTransfers) =>
+            case TriggerHandlerResult.Success(updatedState, cascadeTriggers, assetTransfers, nullifierConsumptions) =>
               ExecutionOps
                 .incrementDepth[G]
-                .as((updatedState, cascadeTriggers, assetTransfers).asRight[FailureReason])
+                .as((updatedState, cascadeTriggers, assetTransfers, nullifierConsumptions).asRight[FailureReason])
 
             case TriggerHandlerResult.Failed(reason) =>
               reason.asLeft[TriggerResult].pure[G]

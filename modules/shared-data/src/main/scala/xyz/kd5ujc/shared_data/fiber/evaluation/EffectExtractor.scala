@@ -9,6 +9,7 @@ import cats.{Monad, ~>}
 
 import io.constellationnetwork.metagraph_sdk.json_logic._
 import io.constellationnetwork.metagraph_sdk.json_logic.core.{BoolValue, MapValue, StrValue}
+import io.constellationnetwork.security.hash.Hash
 
 import xyz.kd5ujc.schema.asset.AssetHolder
 import xyz.kd5ujc.schema.fiber._
@@ -148,6 +149,9 @@ object EffectExtractor {
 
       case FiberDirective.Dependency =>
         ctx => extractDependencyMutations[F, G](ctx.authored, ctx.contextData).map(_.map(x => x: FiberEffect))
+
+      case FiberDirective.ConsumeNullifier =>
+        ctx => extractNullifierConsumptions[F, G](ctx.authored, ctx.contextData).map(_.map(x => x: FiberEffect))
     }
 
   /**
@@ -494,6 +498,57 @@ object EffectExtractor {
         rejectDirective[F, G, FiberEffect.AssetTransferred](
           "_transferAsset",
           s"malformed item (expected an object), got $other"
+        )
+    }
+
+  /**
+   * Extract protocol nullifier consumptions (`_consumeNullifier`, protocol-nullifier-set.md) with gas
+   * metering. Mirrors [[extractAssetTransfers]], but each array ITEM is a bare nf VALUE (a string literal or
+   * a sub-expression that evaluates to one) — no object wrapper, no domain field: the domain is ALWAYS the
+   * emitting fiber's own id, stamped later by the engine. Each item is RESOLVED here against the transition
+   * context (gas charged under [[GasExhaustionPhase.Effect]]), then NORMALIZED through [[NullifierHex]]
+   * (strip optional `0x`, lowercase, require exactly 64 hex chars). A malformed item (non-string, bad hex, or
+   * a gas/eval failure) raises a graceful [[CombineRejected]] — LOUD, never a silent drop (L5 discipline); an
+   * ABSENT directive is a no-op (empty list).
+   *
+   * SECURITY: this extractor carries NO enforcement. The combiner
+   * ([[xyz.kd5ujc.shared_data.lifecycle.combine.NullifierCombiner]]) does the absent-check → insert (and the
+   * double-spend / cap rejection) against the authoritative `CalculatedState.nullifiers`.
+   */
+  def extractNullifierConsumptions[F[_]: Async, G[_]: Monad](
+    effectResult: JsonLogicValue,
+    contextData:  JsonLogicValue
+  )(implicit
+    S:    Stateful[G, ExecutionState],
+    A:    Ask[G, FiberContext],
+    lift: F ~> G
+  ): G[List[FiberEffect.NullifierConsumed]] =
+    extractArrayByKey(effectResult, ReservedKeys.CONSUME_NULLIFIER)
+      .traverse(item => parseNullifierConsumption[F, G](item, contextData))
+
+  /** Parse ONE `_consumeNullifier` item: evaluate (metered), require a string, normalize to 64-hex or reject. */
+  private def parseNullifierConsumption[F[_]: Async, G[_]: Monad](
+    value:       JsonLogicValue,
+    contextData: JsonLogicValue
+  )(implicit
+    S:    Stateful[G, ExecutionState],
+    A:    Ask[G, FiberContext],
+    lift: F ~> G
+  ): G[FiberEffect.NullifierConsumed] =
+    evalOrReject[F, G](value, contextData, GasExhaustionPhase.Effect, "_consumeNullifier", "nullifier").flatMap {
+      case StrValue(raw) =>
+        NullifierHex
+          .normalize(raw)
+          .fold(
+            rejectDirective[F, G, FiberEffect.NullifierConsumed](
+              "_consumeNullifier",
+              s"nullifier must be 64 hex chars (optionally 0x-prefixed), got '$raw'"
+            )
+          )(hex => FiberEffect.NullifierConsumed(Hash(hex)).pure[G])
+      case other =>
+        rejectDirective[F, G, FiberEffect.NullifierConsumed](
+          "_consumeNullifier",
+          s"nullifier must be a hex string, got $other"
         )
     }
 

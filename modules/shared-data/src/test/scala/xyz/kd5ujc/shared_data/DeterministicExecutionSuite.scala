@@ -99,7 +99,7 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
       expect(result1.isInstanceOf[TransactionResult.Committed]) and
       expect(
         result1 match {
-          case TransactionResult.Committed(updatedSMs, _, _, _, _, _, _) =>
+          case TransactionResult.Committed(updatedSMs, _, _, _, _, _, _, _) =>
             updatedSMs.get(fiberId).exists(_.currentState == StateId("ACTIVE"))
           case _ => false
         }
@@ -180,7 +180,7 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
         case TransactionResult.Aborted(reason, _, _) =>
           expect(reason.isInstanceOf[FailureReason.GasExhaustedFailure])
             .or(failure(s"Expected GasExhaustedFailure but got: ${reason.getClass.getSimpleName}"))
-        case TransactionResult.Committed(_, _, _, _, _, _, _) =>
+        case TransactionResult.Committed(_, _, _, _, _, _, _, _) =>
           failure("Expected Aborted with GasExhaustedFailure, but transaction was committed")
       }
     }
@@ -330,7 +330,7 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
         case TransactionResult.Aborted(reason, _, _) =>
           expect(reason.isInstanceOf[FailureReason.CycleDetected])
             .or(failure(s"Expected CycleDetected, got $reason"))
-        case TransactionResult.Committed(_, _, _, _, _, _, _) =>
+        case TransactionResult.Committed(_, _, _, _, _, _, _, _) =>
           failure(s"Expected Aborted, got Committed")
       }
     }
@@ -574,7 +574,7 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
           .runA(ExecutionState.initial)
 
       } yield result match {
-        case TransactionResult.Committed(updatedSMs, _, _, _, _, _, _) =>
+        case TransactionResult.Committed(updatedSMs, _, _, _, _, _, _, _) =>
           // Both fibers should be updated atomically
           expect(updatedSMs.size == 2, s"Expected 2 updated machines, got ${updatedSMs.size}") and
           expect(
@@ -738,7 +738,7 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
         result <- orchestrator.process(fiberId, input, List.empty)
 
       } yield result match {
-        case TransactionResult.Committed(machines, _, _, totalGasUsed, _, _, _) =>
+        case TransactionResult.Committed(machines, _, _, totalGasUsed, _, _, _, _) =>
           // Gas should include ALL guard evaluations (both failed ones + the successful one) + effect
           // First guard: == check (1) + add (1) + 2 consts (2) = 4
           // Second guard: == check (1) + add (1) + 2 consts (2) = 4
@@ -839,7 +839,7 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
             case other =>
               failure(s"Expected GasExhaustedFailure but got: ${other.getClass.getSimpleName}")
           }
-        case TransactionResult.Committed(_, _, _, _, _, _, _) =>
+        case TransactionResult.Committed(_, _, _, _, _, _, _, _) =>
           failure("Expected Aborted with GasExhaustedFailure, but transaction was committed")
       }
     }
@@ -1142,7 +1142,7 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
             reason.isInstanceOf[FailureReason.CycleDetected],
             s"Expected CycleDetected but got: ${reason.getClass.getSimpleName}: ${reason.toMessage}"
           )
-        case TransactionResult.Committed(_, _, _, _, _, _, _) =>
+        case TransactionResult.Committed(_, _, _, _, _, _, _, _) =>
           failure("Expected Aborted with CycleDetected, but transaction was committed")
       }
     }
@@ -1337,7 +1337,7 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
             reason.isInstanceOf[FailureReason.CycleDetected],
             s"Expected CycleDetected but got: ${reason.getClass.getSimpleName}: ${reason.toMessage}"
           )
-        case TransactionResult.Committed(_, _, _, _, _, _, _) =>
+        case TransactionResult.Committed(_, _, _, _, _, _, _, _) =>
           failure("Expected Aborted with CycleDetected, but transaction was committed")
       }
     }
@@ -1562,7 +1562,7 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
             reason.isInstanceOf[FailureReason.CycleDetected],
             s"Expected CycleDetected but got: ${reason.getClass.getSimpleName}: ${reason.toMessage}"
           )
-        case TransactionResult.Committed(_, _, _, _, _, _, _) =>
+        case TransactionResult.Committed(_, _, _, _, _, _, _, _) =>
           failure("Expected Aborted with CycleDetected, but transaction was committed")
       }
     }
@@ -1634,7 +1634,7 @@ object DeterministicExecutionSuite extends SimpleIOSuite with Checkers {
             reason.isInstanceOf[FailureReason.TriggerTargetNotFound],
             s"Expected TriggerTargetNotFound but got: ${reason.getClass.getSimpleName}"
           )
-        case TransactionResult.Committed(machines, _, _, _, _, _, _) =>
+        case TransactionResult.Committed(machines, _, _, _, _, _, _, _) =>
           // If missing dependencies are skipped, verify the main transition completed
           expect(
             machines.get(fiberId).exists(_.currentState == StateId("end")),

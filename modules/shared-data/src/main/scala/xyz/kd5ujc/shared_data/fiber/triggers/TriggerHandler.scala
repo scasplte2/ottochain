@@ -115,8 +115,20 @@ class StateMachineTriggerHandler[F[_]: Async: SecurityProvider, G[_]: Monad](
       result <- outcome match {
         // Cascaded (triggered) transitions do not spawn or mutate dynamic dependencies — those directives
         // (`spawns`, `dependencyMutations`) are honoured only on the PRIMARY transition (see FiberEngine),
-        // so both are ignored here, as `spawns` already is.
-        case FiberResult.Success(newStateData, newStateId, triggers, _, _, emittedEvents, assetTransfers, _) =>
+        // so both are ignored here, as `spawns` already is. `_consumeNullifier` IS honoured on the cascade
+        // (like Transfer/Emit): the domain is the triggered fiber's OWN id, so a cascade can only ever
+        // consume into its own namespace.
+        case FiberResult.Success(
+              newStateData,
+              newStateId,
+              triggers,
+              _,
+              _,
+              emittedEvents,
+              assetTransfers,
+              _,
+              nullifierConsumptions
+            ) =>
           val receipt = EventReceipt.success(
             sm = sm,
             eventName = trigger.input.key,
@@ -144,7 +156,8 @@ class StateMachineTriggerHandler[F[_]: Async: SecurityProvider, G[_]: Monad](
               TriggerHandlerResult.Success(
                 updatedState = updatedState,
                 cascadeTriggers = triggers,
-                assetTransfers = assetTransfers
+                assetTransfers = assetTransfers,
+                nullifierConsumptions = nullifierConsumptions
               ): TriggerHandlerResult
             )
 
