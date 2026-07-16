@@ -1103,7 +1103,7 @@ object SpawnMachinesSuite extends SimpleIOSuite {
             reason.isInstanceOf[FailureReason.GasExhaustedFailure],
             s"Expected GasExhaustedFailure, got ${reason.getClass.getSimpleName}: ${reason.toMessage}"
           )
-        case TransactionResult.Committed(_, _, _, _, _, _, _) =>
+        case TransactionResult.Committed(_, _, _, _, _, _, _, _) =>
           failure("Expected Aborted with GasExhaustedFailure, but transaction was committed")
       }
     }
@@ -1202,7 +1202,7 @@ object SpawnMachinesSuite extends SimpleIOSuite {
             reason.isInstanceOf[FailureReason.DuplicateChildId],
             s"Expected DuplicateChildId but got: ${reason.getClass.getSimpleName}"
           )
-        case TransactionResult.Committed(machines, _, _, _, _, _, _) =>
+        case TransactionResult.Committed(machines, _, _, _, _, _, _, _) =>
           // If duplicates are deduplicated (second overwrites first), verify exactly 1 child
           val childCount = machines.values.count(_.parentFiberId.contains(parentfiberId))
           expect(childCount == 1, s"Expected exactly 1 child after dedup, got $childCount")
@@ -1321,7 +1321,7 @@ object SpawnMachinesSuite extends SimpleIOSuite {
             reason.isInstanceOf[FailureReason.ChildIdCollision],
             s"Expected ChildIdCollision but got: ${reason.getClass.getSimpleName}: ${reason.toMessage}"
           )
-        case TransactionResult.Committed(_, _, _, _, _, _, _) =>
+        case TransactionResult.Committed(_, _, _, _, _, _, _, _) =>
           failure("Expected Aborted with ChildIdCollision, but transaction was committed")
       }
     }
@@ -1412,7 +1412,7 @@ object SpawnMachinesSuite extends SimpleIOSuite {
             reason.isInstanceOf[FailureReason.StateSizeTooLarge],
             s"Expected size-related failure but got: ${reason.getClass.getSimpleName}: ${reason.toMessage}"
           )
-        case TransactionResult.Committed(_, _, _, _, _, _, _) =>
+        case TransactionResult.Committed(_, _, _, _, _, _, _, _) =>
           failure("Expected Aborted for oversized initialData")
       }
     }
@@ -1684,7 +1684,7 @@ object SpawnMachinesSuite extends SimpleIOSuite {
           expect(dial == "spawnOwnerPolicy", s"Expected spawnOwnerPolicy PolicyViolation, got dial=$dial")
         case TransactionResult.Aborted(reason, _, _) =>
           failure(s"Expected PolicyViolation(spawnOwnerPolicy), got: ${reason.getClass.getSimpleName}")
-        case TransactionResult.Committed(_, _, _, _, _, _, _) =>
+        case TransactionResult.Committed(_, _, _, _, _, _, _, _) =>
           failure("Expected Aborted: a child owned by a non-parent address must be rejected by the subset floor")
       }
     }
@@ -1791,7 +1791,7 @@ object SpawnMachinesSuite extends SimpleIOSuite {
             reason.isInstanceOf[FailureReason.InvalidChildIdFormat],
             s"Expected InvalidChildIdFormat but got: ${reason.getClass.getSimpleName}"
           )
-        case Right(TransactionResult.Committed(_, _, _, _, _, _, _)) =>
+        case Right(TransactionResult.Committed(_, _, _, _, _, _, _, _)) =>
           failure("Expected error or Aborted for invalid UUID format, but transaction was committed")
       }
     }
@@ -1894,7 +1894,7 @@ object SpawnMachinesSuite extends SimpleIOSuite {
             reason.isInstanceOf[FailureReason.InvalidChildIdFormat],
             s"Expected InvalidChildIdFormat but got: ${reason.getClass.getSimpleName}"
           )
-        case Right(TransactionResult.Committed(_, _, _, _, _, _, _)) =>
+        case Right(TransactionResult.Committed(_, _, _, _, _, _, _, _)) =>
           failure("Expected error or Aborted for non-string childIdExpr, but transaction was committed")
       }
     }
@@ -1999,7 +1999,7 @@ object SpawnMachinesSuite extends SimpleIOSuite {
             reason.isInstanceOf[FailureReason.InvalidOwnersExpression],
             s"Expected InvalidOwnersExpression but got: ${reason.getClass.getSimpleName}"
           )
-        case Right(TransactionResult.Committed(_, _, _, _, _, _, _)) =>
+        case Right(TransactionResult.Committed(_, _, _, _, _, _, _, _)) =>
           failure("Expected error or Aborted for non-array ownersExpr, but transaction was committed")
       }
     }
@@ -2104,7 +2104,7 @@ object SpawnMachinesSuite extends SimpleIOSuite {
             reason.isInstanceOf[FailureReason.InvalidOwnerAddress],
             s"Expected InvalidOwnerAddress but got: ${reason.getClass.getSimpleName}"
           )
-        case Right(TransactionResult.Committed(_, _, _, _, _, _, _)) =>
+        case Right(TransactionResult.Committed(_, _, _, _, _, _, _, _)) =>
           failure("Expected error or Aborted for invalid owner address")
       }
     }

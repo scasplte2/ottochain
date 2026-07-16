@@ -416,8 +416,8 @@ object ParentChildStateMachineSuite extends SimpleIOSuite {
 
         // Extract logEntries from the committed result
         logEntries = result match {
-          case TransactionResult.Committed(_, _, entries, _, _, _, _) => entries
-          case _                                                      => List.empty
+          case TransactionResult.Committed(_, _, entries, _, _, _, _, _) => entries
+          case _                                                         => List.empty
         }
 
         receipts = logEntries.collect { case r: EventReceipt => r }
@@ -502,8 +502,8 @@ object ParentChildStateMachineSuite extends SimpleIOSuite {
         result <- engine.process(fiberId, input, proofs)
 
         logEntries = result match {
-          case TransactionResult.Committed(_, _, entries, _, _, _, _) => entries
-          case _                                                      => List.empty
+          case TransactionResult.Committed(_, _, entries, _, _, _, _, _) => entries
+          case _                                                         => List.empty
         }
 
         receipts = logEntries.collect { case r: EventReceipt => r }
@@ -576,8 +576,8 @@ object ParentChildStateMachineSuite extends SimpleIOSuite {
         result <- engine.process(fiberId, input, proofs)
 
         logEntries = result match {
-          case TransactionResult.Committed(_, _, entries, _, _, _, _) => entries
-          case _                                                      => List.empty
+          case TransactionResult.Committed(_, _, entries, _, _, _, _, _) => entries
+          case _                                                         => List.empty
         }
 
         receipts = logEntries.collect { case r: EventReceipt => r }

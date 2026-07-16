@@ -118,7 +118,7 @@ object DepthAndHashSuite extends SimpleIOSuite {
         result <- orchestrator.process(parentId, input, List.empty)
 
       } yield result match {
-        case TransactionResult.Committed(machines, _, _, _, _, _, _) =>
+        case TransactionResult.Committed(machines, _, _, _, _, _, _, _) =>
           // Spawns don't increment depth - only triggers do
           // With maxDepth=1, parent transition at depth 0 succeeds, child is spawned
           expect(
@@ -188,7 +188,7 @@ object DepthAndHashSuite extends SimpleIOSuite {
           expect(originalFiber.exists(_.stateDataHash == initialHash)) and
           expect(originalFiber.exists(_.stateData == initialData)) and
           expect(originalFiber.exists(_.sequenceNumber == FiberOrdinal.unsafeApply(10L)))
-        case TransactionResult.Committed(_, _, _, _, _, _, _) =>
+        case TransactionResult.Committed(_, _, _, _, _, _, _, _) =>
           failure("Expected Aborted for missing transition")
       }
     }
@@ -381,7 +381,7 @@ object DepthAndHashSuite extends SimpleIOSuite {
       } yield result match {
         case TransactionResult.Aborted(reason, _, _) =>
           expect(reason.isInstanceOf[FailureReason.DepthExceeded])
-        case TransactionResult.Committed(_, _, _, _, _, _, _) =>
+        case TransactionResult.Committed(_, _, _, _, _, _, _, _) =>
           failure("Expected to exceed depth")
       }
     }

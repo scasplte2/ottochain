@@ -155,7 +155,7 @@ object EventBatchBoundingSuite extends SimpleIOSuite {
         result <- engine.process(fiberId, input, proofs)
 
         updatedFiber = result match {
-          case TransactionResult.Committed(machines, _, _, _, _, _, _) =>
+          case TransactionResult.Committed(machines, _, _, _, _, _, _, _) =>
             machines.get(fiberId)
           case _ => None
         }

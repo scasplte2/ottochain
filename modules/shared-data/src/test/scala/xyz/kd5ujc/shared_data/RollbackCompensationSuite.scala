@@ -214,7 +214,7 @@ object RollbackCompensationSuite extends SimpleIOSuite {
           expect(calculatedState.stateMachines.get(machineA).exists(_.sequenceNumber == FiberOrdinal.MinValue)) and
           expect(calculatedState.stateMachines.get(machineB).exists(_.sequenceNumber == FiberOrdinal.MinValue)) and
           expect(calculatedState.stateMachines.get(machineC).exists(_.sequenceNumber == FiberOrdinal.MinValue))
-        case TransactionResult.Committed(_, _, _, _, _, _, _) =>
+        case TransactionResult.Committed(_, _, _, _, _, _, _, _) =>
           failure("Expected Aborted due to C's failed guard, got Committed")
       }
     }
@@ -296,7 +296,7 @@ object RollbackCompensationSuite extends SimpleIOSuite {
             calculatedState.stateMachines.get(fiberId).exists(_.sequenceNumber == FiberOrdinal.unsafeApply(5L))
           ) and
           expect(calculatedState.stateMachines.get(fiberId).exists(_.stateData == initialData))
-        case TransactionResult.Committed(machines, _, _, _, _, _, _) =>
+        case TransactionResult.Committed(machines, _, _, _, _, _, _, _) =>
           // If it committed (JsonLogic might handle missing vars gracefully),
           // verify state was actually updated
           val updated = machines.get(fiberId)
@@ -435,7 +435,7 @@ object RollbackCompensationSuite extends SimpleIOSuite {
           expect(calculatedState.stateMachines.get(parentId).exists(_.sequenceNumber == FiberOrdinal.MinValue)) and
           // No children should exist
           expect(calculatedState.stateMachines.size == 1)
-        case Right(TransactionResult.Committed(machines, _, _, _, _, _, _)) =>
+        case Right(TransactionResult.Committed(machines, _, _, _, _, _, _, _)) =>
           // If it committed, the child's trigger might have been handled differently
           // Document the actual behavior
           expect(machines.contains(parentId))
@@ -497,7 +497,7 @@ object RollbackCompensationSuite extends SimpleIOSuite {
           expect(calculatedState.stateMachines.get(fiberId).exists(_.sequenceNumber == originalSeqNum)) and
           expect(calculatedState.stateMachines.get(fiberId).exists(_.stateData == initialData)) and
           expect(calculatedState.stateMachines.get(fiberId).exists(_.stateDataHash == initialHash))
-        case TransactionResult.Committed(_, _, _, _, _, _, _) =>
+        case TransactionResult.Committed(_, _, _, _, _, _, _, _) =>
           failure("Expected Aborted for event with no transitions, got Committed")
       }
     }
