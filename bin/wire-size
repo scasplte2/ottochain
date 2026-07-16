@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+#
+# wire-size — run the OnChain wire-size regression suite and print the byte probes.
+# Deterministic serialization = tight byte bands that double as a codec-bloat
+# tripwire. This is the RIGHT kind of "perf test" for a consensus codebase
+# (bytes/gas/counts, not wall-clock). The 512KB snapshot cap is the hard ceiling.
+#
+# Usage:
+#   bin/wire-size
+#
+# NOTE: OnChainWireSizeSuite ships with the OnChain-v2 work (PR #210). If it is
+# not on your branch yet, sbt reports "No tests were executed" — that is expected.
+#
+set -euo pipefail
+
+if ! command -v sbt >/dev/null 2>&1 && [ -f "$HOME/.sdkman/bin/sdkman-init.sh" ]; then
+  set +e; source "$HOME/.sdkman/bin/sdkman-init.sh" >/dev/null 2>&1; set -e
+fi
+
+case "${1:-}" in -h|--help) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
+
+ROOT="$(git rev-parse --show-toplevel)"; cd "$ROOT"
+
+log="$(mktemp)"
+set +e
+sbt "sharedData/testOnly *OnChainWireSizeSuite*" 2>&1 | tee "$log"
+rc=${PIPESTATUS[0]}
+set -e
+
+echo ""
+echo "==> byte probes"
+grep -iE 'bytes|size|KB|budget|margin' "$log" || echo "(no probe lines — suite may be absent on this branch)"
+rm -f "$log"
+exit "$rc"

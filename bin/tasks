@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+#
+# tasks — list open issues an agent can pick up, filtered by label.
+#
+# Usage:
+#   bin/tasks [label]        # default label: agent-ready
+#   bin/tasks cheap-model-ok
+#   bin/tasks --labels       # print the label taxonomy and exit
+#
+# Label taxonomy (route by the minimum tier that can safely do the job):
+#   agent-ready     scoped, acceptance-criteria clear, safe for an agent to start
+#   cheap-model-ok  T0-1 work: tests / docs / bin / worksheets — night-shift picks ONLY these
+#   needs-senior    requires a senior-model session (judgment, cross-cutting)
+#   blast-radius    touches a consensus-critical file — propose only; human/senior decides
+#   size/S size/M size/L   rough effort
+#
+set -euo pipefail
+
+case "${1:-}" in
+  -h|--help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  --labels)  sed -n '9,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+esac
+
+LABEL="${1:-agent-ready}"
+echo "==> open issues labelled '$LABEL'"
+gh issue list --state open --label "$LABEL" \
+  --json number,title,labels \
+  --jq '.[] | "#\(.number)  \(.title)   [\(.labels|map(.name)|join(","))]"' 2>/dev/null \
+  || gh issue list --state open --label "$LABEL"
