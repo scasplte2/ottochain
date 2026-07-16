@@ -49,7 +49,7 @@ jobs:
           #     rejections — a block-inclusion timing issue, not a validation bug. The wide window rides it out.
           ALL="$(cat <<'JSON'
           [
-            {"name":"core","filter":"--exclude sigma-mixer,rule110,staked-oracle-pool,tictactoe,riverdale-economy","concurrency":"","ordinalThreshold":"","maxResubmits":"","wallets":"","timeout":30},
+            {"name":"core","filter":"--exclude sigma-mixer,rule110,staked-oracle-pool,tictactoe,riverdale-economy,riverdale-health","concurrency":"","ordinalThreshold":"","maxResubmits":"","wallets":"","timeout":30},
             {"name":"tictactoe","filter":"--only tictactoe","concurrency":"","ordinalThreshold":"","maxResubmits":"","wallets":"","timeout":30},
             {"name":"sigma-mixer","filter":"--only sigma-mixer","concurrency":"2","ordinalThreshold":"10","maxResubmits":"4","wallets":"","timeout":25},
             {"name":"rule110","filter":"--only rule110","concurrency":"3","ordinalThreshold":"10","maxResubmits":"4","wallets":"","timeout":30},
