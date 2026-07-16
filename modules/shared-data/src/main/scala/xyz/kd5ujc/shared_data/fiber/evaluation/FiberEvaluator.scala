@@ -338,6 +338,7 @@ object FiberEvaluator {
           emittedEvents = effects.collect { case FiberEffect.Emitted(ev) => ev }
           assetTransfers = effects.collect { case t: FiberEffect.AssetTransferred => t }
           depMutations = effects.collect { case d: FiberEffect.DependencyMutated => d }
+          nullifierConsumptions = effects.collect { case n: FiberEffect.NullifierConsumed => n }
 
           // FiberPolicy dial `allowedEffects`: FAIL-CLOSED gate on which directive families this transition may
           // produce. A non-empty family NOT in the allowlist aborts the WHOLE transition (total discard) — it
@@ -352,7 +353,8 @@ object FiberEvaluator {
               EffectKind.Spawn      -> spawnMachines.nonEmpty,
               EffectKind.Emit       -> emittedEvents.nonEmpty,
               EffectKind.Transfer   -> assetTransfers.nonEmpty,
-              EffectKind.Dependency -> depMutations.nonEmpty
+              EffectKind.Dependency -> depMutations.nonEmpty,
+              EffectKind.Nullifier  -> nullifierConsumptions.nonEmpty
             )
             present.collectFirst { case (k, true) if !allowed.contains(k) => k }
           }
@@ -395,7 +397,8 @@ object FiberEvaluator {
                             returnValue = None,
                             emittedEvents = emittedEvents,
                             assetTransfers = assetTransfers,
-                            dependencyMutations = depMutations
+                            dependencyMutations = depMutations,
+                            nullifierConsumptions = nullifierConsumptions
                           )
                       )
                     )

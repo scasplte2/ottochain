@@ -174,8 +174,8 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
     outcome <- orchestrator.process(update.fiberId, input, proofsList)
 
     newState <- outcome match {
-      case TransactionResult.Committed(updatedFibers, updatedScripts, logEntries, _, _, _, assetTransfers) =>
-        handleCommittedOutcome(updatedFibers, updatedScripts, logEntries, assetTransfers)
+      case TransactionResult.Committed(updatedFibers, updatedScripts, logEntries, _, _, _, transfers, nullifiers) =>
+        handleCommittedOutcome(updatedFibers, updatedScripts, logEntries, transfers, nullifiers)
 
       case TransactionResult.Aborted(reason, gasUsed, _) =>
         handleAbortedOutcome(update.fiberId, update.eventName, reason, gasUsed, currentOrdinal)
@@ -302,9 +302,10 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
     newState <- outcome match {
       // A migration pass MUST NOT fabricate `_transferAsset` of held assets (asset-model.md §10, R34); the
       // engine's migration path never produces asset transfers, but the same holder-checked entry point is
-      // used here defensively so any future migration-emitted transfer is still gated by R1.
-      case TransactionResult.Committed(updatedFibers, updatedScripts, logEntries, _, _, _, assetTransfers) =>
-        handleCommittedOutcome(updatedFibers, updatedScripts, logEntries, assetTransfers)
+      // used here defensively so any future migration-emitted transfer is still gated by R1. The same
+      // defensive threading covers `_consumeNullifier` (the migration path never emits it either).
+      case TransactionResult.Committed(updatedFibers, updatedScripts, logEntries, _, _, _, transfers, nullifiers) =>
+        handleCommittedOutcome(updatedFibers, updatedScripts, logEntries, transfers, nullifiers)
 
       case TransactionResult.Aborted(reason, gasUsed, _) =>
         handleAbortedOutcome(update.fiberId, "__upgrade__", reason, gasUsed, currentOrdinal)
@@ -366,23 +367,29 @@ class FiberCombiner[F[_]: Async: SecurityProvider](
    * Applies fiber/script record updates, appends log entries to OnChain.latestLogs, then — within the SAME
    * combiner pass — applies any `_transferAsset` effects the transition emitted (the §9/§10 return channel,
    * R2) through [[AssetCombiner.applyFiberTransfers]], which enforces the holder-ownership defense (R1) and
-   * the no-reentrancy / mutation bound (R20). A rejected transfer raises `CombineRejected`, which
-   * `Combiner.insert` turns into a graceful `RejectionReceipt` for the whole update (#154) — the fiber's state
-   * mutation is discarded along with it (all-or-nothing; never a partial apply).
+   * the no-reentrancy / mutation bound (R20), and then any `_consumeNullifier` effects through
+   * [[NullifierCombiner.applyConsumptions]] (absent-check → insert at the current ordinal; double-spend /
+   * cap breach reject — protocol-nullifier-set.md). A rejected transfer or consumption raises
+   * `CombineRejected`, which `Combiner.insert` turns into a graceful `RejectionReceipt` for the whole update
+   * (#154) — the fiber's state mutation is discarded along with it (all-or-nothing; never a partial apply).
    */
   private def handleCommittedOutcome(
-    updatedFibers:  Map[UUID, Records.StateMachineFiberRecord],
-    updatedScripts: Map[UUID, Records.ScriptFiberRecord],
-    logEntries:     List[FiberLogEntry],
-    assetTransfers: Map[UUID, List[FiberEffect.AssetTransferred]]
+    updatedFibers:         Map[UUID, Records.StateMachineFiberRecord],
+    updatedScripts:        Map[UUID, Records.ScriptFiberRecord],
+    logEntries:            List[FiberLogEntry],
+    assetTransfers:        Map[UUID, List[FiberEffect.AssetTransferred]],
+    nullifierConsumptions: Map[UUID, List[FiberEffect.NullifierConsumed]]
   ): F[DataState[OnChain, CalculatedState]] =
     for {
       withFibers <- current.withFibersAndScripts[F](updatedFibers, updatedScripts).map(_.appendLogs(logEntries))
-      result <-
+      withTransfers <-
         if (assetTransfers.isEmpty) withFibers.pure[F]
         else
           AssetCombiner[F](withFibers, ctx, Limits.MaxRegistryBundleBytes)
             .applyFiberTransfers(withFibers, assetTransfers)
+      result <-
+        if (nullifierConsumptions.isEmpty) withTransfers.pure[F]
+        else NullifierCombiner[F](ctx).applyConsumptions(withTransfers, nullifierConsumptions)
     } yield result
 
   /**

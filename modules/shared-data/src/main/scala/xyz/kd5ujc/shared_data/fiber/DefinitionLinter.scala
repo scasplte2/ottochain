@@ -5,7 +5,14 @@ import cats.Id
 import io.constellationnetwork.metagraph_sdk.json_logic._
 
 import xyz.kd5ujc.schema.asset.AssetHolder
-import xyz.kd5ujc.schema.fiber.{FiberContextRoot, ReservedKeys, StateId, StateMachineDefinition, Transition}
+import xyz.kd5ujc.schema.fiber.{
+  FiberContextRoot,
+  NullifierHex,
+  ReservedKeys,
+  StateId,
+  StateMachineDefinition,
+  Transition
+}
 import xyz.kd5ujc.schema.registry.MachineShape
 import xyz.kd5ujc.shared_data.lifecycle.validate.rules.{CommonRules, FiberRules}
 
@@ -100,6 +107,7 @@ object DefinitionLinter {
       checkVarPaths(t, idx, writtenFields, declaredStateFields, shape) ++
       checkDirectives(t, idx) ++
       checkTransferRecipients(t, idx) ++
+      checkNullifierValues(t, idx) ++
       checkInjectionHazard(t, idx) ++
       checkWrites(t, idx, shape)
     }
@@ -337,6 +345,73 @@ object DefinitionLinter {
       case ConstExpression(MapValue(m)) => m.contains(key)
       case _                            => false
     }
+
+  // ==========================================================================
+  // (b2b) `_consumeNullifier` value shape (bare 64-hex nf values)
+  // ==========================================================================
+
+  /**
+   * A `_consumeNullifier` array item is a bare nf VALUE: a string literal that normalizes to 64 hex chars
+   * (optional `0x` prefix — [[NullifierHex]], the same normalizer the chain enforces at extraction), OR a
+   * dynamic expression (`var`/`cat`/`substr`/…) whose resolved value the combiner checks. This is the offline
+   * shift-left for the extractor's loud `CombineRejected`: an obviously-wrong LITERAL (a string that can never
+   * normalize, or a non-string constant) is flagged here, before the definition is signed. Advisory Warnings —
+   * the chain gate is the extractor.
+   */
+  private def checkNullifierValues(t: Transition, idx: Int): List[Diagnostic] =
+    nullifierItemExprs(t.effect).flatMap(nullifierDiagnostic(_, idx))
+
+  /** Pull each `_consumeNullifier` item sub-expression out of an effect (descends if/merge nesting). */
+  private def nullifierItemExprs(expr: JsonLogicExpression): List[JsonLogicExpression] =
+    expr match {
+      case MapExpression(map) =>
+        map.get(ReservedKeys.CONSUME_NULLIFIER).toList.flatMap(nullifierItemsOfArray) ++
+        map.values.toList.collect { case a: ApplyExpression => a }.flatMap(nullifierItemExprs)
+      case ConstExpression(MapValue(map)) =>
+        map.get(ReservedKeys.CONSUME_NULLIFIER).toList.flatMap {
+          case ArrayValue(items) => items.map(ConstExpression(_): JsonLogicExpression)
+          case _                 => Nil
+        }
+      case ApplyExpression(_, args) => args.flatMap(nullifierItemExprs)
+      case _                        => Nil
+    }
+
+  private def nullifierItemsOfArray(arr: JsonLogicExpression): List[JsonLogicExpression] =
+    arr match {
+      case ArrayExpression(items)             => items
+      case ConstExpression(ArrayValue(items)) => items.map(ConstExpression(_): JsonLogicExpression)
+      case _                                  => Nil
+    }
+
+  /** Classify one item's STATIC shape (None == plausibly-valid literal, or dynamic / not statically checkable). */
+  private def nullifierDiagnostic(item: JsonLogicExpression, idx: Int): Option[Diagnostic] = {
+    val loc = Location(Some(idx), "effect", Some(ReservedKeys.CONSUME_NULLIFIER))
+    item match {
+      case ConstExpression(StrValue(s)) if NullifierHex.normalize(s).isDefined => None
+      case ConstExpression(StrValue(s)) =>
+        Some(
+          Diagnostic(
+            Severity.Warning,
+            "nullifier-literal-malformed",
+            s"""_consumeNullifier literal "$s" does not normalize to 64 hex chars """ +
+            s"(optionally 0x-prefixed); the chain rejects it at combine",
+            loc
+          )
+        )
+      case ConstExpression(_) =>
+        Some(
+          Diagnostic(
+            Severity.Warning,
+            "nullifier-literal-malformed",
+            "_consumeNullifier item must be a 64-hex string (or a dynamic expression); " +
+            "this non-string literal can never normalize and the chain rejects it at combine",
+            loc
+          )
+        )
+      // dynamic ({"var":..} / computed) — the resolved value is checked at combine (loud reject)
+      case _ => None
+    }
+  }
 
   // ==========================================================================
   // (b3) directive-injection hazard — dynamically-computed TOP-LEVEL effect keys
