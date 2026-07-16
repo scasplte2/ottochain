@@ -2,6 +2,8 @@ package xyz.kd5ujc.schema.fiber
 
 import java.util.UUID
 
+import io.constellationnetwork.security.hash.Hash
+
 import xyz.kd5ujc.schema.CodecConfiguration._
 import xyz.kd5ujc.schema.asset.AssetHolder
 
@@ -56,4 +58,15 @@ object FiberEffect {
    */
   @derive(customizableEncoder, customizableDecoder)
   final case class DependencyMutated(fiberId: UUID, active: Boolean) extends FiberEffect
+
+  /**
+   * A protocol nullifier consumption (`_consumeNullifier`, protocol-nullifier-set.md). Carries the RESOLVED,
+   * NORMALIZED nf value (64 lowercase hex chars, `0x` stripped — enforced at extraction, [[xyz.kd5ujc.shared_data.fiber.evaluation.EffectExtractor]]).
+   * The DOMAIN is NOT carried here: it is ALWAYS the emitting fiber's own id, stamped by the engine when it
+   * keys the per-transaction map (`Map(emitterFiberId -> consumptions)`) — an effect can never consume into
+   * another app's namespace. Enforcement (absent-check → insert at the current ordinal, double-spend ⇒
+   * graceful `CombineRejected`) lives ONLY in the combiner (`NullifierCombiner`), never at block acceptance.
+   */
+  @derive(customizableEncoder, customizableDecoder)
+  final case class NullifierConsumed(nullifier: Hash) extends FiberEffect
 }

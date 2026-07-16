@@ -14,7 +14,7 @@ import enumeratum.{CirceEnum, Enum, EnumEntry}
 import io.circe.{Decoder, DecodingFailure, Encoder, Json}
 
 /**
- * The 5 directive families [[xyz.kd5ujc.shared_data.fiber.evaluation.EffectExtractor]] scrapes from a
+ * The 6 directive families [[xyz.kd5ujc.shared_data.fiber.evaluation.EffectExtractor]] scrapes from a
  * transition's effect result. A fiber's [[FiberPolicy.Constrained.allowedEffects]] (when set) restricts which of
  * these its transitions may produce. Entry names are UPPERCASE on the wire (`"TRIGGER"`, `"SPAWN"`, …) — the
  * cross-language string contract with the SDK builder.
@@ -29,6 +29,7 @@ object EffectKind extends Enum[EffectKind] with CirceEnum[EffectKind] {
   case object Emit extends EffectKind // _emit
   case object Transfer extends EffectKind // _transferAsset
   case object Dependency extends EffectKind // _addDependency / _setDependencyActive
+  case object Nullifier extends EffectKind // _consumeNullifier (protocol-nullifier-set.md)
 }
 
 /**

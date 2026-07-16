@@ -37,7 +37,10 @@ object FiberResult {
     returnValue:         Option[JsonLogicValue],
     emittedEvents:       List[EmittedEvent] = List.empty,
     assetTransfers:      List[FiberEffect.AssetTransferred] = List.empty,
-    dependencyMutations: List[FiberEffect.DependencyMutated] = List.empty
+    dependencyMutations: List[FiberEffect.DependencyMutated] = List.empty,
+    // `_consumeNullifier` consumptions (protocol-nullifier-set.md). Same in-process-only default rationale
+    // as assetTransfers; the combiner (NullifierCombiner) is the sole enforcement site.
+    nullifierConsumptions: List[FiberEffect.NullifierConsumed] = List.empty
   ) extends FiberResult
 
   /**

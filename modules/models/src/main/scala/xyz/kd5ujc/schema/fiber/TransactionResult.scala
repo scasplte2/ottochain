@@ -35,7 +35,12 @@ object TransactionResult {
     totalGasUsed:         Long,
     maxDepth:             Int = 0,
     operationCount:       Long = 0L,
-    assetTransfers:       Map[UUID, List[FiberEffect.AssetTransferred]] = Map.empty
+    assetTransfers:       Map[UUID, List[FiberEffect.AssetTransferred]] = Map.empty,
+    // `_consumeNullifier` consumptions keyed by the EMITTING fiber id — which IS the nullifier DOMAIN
+    // (protocol-nullifier-set.md decision #3: domain = the consuming fiber's own id, always). The combiner
+    // (NullifierCombiner) enforces absent-check → insert at the current ordinal; a hit is a graceful
+    // CombineRejected. Same in-process default rationale as assetTransfers.
+    nullifierConsumptions: Map[UUID, List[FiberEffect.NullifierConsumed]] = Map.empty
   ) extends TransactionResult
 
   /**
