@@ -1,0 +1,121 @@
+{
+  "generator": "ottochain-sdk/scripts/gen-health-fixtures.ts",
+  "metakitSdkCommit": "a3138175107ed959bc0ba52bbe96b2564a6173d9",
+  "m5": {
+    "vkey": "0x005a4501fbccfd4675a77a532de31dddbc51beab9935f3f2ee6ed8334fd93be6",
+    "exprHash": "0x45ade3c8a57b0d27b48b63b96cf9dd4ca6ee44b319ed02f98af879934b504c43",
+    "effectExpr": {
+      "merge": [
+        {
+          "var": "state"
+        },
+        {
+          "failedFirstLine": {
+            "+": [
+              {
+                "var": "state.failedFirstLine"
+              },
+              {
+                "if": [
+                  {
+                    "===": [
+                      {
+                        "var": "event.outcome"
+                      },
+                      "failed"
+                    ]
+                  },
+                  1,
+                  0
+                ]
+              }
+            ]
+          },
+          "treatments": {
+            "merge": [
+              {
+                "var": "state.treatments"
+              },
+              [
+                {
+                  "var": "event"
+                }
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    "treeDepth": 8,
+    "roots": [
+      "0x2f698e16e7bb3be6b4bc46e5df8a0410e58cfd9949d3505613fb778bcc43dc75",
+      "0x1f0cf2571ffdc7dd53dcdf75679e59e7511ed42080d38733c24a010b5f298d77",
+      "0x1828dad2335e09c1a27a3589bd073167dd6c09d9f54aeb9c7e797a448eacdbd7"
+    ],
+    "commitments": [
+      "0x282ab7c9244e8d4ff73808a46d943f683fec876c0be52033f6a39e448139b998",
+      "0x16e5049fb3aa62951adda443905dbf9101baccc767e5ae1a3bcb2351cf92b249",
+      "0x0c739a1dd2bb1d70e332693722ee3f4c00299ef62bac4c095888b64fab23c0ae"
+    ],
+    "nullifiers": [
+      "0x0fc15db3491435e0fd81879699da222f5f0ef8c896331e3da553b697fbd54f07",
+      "0x075cadb7eb3b2491c7fe664bbe61b15a20360acdd30a6ce19fd617eb7af11550"
+    ],
+    "note": "wire witnesses (the private chart) committed under fixtures/ for provenance; in production these never leave the client"
+  },
+  "priorAuth": {
+    "vkey": "0x000a4493cdc5aa166c3eb1d12cd66c0ee2838750a5ca4e9eef6d0fec78fd9d65",
+    "rule": {
+      "and": [
+        {
+          ">=": [
+            {
+              "var": "failedFirstLine"
+            },
+            2
+          ]
+        },
+        {
+          "===": [
+            {
+              "var": "activeOpioidCount"
+            },
+            0
+          ]
+        }
+      ]
+    },
+    "logicHash": "0x3e5f989d90c975bb8e24da28e41b3483cabfabc7e87286701bca2bf935118805",
+    "keccakTrue": "0x6273151f959616268004b58dbb21e5c851b7b8d04498b4aabee12291d22fc034",
+    "dataHashTrue": "0x024fa4cf66ce118876624b244d6e81abe956b1a1ce433eed97e8fb4d8ba666ea",
+    "dataHashFalse": "0xaabf3a7e7fba446584991b0fc609032a66d4a0b02a4ce6dabef518c0eebdb504"
+  },
+  "epcsCosign": {
+    "k": 2,
+    "n": 3,
+    "factorPks": [
+      "0x2e6a7da32d2b9b0a6a89e8f3c85325fd19a4c8fdb38bbcfd63351270c4dc2f461070f882311870b8f3a2a451f0aaec568445374a329601e770ca3b1036cde2c0",
+      "0x18e7aab6f036bcef2f41cb39a6427f57d3049bf917ccb69f861af37128e580462faa5f0c84e00835541a2ca99135752ca47a9dd21a22a8d43cc9b8905df7cb21",
+      "0x1d82c48853a0449dbb12f55b1c843b217cf093067aa7438012e90acb6612f897288779aaf9c058122e772d7386ff29a06f2e1cf6b4e1328a8e9d41e7960847dc"
+    ],
+    "simulatedFactor": 2,
+    "messageGood": "0x3e5f989d90c975bb8e24da28e41b3483cabfabc7e87286701bca2bf935118805024fa4cf66ce118876624b244d6e81abe956b1a1ce433eed97e8fb4d8ba666ea6273151f959616268004b58dbb21e5c851b7b8d04498b4aabee12291d22fc034000000000000000000000000000000000000000000000000000000000000000156367ab004feb8b0257ed4796f74d4efa4eb88931b5238d056eaec3996e5cc6f",
+    "derivation": "factor secrets from sha256('riverdale-health:dr-adams:epcs-factor{i}:v1') low-31"
+  },
+  "dispensing": {
+    "G": "0x00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002",
+    "H": "0x229c862dd473366e6ac6c8ae5114c917132ca3b1519d458e281cfe2d309b51c60880d6c66530b5f962a6a0f28154d47fc02877b911c6dd6f5eceddb2d3d92891",
+    "derivationH": "try-and-increment hash-to-curve over SHA256('riverdale-health:rx-nullifier-base:v1')",
+    "rxPoints": [
+      "0x038beb2a7c5dd869012b5b50045a6b0e361d4888afcc407fdaddc82bb6e1ff491098807ec0fe044452326eea1eacf59db230c3ccc9bcc98f93fc4e8d07f5f417",
+      "0x0b72c39fd918946b43a88ed10e79603d0e821b73e9d8eec4f0e49ef53c64644205f8b358bb7e95cee761766bee1ff07103640828c88ffea62acf22e146552695",
+      "0x163daf6c582509144c0ad9570b4d7b594332826990c674f231df7437feb0996d0345a2d62a7f71adbe6d7f7f4404bda4a6340e6c7f1adb768e152869758e0593",
+      "0x12080502c7a3f8446f68b7c9fb6800b4396c08cd0d4659afc8e9ca97e730bbe0205a657d406ae2e495462bd0d0f25022917ea5722ddedf0df10e9e327f258e19"
+    ],
+    "realBranch": 1,
+    "nullifier": "0x1f228133c69a21651bb4a3d23361c0564ac6bce9948f8153eddc5e83a27fe65505e3714949ae86e2b5d3937e58a58fe5146073cba461adb590627006c803bf77",
+    "pharmacyHex": "0x0afd9986bdf1acac506874640c30b9658ccd4694",
+    "message": "0x1f228133c69a21651bb4a3d23361c0564ac6bce9948f8153eddc5e83a27fe65505e3714949ae86e2b5d3937e58a58fe5146073cba461adb590627006c803bf770afd9986bdf1acac506874640c30b9658ccd4694"
+  },
+  "rxId": "0x56367ab004feb8b0257ed4796f74d4efa4eb88931b5238d056eaec3996e5cc6f"
+}

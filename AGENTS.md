@@ -46,6 +46,11 @@ James merges. On canonical Constellation-Labs repos the agent identity is pull-o
 - Local cluster: `just e2e-up` (resolves the tessellation version from the metakit pin). E2E env
   knobs that MUST ride any repro: `DATA_PEERS_COUNT=2`, `DATA_L1_TIME_TRIGGER_INTERVAL="8 seconds"`,
   distinct wallets via `E2E_WALLETS` (multi-party flows fail confusingly on a single wallet).
+- **Adding an e2e example with its own CI lane** (own wallets/limits/label gate): add the lane to
+  the `prepare` matrix in `.github/workflows/e2e.yml` AND add its example dir to the core lane's
+  `--exclude` list — core auto-discovers every non-excluded example and runs it with the default
+  single wallet, so a multi-party example WILL fail there. The prepare job's SOP guard enforces
+  this at selection time (workflow fails before any cluster boots).
 
 ## Terminology
 The two fiber kinds are **state machines** and **scripts**. "oracle" is DEPRECATED — never put it in

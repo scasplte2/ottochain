@@ -1,0 +1,217 @@
+{
+  "states": {
+    "ACTIVE": {
+      "id": "ACTIVE",
+      "isFinal": false,
+      "metadata": null
+    }
+  },
+  "initialState": "ACTIVE",
+  "transitions": [
+    {
+      "from": "ACTIVE",
+      "to": "ACTIVE",
+      "eventName": "update",
+      "guard": {
+        "and": [
+          {
+            "groth16_verify": [
+              {
+                "var": "state.vkey"
+              },
+              {
+                "var": "event.publicValues"
+              },
+              {
+                "var": "event.proof"
+              }
+            ]
+          },
+          {
+            "===": [
+              {
+                "cat": [
+                  "0x",
+                  {
+                    "substr": [
+                      {
+                        "var": "event.publicValues"
+                      },
+                      194,
+                      64
+                    ]
+                  }
+                ]
+              },
+              {
+                "var": "state.exprHash"
+              }
+            ]
+          },
+          {
+            "in": [
+              {
+                "cat": [
+                  "0x",
+                  {
+                    "substr": [
+                      {
+                        "var": "event.publicValues"
+                      },
+                      2,
+                      64
+                    ]
+                  }
+                ]
+              },
+              {
+                "var": "state.knownRoots"
+              }
+            ]
+          },
+          {
+            "!": [
+              {
+                "has": [
+                  {
+                    "var": "state.nullifiers"
+                  },
+                  {
+                    "cat": [
+                      "0x",
+                      {
+                        "substr": [
+                          {
+                            "var": "event.publicValues"
+                          },
+                          66,
+                          64
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "pmt_verify": [
+              {
+                "var": "event.newRoot"
+              },
+              {
+                "cat": [
+                  "0x",
+                  {
+                    "substr": [
+                      {
+                        "var": "event.publicValues"
+                      },
+                      130,
+                      64
+                    ]
+                  }
+                ]
+              },
+              {
+                "var": "state.leafCount"
+              },
+              {
+                "var": "event.newSiblings"
+              }
+            ]
+          }
+        ]
+      },
+      "effect": {
+        "merge": [
+          {
+            "var": "state"
+          },
+          {
+            "nullifiers": {
+              "set": [
+                {
+                  "var": "state.nullifiers"
+                },
+                {
+                  "cat": [
+                    "0x",
+                    {
+                      "substr": [
+                        {
+                          "var": "event.publicValues"
+                        },
+                        66,
+                        64
+                      ]
+                    }
+                  ]
+                },
+                true
+              ]
+            },
+            "commitments": {
+              "merge": [
+                {
+                  "var": "state.commitments"
+                },
+                [
+                  {
+                    "cat": [
+                      "0x",
+                      {
+                        "substr": [
+                          {
+                            "var": "event.publicValues"
+                          },
+                          130,
+                          64
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              ]
+            },
+            "knownRoots": {
+              "merge": [
+                {
+                  "var": "state.knownRoots"
+                },
+                [
+                  {
+                    "var": "event.newRoot"
+                  }
+                ]
+              ]
+            },
+            "currentRoot": {
+              "var": "event.newRoot"
+            },
+            "leafCount": {
+              "+": [
+                {
+                  "var": "state.leafCount"
+                },
+                1
+              ]
+            },
+            "transitions": {
+              "+": [
+                {
+                  "var": "state.transitions"
+                },
+                1
+              ]
+            },
+            "lastUpdateAt": {
+              "var": "$ordinal"
+            }
+          }
+        ]
+      },
+      "dependencies": []
+    }
+  ]
+}

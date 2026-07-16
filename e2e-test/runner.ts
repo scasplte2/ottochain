@@ -19,6 +19,8 @@ import sendSignedUpdate from './lib/sendDataTransaction.ts';
 import getMetagraphEnv from './lib/metagraphEnv.ts';
 import type { StatesMap, Wallets, GeneratorFn, ValidatorFn } from './lib/types.ts';
 import { HttpClient, OttoMetagraphClient } from '@ottochain/sdk';
+// Light-client verification of committed state proofs (SDK ≥ 2.7.0) — used by assertStateProof.
+import { verifyStateProof } from '@ottochain/sdk/core';
 // WIRE record types (from `/core` = ottochain/types) — the exact shapes the client's typed getters
 // return. NOT the root's same-named exports, which resolve to the generated protobuf types.
 import type { StateMachineFiberRecord, ScriptFiberRecord, RegistryEntry } from '@ottochain/sdk/core';
@@ -607,6 +609,10 @@ interface TestStep {
   minSequenceNumber?: number;
   /** assertAsset: the asset instance to inspect. */
   assetId?: string;
+  /** assertStateProof: the projected `stateData` field to prove (required for that action). */
+  field?: string;
+  /** assertStateProof: assert the proven projected field deep-equals this value. */
+  expectedFieldValue?: unknown;
   /** assertAsset: expected custody holder, e.g. { Fiber: "retailer" } or { Wallet: "carol" }. */
   expectedHolder?: HolderRef;
   /** assertAsset: expected `amount` on the asset record. */
@@ -815,6 +821,46 @@ async function runFlow(
               return '?';
             })();
         sl(` \x1b[32massertAsset ${assetName} → ${holderLabel}\x1b[0m ×${Number(rec.amount)}`);
+        return;
+      }
+
+      // assertStateProof: the LIGHT-CLIENT audit check. Fetches the committed state-proof for a
+      // fiber (`/state-machines/{id}/state-proof?field=`) and verifies the Merkle-Patricia
+      // inclusion proof CLIENT-SIDE via the SDK's `verifyStateProof` (@ottochain/sdk ≥ 2.7.0 —
+      // the byte-exact port of metakit's MerklePatriciaVerifier) against `mptRoot`, whose
+      // combined hash IS the snapshot's consensus-signed `calculatedStateProof` — no trust in
+      // the serving node. Step fields: `fiber`, `field` (required), optional `expectedFieldValue`.
+      if (step.action === 'assertStateProof') {
+        const cid = resolveFiber(step.fiber);
+        const who = step.fiber ?? cid.slice(0, 8);
+        const field = step.field as string;
+        if (!field) throw new Error('assertStateProof requires a `field` (projected stateData field)');
+        sw(`\n      ⏳ assertStateProof ${who}.${field}`);
+        const client = new OttoMetagraphClient({ ml0Url: ml0Urls[0] });
+        // Poll: the committed read trails GL0 finalization by a snapshot or two.
+        let proofResp: Awaited<ReturnType<typeof client.getStateMachineStateProof>> | null = null;
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+          try {
+            const r = await client.getStateMachineStateProof(cid, field);
+            if (r?.record && r.fieldValue !== undefined && r.fieldValue !== null) { proofResp = r; break; }
+          } catch { /* 404 until committed */ }
+          sw('.');
+          await new Promise((res) => setTimeout(res, retryDelayMs));
+        }
+        if (!proofResp) throw new Error(`assertStateProof ${who}: no committed state-proof with field "${field}"`);
+        const verdict = verifyStateProof(proofResp, `fiber/${cid}`);
+        if (!verdict.ok)
+          throw new Error(
+            `assertStateProof ${who}: inclusion proof REJECTED (${verdict.reason}) against mptRoot ${String(proofResp.mptRoot).slice(0, 16)}… (ordinal ${proofResp.ordinal})`
+          );
+        if (step.expectedFieldValue !== undefined && !deepEqual(proofResp.fieldValue, step.expectedFieldValue))
+          throw new Error(
+            `assertStateProof ${who}: field "${field}" mismatch — got ${JSON.stringify(proofResp.fieldValue)} want ${JSON.stringify(step.expectedFieldValue)}`
+          );
+        sw(' ✓');
+        sl(
+          ` \x1b[32massertStateProof ${who}.${field}\x1b[0m verified vs committedRoot ${String(proofResp.committedRoot).slice(0, 12)}… @ ordinal ${proofResp.ordinal}`
+        );
         return;
       }
 
