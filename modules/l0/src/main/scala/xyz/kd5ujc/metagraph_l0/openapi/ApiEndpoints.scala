@@ -84,6 +84,16 @@ object ApiEndpoints {
       .summary("Current checkpoint (calculated state snapshot)")
       .tag("state")
 
+  val commitIndex: PublicEndpoint[Unit, Unit, CommitIndexResponse, Any] =
+    endpoint.get
+      .in("data-application" / "v1" / "commit-index")
+      .out(jsonBody[CommitIndexResponse])
+      .summary(
+        "Full recreated commit maps at the last committed ordinal (OnChain v2 carries per-batch " +
+        "deltas only; this is the cumulative view — v1-onchain back-compat + the DL1 heal source)"
+      )
+      .tag("state")
+
   // ---- state machines ----
   val stateMachinesList: PublicEndpoint[Option[String], Unit, SortedMap[UUID, Records.StateMachineFiberRecord], Any] =
     endpoint.get
@@ -235,6 +245,7 @@ object ApiEndpoints {
     utilHash,
     onchain,
     checkpoint,
+    commitIndex,
     stateMachinesList,
     stateMachineGet,
     stateMachineEvents,

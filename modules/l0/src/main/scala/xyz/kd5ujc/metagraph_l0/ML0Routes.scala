@@ -47,6 +47,8 @@ class ML0Routes[F[_]: Async](
       req.asR[Signed[OttochainMessage]](m => meta.hash(m.value).flatMap(Ok(_)))
     case GET -> Root / "onchain"    => meta.onChain.toResponse
     case GET -> Root / "checkpoint" => meta.checkpoint.toResponse
+    // full recreated commit maps (v1-onchain back-compat + DL1 heal source; RFC §3.4)
+    case GET -> Root / "commit-index" => meta.commitIndex.toResponse
 
     // --- state machines ---
     case GET -> Root / "state-machines" :? StatusQueryParam(status) => stateMachine.list(status).toResponse

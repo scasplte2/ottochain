@@ -29,10 +29,11 @@ object OpenApiDocSuite extends SimpleIOSuite {
     val dl1Json = DataL1ApiEndpoints.openApiJson
     val dl1Yaml = DataL1ApiEndpoints.openApiYaml
     expect.all(
-      DataL1ApiEndpoints.all.size == 3,
+      DataL1ApiEndpoints.all.size == 4,
       dl1Json.contains("3.1"),
       dl1Json.contains("/data-application/v1/version"),
       dl1Json.contains("/data-application/v1/onchain"),
+      dl1Json.contains("/data-application/v1/commit-index"),
       !dl1Json.contains("/data-application/v1/state-machines"), // ML0-only surface stays out
       dl1Yaml.contains("title: OttoChain Data L1 API"),
       dl1Yaml.contains("- dl1")
@@ -45,6 +46,7 @@ object OpenApiDocSuite extends SimpleIOSuite {
       "/data-application/v1/util/hash",
       "/data-application/v1/onchain",
       "/data-application/v1/checkpoint",
+      "/data-application/v1/commit-index",
       "/data-application/v1/state-machines",
       "/data-application/v1/state-machines/{id}/estimate-fee",
       "/data-application/v1/state-machines/{id}/state-proof",
@@ -70,6 +72,6 @@ object OpenApiDocSuite extends SimpleIOSuite {
   }
 
   pureTest("endpoint catalog matches the documented count") {
-    expect.eql(22, ApiEndpoints.all.size)
+    expect.eql(23, ApiEndpoints.all.size)
   }
 }

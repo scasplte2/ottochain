@@ -70,7 +70,7 @@ object TransitionValidatorGateSuite extends SimpleIOSuite {
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
 
         machineDef <- IO.fromEither(decode[StateMachineDefinition](defJson)) // policy absent ⇒ Open
@@ -102,7 +102,7 @@ object TransitionValidatorGateSuite extends SimpleIOSuite {
       implicit val l0ctx: L0NodeContext[IO] = fixture.l0Context
       for {
         combiner  <- Combiner.make[IO]().pure[IO]
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         fiberId   <- UUIDGen.randomUUID[IO]
 
         baseDef <- IO.fromEither(decode[StateMachineDefinition](defJson))

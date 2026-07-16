@@ -12,6 +12,7 @@ import io.constellationnetwork.currency.l1.CurrencyL1App
 import io.constellationnetwork.ext.cats.effect.ResourceIO
 import io.constellationnetwork.node.shared.infrastructure.DataL1
 import io.constellationnetwork.schema.cluster.ClusterId
+import io.constellationnetwork.schema.peer.L0Peer
 import io.constellationnetwork.schema.semver.{MetagraphVersion, TessellationVersion}
 import io.constellationnetwork.security.SecurityProvider
 
@@ -21,6 +22,8 @@ import xyz.kd5ujc.data_l1.app.DataL1AppConfigOps._
 import xyz.kd5ujc.shared_data.app._
 
 import com.monovore.decline.Opts
+import org.http4s.Uri
+import org.http4s.ember.client.EmberClientBuilder
 import org.typelevel.log4cats.SelfAwareStructuredLogger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 
@@ -35,6 +38,9 @@ object Main
 
   private object CustomConfig {
     @volatile var configPath: Option[String] = None
+    // the metagraph-L0 peer this node runs against (`--l0-peer`) — reused as the commit-index
+    // heal target (onchain-incrementals RFC §3.3); no extra configuration needed.
+    @volatile var l0Peer: Option[L0Peer] = None
   }
 
   override val opts: Opts[currency.l1.cli.method.Run] = {
@@ -43,6 +49,7 @@ object Main
 
     (currency.l1.cli.method.opts(DataL1), configFileOpt).mapN { (parentOpts, configPath) =>
       CustomConfig.configPath = configPath
+      CustomConfig.l0Peer = Some(parentOpts.l0Peer)
 
       parentOpts
     }
@@ -54,6 +61,10 @@ object Main
     implicit0(supervisor: Supervisor[IO])            <- Supervisor[IO]
     implicit0(sp: SecurityProvider[IO])              <- SecurityProvider.forAsync[IO]
     keyPair                                          <- loadKeyPair[IO](config).asResource
-    l1Service                                        <- DataL1Service.make[IO].asResource
+    httpClient                                       <- EmberClientBuilder.default[IO].build
+    healClient = CustomConfig.l0Peer.map { peer =>
+      CommitIndexHttpClient.make[IO](httpClient, Uri.unsafeFromString(s"http://${peer.ip}:${peer.port}"))
+    }
+    l1Service <- DataL1Service.make[IO](healClient).asResource
   } yield l1Service).some
 }

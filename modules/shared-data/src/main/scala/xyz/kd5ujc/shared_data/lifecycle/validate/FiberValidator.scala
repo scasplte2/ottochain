@@ -10,7 +10,7 @@ import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.signature.SignatureProof
 
 import xyz.kd5ujc.schema.Updates.{ArchiveStateMachine, CreateStateMachine, TransitionStateMachine, UpgradeFiber}
-import xyz.kd5ujc.schema.{CalculatedState, OnChain}
+import xyz.kd5ujc.schema.{CalculatedState, CommitIndex, OnChain}
 import xyz.kd5ujc.shared_data.lifecycle.validate.rules.{CommonRules, FiberRules}
 
 /**
@@ -24,17 +24,18 @@ object FiberValidator {
   /**
    * L1 Validator - Structural validations at Data-L1 layer.
    *
-   * These validations run during API ingestion with only OnChain state available.
-   * They check structural validity without needing signature proofs or CalculatedState.
+   * These validations run during API ingestion against the recreated [[CommitIndex]] (OnChain v2
+   * carries only per-batch deltas; the DL1 folds/heals them into the index — onchain-incrementals
+   * RFC §3.3). They check structural validity without needing signature proofs or CalculatedState.
    *
-   * @param state The current OnChain state for existence checks
+   * @param index The recreated cumulative commit index for existence/sequence checks
    */
-  class L1Validator[F[_]: Monad](state: OnChain) {
+  class L1Validator[F[_]: Monad](index: CommitIndex) {
 
     /** Validates a CreateStateMachineFiber update */
     def createFiber(update: CreateStateMachine): F[ValidationResult] =
       for {
-        cidCheck       <- CommonRules.cidNotUsed(update.fiberId, state)
+        cidCheck       <- CommonRules.cidNotUsed(update.fiberId, index)
         definitionOk   <- FiberRules.L1.validStateMachineDefinition(update.definition)
         limitsOk       <- FiberRules.L1.definitionWithinLimits(update.definition)
         expressionsOk  <- FiberRules.L1.definitionExpressionsWithinDepthLimits(update.definition)
@@ -45,7 +46,7 @@ object FiberValidator {
           Limits.MaxInitialDataBytes,
           "initialData"
         )
-        parentExists <- FiberRules.L1.parentFiberExistsInOnChain(update.parentFiberId, state)
+        parentExists <- FiberRules.L1.parentFiberExistsInOnChain(update.parentFiberId, index)
       } yield List(
         cidCheck,
         definitionOk,
@@ -60,8 +61,8 @@ object FiberValidator {
     /** Validates a ProcessFiberEvent update */
     def processEvent(update: TransitionStateMachine): F[ValidationResult] =
       for {
-        cidExists      <- CommonRules.cidIsFound(update.fiberId, state)
-        seqNumOk       <- FiberRules.L1.sequenceNumberMatches(update.fiberId, update.targetSequenceNumber, state)
+        cidExists      <- CommonRules.cidIsFound(update.fiberId, index)
+        seqNumOk       <- FiberRules.L1.sequenceNumberMatches(update.fiberId, update.targetSequenceNumber, index)
         payloadNotNull <- CommonRules.isNotNull(update.payload, "payload")
         payloadSize <- CommonRules.valueWithinSizeLimit(
           update.payload,
@@ -74,19 +75,19 @@ object FiberValidator {
     /** Validates an ArchiveFiber update */
     def archiveFiber(update: ArchiveStateMachine): F[ValidationResult] =
       for {
-        cidExists <- CommonRules.cidIsFound(update.fiberId, state)
-        seqNumOk  <- FiberRules.L1.sequenceNumberMatches(update.fiberId, update.targetSequenceNumber, state)
+        cidExists <- CommonRules.cidIsFound(update.fiberId, index)
+        seqNumOk  <- FiberRules.L1.sequenceNumberMatches(update.fiberId, update.targetSequenceNumber, index)
       } yield List(cidExists, seqNumOk).combineAll
 
     /** Validates an UpgradeFiber update (structural: fiber exists, new definition valid, sequence) */
     def upgrade(update: UpgradeFiber): F[ValidationResult] =
       for {
-        cidExists     <- CommonRules.cidIsFound(update.fiberId, state)
+        cidExists     <- CommonRules.cidIsFound(update.fiberId, index)
         definitionOk  <- FiberRules.L1.validStateMachineDefinition(update.newDefinition)
         limitsOk      <- FiberRules.L1.definitionWithinLimits(update.newDefinition)
         expressionsOk <- FiberRules.L1.definitionExpressionsWithinDepthLimits(update.newDefinition)
         reservedOk    <- FiberRules.L1.noReservedOperatorFieldNames(update.newDefinition)
-        seqNumOk      <- FiberRules.L1.sequenceNumberMatches(update.fiberId, update.targetSequenceNumber, state)
+        seqNumOk      <- FiberRules.L1.sequenceNumberMatches(update.fiberId, update.targetSequenceNumber, index)
       } yield List(cidExists, definitionOk, limitsOk, expressionsOk, reservedOk, seqNumOk).combineAll
   }
 
@@ -157,7 +158,10 @@ object FiberValidator {
     state:  DataState[OnChain, CalculatedState],
     proofs: NonEmptySet[SignatureProof]
   ) {
-    private val l1 = new L1Validator[F](state.onChain)
+    // OnChain v2 carries only this batch's delta — the cumulative maps the structural checks need
+    // live in CalculatedState (same triple, same freshness as the v1 OnChain read; RFC §3.2).
+    private val index = CommitIndex.fromCalculated(state.calculated)
+    private val l1 = new L1Validator[F](index)
     private val l0 = new L0Validator[F](state, proofs)
 
     /** Validates a CreateStateMachineFiber update (all checks) */
@@ -182,7 +186,7 @@ object FiberValidator {
      */
     def processEvent(update: TransitionStateMachine): F[ValidationResult] =
       for {
-        cidExists        <- CommonRules.cidIsFound(update.fiberId, state.onChain)
+        cidExists        <- CommonRules.cidIsFound(update.fiberId, index)
         payloadNotNull   <- CommonRules.isNotNull(update.payload, "payload")
         payloadSize      <- CommonRules.valueWithinSizeLimit(update.payload, Limits.MaxEventPayloadBytes, "payload")
         payloadStructure <- CommonRules.payloadStructureValid(update.payload, "payload")
@@ -195,7 +199,7 @@ object FiberValidator {
      */
     def archiveFiber(update: ArchiveStateMachine): F[ValidationResult] =
       for {
-        cidExists <- CommonRules.cidIsFound(update.fiberId, state.onChain)
+        cidExists <- CommonRules.cidIsFound(update.fiberId, index)
         l0Result  <- l0.archiveFiber(update)
       } yield List(cidExists, l0Result).combineAll
 
@@ -209,7 +213,7 @@ object FiberValidator {
      */
     def upgrade(update: UpgradeFiber): F[ValidationResult] =
       for {
-        cidExists     <- CommonRules.cidIsFound(update.fiberId, state.onChain)
+        cidExists     <- CommonRules.cidIsFound(update.fiberId, index)
         definitionOk  <- FiberRules.L1.validStateMachineDefinition(update.newDefinition)
         limitsOk      <- FiberRules.L1.definitionWithinLimits(update.newDefinition)
         expressionsOk <- FiberRules.L1.definitionExpressionsWithinDepthLimits(update.newDefinition)

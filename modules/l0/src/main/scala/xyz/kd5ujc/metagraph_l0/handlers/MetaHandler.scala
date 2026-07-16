@@ -11,8 +11,8 @@ import io.constellationnetwork.metagraph_sdk.syntax.all.L0ContextOps
 
 import xyz.kd5ujc.buildinfo.BuildInfo
 import xyz.kd5ujc.schema.Updates.OttochainMessage
-import xyz.kd5ujc.schema.api.{HashResult, VersionInfo}
-import xyz.kd5ujc.schema.{CalculatedState, OnChain}
+import xyz.kd5ujc.schema.api.{CommitIndexResponse, HashResult, VersionInfo}
+import xyz.kd5ujc.schema.{CalculatedState, CommitIndex, OnChain}
 
 /** Service meta + raw-state logic: version info, message hashing, on-chain + calculated state. */
 class MetaHandler[F[_]: Async](
@@ -41,4 +41,14 @@ class MetaHandler[F[_]: Async](
 
   def checkpoint: F[Either[DataApplicationValidationError, Checkpoint[CalculatedState]]] =
     checkpointService.get.map(_.asRight[DataApplicationValidationError])
+
+  /**
+   * The full recreated commit maps at the last committed ordinal (onchain-incrementals RFC §3.4):
+   * the back-compat surface for consumers of the v1 cumulative `/v1/onchain`, and the DL1 heal
+   * source. Served from the per-snapshot checkpoint cache — same freshness as `/v1/checkpoint`.
+   */
+  def commitIndex: F[Either[DataApplicationValidationError, CommitIndexResponse]] =
+    checkpointService.get.map { cp =>
+      CommitIndexResponse(cp.ordinal, CommitIndex.fromCalculated(cp.state)).asRight[DataApplicationValidationError]
+    }
 }

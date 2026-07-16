@@ -71,6 +71,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Checkpoint_CalculatedState'
+  /data-application/v1/commit-index:
+    get:
+      tags:
+      - state
+      - ml0
+      summary: Full recreated commit maps at the last committed ordinal (OnChain v2
+        carries per-batch deltas only; this is the cumulative view — v1-onchain back-compat
+        + the DL1 heal source)
+      operationId: getData-applicationV1Commit-index
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommitIndexResponse'
   /data-application/v1/state-machines:
     get:
       tags:
@@ -629,6 +645,9 @@ components:
       - reverseNames
       - assets
       - usedNonces
+      - fiberCommits
+      - assetCommits
+      - registryCommits
       properties:
         stateMachines:
           $ref: '#/components/schemas/Map_V'
@@ -642,6 +661,12 @@ components:
           $ref: '#/components/schemas/Map_V'
         usedNonces:
           $ref: '#/components/schemas/Map_V'
+        fiberCommits:
+          $ref: '#/components/schemas/Map_V'
+        assetCommits:
+          $ref: '#/components/schemas/Map_V'
+        registryCommits:
+          $ref: '#/components/schemas/Map_V'
     Checkpoint_CalculatedState:
       title: Checkpoint_CalculatedState
       type: object
@@ -654,6 +679,32 @@ components:
           format: int64
         state:
           $ref: '#/components/schemas/CalculatedState'
+    CommitIndex:
+      title: CommitIndex
+      type: object
+      required:
+      - fiberCommits
+      - assetCommits
+      - registryCommits
+      properties:
+        fiberCommits:
+          $ref: '#/components/schemas/Map_V'
+        assetCommits:
+          $ref: '#/components/schemas/Map_V'
+        registryCommits:
+          $ref: '#/components/schemas/Map_V'
+    CommitIndexResponse:
+      title: CommitIndexResponse
+      type: object
+      required:
+      - ordinal
+      - index
+      properties:
+        ordinal:
+          type: integer
+          format: int64
+        index:
+          $ref: '#/components/schemas/CommitIndex'
     DynamicDependency:
       title: DynamicDependency
       type: object
@@ -775,19 +826,25 @@ components:
       title: OnChain
       type: object
       required:
-      - fiberCommits
+      - touchedFiberCommits
       - latestLogs
-      - registryCommits
-      - assetCommits
+      - touchedRegistryCommits
+      - touchedAssetCommits
       properties:
-        fiberCommits:
+        touchedFiberCommits:
           $ref: '#/components/schemas/Map_V'
         latestLogs:
           $ref: '#/components/schemas/Map_V'
-        registryCommits:
+        touchedRegistryCommits:
           $ref: '#/components/schemas/Map_V'
-        assetCommits:
+        touchedAssetCommits:
           $ref: '#/components/schemas/Map_V'
+        burnedAssets:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
     OriginProvenance:
       title: OriginProvenance
       type: object

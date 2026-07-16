@@ -8,7 +8,7 @@ import cats.syntax.all._
 
 import io.constellationnetwork.currency.dataApplication.DataApplicationValidationError
 
-import xyz.kd5ujc.schema.OnChain
+import xyz.kd5ujc.schema.CommitIndex
 import xyz.kd5ujc.schema.Updates.{ApplyMorphism, AuthorizeCompose, CreateAssetPolicy, MintAsset}
 import xyz.kd5ujc.schema.asset.{MorphismKind, TokenBehavior}
 import xyz.kd5ujc.schema.fiber.FiberOrdinal
@@ -49,9 +49,9 @@ object AssetRules {
      */
     def applyMorphismStructural[F[_]: Applicative](
       update: ApplyMorphism,
-      state:  OnChain
+      index:  CommitIndex
     ): F[ValidationResult] =
-      state.assetCommits.get(update.assetId) match {
+      index.assetCommits.get(update.assetId) match {
         case None =>
           (Errors.AssetNotFound(update.assetId): DataApplicationValidationError).invalidNec[Unit].pure[F]
         case Some(commit) =>

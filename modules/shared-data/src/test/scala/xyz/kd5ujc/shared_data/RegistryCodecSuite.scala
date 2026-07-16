@@ -57,7 +57,7 @@ object RegistryCodecSuite extends SimpleIOSuite {
   }
 
   test("OnChain carrying a registry commit round-trips") {
-    val oc = OnChain.genesis.copy(registryCommits = SortedMap(entry.name -> Hash("entryhash")))
+    val oc = OnChain.genesis.copy(touchedRegistryCommits = SortedMap(entry.name -> Hash("entryhash")))
     val json = oc.asJson.noSpaces
     IO.pure(expect(decode[OnChain](json) == Right(oc)))
   }

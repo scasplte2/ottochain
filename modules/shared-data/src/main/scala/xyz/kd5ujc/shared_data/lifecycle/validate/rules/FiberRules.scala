@@ -14,7 +14,7 @@ import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.signature.SignatureProof
 
 import xyz.kd5ujc.schema.fiber.{FiberOrdinal, FiberStatus, StateId, StateMachineDefinition}
-import xyz.kd5ujc.schema.{CalculatedState, OnChain, Records}
+import xyz.kd5ujc.schema.{CalculatedState, CommitIndex, Records}
 import xyz.kd5ujc.shared_data.lifecycle.validate.{Limits, ValidationResult}
 import xyz.kd5ujc.shared_data.syntax.calculatedState._
 
@@ -196,9 +196,9 @@ object FiberRules {
     def sequenceNumberMatches[F[_]: Applicative](
       fiberId:              UUID,
       targetSequenceNumber: FiberOrdinal,
-      state:                OnChain
+      index:                CommitIndex
     ): F[ValidationResult] =
-      state.fiberCommits
+      index.fiberCommits
         .get(fiberId)
         .fold(
           // Fiber not found — cidIsFound already catches this, pass here
@@ -217,15 +217,15 @@ object FiberRules {
             .pure[F]
         }
 
-    /** Validates parent fiber exists in on-chain state (L1 structural check) */
+    /** Validates parent fiber exists in the recreated commit index (L1 structural check) */
     def parentFiberExistsInOnChain[F[_]: Applicative](
       parentFiberId: Option[UUID],
-      state:         OnChain
+      index:         CommitIndex
     ): F[ValidationResult] =
       parentFiberId.fold(().validNec[DataApplicationValidationError].pure[F]) { parentId =>
         Validated
           .condNec(
-            state.fiberCommits.contains(parentId),
+            index.fiberCommits.contains(parentId),
             (),
             Errors.ParentFiberNotFound(parentId): DataApplicationValidationError
           )

@@ -48,7 +48,7 @@ object GenesisLoaderSuite extends SimpleIOSuite {
 
   private val populatedState: DataState[OnChain, CalculatedState] =
     DataState(
-      OnChain.genesis.copy(registryCommits = SortedMap(entry.name -> Hash("entryhash"))),
+      OnChain.genesis.copy(touchedRegistryCommits = SortedMap(entry.name -> Hash("entryhash"))),
       CalculatedState.genesis.copy(registry = SortedMap(entry.name -> entry))
     )
 
@@ -70,7 +70,7 @@ object GenesisLoaderSuite extends SimpleIOSuite {
     GenesisLoader.load[IO](None).map { ds =>
       expect(ds == emptyState) and
       expect(ds.calculated.registry.isEmpty) and
-      expect(ds.onChain.registryCommits.isEmpty)
+      expect(ds.calculated.registryCommits.isEmpty)
     }
   }
 

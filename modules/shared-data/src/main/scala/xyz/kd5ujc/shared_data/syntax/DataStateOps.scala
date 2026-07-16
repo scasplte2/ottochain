@@ -17,9 +17,11 @@ import monocle.Monocle.toAppliedFocusOps
 /**
  * Extension methods for DataState to simplify state updates.
  *
- * These operations ensure that both OnChain (hashes) and CalculatedState (records)
- * are updated atomically. RecordHash and stateDataHash are computed internally —
- * callers only provide the record.
+ * These operations ensure that OnChain (the per-batch `touched*` delta), the cumulative
+ * CalculatedState commit maps, and the CalculatedState records are updated atomically — the
+ * same fold writes all three from the same computed hash, so delta and cumulative state cannot
+ * diverge (onchain-incrementals RFC §3.1). RecordHash and stateDataHash are computed
+ * internally — callers only provide the record.
  */
 trait DataStateOps {
 
@@ -44,7 +46,9 @@ trait DataStateOps {
           sm.computeDigest.map { recordHash =>
             val commit = FiberCommit(recordHash, Some(sm.stateDataHash), sm.sequenceNumber)
             state
-              .focus(_.onChain.fiberCommits)
+              .focus(_.onChain.touchedFiberCommits)
+              .modify(_.updated(id, commit))
+              .focus(_.calculated.fiberCommits)
               .modify(_.updated(id, commit))
               .focus(_.calculated.stateMachines)
               .modify(_.updated(id, sm))
@@ -53,7 +57,9 @@ trait DataStateOps {
           script.computeDigest.map { recordHash =>
             val commit = FiberCommit(recordHash, script.stateDataHash, script.sequenceNumber)
             state
-              .focus(_.onChain.fiberCommits)
+              .focus(_.onChain.touchedFiberCommits)
+              .modify(_.updated(id, commit))
+              .focus(_.calculated.fiberCommits)
               .modify(_.updated(id, commit))
               .focus(_.calculated.scripts)
               .modify(_.updated(id, script))
@@ -83,7 +89,9 @@ trait DataStateOps {
           o.computeDigest.map(recordHash => id -> FiberCommit(recordHash, o.stateDataHash, o.sequenceNumber))
         }
       } yield state
-        .focus(_.onChain.fiberCommits)
+        .focus(_.onChain.touchedFiberCommits)
+        .modify(_ ++ smHashes.toMap ++ scriptHashes.toMap)
+        .focus(_.calculated.fiberCommits)
         .modify(_ ++ smHashes.toMap ++ scriptHashes.toMap)
         .focus(_.calculated.stateMachines)
         .modify(_ ++ sms)
@@ -105,9 +113,10 @@ trait DataStateOps {
       withRecords(fibers ++ scripts)
 
     /**
-     * Commit a registry entry atomically: store the entry in CalculatedState.registry and its hash in
-     * OnChain.registryCommits. The chain commits only the entry's hash + metadata, never schema/definition
-     * bytes.
+     * Commit a registry entry atomically: store the entry in CalculatedState.registry, its hash in the
+     * cumulative CalculatedState.registryCommits, and the same hash in the per-batch
+     * OnChain.touchedRegistryCommits delta. The chain commits only the entry's hash + metadata, never
+     * schema/definition bytes.
      */
     def withRegistryEntry[F[_]: Async](
       name:  RegistryName,
@@ -115,7 +124,9 @@ trait DataStateOps {
     ): F[DataState[OnChain, CalculatedState]] =
       entry.computeDigest.map { entryHash =>
         state
-          .focus(_.onChain.registryCommits)
+          .focus(_.onChain.touchedRegistryCommits)
+          .modify(_.updated(name, entryHash))
+          .focus(_.calculated.registryCommits)
           .modify(_.updated(name, entryHash))
           .focus(_.calculated.registry)
           .modify(_.updated(name, entry))

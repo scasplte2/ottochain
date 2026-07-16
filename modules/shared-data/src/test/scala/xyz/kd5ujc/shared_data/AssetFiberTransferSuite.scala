@@ -155,7 +155,7 @@ object AssetFiberTransferSuite extends SimpleIOSuite {
       // the channel works: holder is now Bob's wallet, sequence bumped, commit updated
       expect(moved.map(_.holder).contains(AssetHolder.Wallet(bobAddr))) and
       expect(moved.map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next)) and
-      expect(after.onChain.assetCommits.get(assetId).map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next)) and
+      expect(after.calculated.assetCommits.get(assetId).map(_.sequenceNumber).contains(FiberOrdinal.MinValue.next)) and
       // the escrow advanced to RELEASED
       expect(escrowAfter.map(_.currentState).contains(StateId("RELEASED")))
     }

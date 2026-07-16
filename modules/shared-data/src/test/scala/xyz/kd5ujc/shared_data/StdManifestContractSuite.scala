@@ -37,7 +37,7 @@ object StdManifestContractSuite extends SimpleIOSuite {
     } yield expect(manifest.packages.size == 3) and
     expect(stdNames.forall { n =>
       val name = RegistryName.unsafe(n)
-      genesis.calculated.registry.contains(name) && genesis.onChain.registryCommits.contains(name)
+      genesis.calculated.registry.contains(name) && genesis.calculated.registryCommits.contains(name)
     }) and
     expect(genesis.calculated.registry.values.forall(_.target match {
       case RegistryTarget.SchemaPackage(lineage) =>

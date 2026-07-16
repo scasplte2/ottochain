@@ -6,15 +6,13 @@ import cats.syntax.all._
 
 import io.constellationnetwork.currency.dataApplication._
 import io.constellationnetwork.currency.dataApplication.dataApplication.DataApplicationValidationErrorOr
-import io.constellationnetwork.metagraph_sdk.lifecycle.committed.CommittedOnChain
-import io.constellationnetwork.metagraph_sdk.lifecycle.{CheckpointService, ValidationService}
+import io.constellationnetwork.metagraph_sdk.lifecycle.ValidationService
 import io.constellationnetwork.metagraph_sdk.std.Checkpoint
-import io.constellationnetwork.metagraph_sdk.syntax.all.L1ContextOps
 import io.constellationnetwork.security.SecurityProvider
 import io.constellationnetwork.security.signature.Signed
 
 import xyz.kd5ujc.schema.Updates._
-import xyz.kd5ujc.schema.{CalculatedState, OnChain}
+import xyz.kd5ujc.schema.{CalculatedState, CommitIndex, OnChain}
 import xyz.kd5ujc.shared_data.lifecycle.validate.{AssetValidator, FiberValidator, RegistryValidator, ScriptValidator}
 
 import org.typelevel.log4cats.SelfAwareStructuredLogger
@@ -46,13 +44,27 @@ import org.typelevel.log4cats.slf4j.Slf4jLogger
 object Validator {
 
   /**
-   * Creates a ValidationService instance.
+   * Creates a ValidationService instance with its own private commit-index cache.
    *
+   * @param healClient DL1-only heal transport for the commit-index cache (RFC §3.3). `None` on
+   *                   ML0 (which never calls `validateUpdate`) and in transport-less dev setups —
+   *                   there a gap degrades to folding onto the possibly-incomplete index, loudly.
    * @return A ValidationService that validates OttochainMessage updates
    */
-  def make[F[_]: Async: Parallel: SecurityProvider]
-    : F[ValidationService[F, OttochainMessage, OnChain, CalculatedState]] =
-    CheckpointService.make[F, OnChain](OnChain.genesis).map { checkpointService =>
+  def make[F[_]: Async: Parallel: SecurityProvider](
+    healClient: Option[CommitIndexHealClient[F]] = None
+  ): F[ValidationService[F, OttochainMessage, OnChain, CalculatedState]] =
+    CommitIndexService.make[F](healClient).flatMap(make(_))
+
+  /**
+   * Creates a ValidationService sharing an externally-owned [[CommitIndexService]] — the DL1
+   * passes the same instance to its `/v1/commit-index` route so the ingestion gate and the
+   * polled sync surface observe one folded view.
+   */
+  def make[F[_]: Async: Parallel: SecurityProvider](
+    commitIndexService: CommitIndexService[F]
+  ): F[ValidationService[F, OttochainMessage, OnChain, CalculatedState]] =
+    Async[F].pure {
       new ValidationService[F, OttochainMessage, OnChain, CalculatedState] {
 
         private val logger: SelfAwareStructuredLogger[F] =
@@ -67,11 +79,12 @@ object Validator {
         override def validateUpdate(
           update: OttochainMessage
         )(implicit ctx: L1NodeContext[F]): F[DataApplicationValidationErrorOr[Unit]] =
-          withOnChainCache(ctx) { checkpoint =>
-            val fiberL1 = new FiberValidator.L1Validator[F](checkpoint.state)
-            val scriptL1 = new ScriptValidator.L1Validator[F](checkpoint.state)
+          withCommitIndexCache(ctx) { checkpoint =>
+            val index = checkpoint.state
+            val fiberL1 = new FiberValidator.L1Validator[F](index)
+            val scriptL1 = new ScriptValidator.L1Validator[F](index)
             val registryL1 = new RegistryValidator.L1Validator[F]
-            val assetL1 = new AssetValidator.L1Validator[F](checkpoint.state)
+            val assetL1 = new AssetValidator.L1Validator[F](index)
 
             val updateName = update.getClass.getSimpleName
             val fiberId = update match {
@@ -91,7 +104,7 @@ object Validator {
               case u: ApplyMorphism          => u.fiberId.toString
               case u: AuthorizeCompose       => u.fiberId.toString
             }
-            val cids = checkpoint.state.fiberCommits.keys.map(_.toString.take(8)).mkString(", ")
+            val cids = index.fiberCommits.keys.map(_.toString.take(8)).mkString(", ")
 
             for {
               _ <- logger.info(
@@ -158,8 +171,10 @@ object Validator {
           // block-poisoning hazard — a concurrent publish/mint/yank flips a once-valid op to Invalid at ML0
           // re-validation and tessellation drops the ENTIRE DL1 block (all-or-nothing). Those checks live
           // ONLY in the AssetCombiner (Phase 4) as graceful CombineRejected -> RejectionReceipt. ApplyMorphism
-          // L1 reads only OnChain.assetCommits (the safe behavior bitmask + sequence number), never lineage.
-          val assetL1 = new AssetValidator.L1Validator[F](current.onChain)
+          // L1 reads only the commit index (the safe behavior bitmask + sequence number), never lineage —
+          // under OnChain v2 the cumulative maps live in CalculatedState (same triple, same freshness as the
+          // v1 OnChain read; the relocation does NOT widen this gate's reads — RFC §3.2).
+          val assetL1 = new AssetValidator.L1Validator[F](CommitIndex.fromCalculated(current.calculated))
 
           signedUpdate.value match {
             case u: CreateStateMachine     => fiberCombined.createFiber(u)
@@ -181,44 +196,14 @@ object Validator {
         }
 
         /**
-         * Executes validation with cached on-chain state.
-         *
-         * The checkpoint is refreshed when a new snapshot is available,
-         * avoiding redundant state fetches during batch processing.
+         * Executes validation with the recreated commit-index cache — refresh (fold or heal) via the
+         * shared [[CommitIndexService]], then validate against the returned view. The same service
+         * backs the DL1's `GET /v1/commit-index` route, so the gate and the polled surface agree.
          */
-        private def withOnChainCache(context: L1NodeContext[F])(
-          f: Checkpoint[OnChain] => F[DataApplicationValidationErrorOr[Unit]]
+        private def withCommitIndexCache(context: L1NodeContext[F])(
+          f: Checkpoint[CommitIndex] => F[DataApplicationValidationErrorOr[Unit]]
         ): F[DataApplicationValidationErrorOr[Unit]] =
-          checkpointService
-            .evalModify[DataApplicationValidationError] { checkpoint =>
-              context.getLatestCurrencySnapshot.flatMap {
-                case Right(snapshot) if snapshot.ordinal > checkpoint.ordinal =>
-                  logger.info(
-                    s"[DL1-cache] REFRESHING: snapshotOrdinal=${snapshot.ordinal} > cacheOrdinal=${checkpoint.ordinal}"
-                  ) *>
-                  // ML0 now commits CommittedOnChain[OnChain] (makeL0 wraps OnChain with the committed
-                  // breadcrumb); unwrap .inner to get the plain OnChain the fiber sequence checks need.
-                  context.getOnChainState[CommittedOnChain[OnChain]].flatMap {
-                    case Right(committed) =>
-                      val newState = committed.inner
-                      val cids = newState.fiberCommits.keys.map(_.toString.take(8)).mkString(", ")
-                      logger
-                        .info(
-                          s"[DL1-cache] REFRESHED: ordinal=${snapshot.ordinal} fiberCommits=${newState.fiberCommits.size} cids=[$cids]"
-                        )
-                        .as(Checkpoint(snapshot.ordinal, newState).asRight[DataApplicationValidationError])
-                    case Left(err) =>
-                      logger.warn(s"[DL1-cache] REFRESH FAILED: $err").as(err.asLeft[Checkpoint[OnChain]])
-                  }
-                case Right(snapshot) =>
-                  logger.debug(
-                    s"[DL1-cache] NO REFRESH: snapshotOrdinal=${snapshot.ordinal} == cacheOrdinal=${checkpoint.ordinal}"
-                  ) *> checkpoint.asRight[DataApplicationValidationError].pure[F]
-                case Left(err) =>
-                  logger.warn(s"[DL1-cache] SNAPSHOT ERROR: $err").as(err.asLeft[Checkpoint[OnChain]])
-              }
-            }
-            .flatMap(_.fold(_.invalidNec[Unit].pure[F], f))
+          commitIndexService.refreshed(context).flatMap(_.fold(_.invalidNec[Unit].pure[F], f))
       }
     }
 }

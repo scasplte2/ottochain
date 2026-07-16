@@ -127,7 +127,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         pr2 <- fixture.registry.generateProofs(p2, Set(Alice))
         s2  <- combiner.insert(s1, Signed(p2, pr2))
       } yield expect(versionsOf(s2, "escrow").contains(Set(SemVer(1, 0, 0), SemVer(1, 1, 0)))) and
-      expect(s2.onChain.registryCommits.contains(pkg("escrow")))
+      expect(s2.calculated.registryCommits.contains(pkg("escrow")))
     }
   }
 
@@ -143,7 +143,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
       val p1 = publish("escrow", SemVer(1, 0, 0)) // Alice creates + owns
       val p2 = publish("escrow", SemVer(1, 1, 0)) // Bob (not an owner) tries to publish
       for {
-        validator     <- Validator.make[IO]
+        validator     <- Validator.make[IO]()
         pr1           <- fixture.registry.generateProofs(p1, Set(Alice))
         s1            <- combiner.insert(genesis, Signed(p1, pr1))
         pr2           <- fixture.registry.generateProofs(p2, Set(Bob))
@@ -161,7 +161,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
       val p1 = publish("escrow", SemVer(1, 0, 0))
       val pLow = publish("escrow", SemVer(0, 9, 0))
       for {
-        validator     <- Validator.make[IO]
+        validator     <- Validator.make[IO]()
         pr1           <- fixture.registry.generateProofs(p1, Set(Alice))
         s1            <- combiner.insert(genesis, Signed(p1, pr1))
         prLow         <- fixture.registry.generateProofs(pLow, Set(Alice))
@@ -236,7 +236,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         schemaRef = Some(SchemaRef(pkg("escrow"), VersionReq.Exact(SemVer(1, 0, 0))))
       )
       for {
-        validator     <- Validator.make[IO]
+        validator     <- Validator.make[IO]()
         pr1           <- fixture.registry.generateProofs(p1, Set(Alice))
         s1            <- combiner.insert(genesis, Signed(p1, pr1))
         prC           <- fixture.registry.generateProofs(create, Set(Alice))
@@ -261,7 +261,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         schemaRef = Some(SchemaRef(pkg("ghost"), VersionReq.Latest))
       )
       for {
-        validator     <- Validator.make[IO]
+        validator     <- Validator.make[IO]()
         prC           <- fixture.registry.generateProofs(create, Set(Alice))
         valid         <- validator.validateSignedUpdate(genesis, Signed(create, prC))
         combineFailed <- combiner.insert(genesis, Signed(create, prC)).map(wasRejected)
@@ -360,7 +360,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         targetSequenceNumber = FiberOrdinal.MinValue
       )
       for {
-        validator     <- Validator.make[IO]
+        validator     <- Validator.make[IO]()
         pr1           <- fixture.registry.generateProofs(p1, Set(Alice))
         s1            <- combiner.insert(genesis, Signed(p1, pr1))
         prC           <- fixture.registry.generateProofs(create, Set(Alice))
@@ -403,7 +403,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         targetSequenceNumber = FiberOrdinal.MinValue
       )
       for {
-        validator <- Validator.make[IO]
+        validator <- Validator.make[IO]()
         pr1       <- fixture.registry.generateProofs(p1, Set(Alice))
         s1        <- combiner.insert(genesis, Signed(p1, pr1))
         pr2       <- fixture.registry.generateProofs(p2, Set(Alice))
@@ -600,7 +600,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
       val create = CreateStateMachine(fiberA, minimalDef, emptyData)
       val alias = RegisterAlias(pkg("escrow"), fiberA) // .package TLD is not a fiber alias
       for {
-        validator     <- Validator.make[IO]
+        validator     <- Validator.make[IO]()
         prC           <- fixture.registry.generateProofs(create, Set(Alice))
         s1            <- combiner.insert(genesis, Signed(create, prC))
         prA           <- fixture.registry.generateProofs(alias, Set(Alice))
@@ -618,7 +618,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
       val create = CreateStateMachine(fiberA, minimalDef, emptyData) // a state machine
       val alias = RegisterAlias(RegistryName.unsafe("script.script"), fiberA) // .script wants a script fiber
       for {
-        validator     <- Validator.make[IO]
+        validator     <- Validator.make[IO]()
         prC           <- fixture.registry.generateProofs(create, Set(Alice))
         s1            <- combiner.insert(genesis, Signed(create, prC))
         prA           <- fixture.registry.generateProofs(alias, Set(Alice))
@@ -637,7 +637,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
       val create = CreateStateMachine(fiberA, minimalDef, emptyData) // Alice owns
       val alias = RegisterAlias(RegistryName.unsafe("hostile.machine"), fiberA)
       for {
-        validator     <- Validator.make[IO]
+        validator     <- Validator.make[IO]()
         prC           <- fixture.registry.generateProofs(create, Set(Alice))
         s1            <- combiner.insert(genesis, Signed(create, prC))
         prB           <- fixture.registry.generateProofs(alias, Set(Bob)) // Bob, not an owner, signs
@@ -669,7 +669,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
       val combiner = Combiner.make[IO]()
       val p = publish("std", SemVer(1, 0, 0)) // -> std.package; "std" is reserved
       for {
-        validator     <- Validator.make[IO]
+        validator     <- Validator.make[IO]()
         pr            <- fixture.registry.generateProofs(p, Set(Alice))
         valid         <- validator.validateSignedUpdate(genesis, Signed(p, pr))
         combineFailed <- combiner.insert(genesis, Signed(p, pr)).map(wasRejected)
@@ -703,7 +703,7 @@ object RegistryCombinerSuite extends SimpleIOSuite {
         metadata = Some(SortedMap("note" -> ("x" * 200))) // value exceeds 128 chars
       )
       for {
-        validator     <- Validator.make[IO]
+        validator     <- Validator.make[IO]()
         prG           <- fixture.registry.generateProofs(good, Set(Alice))
         s1            <- combiner.insert(genesis, Signed(good, prG))
         prB           <- fixture.registry.generateProofs(bad, Set(Alice))

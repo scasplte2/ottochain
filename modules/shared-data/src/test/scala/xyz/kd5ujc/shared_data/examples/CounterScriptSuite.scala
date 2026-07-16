@@ -547,7 +547,7 @@ object CounterScriptSuite extends SimpleIOSuite {
         )
 
         // Check onChain has hashes for this script
-        initialOnChainHashes = state1.onChain.fiberCommits.get(cid)
+        initialOnChainHashes = state1.calculated.fiberCommits.get(cid)
         initialStateHash = state1.scriptRecord(cid).flatMap(_.stateDataHash)
 
         invokeScript = Updates.InvokeScript(
@@ -561,7 +561,7 @@ object CounterScriptSuite extends SimpleIOSuite {
         state2      <- combiner.insert(state1, Signed(invokeScript, invokeProof))
 
         // Check onChain hashes were updated
-        updatedOnChainHashes = state2.onChain.fiberCommits.get(cid)
+        updatedOnChainHashes = state2.calculated.fiberCommits.get(cid)
         updatedStateHash = state2.scriptRecord(cid).flatMap(_.stateDataHash)
       } yield expect.all(
         initialOnChainHashes.isDefined,

@@ -2,7 +2,7 @@ package xyz.kd5ujc.schema
 
 import java.util.UUID
 
-import scala.collection.immutable.SortedMap
+import scala.collection.immutable.{SortedMap, SortedSet}
 
 import io.constellationnetwork.currency.dataApplication.DataOnChainState
 import io.constellationnetwork.security.hash.Hash
@@ -41,14 +41,35 @@ case class AssetCommit(
   origin:         Option[Hash] = None
 )
 
+/**
+ * OnChain v2 (docs/proposals/onchain-incrementals.md): PER-BATCH deltas only, never cumulative.
+ *
+ * tessellation serializes this struct into `dataApplication.onChainState` of EVERY incremental
+ * snapshot, and the whole snapshot binary is hard-capped at 512,000 bytes
+ * (`max-state-channel-snapshot-binary-size-in-bytes`; enforced in `CurrencySnapshotCreator`).
+ * The v1 cumulative maps ran into that cap at ~2,265 fibers (measured, `OnChainWireSizeSuite`)
+ * with a PERMANENT-HALT failure mode (`UnableToReduceProposalByCutting` — the events-cutter
+ * cannot shed non-event state). v2 keeps snapshot bytes O(batch churn): churn IS events, so an
+ * oversized batch degrades gracefully (data blocks deferred to the next snapshot).
+ *
+ * The cumulative maps now live in `CalculatedState.fiberCommits/assetCommits/registryCommits`
+ * (rooted under the committed MPT as `commit/f|a|r/<id>`, never wire-shipped). Every `touched*`
+ * write goes to BOTH (same `DataStateOps` fold, same hash) — the delta here is exactly what a
+ * DL1 `CommitIndex` folds to recreate the full maps (see `CommitIndex.fold`).
+ *
+ * `touched*` maps use the SAME clear-then-accumulate mechanism as `latestLogs`: cleared at the
+ * top of `orderedCombiner`'s fold, repopulated by this batch's writes only.
+ */
 @derive(customizableDecoder, customizableEncoder)
 case class OnChain(
-  fiberCommits:    SortedMap[UUID, FiberCommit],
-  latestLogs:      SortedMap[UUID, List[FiberLogEntry]],
-  registryCommits: SortedMap[RegistryName, Hash] = SortedMap.empty,
-  assetCommits:    SortedMap[UUID, AssetCommit] = SortedMap.empty
+  touchedFiberCommits:    SortedMap[UUID, FiberCommit],
+  latestLogs:             SortedMap[UUID, List[FiberLogEntry]],
+  touchedRegistryCommits: SortedMap[RegistryName, Hash] = SortedMap.empty,
+  touchedAssetCommits:    SortedMap[UUID, AssetCommit] = SortedMap.empty,
+  // burns are removals — they cannot ride an upsert map (asset-model §5d Burn morphism)
+  burnedAssets: SortedSet[UUID] = SortedSet.empty
 ) extends DataOnChainState
 
 object OnChain {
-  val genesis: OnChain = OnChain(SortedMap.empty, SortedMap.empty, SortedMap.empty, SortedMap.empty)
+  val genesis: OnChain = OnChain(SortedMap.empty, SortedMap.empty, SortedMap.empty, SortedMap.empty, SortedSet.empty)
 }
