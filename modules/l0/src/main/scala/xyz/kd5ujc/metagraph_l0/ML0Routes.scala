@@ -74,6 +74,12 @@ class ML0Routes[F[_]: Async](
     case GET -> Root / "assets" / UUIDVar(id) / "state-proof" :? FieldQueryParam(field) =>
       stateProof.asset(id, field)
 
+    // --- nullifiers ---
+    // Spent-nullifier presence proof (protocol-nullifier-set.md): 200 + state proof when spent (record =
+    // spend ordinal), 404 when unspent/unknown. The nullifier set is excluded from /v1/checkpoint, so this
+    // (plus the committed key) is the ONLY read surface for it.
+    case GET -> Root / "nullifiers" / UUIDVar(domain) / nf => stateProof.nullifier(domain, nf)
+
     // --- registry ---
     case GET -> Root / "registry"                           => registry.all.toResponse
     case GET -> Root / "registry" / "reverse" / UUIDVar(id) => registry.reverse(id).toResponse

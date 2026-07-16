@@ -3,6 +3,8 @@ package xyz.kd5ujc.metagraph_l0.handlers
 import cats.effect.Async
 import cats.syntax.all._
 
+import scala.collection.immutable.SortedMap
+
 import io.constellationnetwork.currency.dataApplication.{DataApplicationValidationError, L0NodeContext}
 import io.constellationnetwork.metagraph_sdk.lifecycle.CheckpointService
 import io.constellationnetwork.metagraph_sdk.std.Checkpoint
@@ -40,7 +42,13 @@ class MetaHandler[F[_]: Async](
     context.getOnChainState[OnChain]
 
   def checkpoint: F[Either[DataApplicationValidationError, Checkpoint[CalculatedState]]] =
-    checkpointService.get.map(_.asRight[DataApplicationValidationError])
+    checkpointService.get.map { cp =>
+      // The protocol nullifier set is UNBOUNDED (monotonic, never pruned — protocol-nullifier-set.md), and
+      // /v1/checkpoint is the only whole-state JSON serialization surface, so the set is EXCLUDED here — a
+      // handler-level slim ONLY (the canonical encoder / committed hashing paths are untouched). Nullifier
+      // reads are served by the dedicated GET /v1/nullifiers/{domain}/{nf} route + committed state proofs.
+      cp.copy(state = cp.state.copy(nullifiers = SortedMap.empty)).asRight[DataApplicationValidationError]
+    }
 
   /**
    * The full recreated commit maps at the last committed ordinal (onchain-incrementals RFC §3.4):
