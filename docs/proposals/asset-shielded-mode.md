@@ -10,14 +10,17 @@ integration**: a shielded representation on `AssetRecord`, a `ShieldedSpend` mor
 set as a TOTAL committed-view key** with a bounded-growth design, and selective-disclosure viewing
 keys. No new cryptography is proposed.
 
-> **This is a future, gated RFC — NOT low-hanging.** Per
-> `docs/proposals/asset-model-zk-extension.md`, the near-term zk wins are the **ZkVerify-gated
-> morphism** (already *shipped* — PR #166, `5267cc1`) and the **`Pool` morphism** (the lossy compose,
-> *in progress / recommended next*). This RFC is the *large* item: a subsystem gated on (1) a public
-> security audit of metakit's verifier — a **hard prerequisite** before it guards real value — and
-> (2) a nullifier-set state-rent / bounded-growth design. It is deliberately scoped *after* those two
-> wins. It does not change the public-by-default posture of `CalculatedState`; shielded is an opt-in
-> `AssetPolicy` flavor, never the base ledger.
+> **STATUS UPDATE (2026-07-16, maintainer decision):** the **nullifier-set portion of this RFC
+> (§3.3) is superseded by `docs/proposals/protocol-nullifier-set.md`** and is in active
+> implementation. The two former gates were re-scoped: (1) the external audit of metakit's
+> verifiers is a **pre-mainnet-value** gate, not a pre-implementation gate (we are pre-launch);
+> (2) **unbounded growth is ACCEPTED** for v1 — post-rc.7 incremental MPT + post-#210 per-batch
+> OnChain deltas make per-snapshot cost scale with touched keys, not set size; the working-copy
+> and checkpoint-serialization costs are managed (checkpoint exclusion), and the
+> `nullifier/<domain>/<nf>` key layout leaves epoch-windowing retrofittable (revisit trigger:
+> heap pressure / ~10M entries). The `ShieldedSpend` morphism, shielded `AssetPolicy` mode, and
+> viewing keys below REMAIN future work and will consume the protocol nullifier subsystem.
+> Shielded stays an opt-in `AssetPolicy` flavor, never the base ledger.
 
 **Companions:** `docs/proposals/asset-model-zk-extension.md` (the reconciled findings of record —
 this RFC is its §4 + roadmap items #4/#5 written up), `docs/proposals/zk-coin-audit.md` (the external
