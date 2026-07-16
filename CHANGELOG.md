@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.8.0](https://github.com/scasplte2/ottochain/compare/v0.7.16...v0.8.0) (2026-07-16)
+
+
+### Features
+
+* **e2e:** readable economy run + live consuming morphisms ([#191](https://github.com/scasplte2/ottochain/issues/191)) ([96ac483](https://github.com/scasplte2/ottochain/commit/96ac4837001f05ac7f473e010f90882877c15230))
+* **e2e:** riverdale-health — ZK medical-privacy lane ([#213](https://github.com/scasplte2/ottochain/issues/213)) ([2c28524](https://github.com/scasplte2/ottochain/commit/2c28524d6500b63b82b19be485e99b342b19bd73))
+* **engine:** effect hardening + rule-110 & staked-oracle e2e (wave 1) ([#183](https://github.com/scasplte2/ottochain/issues/183)) ([1c41c6c](https://github.com/scasplte2/ottochain/commit/1c41c6cfda85793b85c9cb948e3f93eca46923b6))
+* **fiber:** add the Immutable named policy preset ([#189](https://github.com/scasplte2/ottochain/issues/189)) ([c2673ff](https://github.com/scasplte2/ottochain/commit/c2673ffcae16e9e28d56ec786ce024981c0e02e1))
+* **fiber:** injection-immune directive extraction ([#197](https://github.com/scasplte2/ottochain/issues/197)) ([4bab412](https://github.com/scasplte2/ottochain/commit/4bab412c248dc863a3170b99f9b43a715f1cfc70))
+* **fiber:** object-form-only _transferAsset recipient, fail-loud ([#193](https://github.com/scasplte2/ottochain/issues/193)) ([d6627a1](https://github.com/scasplte2/ottochain/commit/d6627a1a1891639a2adf612d3fb7de68356d23ee))
+* **fiber:** transitionPolicy dial + auto-declared machines deps ([#194](https://github.com/scasplte2/ottochain/issues/194)) ([cd5ec9a](https://github.com/scasplte2/ottochain/commit/cd5ec9a9cbcb305414f8d3d3878492ba6f552aba))
+* **fiber:** wire transitionPolicy.Open end-to-end; combiner sole gate ([#207](https://github.com/scasplte2/ottochain/issues/207)) ([ba9f656](https://github.com/scasplte2/ottochain/commit/ba9f6562c4dc861fe95ad0c939a57f3288f58c81)), closes [#205](https://github.com/scasplte2/ottochain/issues/205)
+* **nullifier:** protocol nullifier set — state, effect token, surface ([#214](https://github.com/scasplte2/ottochain/issues/214)) ([7ada01f](https://github.com/scasplte2/ottochain/commit/7ada01f1b8433b50acd5d86aa2388dd3f0e611f2))
+* **onchain:** per-batch delta OnChain + CommitIndex recreation ([#210](https://github.com/scasplte2/ottochain/issues/210)) ([825a8d1](https://github.com/scasplte2/ottochain/commit/825a8d1d9e8ade45a7fbb550e18bd121e270d5ad))
+* **openapi:** publish spec (json+yaml) as release artifacts ([#198](https://github.com/scasplte2/ottochain/issues/198)) ([93f0d76](https://github.com/scasplte2/ottochain/commit/93f0d7612f0f7977a69aa1f6e0f8fa1c21c5c0ba))
+
+
+### Bug Fixes
+
+* Fix:  ([71e9e18](https://github.com/scasplte2/ottochain/commit/71e9e189662c982d2aa4af5ce7fd5502e844d6da))
+* **engine:** permissionless-DL safety hardening (C2/C3/H1/M1/L1) ([#201](https://github.com/scasplte2/ottochain/issues/201)) ([99a9b3c](https://github.com/scasplte2/ottochain/commit/99a9b3c5aa9d79571c60b6c324536f63524f8916))
+* **fiber:** permissionless-safety hardening L2–L6 ([#209](https://github.com/scasplte2/ottochain/issues/209)) ([8b2127c](https://github.com/scasplte2/ottochain/commit/8b2127c7de079b4094521fd9f08abacc5e860383))
+
+
+### Code Refactoring
+
+* **fiber:** flatten nested Option/Either matches to chaining ([#211](https://github.com/scasplte2/ottochain/issues/211)) ([1836111](https://github.com/scasplte2/ottochain/commit/1836111b900663eb4b35bcf811c26604b860e52c))
+* **fiber:** rework FiberPolicy into a named ADT ([#187](https://github.com/scasplte2/ottochain/issues/187)) ([0ff9792](https://github.com/scasplte2/ottochain/commit/0ff97929407fc2de58cd0c556521d3f22cefe804))
+
+
+### Documentation
+
+* **proposals:** fiber/asset authoring ergonomics + F7 auth-gap test ([#192](https://github.com/scasplte2/ottochain/issues/192)) ([7f326ee](https://github.com/scasplte2/ottochain/commit/7f326ee3eb770660483212e92e3038c100a591d0))
+* refine whitepaper voice and capability claims ([#184](https://github.com/scasplte2/ottochain/issues/184)) ([a6e3b49](https://github.com/scasplte2/ottochain/commit/a6e3b4942ae1405f7486528cd2116fa60533f977))
+
 ## [0.7.15](https://github.com/scasplte2/ottochain/compare/v0.7.14...v0.7.15) (2026-06-19)
 
 
