@@ -23,7 +23,7 @@ import { HttpClient, OttoMetagraphClient } from '@ottochain/sdk';
 import { verifyStateProof } from '@ottochain/sdk/core';
 // WIRE record types (from `/core` = ottochain/types) — the exact shapes the client's typed getters
 // return. NOT the root's same-named exports, which resolve to the generated protobuf types.
-import type { StateMachineFiberRecord, ScriptFiberRecord, RegistryEntry } from '@ottochain/sdk/core';
+import type { StateMachineFiberRecord, ScriptFiberRecord, RegistryEntry, StateProof } from '@ottochain/sdk/core';
 import { waitForOrdinalConfirmation, waitForOrdinalAdvance } from './lib/ordinalConfirmation.ts';
 import { WebhookListener } from './lib/webhookListener.ts';
 import { ChainKeepalive } from './lib/keepalive.ts';
@@ -330,6 +330,56 @@ async function loadFileOrModule(
   throw new Error(`File not found: ${filePath} (tried .ts, .js, .json)`);
 }
 
+/**
+ * Resolve an assertNullifier step's nullifier to the chain-normalized form — lowercase 64-hex, no
+ * `0x` — the byte-identical `<nf>` segment of the committed `nullifier/<domain>/<nf>` key (chain:
+ * `NullifierHex.scala`, the normalizer both the `_consumeNullifier` extractor and the
+ * `/v1/nullifiers` route run). Three sources, mirroring how the flows actually mint nfs:
+ *   - `nf`: a literal value;
+ *   - `nfFromEvent`: word `pvWord` (0-based) of an event fixture's `payload.publicValues` — the M5
+ *     shielded-update layout `anchor | nullifier | newCommitment | exprHash`, 64 hex chars per word;
+ *   - `nfFromEventField`: a payload field; `xOnly` keeps the first 64 hex chars — a G1 point's
+ *     x-coordinate, which is what the dispense definition consumes (x-only also kills ±Nf
+ *     malleability: a negated point shares its x, so it collides with the consumed entry).
+ */
+async function resolveNullifier(
+  step: { nf?: string; nfFromEvent?: { event: string; pvWord: number }; nfFromEventField?: { event: string; field: string; xOnly?: boolean } },
+  exampleDir: string,
+  loadContext: Record<string, unknown>
+): Promise<string> {
+  const normalize = (raw: string): string => {
+    const stripped = raw.startsWith('0x') || raw.startsWith('0X') ? raw.slice(2) : raw;
+    const hex = stripped.toLowerCase();
+    if (!/^[0-9a-f]{64}$/.test(hex))
+      throw new Error(`assertNullifier: "${raw}" does not normalize to 64 hex chars (optionally 0x-prefixed)`);
+    return hex;
+  };
+  if (step.nf) return normalize(step.nf);
+  if (step.nfFromEvent) {
+    const { event, pvWord } = step.nfFromEvent;
+    const data = (await loadFileOrModule(path.join(exampleDir, event), loadContext)) as {
+      payload?: { publicValues?: string };
+    };
+    const pv = data?.payload?.publicValues;
+    if (typeof pv !== 'string') throw new Error(`assertNullifier: ${event} has no payload.publicValues`);
+    const body = pv.startsWith('0x') || pv.startsWith('0X') ? pv.slice(2) : pv;
+    const word = body.slice(pvWord * 64, (pvWord + 1) * 64);
+    if (word.length !== 64) throw new Error(`assertNullifier: ${event} publicValues has no word ${pvWord}`);
+    return normalize(word);
+  }
+  if (step.nfFromEventField) {
+    const { event, field, xOnly } = step.nfFromEventField;
+    const data = (await loadFileOrModule(path.join(exampleDir, event), loadContext)) as {
+      payload?: Record<string, unknown>;
+    };
+    const raw = data?.payload?.[field];
+    if (typeof raw !== 'string') throw new Error(`assertNullifier: ${event} payload.${field} is not a string`);
+    const body = raw.startsWith('0x') || raw.startsWith('0X') ? raw.slice(2) : raw;
+    return normalize(xOnly ? body.slice(0, 64) : body);
+  }
+  throw new Error('assertNullifier requires one of `nf`, `nfFromEvent`, `nfFromEventField`');
+}
+
 // Raw read by design: the body flows OPAQUELY into the example validator functions (compared as raw
 // JSON) and into `JSON.stringify` output — none of which are typed against `Checkpoint` — so there is
 // no typed shape to thread through here without retyping the whole example-validator layer.
@@ -613,6 +663,14 @@ interface TestStep {
   field?: string;
   /** assertStateProof: assert the proven projected field deep-equals this value. */
   expectedFieldValue?: unknown;
+  /** assertNullifier: literal nullifier value — 64 hex chars, optional `0x` prefix. */
+  nf?: string;
+  /** assertNullifier: derive the nf from an event fixture's `payload.publicValues` word (0-based). */
+  nfFromEvent?: { event: string; pvWord: number };
+  /** assertNullifier: derive the nf from an event fixture's payload field; `xOnly` keeps the first 64 hex (a G1 point's x-coordinate). */
+  nfFromEventField?: { event: string; field: string; xOnly?: boolean };
+  /** assertNullifier (required): true ⇒ spent — 200 + client-verified presence proof; false ⇒ unspent — 404 through the budget. */
+  expectSpent?: boolean;
   /** assertAsset: expected custody holder, e.g. { Fiber: "retailer" } or { Wallet: "carol" }. */
   expectedHolder?: HolderRef;
   /** assertAsset: expected `amount` on the asset record. */
@@ -861,6 +919,65 @@ async function runFlow(
         sl(
           ` \x1b[32massertStateProof ${who}.${field}\x1b[0m verified vs committedRoot ${String(proofResp.committedRoot).slice(0, 12)}… @ ordinal ${proofResp.ordinal}`
         );
+        return;
+      }
+
+      // assertNullifier: the PROTOCOL nullifier-set check (protocol-nullifier-set.md Phase A) — the
+      // single-key PDMP query. Poll-only: GET /data-application/v1/nullifiers/{domain}/{nf}, where
+      // the domain is the CONSUMING fiber's own id (the emitter-keyed namespace). expectSpent=true ⇒
+      // poll until 200, then verify the Merkle-Patricia PRESENCE proof CLIENT-SIDE via the SDK's
+      // `verifyStateProof` against the full committed key `nullifier/<domain>/<nf>` (the chain keys
+      // `StateProofResponse.key` on exactly that string — StateProofHandler.nullifier); the proven
+      // record is the spend ordinal. expectSpent=false ⇒ the route must stay 404 through a short
+      // fixed budget — a trusted-node read until Phase B MPT absence proofs land (metakit rc.8).
+      if (step.action === 'assertNullifier') {
+        const domain = resolveFiber(step.fiber);
+        const who = step.fiber ?? domain.slice(0, 8);
+        if (typeof step.expectSpent !== 'boolean')
+          throw new Error('assertNullifier requires `expectSpent: true|false`');
+        const nf = await resolveNullifier(step, path.join(examplesDir, example.dir), { wallets, session });
+        sw(`\n      ⏳ assertNullifier ${who}/${nf.slice(0, 12)}… (expect ${step.expectSpent ? 'SPENT' : 'UNSPENT'})`);
+        const nfUrl = `${ml0Urls[0]}/data-application/v1/nullifiers/${domain}/${nf}`;
+        if (step.expectSpent) {
+          let proofResp: StateProof | null = null;
+          for (let attempt = 0; attempt < maxRetries; attempt++) {
+            try {
+              const r = (await new HttpClient(nfUrl).get<unknown>('')) as StateProof | null;
+              if (r?.record !== undefined && r?.record !== null) { proofResp = r; break; }
+            } catch { /* 404 until the consuming transition commits */ }
+            sw('.');
+            await new Promise((res) => setTimeout(res, retryDelayMs));
+          }
+          if (!proofResp)
+            throw new Error(`assertNullifier ${who}: nullifier ${nf} never showed as spent at ML0`);
+          const verdict = verifyStateProof(proofResp, `nullifier/${domain}/${nf}`);
+          if (!verdict.ok)
+            throw new Error(
+              `assertNullifier ${who}: presence proof REJECTED (${verdict.reason}) against mptRoot ${String(proofResp.mptRoot).slice(0, 16)}… (ordinal ${proofResp.ordinal})`
+            );
+          sw(' ✓');
+          sl(
+            ` \x1b[32massertNullifier ${who}/${nf.slice(0, 12)}… SPENT\x1b[0m (record ${JSON.stringify(proofResp.record)}) — proof verified vs committedRoot ${String(proofResp.committedRoot).slice(0, 12)}… @ ordinal ${proofResp.ordinal}`
+          );
+        } else {
+          // No absence proof to verify yet (Phase B) — require a 404 on EVERY poll of the fixed
+          // budget (mirrors the ml0-reject settle loops), so a late-landing spend still fails.
+          for (let attempt = 0; attempt < 8; attempt++) {
+            let spent = false;
+            try {
+              const r = (await new HttpClient(nfUrl).get<unknown>('')) as StateProof | null;
+              spent = r?.record !== undefined && r?.record !== null;
+            } catch { /* 404 ⇒ still unspent — the expected outcome */ }
+            if (spent)
+              throw new Error(`assertNullifier ${who}: expected ${nf} UNSPENT, but the route returned a spend record`);
+            sw('.');
+            await new Promise((res) => setTimeout(res, retryDelayMs));
+          }
+          sw(' ✓');
+          sl(
+            ` \x1b[32massertNullifier ${who}/${nf.slice(0, 12)}… UNSPENT\x1b[0m (404 across the budget; absence proofs = Phase B)`
+          );
+        }
         return;
       }
 

@@ -70,31 +70,6 @@
             ]
           },
           {
-            "!": [
-              {
-                "has": [
-                  {
-                    "var": "state.nullifiers"
-                  },
-                  {
-                    "cat": [
-                      "0x",
-                      {
-                        "substr": [
-                          {
-                            "var": "event.publicValues"
-                          },
-                          66,
-                          64
-                        ]
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          },
-          {
             "pmt_verify": [
               {
                 "var": "event.newRoot"
@@ -129,28 +104,22 @@
             "var": "state"
           },
           {
-            "nullifiers": {
-              "set": [
-                {
-                  "var": "state.nullifiers"
-                },
-                {
-                  "cat": [
-                    "0x",
-                    {
-                      "substr": [
-                        {
-                          "var": "event.publicValues"
-                        },
-                        66,
-                        64
-                      ]
-                    }
-                  ]
-                },
-                true
-              ]
-            },
+            "_consumeNullifier": [
+              {
+                "cat": [
+                  "0x",
+                  {
+                    "substr": [
+                      {
+                        "var": "event.publicValues"
+                      },
+                      66,
+                      64
+                    ]
+                  }
+                ]
+              }
+            ],
             "commitments": {
               "merge": [
                 {

@@ -1,6 +1,6 @@
 {
   "name": "Riverdale Health (ZK medical privacy: shielded chart, prior-auth proof, EPCS co-sign, anti-double-fill)",
-  "description": "A controlled-substance prescription lifecycle where every guarantee is enforced on-chain: (1) patient-blake's medical record lives as SHIELDED state — two visits update it privately via zk-jlvm-shielded (M5) Groth16 proofs (the JLVM effect runs INSIDE the SP1 guest; the chain sees only anchor|nullifier|newCommitment|exprHash, never the chart), with replay of a spent note denied by the nullifier map; (2) prior authorization is a zk-jlvm proof that the HIDDEN history satisfies the pinned fail-first rule (>=2 failed first-line treatments AND no active opioid Rx) — groth16_verify + exprHash/outputHash binding, an under-documented chart is rejected; (3) the DEA-EPCS-style co-sign is a CDS THRESHOLD(2-of-3 dlog) sigma_verify over the prescriber's registered factors, message-bound to (publicValues ‖ rxId) so it attests to exactly this proof for exactly this prescription; (4) Schedule II one-script-one-fill: the fill is an OR-of-dhtuple ring proof (which prescription stays hidden) with a witness-bound nullifier — the second pharmacy presenting the same fill is denied by has(spentNullifiers); (5) audit without dragnet: light-client state proofs verified via the REAL mpt_verify opcode against the consensus-signed committed root. All SP1 bundles are REAL GPU-generated Groth16 proofs (fixture-manifest.json records provenance); sigma proofs are real BN254 CDS transcripts verified through the sigma_verify opcode before check-in.",
+  "description": "A controlled-substance prescription lifecycle where every guarantee is enforced on-chain: (1) patient-blake's medical record lives as SHIELDED state — two visits update it privately via zk-jlvm-shielded (M5) Groth16 proofs (the JLVM effect runs INSIDE the SP1 guest; the chain sees only anchor|nullifier|newCommitment|exprHash, never the chart), with each note nullifier consumed into the PROTOCOL nullifier set (_consumeNullifier -> NullifierCombiner) and replay of a spent note denied; (2) prior authorization is a zk-jlvm proof that the HIDDEN history satisfies the pinned fail-first rule (>=2 failed first-line treatments AND no active opioid Rx) — groth16_verify + exprHash/outputHash binding, an under-documented chart is rejected; (3) the DEA-EPCS-style co-sign is a CDS THRESHOLD(2-of-3 dlog) sigma_verify over the prescriber's registered factors, message-bound to (publicValues ‖ rxId) so it attests to exactly this proof for exactly this prescription; (4) Schedule II one-script-one-fill: the fill is an OR-of-dhtuple ring proof (which prescription stays hidden) with a witness-bound nullifier — its x-coordinate is consumed into the protocol nullifier set, so the second pharmacy presenting the same fill is rejected by NullifierCombiner ('nullifier already consumed'); (5) audit without dragnet: light-client state proofs verified via the REAL mpt_verify opcode against the consensus-signed committed root, plus assertNullifier — the single-key nullifier/{domain}/{nf} PDMP query with a client-verified presence proof. All SP1 bundles are REAL GPU-generated Groth16 proofs (fixture-manifest.json records provenance); sigma proofs are real BN254 CDS transcripts verified through the sigma_verify opcode before check-in.",
   "type": "state-machine",
   "definition": "record.definition.json",
   "initialData": "record.initial.json",
@@ -39,6 +39,16 @@
           "signers": [
             "patient-blake"
           ]
+        },
+        {
+          "action": "assertNullifier",
+          "fiber": "record",
+          "nfFromEvent": {
+            "event": "event-visit-1.ts",
+            "pvWord": 1
+          },
+          "expectSpent": true,
+          "label": "visit-1's note nullifier is in the protocol set under the record's domain"
         },
         {
           "action": "processEvent",
@@ -111,6 +121,24 @@
           "signers": [
             "pharmacy-corner"
           ]
+        },
+        {
+          "action": "assertNullifier",
+          "fiber": "pdmp",
+          "nfFromEventField": {
+            "event": "event-fill.ts",
+            "field": "nullifier",
+            "xOnly": true
+          },
+          "expectSpent": true,
+          "label": "the fill nullifier's x-coordinate is protocol-spent on the dispensing log — the single-key PDMP query"
+        },
+        {
+          "action": "assertNullifier",
+          "fiber": "record",
+          "nf": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+          "expectSpent": false,
+          "label": "a never-consumed nullifier stays unspent (404; verifiable absence proofs = Phase B)"
         },
         {
           "action": "processEvent",
