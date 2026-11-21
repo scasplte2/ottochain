@@ -104,8 +104,25 @@ Flight recorder: poll ML0 each snapshot during the run → evidence/timeline.jso
   KEY-do-not-open.txt. VoxCPM2 / Qwen3-TTS 1.7B / Ming-3.0-tts 0.5B all ran (torch 2.8 cu128). ~23 GB
   under ~/voice-lab (losers' venvs ~13 GB to remove after James picks).
 
+- 16:10–17:10 — Voice: James picked B take 2 = VoxCPM2 (seed 2026). Ming env removed (~6.6 GB).
+  Script restructured on James's note (story first: shop → two questions → mechanics → payoff), 13 acts,
+  `script.json` (source of truth). `narrate.py` (line-by-line, fixed per-line seeds) → 186.9 s;
+  `asr_check.py` (Whisper large-v3): residual diffs are homophones (OttoChain/autochain, brakes/breaks,
+  Rosa's/Rose's) — mandate-0/-1, delivery-0 regenerated once. Claims re-verified on chain before scripting:
+  mandate still bound to 1.0.0 after 1.1.0 (#400); `$80 → $80.01` rejected (`tamper.ts`).
+- FILM: `scenes/film.tsx` world-space board + camera; render 1080p30 5610 frames, 35 MB, with narration
+  (−16 LUFS) + `sfx-film.mjs` bed. VERTICAL: `scenes/vertical.tsx` + `cut.mjs` (same EDL for audio),
+  64.7 s 1080×1920. BOARD: `board.html` + `board/main.ts` → `dist/board/` (static, ~4 MB); smoke-tested
+  desktop + phone in headless Chromium: no console errors, no horizontal overflow.
+- Deliverables (local, gitignored): demo/bike-shop-film/output/{ottochain-bike-shop-v1.mp4,
+  ottochain-bike-shop-vertical-v1.mp4, styleframe-v4.mp4}, dist/board/.
+- `bin/preflight` full: format+lint, tests, openapi, commitlint PASS; e2e-tsc failed on tamper.ts typing →
+  fixed (403988e); `bin/preflight --fast` all PASS.
+- Known polish items: in the poisoned framing the $500 invoice sits over Rosa's name tag; record.ts doesn't
+  stop on SIGTERM through the tsx wrapper (stop the child PID).
+
 ## Next
-1. James reviews the style frame (look/pace/Otto).
+1. James reviews the full film, vertical cut and board.
 2. Cluster baseline (zk-eligibility, riverdale-economy, agent-mandate) then the `bike-shop` example run.
 3. Voice A/B: VoxCPM2 vs Qwen3-TTS vs Ming-3.0 on the same 20–30 s slice + paragraph.
 
