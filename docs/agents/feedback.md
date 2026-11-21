@@ -61,3 +61,7 @@ scripts, new lint rules, or new items in `process-observations.md`. Newest at th
 ### 2026-11-21 — diagnose Tessellation release resolution
 
 - In a JAR download failure, record the Maven version and the final release tag together. The rule110 log resolved 4.0.0 but generated the cache key `tessellation-jars-v`. One resolver for the warmer and E2E lanes makes the failure reproducible from either workflow.
+
+### 2026-11-21 — compare matrix lanes at the first failed step
+
+- The same pinned POM returned a 404 to two workers and resolved for their peers. Checking the first failing HTTP request across lanes identified the dependency on individual runner responses. The E2E prepare job now resolves one tag for the matrix.

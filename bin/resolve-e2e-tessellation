@@ -12,14 +12,29 @@ version=${TESS_VERSION_OVERRIDE:-}
 if [[ -z $version ]]; then
   metakit=$(sed -nE 's/^[[:space:]]*val metakit = "([^"]+)"$/\1/p' project/Dependencies.scala)
   : "${metakit:?Missing metakit version pin in project/Dependencies.scala}"
-  pom="https://repo.maven.apache.org/maven2/io/constellationnetwork/metakit_2.13/$metakit/metakit_2.13-$metakit.pom"
-  version=$(curl -fsSL --retry 3 "$pom" | python3 -c '
+  pom_path="maven2/io/constellationnetwork/metakit_2.13/$metakit/metakit_2.13-$metakit.pom"
+  pom_file=$(mktemp)
+  trap 'rm -f "$pom_file"' EXIT
+  for host in repo.maven.apache.org repo1.maven.org; do
+    echo "Fetching metakit $metakit POM from $host" >&2
+    if curl -fsSL --retry 2 --retry-all-errors --connect-timeout 5 --max-time 15 \
+      --output "$pom_file" "https://$host/$pom_path" && [[ -s $pom_file ]]; then
+      break
+    fi
+    # Discard partial content before trying the other Maven Central endpoint.
+    : > "$pom_file"
+  done
+  if [[ ! -s $pom_file ]]; then
+    echo "Could not fetch metakit $metakit POM from either Maven Central endpoint" >&2
+    exit 1
+  fi
+  version=$(python3 -c '
 import sys
 import xml.etree.ElementTree as ET
 deps = ET.parse(sys.stdin).findall("{*}dependencies/{*}dependency")
 print(next((d.findtext("{*}version") for d in deps
             if d.findtext("{*}artifactId") == "tessellation-sdk_2.13"), ""))
-')
+' < "$pom_file")
 fi
 version=${version#v}
 if [[ ! $version =~ ^([0-9]+\.[0-9]+)\.[0-9]+([.+-][a-zA-Z0-9.-]+)?$ ]]; then
