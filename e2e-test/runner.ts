@@ -20,7 +20,8 @@ import getMetagraphEnv from './lib/metagraphEnv.ts';
 import type { StatesMap, Wallets, GeneratorFn, ValidatorFn } from './lib/types.ts';
 import { HttpClient, OttoMetagraphClient } from '@ottochain/sdk';
 // Light-client verification of committed state proofs (SDK ≥ 2.7.0) — used by assertStateProof.
-import { verifyStateProof } from '@ottochain/sdk/core';
+import { waitForRefusedEvent } from './lib/refusedEvent.ts';
+import { provedField } from './lib/provedField.ts';
 // WIRE record types (from `/core` = ottochain/types) — the exact shapes the client's typed getters
 // return. NOT the root's same-named exports, which resolve to the generated protobuf types.
 import type { StateMachineFiberRecord, ScriptFiberRecord, RegistryEntry } from '@ottochain/sdk/core';
@@ -589,7 +590,7 @@ interface TestStep {
   args?: string;
   expectedResult?: unknown;
   /** Assert this step is REJECTED: 'dl1' (HTTP 400, structural) or 'ml0' (admitted then combine-denied). */
-  expectRejected?: 'dl1' | 'ml0';
+  expectRejected?: 'dl1' | 'ml0' | 'eventReceipt';
   /**
    * Run this step concurrently with adjacent `parallel: true` steps (a maximal consecutive run forms
    * one batch). Use ONLY for steps with no inter-dependency (independent setup: registry publishes,
@@ -824,12 +825,8 @@ async function runFlow(
         return;
       }
 
-      // assertStateProof: the LIGHT-CLIENT audit check. Fetches the committed state-proof for a
-      // fiber (`/state-machines/{id}/state-proof?field=`) and verifies the Merkle-Patricia
-      // inclusion proof CLIENT-SIDE via the SDK's `verifyStateProof` (@ottochain/sdk ≥ 2.7.0 —
-      // the byte-exact port of metakit's MerklePatriciaVerifier) against `mptRoot`, whose
-      // combined hash IS the snapshot's consensus-signed `calculatedStateProof` — no trust in
-      // the serving node. Step fields: `fiber`, `field` (required), optional `expectedFieldValue`.
+      // Bind the projected field to its record and expected fiber under the response's MPT root.
+      // Snapshot anchoring is a separate check in the supplier verifier.
       if (step.action === 'assertStateProof') {
         const cid = resolveFiber(step.fiber);
         const who = step.fiber ?? cid.slice(0, 8);
@@ -848,18 +845,12 @@ async function runFlow(
           await new Promise((res) => setTimeout(res, retryDelayMs));
         }
         if (!proofResp) throw new Error(`assertStateProof ${who}: no committed state-proof with field "${field}"`);
-        const verdict = verifyStateProof(proofResp, `fiber/${cid}`);
-        if (!verdict.ok)
-          throw new Error(
-            `assertStateProof ${who}: inclusion proof REJECTED (${verdict.reason}) against mptRoot ${String(proofResp.mptRoot).slice(0, 16)}… (ordinal ${proofResp.ordinal})`
-          );
-        if (step.expectedFieldValue !== undefined && !deepEqual(proofResp.fieldValue, step.expectedFieldValue))
-          throw new Error(
-            `assertStateProof ${who}: field "${field}" mismatch — got ${JSON.stringify(proofResp.fieldValue)} want ${JSON.stringify(step.expectedFieldValue)}`
-          );
+        const value = provedField(proofResp, cid, field);
+        if (step.expectedFieldValue !== undefined && !deepEqual(value, step.expectedFieldValue))
+          throw new Error(`assertStateProof ${who}: proved ${field} was ${JSON.stringify(value)}, expected ${JSON.stringify(step.expectedFieldValue)}`);
         sw(' ✓');
         sl(
-          ` \x1b[32massertStateProof ${who}.${field}\x1b[0m verified vs committedRoot ${String(proofResp.committedRoot).slice(0, 12)}… @ ordinal ${proofResp.ordinal}`
+          ` \x1b[32massertStateProof ${who}.${field}\x1b[0m included under mptRoot ${String(proofResp.mptRoot).slice(0, 12)}… @ ordinal ${proofResp.ordinal}`
         );
         return;
       }
@@ -1316,6 +1307,9 @@ async function runFlow(
         entityPath = `scripts/${activeCid}`;
       }
 
+      const priorRecord = step.expectRejected === 'eventReceipt'
+        ? await new OttoMetagraphClient({ ml0Url: ml0Urls[0] }).getStateMachine(activeCid)
+        : null;
       // Snapshot initial state before sending
       const initialStates = await getInitialStates(ml0Env);
 
@@ -1367,6 +1361,15 @@ async function runFlow(
 
       if (!sendSuccess) {
         throw new Error(`Failed to send transaction for ${step.action}`);
+      }
+
+      if (step.expectRejected === 'eventReceipt') {
+        if (!priorRecord || step.action !== 'processEvent') throw new Error('A prior mandate record is required');
+        const eventName = (stepOptions.eventData as { eventName: string }).eventName;
+        const receipt = await waitForRefusedEvent(ml0Urls[0], priorRecord, currentMessage, eventName,
+          Object.values(signWallets).map(w => w.address), maxRetries, retryDelayMs);
+        sl(` Refused ${activeCid} at ${receipt.ordinal}: ${receipt.errorMessage}`);
+        return;
       }
 
       // Combine-rejection path (e.g. a guard-denied processEvent): the update is admitted by DL1 but

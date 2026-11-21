@@ -1,0 +1,166 @@
+{
+  "name": "Agent mandate",
+  "description": "Four parties exercise a revocable synthetic authorization.",
+  "type": "state-machine",
+  "definition": "definition.json",
+  "initialData": "initial.ts",
+  "testFlows": [
+    {
+      "name": "Signer-enforced supplier mandate",
+      "description": "Prove every business-state checkpoint.",
+      "steps": [
+        {
+          "action": "create",
+          "definition": "definition.json",
+          "initialData": "initial.ts",
+          "signers": [
+            "owner"
+          ]
+        },
+        {
+          "action": "assertStateProof",
+          "field": "remainingCents",
+          "expectedFieldValue": 10000,
+          "signers": [
+            "agent"
+          ]
+        },
+        {
+          "action": "processEvent",
+          "event": "authorize.json",
+          "eventData": {
+            "amountCents": 2000,
+            "payee": "supplier-a",
+            "requestNumber": 1
+          },
+          "signers": [
+            "agent"
+          ],
+          "expectedState": "active"
+        },
+        {
+          "action": "assertStateProof",
+          "field": "remainingCents",
+          "expectedFieldValue": 8000,
+          "signers": [
+            "agent"
+          ]
+        },
+        {
+          "action": "processEvent",
+          "event": "authorize.json",
+          "eventData": {
+            "amountCents": 2000,
+            "payee": "other",
+            "requestNumber": 2
+          },
+          "signers": [
+            "agent"
+          ],
+          "expectRejected": "eventReceipt"
+        },
+        {
+          "action": "assertStateProof",
+          "field": "remainingCents",
+          "expectedFieldValue": 8000,
+          "signers": [
+            "agent"
+          ]
+        },
+        {
+          "action": "processEvent",
+          "event": "authorize.json",
+          "eventData": {
+            "amountCents": 2000,
+            "payee": "supplier-a",
+            "requestNumber": 2
+          },
+          "signers": [
+            "stranger"
+          ],
+          "expectRejected": "eventReceipt"
+        },
+        {
+          "action": "assertStateProof",
+          "field": "remainingCents",
+          "expectedFieldValue": 8000,
+          "signers": [
+            "agent"
+          ]
+        },
+        {
+          "action": "processEvent",
+          "event": "authorize.json",
+          "eventData": {
+            "amountCents": 4000,
+            "payee": "supplier-a",
+            "requestNumber": 2
+          },
+          "signers": [
+            "agent"
+          ],
+          "expectRejected": "eventReceipt"
+        },
+        {
+          "action": "assertStateProof",
+          "field": "remainingCents",
+          "expectedFieldValue": 8000,
+          "signers": [
+            "agent"
+          ]
+        },
+        {
+          "action": "processEvent",
+          "event": "authorize.json",
+          "eventData": {
+            "amountCents": 4000,
+            "payee": "supplier-a",
+            "requestNumber": 2
+          },
+          "signers": [
+            "agent",
+            "cosigner"
+          ],
+          "expectedState": "active"
+        },
+        {
+          "action": "assertStateProof",
+          "field": "remainingCents",
+          "expectedFieldValue": 4000,
+          "signers": [
+            "agent"
+          ]
+        },
+        {
+          "action": "processEvent",
+          "event": "revoke.json",
+          "signers": [
+            "owner"
+          ],
+          "expectedState": "revoked"
+        },
+        {
+          "action": "processEvent",
+          "event": "authorize.json",
+          "eventData": {
+            "amountCents": 1000,
+            "payee": "supplier-b",
+            "requestNumber": 3
+          },
+          "signers": [
+            "agent"
+          ],
+          "expectRejected": "eventReceipt"
+        },
+        {
+          "action": "assertStateProof",
+          "field": "remainingCents",
+          "expectedFieldValue": 4000,
+          "signers": [
+            "agent"
+          ]
+        }
+      ]
+    }
+  ]
+}
