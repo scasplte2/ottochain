@@ -1,0 +1,31 @@
+{
+  "name": "shop-credit.asset",
+  "version": "1.0.0",
+  "behavior": 28,
+  "supply": {
+    "mintPolicy": {
+      "==": [
+        1,
+        1
+      ]
+    },
+    "burnPolicy": {
+      "==": [
+        1,
+        1
+      ]
+    }
+  },
+  "morphisms": {
+    "TRANSFER": {
+      "visibility": "PUBLIC"
+    },
+    "FRACTIONALIZE": {
+      "visibility": "PUBLIC"
+    }
+  },
+  "stateShape": {
+    "typeName": "ShopCredit",
+    "fields": []
+  }
+}

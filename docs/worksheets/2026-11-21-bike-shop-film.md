@@ -80,6 +80,30 @@ Flight recorder: poll ML0 each snapshot during the run → evidence/timeline.jso
 - Voice reference received: `~/voice-reference/james-2026-11-21.m4a` (4:56, 48 kHz, peak −4.6 dB). Private
   dir (700), never committed/uploaded. Needs transcript (local Whisper) for VoxCPM2/Qwen3 reference text.
 
+- 15:15–16:05 — DEVNET (task-owned, ~/devnets/bike-shop): tessellation develop 20aa1c6 clone (infra only,
+  `compose-runner.sh` patched to reuse an existing `tessellation_common` net — that network pre-existed,
+  created 2026-09-18, 0 containers, NOT ours, never removed), release JARs v4.0.0-rc.10 sha256-verified,
+  metagraph JARs from this branch. Skipped `just up` (its install_dependencies.sh edits ~/.bashrc and
+  installs nvm). `SKIP_STREAMING=true`, API ports on 127.0.0.1. Reset = ~/devnets/bike-shop/reset.sh
+  (removes ONLY gl0-0/ml0-0/dl1-{0,1,2} after checking their compose working dir).
+- Baseline at this HEAD: zk-eligibility 2/2 PASS, agent-mandate 15/15 PASS (Node 20 tsx runner).
+- Runner fix: morphism-CREATED assets (Fractionalize shards, Compose composite) are now gated on DL1
+  commit-index ingestion before the next step (was: AssetNotFound at DL1 on a fresh shard). COMPOSE
+  confirms via source removal like BURN/DECOMPOSE.
+- RUN 3 PASS: `runner.ts --target local --only bike-shop --wallets maya,agent,spoke,guild,rosa
+  --parallel false` → 55/55 in 631.7 s. Poisoned $500 refused (receipt ordinal 177); revoked refusal 394;
+  soulbound resale DL1-rejected `MorphismNotPermitted`. Flight recorder: ordinals 1–399, no gaps (raw 38 MB
+  kept OUT of repo at ~/devnets/bike-shop/evidence-raw/timeline-run3.jsonl). Verifier bundles captured
+  live for mandate/desk/delivery/trade (evidence/*.bundle|pin.json); offline replay passes 4 checks.
+- `demo/bike-shop-film/derive.mjs` → film-data.json (51 events). Poisoned invoice per-clause JLVM replay:
+  ✗ per-order limit, ✗ budget, ✗ approved supplier, ✗ credit match (5 pass) — James chose "several checks
+  fail" for the film (keep $500).
+- Issues filed: #222 (cascade `_spawn` silently dropped), #223 (proposal: fiber split-and-send +
+  cascade heldAssets visibility).
+- Voice A/B (subagent): ~/voice-lab/ab/{A,B,C}(-take2).wav + reference-clip.wav, blind key in
+  KEY-do-not-open.txt. VoxCPM2 / Qwen3-TTS 1.7B / Ming-3.0-tts 0.5B all ran (torch 2.8 cu128). ~23 GB
+  under ~/voice-lab (losers' venvs ~13 GB to remove after James picks).
+
 ## Next
 1. James reviews the style frame (look/pace/Otto).
 2. Cluster baseline (zk-eligibility, riverdale-economy, agent-mandate) then the `bike-shop` example run.

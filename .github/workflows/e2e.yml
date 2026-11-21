@@ -52,13 +52,14 @@ jobs:
           #     rejections — a block-inclusion timing issue, not a validation bug. The wide window rides it out.
           ALL="$(cat <<'JSON'
           [
-            {"name":"core","filter":"--exclude sigma-mixer,rule110,staked-oracle-pool,tictactoe,riverdale-economy,riverdale-health,agent-mandate","concurrency":"","ordinalThreshold":"","maxResubmits":"","wallets":"","timeout":30},
+            {"name":"core","filter":"--exclude sigma-mixer,rule110,staked-oracle-pool,tictactoe,riverdale-economy,riverdale-health,agent-mandate,bike-shop","concurrency":"","ordinalThreshold":"","maxResubmits":"","wallets":"","timeout":30},
             {"name":"tictactoe","filter":"--only tictactoe","concurrency":"","ordinalThreshold":"","maxResubmits":"","wallets":"","timeout":30},
             {"name":"sigma-mixer","filter":"--only sigma-mixer","concurrency":"2","ordinalThreshold":"10","maxResubmits":"4","wallets":"","timeout":25},
             {"name":"rule110","filter":"--only rule110","concurrency":"3","ordinalThreshold":"10","maxResubmits":"4","wallets":"","timeout":30},
             {"name":"staked-oracle","filter":"--only staked-oracle-pool","concurrency":"1","ordinalThreshold":"30","maxResubmits":"1","wallets":"alice,bob,carol","timeout":45},
             {"name":"riverdale-economy","filter":"--only riverdale-economy","concurrency":"1","ordinalThreshold":"30","maxResubmits":"4","wallets":"alice,bob,carol,dave,erin,frank","timeout":55},
             {"name":"agent-mandate","filter":"--only agent-mandate","concurrency":"1","ordinalThreshold":"30","maxResubmits":"1","wallets":"owner,agent,cosigner,stranger","timeout":40},
+            {"name":"bike-shop","filter":"--only bike-shop","concurrency":"1","ordinalThreshold":"30","maxResubmits":"1","wallets":"maya,agent,spoke,guild,rosa","timeout":45},
             {"name":"riverdale-health","filter":"--only riverdale-health","concurrency":"1","ordinalThreshold":"30","maxResubmits":"4","wallets":"dr-adams,patient-blake,pharmacy-corner,pharmacy-mainst,auditor-dea","timeout":40}
           ]
           JSON

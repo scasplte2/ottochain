@@ -1,0 +1,3957 @@
+{
+  "source": {
+    "firstOrdinal": 1,
+    "lastOrdinal": 405,
+    "snapshots": 405,
+    "operator": "local devnet, one operator"
+  },
+  "fibers": {
+    "mandate": "a21bd79a-1312-4558-8eed-1fc10be03788",
+    "desk": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+    "delivery": "b1ce0000-0000-4000-8000-00000000de01",
+    "trade": "8bae6856-29d6-4b3d-b178-4486340711e6"
+  },
+  "roles": {
+    "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1": "maya",
+    "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn": "agent",
+    "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ": "spoke"
+  },
+  "events": [
+    {
+      "ordinal": 7,
+      "calculatedStateProof": "1d2a3562a795d127c4dfd08727a38409b7417eb55e0e625feb22d406e22ea28a",
+      "receipts": [],
+      "updates": [
+        {
+          "type": "PublishMachineVersion",
+          "signers": [
+            "DAG6YrGyY24Us8fEod3L3QdrnuVfuGAJ6teAjaL7"
+          ],
+          "valid": true,
+          "summary": {
+            "name": "purchasing-mandate.machine",
+            "version": "1.0.0"
+          }
+        }
+      ],
+      "state": {}
+    },
+    {
+      "ordinal": 8,
+      "calculatedStateProof": "db93788dfd1bea1b240ce46cab5f31adafea02af9e42269be307bcda01ae5864",
+      "receipts": [],
+      "updates": [
+        {
+          "type": "PublishMachineVersion",
+          "signers": [
+            "DAG6YrGyY24Us8fEod3L3QdrnuVfuGAJ6teAjaL7"
+          ],
+          "valid": true,
+          "summary": {
+            "name": "purchasing-mandate.machine",
+            "version": "1.0.0"
+          }
+        }
+      ],
+      "state": {}
+    },
+    {
+      "ordinal": 10,
+      "calculatedStateProof": "960b57dab4b456535abef2a120415fb705bc8fe308bb9f37f9343437af38ae61",
+      "receipts": [],
+      "updates": [
+        {
+          "type": "CreateAssetPolicy",
+          "signers": [
+            "maya"
+          ],
+          "valid": true,
+          "summary": {
+            "name": "shop-credit.asset",
+            "version": "1.0.0"
+          }
+        }
+      ],
+      "state": {}
+    },
+    {
+      "ordinal": 11,
+      "calculatedStateProof": "aeb6e0534556203de2cfd1cb015a1a5e4b4931c49326f7fd814623e4a616e1bf",
+      "receipts": [],
+      "updates": [
+        {
+          "type": "CreateAssetPolicy",
+          "signers": [
+            "maya"
+          ],
+          "valid": true,
+          "summary": {
+            "name": "shop-credit.asset",
+            "version": "1.0.0"
+          }
+        }
+      ],
+      "state": {}
+    },
+    {
+      "ordinal": 17,
+      "calculatedStateProof": "7e9422a8d16113255bd4d1e90d327cda637047498a7a354a70cf45353af1323e",
+      "receipts": [],
+      "updates": [
+        {
+          "type": "CreateAssetPolicy",
+          "signers": [
+            "maya"
+          ],
+          "valid": true,
+          "summary": {
+            "name": "warranty.asset",
+            "version": "1.0.0"
+          }
+        }
+      ],
+      "state": {}
+    },
+    {
+      "ordinal": 18,
+      "calculatedStateProof": "3944a8ffc2c3a80736f6847251be9a3675a317ba4cc3cf302f6deff5bbaa7eef",
+      "receipts": [],
+      "updates": [
+        {
+          "type": "CreateAssetPolicy",
+          "signers": [
+            "maya"
+          ],
+          "valid": true,
+          "summary": {
+            "name": "warranty.asset",
+            "version": "1.0.0"
+          }
+        }
+      ],
+      "state": {}
+    },
+    {
+      "ordinal": 20,
+      "calculatedStateProof": "0b792fd3a1a13a2d034b9b08a8ba2fba80bd3dd8b4f4ce503e37f1c453e549b0",
+      "receipts": [],
+      "updates": [
+        {
+          "type": "CreateAssetPolicy",
+          "signers": [
+            "spoke"
+          ],
+          "valid": true,
+          "summary": {
+            "name": "brake-pads.asset",
+            "version": "1.0.0"
+          }
+        }
+      ],
+      "state": {}
+    },
+    {
+      "ordinal": 21,
+      "calculatedStateProof": "969ad5adea1c3cd6a422dcbd4748991078262678a1937658a4a10475460e25e5",
+      "receipts": [],
+      "updates": [
+        {
+          "type": "CreateAssetPolicy",
+          "signers": [
+            "spoke"
+          ],
+          "valid": true,
+          "summary": {
+            "name": "brake-pads.asset",
+            "version": "1.0.0"
+          }
+        }
+      ],
+      "state": {}
+    },
+    {
+      "ordinal": 24,
+      "calculatedStateProof": "cbd34e0993326c144b457cd88d0663af45901d16bce19bd3c79db11ca1e99a84",
+      "receipts": [],
+      "updates": [
+        {
+          "type": "CreateAssetPolicy",
+          "signers": [
+            "spoke"
+          ],
+          "valid": true,
+          "summary": {
+            "name": "tune-up-voucher.asset",
+            "version": "1.0.0"
+          }
+        }
+      ],
+      "state": {}
+    },
+    {
+      "ordinal": 25,
+      "calculatedStateProof": "adad378fdd01afc7c3ea7720f4eafd69b005c79906edbd99dc1d6df7d7c1e283",
+      "receipts": [],
+      "updates": [
+        {
+          "type": "CreateAssetPolicy",
+          "signers": [
+            "spoke"
+          ],
+          "valid": true,
+          "summary": {
+            "name": "tune-up-voucher.asset",
+            "version": "1.0.0"
+          }
+        }
+      ],
+      "state": {}
+    },
+    {
+      "ordinal": 27,
+      "calculatedStateProof": "0dc6a9f788d1dd014871c31bd9b2169770ccc702bdc1aa00cd391b72c015110d",
+      "receipts": [
+        {
+          "fiber": "desk",
+          "kind": "CreationReceipt",
+          "success": false,
+          "error": null,
+          "gas": 0,
+          "source": null
+        }
+      ],
+      "updates": [
+        {
+          "type": "CreateStateMachine",
+          "signers": [
+            "spoke"
+          ],
+          "valid": true,
+          "summary": {
+            "fiberId": "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+          }
+        }
+      ],
+      "state": {
+        "desk": {
+          "state": "open",
+          "seq": 0,
+          "data": {
+            "dispatched": 0,
+            "ordersReceived": 0,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 28,
+      "calculatedStateProof": "fe4d5aa24fe95eb0749d5623ef2d71385df586acbbf760eeb5ebd2c1bc49ef95",
+      "receipts": [
+        {
+          "fiber": "desk",
+          "kind": "CreationReceipt",
+          "success": false,
+          "error": null,
+          "gas": 0,
+          "source": null
+        }
+      ],
+      "updates": [
+        {
+          "type": "CreateStateMachine",
+          "signers": [
+            "spoke"
+          ],
+          "valid": true,
+          "summary": {
+            "fiberId": "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+          }
+        }
+      ],
+      "state": {
+        "desk": {
+          "state": "open",
+          "seq": 0,
+          "data": {
+            "dispatched": 0,
+            "ordersReceived": 0,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 30,
+      "calculatedStateProof": "1517d43793c8c5eb6677675b04d533e55b0e55cb3daa6746a650d647ac3b68e4",
+      "receipts": [],
+      "updates": [
+        {
+          "type": "RegisterAlias",
+          "signers": [
+            "spoke"
+          ],
+          "valid": true,
+          "summary": {
+            "name": "spoke-and-sprocket.machine",
+            "targetFiberId": "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+          }
+        }
+      ],
+      "state": {
+        "desk": {
+          "state": "open",
+          "seq": 0,
+          "data": {
+            "dispatched": 0,
+            "ordersReceived": 0,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 31,
+      "calculatedStateProof": "f74ccad710582b863ecaf984c6a6749a8ff44257f659c2e639ad5b75c41ba360",
+      "receipts": [],
+      "updates": [
+        {
+          "type": "RegisterAlias",
+          "signers": [
+            "spoke"
+          ],
+          "valid": true,
+          "summary": {
+            "name": "spoke-and-sprocket.machine",
+            "targetFiberId": "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+          }
+        }
+      ],
+      "state": {
+        "desk": {
+          "state": "open",
+          "seq": 0,
+          "data": {
+            "dispatched": 0,
+            "ordersReceived": 0,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 35,
+      "calculatedStateProof": "bda1040977ea756ecb488fb52da70556af982d7101f7bd3c8996cab28a13034d",
+      "receipts": [
+        {
+          "fiber": "mandate",
+          "kind": "CreationReceipt",
+          "success": false,
+          "error": null,
+          "gas": 0,
+          "source": null
+        }
+      ],
+      "updates": [
+        {
+          "type": "CreateStateMachine",
+          "signers": [
+            "maya"
+          ],
+          "valid": true,
+          "summary": {
+            "fiberId": "a21bd79a-1312-4558-8eed-1fc10be03788"
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 0,
+          "data": {
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 0,
+            "perOrderLimitCents": 2500,
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 10000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 0,
+          "data": {
+            "dispatched": 0,
+            "ordersReceived": 0,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 36,
+      "calculatedStateProof": "534fb6ffbe0cb669243fc14c7ac38167b5cb5b388eb54f4807571a1fbd778679",
+      "receipts": [
+        {
+          "fiber": "mandate",
+          "kind": "CreationReceipt",
+          "success": false,
+          "error": null,
+          "gas": 0,
+          "source": null
+        }
+      ],
+      "updates": [
+        {
+          "type": "CreateStateMachine",
+          "signers": [
+            "maya"
+          ],
+          "valid": true,
+          "summary": {
+            "fiberId": "a21bd79a-1312-4558-8eed-1fc10be03788"
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 0,
+          "data": {
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 0,
+            "perOrderLimitCents": 2500,
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 10000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 0,
+          "data": {
+            "dispatched": 0,
+            "ordersReceived": 0,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 39,
+      "calculatedStateProof": "f85cf4c271d0092c77fa845e69e3bbedc3d7049bc1e1f1a14cbec349437856f5",
+      "receipts": [
+        {
+          "fiber": "trade",
+          "kind": "CreationReceipt",
+          "success": false,
+          "error": null,
+          "gas": 0,
+          "source": null
+        }
+      ],
+      "updates": [
+        {
+          "type": "CreateStateMachine",
+          "signers": [
+            "spoke"
+          ],
+          "valid": true,
+          "summary": {
+            "fiberId": "8bae6856-29d6-4b3d-b178-4486340711e6"
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 0,
+          "data": {
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 0,
+            "perOrderLimitCents": 2500,
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 10000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 0,
+          "data": {
+            "dispatched": 0,
+            "ordersReceived": 0,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        },
+        "trade": {
+          "state": "pending",
+          "seq": 0,
+          "data": {
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 46,
+      "calculatedStateProof": "e5027c762c500c1c2d5fb8e8940d1d91933d50371ae20ba48aca2895fbcf28e8",
+      "receipts": [],
+      "updates": [
+        {
+          "type": "MintAsset",
+          "signers": [
+            "maya"
+          ],
+          "valid": true,
+          "summary": {
+            "amount": 10000,
+            "assetId": "b1ce0000-0000-4000-8000-00000000c000"
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 0,
+          "data": {
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 0,
+            "perOrderLimitCents": 2500,
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 10000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 0,
+          "data": {
+            "dispatched": 0,
+            "ordersReceived": 0,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        },
+        "trade": {
+          "state": "pending",
+          "seq": 0,
+          "data": {
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 47,
+      "calculatedStateProof": "210ee0f3d1d313511e30b465302b060857af83d84c46ac664d8b2b94711bc6ae",
+      "receipts": [
+        {
+          "fiber": "b1ce0000-0000-4000-8000-00000000c000",
+          "kind": "RejectionReceipt",
+          "event": "MintAsset",
+          "success": false,
+          "error": "mint target b1ce0000-0000-4000-8000-00000000c000 already exists",
+          "gas": 0,
+          "source": null
+        }
+      ],
+      "updates": [
+        {
+          "type": "MintAsset",
+          "signers": [
+            "maya"
+          ],
+          "valid": true,
+          "summary": {
+            "amount": 10000,
+            "assetId": "b1ce0000-0000-4000-8000-00000000c000"
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 0,
+          "data": {
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 0,
+            "perOrderLimitCents": 2500,
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 10000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 0,
+          "data": {
+            "dispatched": 0,
+            "ordersReceived": 0,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        },
+        "trade": {
+          "state": "pending",
+          "seq": 0,
+          "data": {
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 58,
+      "calculatedStateProof": "781c1070d11b661f5659b68744d4bb88d62bbfe519df62383ad602ed1c73f14e",
+      "receipts": [],
+      "updates": [
+        {
+          "type": "ApplyMorphism",
+          "signers": [
+            "maya"
+          ],
+          "valid": true,
+          "summary": {
+            "assetId": "b1ce0000-0000-4000-8000-00000000c000",
+            "kind": "FRACTIONALIZE",
+            "shardIds": [
+              "b1ce0000-0000-4000-8000-00000000c001",
+              "b1ce0000-0000-4000-8000-00000000c002",
+              "b1ce0000-0000-4000-8000-00000000c003",
+              "b1ce0000-0000-4000-8000-00000000c004",
+              "b1ce0000-0000-4000-8000-00000000c005"
+            ]
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 0,
+          "data": {
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 0,
+            "perOrderLimitCents": 2500,
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 10000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 0,
+          "data": {
+            "dispatched": 0,
+            "ordersReceived": 0,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        },
+        "trade": {
+          "state": "pending",
+          "seq": 0,
+          "data": {
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 59,
+      "calculatedStateProof": "5b3176e7a2dd008fd73e7a2118b56a886e88775da5d2430eca3e48bef915342f",
+      "receipts": [
+        {
+          "fiber": "b1ce0000-0000-4000-8000-00000000c000",
+          "kind": "RejectionReceipt",
+          "event": "ApplyMorphism",
+          "success": false,
+          "error": "asset b1ce0000-0000-4000-8000-00000000c000 not found",
+          "gas": 0,
+          "source": null
+        }
+      ],
+      "updates": [
+        {
+          "type": "ApplyMorphism",
+          "signers": [
+            "maya"
+          ],
+          "valid": true,
+          "summary": {
+            "assetId": "b1ce0000-0000-4000-8000-00000000c000",
+            "kind": "FRACTIONALIZE",
+            "shardIds": [
+              "b1ce0000-0000-4000-8000-00000000c001",
+              "b1ce0000-0000-4000-8000-00000000c002",
+              "b1ce0000-0000-4000-8000-00000000c003",
+              "b1ce0000-0000-4000-8000-00000000c004",
+              "b1ce0000-0000-4000-8000-00000000c005"
+            ]
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 0,
+          "data": {
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 0,
+            "perOrderLimitCents": 2500,
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 10000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 0,
+          "data": {
+            "dispatched": 0,
+            "ordersReceived": 0,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        },
+        "trade": {
+          "state": "pending",
+          "seq": 0,
+          "data": {
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 70,
+      "calculatedStateProof": "685e49f671a3ab2b243f68d190567040a109507b147f54a4531ace639a2e65cc",
+      "receipts": [],
+      "updates": [
+        {
+          "type": "ApplyMorphism",
+          "signers": [
+            "maya"
+          ],
+          "valid": true,
+          "summary": {
+            "assetId": "b1ce0000-0000-4000-8000-00000000c001",
+            "kind": "TRANSFER",
+            "recipient": {
+              "Fiber": {
+                "fiberId": "a21bd79a-1312-4558-8eed-1fc10be03788"
+              }
+            }
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 0,
+          "data": {
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 0,
+            "perOrderLimitCents": 2500,
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 10000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 0,
+          "data": {
+            "dispatched": 0,
+            "ordersReceived": 0,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        },
+        "trade": {
+          "state": "pending",
+          "seq": 0,
+          "data": {
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 71,
+      "calculatedStateProof": "2ef4233d74581068b47e7db22a54009cd8baabe7500eddc17c0cf3deee65fcc0",
+      "receipts": [
+        {
+          "fiber": "b1ce0000-0000-4000-8000-00000000c001",
+          "kind": "RejectionReceipt",
+          "event": "ApplyMorphism",
+          "success": false,
+          "error": "sequence number mismatch for b1ce0000-0000-4000-8000-00000000c001: target=0, actual=1",
+          "gas": 0,
+          "source": null
+        }
+      ],
+      "updates": [
+        {
+          "type": "ApplyMorphism",
+          "signers": [
+            "maya"
+          ],
+          "valid": true,
+          "summary": {
+            "assetId": "b1ce0000-0000-4000-8000-00000000c001",
+            "kind": "TRANSFER",
+            "recipient": {
+              "Fiber": {
+                "fiberId": "a21bd79a-1312-4558-8eed-1fc10be03788"
+              }
+            }
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 0,
+          "data": {
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 0,
+            "perOrderLimitCents": 2500,
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 10000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 0,
+          "data": {
+            "dispatched": 0,
+            "ordersReceived": 0,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        },
+        "trade": {
+          "state": "pending",
+          "seq": 0,
+          "data": {
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 74,
+      "calculatedStateProof": "085a827a00b1ef319def48aa96a09cca1c8b27d35428e744b1422c5a8bc1c58d",
+      "receipts": [],
+      "updates": [
+        {
+          "type": "ApplyMorphism",
+          "signers": [
+            "maya"
+          ],
+          "valid": true,
+          "summary": {
+            "assetId": "b1ce0000-0000-4000-8000-00000000c002",
+            "kind": "TRANSFER",
+            "recipient": {
+              "Fiber": {
+                "fiberId": "a21bd79a-1312-4558-8eed-1fc10be03788"
+              }
+            }
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 0,
+          "data": {
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 0,
+            "perOrderLimitCents": 2500,
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 10000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 0,
+          "data": {
+            "dispatched": 0,
+            "ordersReceived": 0,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        },
+        "trade": {
+          "state": "pending",
+          "seq": 0,
+          "data": {
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 75,
+      "calculatedStateProof": "12c9cb8157744823d9b1cb228004436bc73da1cfaa5a76e5bcbb2b8230330816",
+      "receipts": [
+        {
+          "fiber": "b1ce0000-0000-4000-8000-00000000c002",
+          "kind": "RejectionReceipt",
+          "event": "ApplyMorphism",
+          "success": false,
+          "error": "sequence number mismatch for b1ce0000-0000-4000-8000-00000000c002: target=0, actual=1",
+          "gas": 0,
+          "source": null
+        }
+      ],
+      "updates": [
+        {
+          "type": "ApplyMorphism",
+          "signers": [
+            "maya"
+          ],
+          "valid": true,
+          "summary": {
+            "assetId": "b1ce0000-0000-4000-8000-00000000c002",
+            "kind": "TRANSFER",
+            "recipient": {
+              "Fiber": {
+                "fiberId": "a21bd79a-1312-4558-8eed-1fc10be03788"
+              }
+            }
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 0,
+          "data": {
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 0,
+            "perOrderLimitCents": 2500,
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 10000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 0,
+          "data": {
+            "dispatched": 0,
+            "ordersReceived": 0,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        },
+        "trade": {
+          "state": "pending",
+          "seq": 0,
+          "data": {
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 80,
+      "calculatedStateProof": "276a2edf1a6eb8831c4262d0c28e0ed4661f3a93d30bc48a517fc4de2d581aaf",
+      "receipts": [],
+      "updates": [
+        {
+          "type": "MintAsset",
+          "signers": [
+            "spoke"
+          ],
+          "valid": true,
+          "summary": {
+            "amount": 1,
+            "assetId": "b1ce0000-0000-4000-8000-00000000ba01"
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 0,
+          "data": {
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 0,
+            "perOrderLimitCents": 2500,
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 10000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 0,
+          "data": {
+            "dispatched": 0,
+            "ordersReceived": 0,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        },
+        "trade": {
+          "state": "pending",
+          "seq": 0,
+          "data": {
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 81,
+      "calculatedStateProof": "3d01d46bbf3557d70efc043b471bd432f490ecc15de189d777cd6a4ba36e626a",
+      "receipts": [
+        {
+          "fiber": "b1ce0000-0000-4000-8000-00000000ba01",
+          "kind": "RejectionReceipt",
+          "event": "MintAsset",
+          "success": false,
+          "error": "mint target b1ce0000-0000-4000-8000-00000000ba01 already exists",
+          "gas": 0,
+          "source": null
+        }
+      ],
+      "updates": [
+        {
+          "type": "MintAsset",
+          "signers": [
+            "spoke"
+          ],
+          "valid": true,
+          "summary": {
+            "amount": 1,
+            "assetId": "b1ce0000-0000-4000-8000-00000000ba01"
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 0,
+          "data": {
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 0,
+            "perOrderLimitCents": 2500,
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 10000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 0,
+          "data": {
+            "dispatched": 0,
+            "ordersReceived": 0,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        },
+        "trade": {
+          "state": "pending",
+          "seq": 0,
+          "data": {
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 133,
+      "calculatedStateProof": "1400d80ebe743d127ca63dfc24b7a1003fd132a062030d427f73eda1da8a1986",
+      "receipts": [
+        {
+          "fiber": "mandate",
+          "kind": "EventReceipt",
+          "event": "authorize",
+          "success": true,
+          "from": "active",
+          "to": "active",
+          "error": null,
+          "gas": 455,
+          "source": null
+        },
+        {
+          "fiber": "desk",
+          "kind": "EventReceipt",
+          "event": "receive_order",
+          "success": true,
+          "from": "open",
+          "to": "open",
+          "error": null,
+          "gas": 0,
+          "source": "mandate"
+        }
+      ],
+      "updates": [
+        {
+          "type": "TransitionStateMachine",
+          "signers": [
+            "agent"
+          ],
+          "valid": true,
+          "summary": {
+            "eventName": "authorize",
+            "fiberId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+            "payload": {
+              "amountCents": 2000,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001",
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "item": "brake pads",
+              "payee": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+              "payeeFiber": "desk",
+              "requestNumber": 1
+            }
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 1,
+          "data": {
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 1,
+            "perOrderLimitCents": 2500,
+            "openOrder": {
+              "signers": [
+                "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn"
+              ],
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "payee": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            },
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 8000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 1,
+          "data": {
+            "dispatched": 0,
+            "ordersReceived": 1,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "lastOrder": {
+              "shipTo": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            }
+          }
+        },
+        "trade": {
+          "state": "pending",
+          "seq": 0,
+          "data": {
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 134,
+      "calculatedStateProof": "1a32edfbb2982457db4ac6b533edacf5549be5939345be1299da46d49972008d",
+      "receipts": [
+        {
+          "fiber": "mandate",
+          "kind": "RejectionReceipt",
+          "event": "TransitionStateMachine",
+          "success": false,
+          "error": "Sequence number mismatch: target=FiberOrdinal(0), actual=FiberOrdinal(1)",
+          "gas": 0,
+          "source": null
+        }
+      ],
+      "updates": [
+        {
+          "type": "TransitionStateMachine",
+          "signers": [
+            "agent"
+          ],
+          "valid": true,
+          "summary": {
+            "eventName": "authorize",
+            "fiberId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+            "payload": {
+              "amountCents": 2000,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001",
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "item": "brake pads",
+              "payee": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+              "payeeFiber": "desk",
+              "requestNumber": 1
+            }
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 1,
+          "data": {
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 1,
+            "perOrderLimitCents": 2500,
+            "openOrder": {
+              "signers": [
+                "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn"
+              ],
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "payee": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            },
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 8000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 1,
+          "data": {
+            "dispatched": 0,
+            "ordersReceived": 1,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "lastOrder": {
+              "shipTo": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            }
+          }
+        },
+        "trade": {
+          "state": "pending",
+          "seq": 0,
+          "data": {
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 176,
+      "calculatedStateProof": "bb073544e95bd71878e67df19b77df8ba03157e4b9a24bb790d66d715fc06565",
+      "receipts": [
+        {
+          "fiber": "mandate",
+          "kind": "EventReceipt",
+          "event": "authorize",
+          "success": false,
+          "from": "active",
+          "to": "active",
+          "error": "No guard matched from active on authorize (1 guards tried)",
+          "gas": 290,
+          "source": null
+        }
+      ],
+      "updates": [
+        {
+          "type": "TransitionStateMachine",
+          "signers": [
+            "agent"
+          ],
+          "valid": true,
+          "summary": {
+            "eventName": "authorize",
+            "fiberId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+            "payload": {
+              "amountCents": 50000,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c002",
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "item": "URGENT parts",
+              "payee": "b1ce0000-0000-4000-8000-0000000bad01",
+              "payeeId": "b1ce0000-0000-4000-8000-0000000bad01",
+              "requestNumber": 2
+            }
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 1,
+          "data": {
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 1,
+            "perOrderLimitCents": 2500,
+            "openOrder": {
+              "signers": [
+                "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn"
+              ],
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "payee": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            },
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 8000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 1,
+          "data": {
+            "dispatched": 0,
+            "ordersReceived": 1,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "lastOrder": {
+              "shipTo": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            }
+          }
+        },
+        "trade": {
+          "state": "pending",
+          "seq": 0,
+          "data": {
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 177,
+      "calculatedStateProof": "ddef722f5bfc4eeba150a8894f9071b1098d11626f6bbe27f4d41cff3df10fdf",
+      "receipts": [
+        {
+          "fiber": "mandate",
+          "kind": "EventReceipt",
+          "event": "authorize",
+          "success": false,
+          "from": "active",
+          "to": "active",
+          "error": "No guard matched from active on authorize (1 guards tried)",
+          "gas": 290,
+          "source": null
+        }
+      ],
+      "updates": [
+        {
+          "type": "TransitionStateMachine",
+          "signers": [
+            "agent"
+          ],
+          "valid": true,
+          "summary": {
+            "eventName": "authorize",
+            "fiberId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+            "payload": {
+              "amountCents": 50000,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c002",
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "item": "URGENT parts",
+              "payee": "b1ce0000-0000-4000-8000-0000000bad01",
+              "payeeId": "b1ce0000-0000-4000-8000-0000000bad01",
+              "requestNumber": 2
+            }
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 1,
+          "data": {
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 1,
+            "perOrderLimitCents": 2500,
+            "openOrder": {
+              "signers": [
+                "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn"
+              ],
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "payee": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            },
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 8000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 1,
+          "data": {
+            "dispatched": 0,
+            "ordersReceived": 1,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "lastOrder": {
+              "shipTo": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            }
+          }
+        },
+        "trade": {
+          "state": "pending",
+          "seq": 0,
+          "data": {
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 179,
+      "calculatedStateProof": "b4ca14e592ef1df1a01d285f2076a9813ed0ca74cf5f4ecd890b04d18692ba5a",
+      "receipts": [
+        {
+          "fiber": "desk",
+          "kind": "EventReceipt",
+          "event": "dispatch",
+          "success": true,
+          "from": "open",
+          "to": "open",
+          "error": null,
+          "gas": 354,
+          "source": null
+        }
+      ],
+      "updates": [
+        {
+          "type": "TransitionStateMachine",
+          "signers": [
+            "spoke"
+          ],
+          "valid": true,
+          "summary": {
+            "eventName": "dispatch",
+            "fiberId": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+            "payload": {
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "goodsId": "b1ce0000-0000-4000-8000-00000000ba01",
+              "name": "dispatch"
+            }
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 1,
+          "data": {
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 1,
+            "perOrderLimitCents": 2500,
+            "openOrder": {
+              "signers": [
+                "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn"
+              ],
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "payee": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            },
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 8000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 2,
+          "data": {
+            "dispatched": 1,
+            "ordersReceived": 1,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "lastOrder": {
+              "shipTo": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            }
+          }
+        },
+        "delivery": {
+          "state": "in_transit",
+          "seq": 0,
+          "data": {
+            "orderDesk": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "requestNumber": 1,
+            "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+            "item": "brake pads"
+          }
+        },
+        "trade": {
+          "state": "pending",
+          "seq": 0,
+          "data": {
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 180,
+      "calculatedStateProof": "ddcf41ce2f5b0ed6144d9cd1738ec63e6e577be48dd325428acefefe49d47a90",
+      "receipts": [
+        {
+          "fiber": "desk",
+          "kind": "RejectionReceipt",
+          "event": "TransitionStateMachine",
+          "success": false,
+          "error": "Sequence number mismatch: target=FiberOrdinal(1), actual=FiberOrdinal(2)",
+          "gas": 0,
+          "source": null
+        }
+      ],
+      "updates": [
+        {
+          "type": "TransitionStateMachine",
+          "signers": [
+            "spoke"
+          ],
+          "valid": true,
+          "summary": {
+            "eventName": "dispatch",
+            "fiberId": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+            "payload": {
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "goodsId": "b1ce0000-0000-4000-8000-00000000ba01",
+              "name": "dispatch"
+            }
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 1,
+          "data": {
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 1,
+            "perOrderLimitCents": 2500,
+            "openOrder": {
+              "signers": [
+                "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn"
+              ],
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "payee": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            },
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 8000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 2,
+          "data": {
+            "dispatched": 1,
+            "ordersReceived": 1,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "lastOrder": {
+              "shipTo": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            }
+          }
+        },
+        "delivery": {
+          "state": "in_transit",
+          "seq": 0,
+          "data": {
+            "orderDesk": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "requestNumber": 1,
+            "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+            "item": "brake pads"
+          }
+        },
+        "trade": {
+          "state": "pending",
+          "seq": 0,
+          "data": {
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 202,
+      "calculatedStateProof": "a04ac7088a59681c2a831f6b8a68f8ba1f3f3e817adbf6c6a08db336b11e900e",
+      "receipts": [
+        {
+          "fiber": "mandate",
+          "kind": "EventReceipt",
+          "event": "delivery_received",
+          "success": true,
+          "from": "active",
+          "to": "active",
+          "error": null,
+          "gas": 0,
+          "source": "delivery"
+        },
+        {
+          "fiber": "delivery",
+          "kind": "EventReceipt",
+          "event": "deliver",
+          "success": true,
+          "from": "in_transit",
+          "to": "delivered",
+          "error": null,
+          "gas": 84,
+          "source": null
+        }
+      ],
+      "updates": [
+        {
+          "type": "TransitionStateMachine",
+          "signers": [
+            "spoke"
+          ],
+          "valid": true,
+          "summary": {
+            "eventName": "deliver",
+            "fiberId": "b1ce0000-0000-4000-8000-00000000de01",
+            "payload": {
+              "name": "deliver"
+            }
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 2,
+          "data": {
+            "lastDelivery": {
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "item": "brake pads",
+              "ordinal": 202,
+              "requestNumber": 1
+            },
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 1,
+            "perOrderLimitCents": 2500,
+            "openOrder": {
+              "signers": [
+                "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn"
+              ],
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "payee": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            },
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 8000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 2,
+          "data": {
+            "dispatched": 1,
+            "ordersReceived": 1,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "lastOrder": {
+              "shipTo": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            }
+          }
+        },
+        "delivery": {
+          "state": "delivered",
+          "seq": 1,
+          "data": {
+            "orderDesk": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "requestNumber": 1,
+            "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+            "deliveredAt": 202,
+            "item": "brake pads"
+          }
+        },
+        "trade": {
+          "state": "pending",
+          "seq": 0,
+          "data": {
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 203,
+      "calculatedStateProof": "c2795a672345883bd4be14fb0cc2abfe92ae13f8f3a1fb4d625ba77bb51547e4",
+      "receipts": [
+        {
+          "fiber": "delivery",
+          "kind": "RejectionReceipt",
+          "event": "TransitionStateMachine",
+          "success": false,
+          "error": "Sequence number mismatch: target=FiberOrdinal(0), actual=FiberOrdinal(1)",
+          "gas": 0,
+          "source": null
+        }
+      ],
+      "updates": [
+        {
+          "type": "TransitionStateMachine",
+          "signers": [
+            "spoke"
+          ],
+          "valid": true,
+          "summary": {
+            "eventName": "deliver",
+            "fiberId": "b1ce0000-0000-4000-8000-00000000de01",
+            "payload": {
+              "name": "deliver"
+            }
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 2,
+          "data": {
+            "lastDelivery": {
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "item": "brake pads",
+              "ordinal": 202,
+              "requestNumber": 1
+            },
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 1,
+            "perOrderLimitCents": 2500,
+            "openOrder": {
+              "signers": [
+                "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn"
+              ],
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "payee": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            },
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 8000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 2,
+          "data": {
+            "dispatched": 1,
+            "ordersReceived": 1,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "lastOrder": {
+              "shipTo": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            }
+          }
+        },
+        "delivery": {
+          "state": "delivered",
+          "seq": 1,
+          "data": {
+            "orderDesk": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "requestNumber": 1,
+            "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+            "deliveredAt": 202,
+            "item": "brake pads"
+          }
+        },
+        "trade": {
+          "state": "pending",
+          "seq": 0,
+          "data": {
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 211,
+      "calculatedStateProof": "d751a61ba23a1f309afa3e180f05e6089d857d5c9ed9bbe8e2deed757b692d72",
+      "receipts": [
+        {
+          "fiber": "trade",
+          "kind": "EventReceipt",
+          "event": "prove",
+          "success": true,
+          "from": "pending",
+          "to": "approved",
+          "error": null,
+          "gas": 250618,
+          "source": null
+        }
+      ],
+      "updates": [
+        {
+          "type": "TransitionStateMachine",
+          "signers": [
+            "maya"
+          ],
+          "valid": true,
+          "summary": {
+            "eventName": "prove",
+            "fiberId": "8bae6856-29d6-4b3d-b178-4486340711e6",
+            "payload": {
+              "proof": "0x4388a21c0000000000000000000000000000000000000000000000000000000000000000002f850ee998974d6cc00e50cd0814b098c05bfade466d28573240d057f2535200000000000000000000000000000000000000000000000000000000000000001cfbc4deb8dce6037d9768f051fcf6c9a9e1d120a9e43307b7faa18292c207542df97b6fc5323b7b306f65661404feb3db64410d22439b5bcda7718a301167121683dde3253729acd334808bd711b0acc0ef6f0a18c31f7be8ca7cf983e14069080f58e0c1c0c557379210e05d63d96bdc1fc9786f9134c792e52f2770cdf38d1741702ac4ed09ba71bc9c82463d66224ff23bdf849de78b02fe3dd3594911a200e8ce59e7dd87d48ab7516e4af19fddc1253a06d5e038b4a653961e14cc0a4e2b7b20638e45e04be44c3e85ef77bc475661ca52a254e0ffa18e049caa5db4b20dd042b6e3e26e89c4b3b96b84c644534643b5f2f0c5e40585ae449632f4fb08",
+              "publicValues": "0xccc6c597899c9e0dc76770e4e288fd9796431140c8cd4facc9f01daeaac0bb62fe47d84fb51a51fb7d89133d93ed9c734670cca1662b8e682e3bd923c40ffa1b6273151f959616268004b58dbb21e5c851b7b8d04498b4aabee12291d22fc0340000000000000000000000000000000000000000000000000000000000000001"
+            }
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 2,
+          "data": {
+            "lastDelivery": {
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "item": "brake pads",
+              "ordinal": 202,
+              "requestNumber": 1
+            },
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 1,
+            "perOrderLimitCents": 2500,
+            "openOrder": {
+              "signers": [
+                "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn"
+              ],
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "payee": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            },
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 8000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 2,
+          "data": {
+            "dispatched": 1,
+            "ordersReceived": 1,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "lastOrder": {
+              "shipTo": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            }
+          }
+        },
+        "delivery": {
+          "state": "delivered",
+          "seq": 1,
+          "data": {
+            "orderDesk": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "requestNumber": 1,
+            "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+            "deliveredAt": 202,
+            "item": "brake pads"
+          }
+        },
+        "trade": {
+          "state": "approved",
+          "seq": 1,
+          "data": {
+            "tradePricing": true,
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "approvedAt": 211,
+            "provenRule": "0xccc6c597899c9e0dc76770e4e288fd9796431140c8cd4facc9f01daeaac0bb62"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 212,
+      "calculatedStateProof": "5af1b8b080dadddd9378ad14d6c713141752104b95d5bc02e48e793b592e28ad",
+      "receipts": [
+        {
+          "fiber": "trade",
+          "kind": "RejectionReceipt",
+          "event": "TransitionStateMachine",
+          "success": false,
+          "error": "Sequence number mismatch: target=FiberOrdinal(0), actual=FiberOrdinal(1)",
+          "gas": 0,
+          "source": null
+        }
+      ],
+      "updates": [
+        {
+          "type": "TransitionStateMachine",
+          "signers": [
+            "maya"
+          ],
+          "valid": true,
+          "summary": {
+            "eventName": "prove",
+            "fiberId": "8bae6856-29d6-4b3d-b178-4486340711e6",
+            "payload": {
+              "proof": "0x4388a21c0000000000000000000000000000000000000000000000000000000000000000002f850ee998974d6cc00e50cd0814b098c05bfade466d28573240d057f2535200000000000000000000000000000000000000000000000000000000000000001cfbc4deb8dce6037d9768f051fcf6c9a9e1d120a9e43307b7faa18292c207542df97b6fc5323b7b306f65661404feb3db64410d22439b5bcda7718a301167121683dde3253729acd334808bd711b0acc0ef6f0a18c31f7be8ca7cf983e14069080f58e0c1c0c557379210e05d63d96bdc1fc9786f9134c792e52f2770cdf38d1741702ac4ed09ba71bc9c82463d66224ff23bdf849de78b02fe3dd3594911a200e8ce59e7dd87d48ab7516e4af19fddc1253a06d5e038b4a653961e14cc0a4e2b7b20638e45e04be44c3e85ef77bc475661ca52a254e0ffa18e049caa5db4b20dd042b6e3e26e89c4b3b96b84c644534643b5f2f0c5e40585ae449632f4fb08",
+              "publicValues": "0xccc6c597899c9e0dc76770e4e288fd9796431140c8cd4facc9f01daeaac0bb62fe47d84fb51a51fb7d89133d93ed9c734670cca1662b8e682e3bd923c40ffa1b6273151f959616268004b58dbb21e5c851b7b8d04498b4aabee12291d22fc0340000000000000000000000000000000000000000000000000000000000000001"
+            }
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 2,
+          "data": {
+            "lastDelivery": {
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "item": "brake pads",
+              "ordinal": 202,
+              "requestNumber": 1
+            },
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 1,
+            "perOrderLimitCents": 2500,
+            "openOrder": {
+              "signers": [
+                "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn"
+              ],
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "payee": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            },
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 8000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 2,
+          "data": {
+            "dispatched": 1,
+            "ordersReceived": 1,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "lastOrder": {
+              "shipTo": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            }
+          }
+        },
+        "delivery": {
+          "state": "delivered",
+          "seq": 1,
+          "data": {
+            "orderDesk": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "requestNumber": 1,
+            "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+            "deliveredAt": 202,
+            "item": "brake pads"
+          }
+        },
+        "trade": {
+          "state": "approved",
+          "seq": 1,
+          "data": {
+            "tradePricing": true,
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "approvedAt": 211,
+            "provenRule": "0xccc6c597899c9e0dc76770e4e288fd9796431140c8cd4facc9f01daeaac0bb62"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 223,
+      "calculatedStateProof": "46d85133584546ed3b5486a8ffec141650fdc65713e25fa04690d1b29afb81a8",
+      "receipts": [],
+      "updates": [
+        {
+          "type": "MintAsset",
+          "signers": [
+            "spoke"
+          ],
+          "valid": true,
+          "summary": {
+            "amount": 1,
+            "assetId": "b1ce0000-0000-4000-8000-00000000f001"
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 2,
+          "data": {
+            "lastDelivery": {
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "item": "brake pads",
+              "ordinal": 202,
+              "requestNumber": 1
+            },
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 1,
+            "perOrderLimitCents": 2500,
+            "openOrder": {
+              "signers": [
+                "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn"
+              ],
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "payee": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            },
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 8000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 2,
+          "data": {
+            "dispatched": 1,
+            "ordersReceived": 1,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "lastOrder": {
+              "shipTo": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            }
+          }
+        },
+        "delivery": {
+          "state": "delivered",
+          "seq": 1,
+          "data": {
+            "orderDesk": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "requestNumber": 1,
+            "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+            "deliveredAt": 202,
+            "item": "brake pads"
+          }
+        },
+        "trade": {
+          "state": "approved",
+          "seq": 1,
+          "data": {
+            "tradePricing": true,
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "approvedAt": 211,
+            "provenRule": "0xccc6c597899c9e0dc76770e4e288fd9796431140c8cd4facc9f01daeaac0bb62"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 224,
+      "calculatedStateProof": "b4a459741b8b5e70726454f678cb0917730b5a32956a84cd482fd28e5e6c1db2",
+      "receipts": [
+        {
+          "fiber": "b1ce0000-0000-4000-8000-00000000f001",
+          "kind": "RejectionReceipt",
+          "event": "MintAsset",
+          "success": false,
+          "error": "mint target b1ce0000-0000-4000-8000-00000000f001 already exists",
+          "gas": 0,
+          "source": null
+        }
+      ],
+      "updates": [
+        {
+          "type": "MintAsset",
+          "signers": [
+            "spoke"
+          ],
+          "valid": true,
+          "summary": {
+            "amount": 1,
+            "assetId": "b1ce0000-0000-4000-8000-00000000f001"
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 2,
+          "data": {
+            "lastDelivery": {
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "item": "brake pads",
+              "ordinal": 202,
+              "requestNumber": 1
+            },
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 1,
+            "perOrderLimitCents": 2500,
+            "openOrder": {
+              "signers": [
+                "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn"
+              ],
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "payee": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            },
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 8000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 2,
+          "data": {
+            "dispatched": 1,
+            "ordersReceived": 1,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "lastOrder": {
+              "shipTo": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            }
+          }
+        },
+        "delivery": {
+          "state": "delivered",
+          "seq": 1,
+          "data": {
+            "orderDesk": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "requestNumber": 1,
+            "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+            "deliveredAt": 202,
+            "item": "brake pads"
+          }
+        },
+        "trade": {
+          "state": "approved",
+          "seq": 1,
+          "data": {
+            "tradePricing": true,
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "approvedAt": 211,
+            "provenRule": "0xccc6c597899c9e0dc76770e4e288fd9796431140c8cd4facc9f01daeaac0bb62"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 277,
+      "calculatedStateProof": "15cda497e1082986fc1d62318dd6075cb433c71a872570c374c6e551c24a7447",
+      "receipts": [],
+      "updates": [
+        {
+          "type": "ApplyMorphism",
+          "signers": [
+            "maya"
+          ],
+          "valid": true,
+          "summary": {
+            "assetId": "b1ce0000-0000-4000-8000-00000000ba01",
+            "compositeId": "b1ce0000-0000-4000-8000-00000000c1d1",
+            "kind": "COMPOSE",
+            "otherAssetIds": [
+              "b1ce0000-0000-4000-8000-00000000f001"
+            ]
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 2,
+          "data": {
+            "lastDelivery": {
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "item": "brake pads",
+              "ordinal": 202,
+              "requestNumber": 1
+            },
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 1,
+            "perOrderLimitCents": 2500,
+            "openOrder": {
+              "signers": [
+                "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn"
+              ],
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "payee": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            },
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 8000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 2,
+          "data": {
+            "dispatched": 1,
+            "ordersReceived": 1,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "lastOrder": {
+              "shipTo": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            }
+          }
+        },
+        "delivery": {
+          "state": "delivered",
+          "seq": 1,
+          "data": {
+            "orderDesk": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "requestNumber": 1,
+            "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+            "deliveredAt": 202,
+            "item": "brake pads"
+          }
+        },
+        "trade": {
+          "state": "approved",
+          "seq": 1,
+          "data": {
+            "tradePricing": true,
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "approvedAt": 211,
+            "provenRule": "0xccc6c597899c9e0dc76770e4e288fd9796431140c8cd4facc9f01daeaac0bb62"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 278,
+      "calculatedStateProof": "b5e2584d1431a5be76850b7cf579b5938b29f74ea0ec88467b08b340798b9468",
+      "receipts": [
+        {
+          "fiber": "b1ce0000-0000-4000-8000-00000000ba01",
+          "kind": "RejectionReceipt",
+          "event": "ApplyMorphism",
+          "success": false,
+          "error": "asset b1ce0000-0000-4000-8000-00000000ba01 not found",
+          "gas": 0,
+          "source": null
+        }
+      ],
+      "updates": [
+        {
+          "type": "ApplyMorphism",
+          "signers": [
+            "maya"
+          ],
+          "valid": true,
+          "summary": {
+            "assetId": "b1ce0000-0000-4000-8000-00000000ba01",
+            "compositeId": "b1ce0000-0000-4000-8000-00000000c1d1",
+            "kind": "COMPOSE",
+            "otherAssetIds": [
+              "b1ce0000-0000-4000-8000-00000000f001"
+            ]
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 2,
+          "data": {
+            "lastDelivery": {
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "item": "brake pads",
+              "ordinal": 202,
+              "requestNumber": 1
+            },
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 1,
+            "perOrderLimitCents": 2500,
+            "openOrder": {
+              "signers": [
+                "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn"
+              ],
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "payee": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            },
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 8000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 2,
+          "data": {
+            "dispatched": 1,
+            "ordersReceived": 1,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "lastOrder": {
+              "shipTo": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            }
+          }
+        },
+        "delivery": {
+          "state": "delivered",
+          "seq": 1,
+          "data": {
+            "orderDesk": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "requestNumber": 1,
+            "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+            "deliveredAt": 202,
+            "item": "brake pads"
+          }
+        },
+        "trade": {
+          "state": "approved",
+          "seq": 1,
+          "data": {
+            "tradePricing": true,
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "approvedAt": 211,
+            "provenRule": "0xccc6c597899c9e0dc76770e4e288fd9796431140c8cd4facc9f01daeaac0bb62"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 334,
+      "calculatedStateProof": "c726c2654f8688a8db17dd70c3a40ad82c6c02e87eb7801157535e9369d17113",
+      "receipts": [],
+      "updates": [
+        {
+          "type": "ApplyMorphism",
+          "signers": [
+            "maya"
+          ],
+          "valid": true,
+          "summary": {
+            "assetId": "b1ce0000-0000-4000-8000-00000000c1d1",
+            "kind": "TRANSFER",
+            "recipient": {
+              "Wallet": {
+                "address": "DAG4aNVHdpvYMJ9QSQpuXwceiZJdiH4cm1htvH8Q"
+              }
+            }
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 2,
+          "data": {
+            "lastDelivery": {
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "item": "brake pads",
+              "ordinal": 202,
+              "requestNumber": 1
+            },
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 1,
+            "perOrderLimitCents": 2500,
+            "openOrder": {
+              "signers": [
+                "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn"
+              ],
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "payee": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            },
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 8000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 2,
+          "data": {
+            "dispatched": 1,
+            "ordersReceived": 1,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "lastOrder": {
+              "shipTo": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            }
+          }
+        },
+        "delivery": {
+          "state": "delivered",
+          "seq": 1,
+          "data": {
+            "orderDesk": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "requestNumber": 1,
+            "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+            "deliveredAt": 202,
+            "item": "brake pads"
+          }
+        },
+        "trade": {
+          "state": "approved",
+          "seq": 1,
+          "data": {
+            "tradePricing": true,
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "approvedAt": 211,
+            "provenRule": "0xccc6c597899c9e0dc76770e4e288fd9796431140c8cd4facc9f01daeaac0bb62"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 335,
+      "calculatedStateProof": "4ade21df9872c631550302d6c711a1928f85f22a39ba9dc0efaca36736195466",
+      "receipts": [
+        {
+          "fiber": "b1ce0000-0000-4000-8000-00000000c1d1",
+          "kind": "RejectionReceipt",
+          "event": "ApplyMorphism",
+          "success": false,
+          "error": "sequence number mismatch for b1ce0000-0000-4000-8000-00000000c1d1: target=0, actual=1",
+          "gas": 0,
+          "source": null
+        }
+      ],
+      "updates": [
+        {
+          "type": "ApplyMorphism",
+          "signers": [
+            "maya"
+          ],
+          "valid": true,
+          "summary": {
+            "assetId": "b1ce0000-0000-4000-8000-00000000c1d1",
+            "kind": "TRANSFER",
+            "recipient": {
+              "Wallet": {
+                "address": "DAG4aNVHdpvYMJ9QSQpuXwceiZJdiH4cm1htvH8Q"
+              }
+            }
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 2,
+          "data": {
+            "lastDelivery": {
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "item": "brake pads",
+              "ordinal": 202,
+              "requestNumber": 1
+            },
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 1,
+            "perOrderLimitCents": 2500,
+            "openOrder": {
+              "signers": [
+                "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn"
+              ],
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "payee": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            },
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 8000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 2,
+          "data": {
+            "dispatched": 1,
+            "ordersReceived": 1,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "lastOrder": {
+              "shipTo": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            }
+          }
+        },
+        "delivery": {
+          "state": "delivered",
+          "seq": 1,
+          "data": {
+            "orderDesk": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "requestNumber": 1,
+            "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+            "deliveredAt": 202,
+            "item": "brake pads"
+          }
+        },
+        "trade": {
+          "state": "approved",
+          "seq": 1,
+          "data": {
+            "tradePricing": true,
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "approvedAt": 211,
+            "provenRule": "0xccc6c597899c9e0dc76770e4e288fd9796431140c8cd4facc9f01daeaac0bb62"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 337,
+      "calculatedStateProof": "bc7081c19774a34f6f3eb37068d26139763752d5ee6878c10cfa7f0a22fc621d",
+      "receipts": [],
+      "updates": [
+        {
+          "type": "MintAsset",
+          "signers": [
+            "maya"
+          ],
+          "valid": true,
+          "summary": {
+            "amount": 1,
+            "assetId": "b1ce0000-0000-4000-8000-00000000ea01"
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 2,
+          "data": {
+            "lastDelivery": {
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "item": "brake pads",
+              "ordinal": 202,
+              "requestNumber": 1
+            },
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 1,
+            "perOrderLimitCents": 2500,
+            "openOrder": {
+              "signers": [
+                "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn"
+              ],
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "payee": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            },
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 8000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 2,
+          "data": {
+            "dispatched": 1,
+            "ordersReceived": 1,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "lastOrder": {
+              "shipTo": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            }
+          }
+        },
+        "delivery": {
+          "state": "delivered",
+          "seq": 1,
+          "data": {
+            "orderDesk": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "requestNumber": 1,
+            "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+            "deliveredAt": 202,
+            "item": "brake pads"
+          }
+        },
+        "trade": {
+          "state": "approved",
+          "seq": 1,
+          "data": {
+            "tradePricing": true,
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "approvedAt": 211,
+            "provenRule": "0xccc6c597899c9e0dc76770e4e288fd9796431140c8cd4facc9f01daeaac0bb62"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 338,
+      "calculatedStateProof": "649e743d884949156ebc6f0ae496fec538ef66ea78c58102136d9bea44e6cb94",
+      "receipts": [
+        {
+          "fiber": "b1ce0000-0000-4000-8000-00000000ea01",
+          "kind": "RejectionReceipt",
+          "event": "MintAsset",
+          "success": false,
+          "error": "mint target b1ce0000-0000-4000-8000-00000000ea01 already exists",
+          "gas": 0,
+          "source": null
+        }
+      ],
+      "updates": [
+        {
+          "type": "MintAsset",
+          "signers": [
+            "maya"
+          ],
+          "valid": true,
+          "summary": {
+            "amount": 1,
+            "assetId": "b1ce0000-0000-4000-8000-00000000ea01"
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 2,
+          "data": {
+            "lastDelivery": {
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "item": "brake pads",
+              "ordinal": 202,
+              "requestNumber": 1
+            },
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 1,
+            "perOrderLimitCents": 2500,
+            "openOrder": {
+              "signers": [
+                "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn"
+              ],
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "payee": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            },
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 8000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 2,
+          "data": {
+            "dispatched": 1,
+            "ordersReceived": 1,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "lastOrder": {
+              "shipTo": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            }
+          }
+        },
+        "delivery": {
+          "state": "delivered",
+          "seq": 1,
+          "data": {
+            "orderDesk": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "requestNumber": 1,
+            "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+            "deliveredAt": 202,
+            "item": "brake pads"
+          }
+        },
+        "trade": {
+          "state": "approved",
+          "seq": 1,
+          "data": {
+            "tradePricing": true,
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "approvedAt": 211,
+            "provenRule": "0xccc6c597899c9e0dc76770e4e288fd9796431140c8cd4facc9f01daeaac0bb62"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 373,
+      "calculatedStateProof": "afd8f6d096ddb89be3e89fb718429b61840a488df0a8f408464f35d832b4945e",
+      "receipts": [],
+      "updates": [
+        {
+          "type": "PublishMachineVersion",
+          "signers": [
+            "DAG6YrGyY24Us8fEod3L3QdrnuVfuGAJ6teAjaL7"
+          ],
+          "valid": true,
+          "summary": {
+            "name": "purchasing-mandate.machine",
+            "version": "1.1.0"
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 2,
+          "data": {
+            "lastDelivery": {
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "item": "brake pads",
+              "ordinal": 202,
+              "requestNumber": 1
+            },
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 1,
+            "perOrderLimitCents": 2500,
+            "openOrder": {
+              "signers": [
+                "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn"
+              ],
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "payee": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            },
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 8000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 2,
+          "data": {
+            "dispatched": 1,
+            "ordersReceived": 1,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "lastOrder": {
+              "shipTo": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            }
+          }
+        },
+        "delivery": {
+          "state": "delivered",
+          "seq": 1,
+          "data": {
+            "orderDesk": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "requestNumber": 1,
+            "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+            "deliveredAt": 202,
+            "item": "brake pads"
+          }
+        },
+        "trade": {
+          "state": "approved",
+          "seq": 1,
+          "data": {
+            "tradePricing": true,
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "approvedAt": 211,
+            "provenRule": "0xccc6c597899c9e0dc76770e4e288fd9796431140c8cd4facc9f01daeaac0bb62"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 374,
+      "calculatedStateProof": "666dc826d2816f20505176d14db271a6f9002bb08a8f35b968a2e165d9560259",
+      "receipts": [],
+      "updates": [
+        {
+          "type": "PublishMachineVersion",
+          "signers": [
+            "DAG6YrGyY24Us8fEod3L3QdrnuVfuGAJ6teAjaL7"
+          ],
+          "valid": true,
+          "summary": {
+            "name": "purchasing-mandate.machine",
+            "version": "1.1.0"
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "active",
+          "seq": 2,
+          "data": {
+            "lastDelivery": {
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "item": "brake pads",
+              "ordinal": 202,
+              "requestNumber": 1
+            },
+            "expiresAt": 1000000,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ],
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 1,
+            "perOrderLimitCents": 2500,
+            "openOrder": {
+              "signers": [
+                "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn"
+              ],
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "payee": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            },
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 8000
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 2,
+          "data": {
+            "dispatched": 1,
+            "ordersReceived": 1,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "lastOrder": {
+              "shipTo": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            }
+          }
+        },
+        "delivery": {
+          "state": "delivered",
+          "seq": 1,
+          "data": {
+            "orderDesk": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "requestNumber": 1,
+            "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+            "deliveredAt": 202,
+            "item": "brake pads"
+          }
+        },
+        "trade": {
+          "state": "approved",
+          "seq": 1,
+          "data": {
+            "tradePricing": true,
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "approvedAt": 211,
+            "provenRule": "0xccc6c597899c9e0dc76770e4e288fd9796431140c8cd4facc9f01daeaac0bb62"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 378,
+      "calculatedStateProof": "8a275b25444aefe25f582d0a26f2013fd3e4d7938c357810412ebe0f66ee78b2",
+      "receipts": [
+        {
+          "fiber": "mandate",
+          "kind": "EventReceipt",
+          "event": "revoke",
+          "success": true,
+          "from": "active",
+          "to": "revoked",
+          "error": null,
+          "gas": 63,
+          "source": null
+        }
+      ],
+      "updates": [
+        {
+          "type": "TransitionStateMachine",
+          "signers": [
+            "maya"
+          ],
+          "valid": true,
+          "summary": {
+            "eventName": "revoke",
+            "fiberId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+            "payload": {
+              "name": "revoke"
+            }
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "revoked",
+          "seq": 3,
+          "data": {
+            "lastDelivery": {
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "item": "brake pads",
+              "ordinal": 202,
+              "requestNumber": 1
+            },
+            "expiresAt": 1000000,
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 1,
+            "perOrderLimitCents": 2500,
+            "openOrder": {
+              "signers": [
+                "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn"
+              ],
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "payee": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            },
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 8000,
+            "revokedAt": 378,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ]
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 2,
+          "data": {
+            "dispatched": 1,
+            "ordersReceived": 1,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "lastOrder": {
+              "shipTo": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            }
+          }
+        },
+        "delivery": {
+          "state": "delivered",
+          "seq": 1,
+          "data": {
+            "orderDesk": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "requestNumber": 1,
+            "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+            "deliveredAt": 202,
+            "item": "brake pads"
+          }
+        },
+        "trade": {
+          "state": "approved",
+          "seq": 1,
+          "data": {
+            "tradePricing": true,
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "approvedAt": 211,
+            "provenRule": "0xccc6c597899c9e0dc76770e4e288fd9796431140c8cd4facc9f01daeaac0bb62"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 379,
+      "calculatedStateProof": "f900265ea438bf361c9263979c373f44a8780bd31192f2fe4aa92ee9c0e72f27",
+      "receipts": [
+        {
+          "fiber": "mandate",
+          "kind": "RejectionReceipt",
+          "event": "TransitionStateMachine",
+          "success": false,
+          "error": "Sequence number mismatch: target=FiberOrdinal(2), actual=FiberOrdinal(3)",
+          "gas": 0,
+          "source": null
+        }
+      ],
+      "updates": [
+        {
+          "type": "TransitionStateMachine",
+          "signers": [
+            "maya"
+          ],
+          "valid": true,
+          "summary": {
+            "eventName": "revoke",
+            "fiberId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+            "payload": {
+              "name": "revoke"
+            }
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "revoked",
+          "seq": 3,
+          "data": {
+            "lastDelivery": {
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "item": "brake pads",
+              "ordinal": 202,
+              "requestNumber": 1
+            },
+            "expiresAt": 1000000,
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 1,
+            "perOrderLimitCents": 2500,
+            "openOrder": {
+              "signers": [
+                "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn"
+              ],
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "payee": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            },
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 8000,
+            "revokedAt": 378,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ]
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 2,
+          "data": {
+            "dispatched": 1,
+            "ordersReceived": 1,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "lastOrder": {
+              "shipTo": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            }
+          }
+        },
+        "delivery": {
+          "state": "delivered",
+          "seq": 1,
+          "data": {
+            "orderDesk": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "requestNumber": 1,
+            "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+            "deliveredAt": 202,
+            "item": "brake pads"
+          }
+        },
+        "trade": {
+          "state": "approved",
+          "seq": 1,
+          "data": {
+            "tradePricing": true,
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "approvedAt": 211,
+            "provenRule": "0xccc6c597899c9e0dc76770e4e288fd9796431140c8cd4facc9f01daeaac0bb62"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 394,
+      "calculatedStateProof": "92dec40739431a88d7f8c275f165ee0b1b526589d9d136755679d3b3b408ec08",
+      "receipts": [
+        {
+          "fiber": "mandate",
+          "kind": "EventReceipt",
+          "event": "authorize",
+          "success": false,
+          "from": "revoked",
+          "to": "revoked",
+          "error": "No guard matched from revoked on authorize (1 guards tried)",
+          "gas": 0,
+          "source": null
+        }
+      ],
+      "updates": [
+        {
+          "type": "TransitionStateMachine",
+          "signers": [
+            "agent"
+          ],
+          "valid": true,
+          "summary": {
+            "eventName": "authorize",
+            "fiberId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+            "payload": {
+              "amountCents": 1000,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c002",
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "item": "brake pads",
+              "payee": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+              "payeeFiber": "desk",
+              "requestNumber": 3
+            }
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "revoked",
+          "seq": 3,
+          "data": {
+            "lastDelivery": {
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "item": "brake pads",
+              "ordinal": 202,
+              "requestNumber": 1
+            },
+            "expiresAt": 1000000,
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 1,
+            "perOrderLimitCents": 2500,
+            "openOrder": {
+              "signers": [
+                "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn"
+              ],
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "payee": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            },
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 8000,
+            "revokedAt": 378,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ]
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 2,
+          "data": {
+            "dispatched": 1,
+            "ordersReceived": 1,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "lastOrder": {
+              "shipTo": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            }
+          }
+        },
+        "delivery": {
+          "state": "delivered",
+          "seq": 1,
+          "data": {
+            "orderDesk": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "requestNumber": 1,
+            "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+            "deliveredAt": 202,
+            "item": "brake pads"
+          }
+        },
+        "trade": {
+          "state": "approved",
+          "seq": 1,
+          "data": {
+            "tradePricing": true,
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "approvedAt": 211,
+            "provenRule": "0xccc6c597899c9e0dc76770e4e288fd9796431140c8cd4facc9f01daeaac0bb62"
+          }
+        }
+      }
+    },
+    {
+      "ordinal": 395,
+      "calculatedStateProof": "60925d478654d847f74cdbcf7496760317512b3f81c44f8a8d4294f3f5e8f328",
+      "receipts": [
+        {
+          "fiber": "mandate",
+          "kind": "EventReceipt",
+          "event": "authorize",
+          "success": false,
+          "from": "revoked",
+          "to": "revoked",
+          "error": "No guard matched from revoked on authorize (1 guards tried)",
+          "gas": 0,
+          "source": null
+        }
+      ],
+      "updates": [
+        {
+          "type": "TransitionStateMachine",
+          "signers": [
+            "agent"
+          ],
+          "valid": true,
+          "summary": {
+            "eventName": "authorize",
+            "fiberId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+            "payload": {
+              "amountCents": 1000,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c002",
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "item": "brake pads",
+              "payee": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+              "payeeFiber": "desk",
+              "requestNumber": 3
+            }
+          }
+        }
+      ],
+      "state": {
+        "mandate": {
+          "state": "revoked",
+          "seq": 3,
+          "data": {
+            "lastDelivery": {
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "item": "brake pads",
+              "ordinal": 202,
+              "requestNumber": 1
+            },
+            "expiresAt": 1000000,
+            "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+            "lastRequestNumber": 1,
+            "perOrderLimitCents": 2500,
+            "openOrder": {
+              "signers": [
+                "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn"
+              ],
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "payee": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            },
+            "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "remainingCents": 8000,
+            "revokedAt": 378,
+            "approvedSuppliers": [
+              "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+            ]
+          }
+        },
+        "desk": {
+          "state": "open",
+          "seq": 2,
+          "data": {
+            "dispatched": 1,
+            "ordersReceived": 1,
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "lastOrder": {
+              "shipTo": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+              "amountCents": 2000,
+              "requestNumber": 1,
+              "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+              "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+              "item": "brake pads",
+              "ordinal": 133,
+              "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+            }
+          }
+        },
+        "delivery": {
+          "state": "delivered",
+          "seq": 1,
+          "data": {
+            "orderDesk": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "requestNumber": 1,
+            "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+            "deliveredAt": 202,
+            "item": "brake pads"
+          }
+        },
+        "trade": {
+          "state": "approved",
+          "seq": 1,
+          "data": {
+            "tradePricing": true,
+            "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+            "rule": "credit score >= 700",
+            "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+            "approvedAt": 211,
+            "provenRule": "0xccc6c597899c9e0dc76770e4e288fd9796431140c8cd4facc9f01daeaac0bb62"
+          }
+        }
+      }
+    }
+  ],
+  "assets": {
+    "b1ce0000-0000-4000-8000-00000000c000": [
+      {
+        "ordinal": 46,
+        "holder": "maya",
+        "amount": 10000,
+        "behavior": 28
+      }
+    ],
+    "b1ce0000-0000-4000-8000-00000000c001": [
+      {
+        "ordinal": 58,
+        "holder": "maya",
+        "amount": 2000,
+        "behavior": 24
+      },
+      {
+        "ordinal": 70,
+        "holder": "mandate",
+        "amount": 2000,
+        "behavior": 24
+      },
+      {
+        "ordinal": 133,
+        "holder": "desk",
+        "amount": 2000,
+        "behavior": 24
+      }
+    ],
+    "b1ce0000-0000-4000-8000-00000000c002": [
+      {
+        "ordinal": 58,
+        "holder": "maya",
+        "amount": 2000,
+        "behavior": 24
+      },
+      {
+        "ordinal": 74,
+        "holder": "mandate",
+        "amount": 2000,
+        "behavior": 24
+      }
+    ],
+    "b1ce0000-0000-4000-8000-00000000c003": [
+      {
+        "ordinal": 58,
+        "holder": "maya",
+        "amount": 2000,
+        "behavior": 24
+      }
+    ],
+    "b1ce0000-0000-4000-8000-00000000c004": [
+      {
+        "ordinal": 58,
+        "holder": "maya",
+        "amount": 2000,
+        "behavior": 24
+      }
+    ],
+    "b1ce0000-0000-4000-8000-00000000c005": [
+      {
+        "ordinal": 58,
+        "holder": "maya",
+        "amount": 2000,
+        "behavior": 24
+      }
+    ],
+    "b1ce0000-0000-4000-8000-00000000ba01": [
+      {
+        "ordinal": 80,
+        "holder": "desk",
+        "amount": 1,
+        "behavior": 20
+      },
+      {
+        "ordinal": 179,
+        "holder": "maya",
+        "amount": 1,
+        "behavior": 20
+      }
+    ],
+    "b1ce0000-0000-4000-8000-00000000f001": [
+      {
+        "ordinal": 223,
+        "holder": "maya",
+        "amount": 1,
+        "behavior": 22
+      }
+    ],
+    "b1ce0000-0000-4000-8000-00000000c1d1": [
+      {
+        "ordinal": 277,
+        "holder": "maya",
+        "amount": 2,
+        "behavior": 22
+      },
+      {
+        "ordinal": 334,
+        "holder": "DAG4aNVHdpvYMJ9QSQpuXwceiZJdiH4cm1htvH8Q",
+        "amount": 2,
+        "behavior": 22
+      }
+    ],
+    "b1ce0000-0000-4000-8000-00000000ea01": [
+      {
+        "ordinal": 337,
+        "holder": "DAG4aNVHdpvYMJ9QSQpuXwceiZJdiH4cm1htvH8Q",
+        "amount": 1,
+        "behavior": 0
+      }
+    ]
+  },
+  "poisoned": {
+    "ordinal": 176,
+    "request": {
+      "amountCents": 50000,
+      "creditId": "b1ce0000-0000-4000-8000-00000000c002",
+      "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+      "item": "URGENT parts",
+      "payee": "b1ce0000-0000-4000-8000-0000000bad01",
+      "payeeId": "b1ce0000-0000-4000-8000-0000000bad01",
+      "requestNumber": 2
+    },
+    "signers": [
+      "agent"
+    ],
+    "before": {
+      "expiresAt": 1000000,
+      "approvedSuppliers": [
+        "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+      ],
+      "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+      "lastRequestNumber": 1,
+      "perOrderLimitCents": 2500,
+      "openOrder": {
+        "signers": [
+          "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn"
+        ],
+        "amountCents": 2000,
+        "requestNumber": 1,
+        "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+        "payee": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+        "item": "brake pads",
+        "ordinal": 133,
+        "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+      },
+      "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+      "remainingCents": 8000
+    },
+    "gates": [
+      {
+        "label": "Agent signed",
+        "wire": "signature",
+        "pass": true
+      },
+      {
+        "label": "Whole cents",
+        "wire": "amount",
+        "pass": true
+      },
+      {
+        "label": "Positive amount",
+        "wire": "amount",
+        "pass": true
+      },
+      {
+        "label": "Within $25 per order",
+        "wire": "amount",
+        "pass": false
+      },
+      {
+        "label": "Within budget",
+        "wire": "amount",
+        "pass": false
+      },
+      {
+        "label": "Approved supplier",
+        "wire": "payee",
+        "pass": false
+      },
+      {
+        "label": "Before expiry",
+        "wire": "logic",
+        "pass": true
+      },
+      {
+        "label": "Next request",
+        "wire": "logic",
+        "pass": true
+      },
+      {
+        "label": "Credit matches amount",
+        "wire": "amount",
+        "pass": false
+      }
+    ],
+    "receipt": {
+      "fiber": "mandate",
+      "kind": "EventReceipt",
+      "event": "authorize",
+      "success": false,
+      "from": "active",
+      "to": "active",
+      "error": "No guard matched from active on authorize (1 guards tried)",
+      "gas": 290,
+      "source": null
+    }
+  },
+  "verified": {
+    "mandate": {
+      "ordinal": 400,
+      "state": "revoked",
+      "checks": [
+        "expected-key inclusion",
+        "ordinal catalog",
+        "combined commitment",
+        "pinned ledger snapshot"
+      ],
+      "trust": "Local demo operator. Validator signature threshold unchecked.",
+      "data": {
+        "lastDelivery": {
+          "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+          "item": "brake pads",
+          "ordinal": 202,
+          "requestNumber": 1
+        },
+        "expiresAt": 1000000,
+        "agent": "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn",
+        "lastRequestNumber": 1,
+        "perOrderLimitCents": 2500,
+        "openOrder": {
+          "signers": [
+            "DAG6eNCrGtPwAXR64X9zycj8djLL4MdH2PLtxhGn"
+          ],
+          "amountCents": 2000,
+          "requestNumber": 1,
+          "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+          "payee": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+          "item": "brake pads",
+          "ordinal": 133,
+          "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+        },
+        "owner": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+        "remainingCents": 8000,
+        "revokedAt": 378,
+        "approvedSuppliers": [
+          "b3790f30-93e1-4a3e-96e5-c0ed9a723308"
+        ]
+      }
+    },
+    "desk": {
+      "ordinal": 401,
+      "state": "open",
+      "checks": [
+        "expected-key inclusion",
+        "ordinal catalog",
+        "combined commitment",
+        "pinned ledger snapshot"
+      ],
+      "trust": "Local demo operator. Validator signature threshold unchecked.",
+      "data": {
+        "dispatched": 1,
+        "ordersReceived": 1,
+        "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+        "lastOrder": {
+          "shipTo": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+          "amountCents": 2000,
+          "requestNumber": 1,
+          "deliveryId": "b1ce0000-0000-4000-8000-00000000de01",
+          "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+          "item": "brake pads",
+          "ordinal": 133,
+          "creditId": "b1ce0000-0000-4000-8000-00000000c001"
+        }
+      }
+    },
+    "delivery": {
+      "ordinal": 402,
+      "state": "delivered",
+      "checks": [
+        "expected-key inclusion",
+        "ordinal catalog",
+        "combined commitment",
+        "pinned ledger snapshot"
+      ],
+      "trust": "Local demo operator. Validator signature threshold unchecked.",
+      "data": {
+        "orderDesk": "b3790f30-93e1-4a3e-96e5-c0ed9a723308",
+        "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+        "requestNumber": 1,
+        "mandateId": "a21bd79a-1312-4558-8eed-1fc10be03788",
+        "deliveredAt": 202,
+        "item": "brake pads"
+      }
+    },
+    "trade": {
+      "ordinal": 403,
+      "state": "approved",
+      "checks": [
+        "expected-key inclusion",
+        "ordinal catalog",
+        "combined commitment",
+        "pinned ledger snapshot"
+      ],
+      "trust": "Local demo operator. Validator signature threshold unchecked.",
+      "data": {
+        "tradePricing": true,
+        "applicant": "DAG09zGERMRhws7NxvYVax1vMXtawkHiSTSwLjw1",
+        "rule": "credit score >= 700",
+        "supplier": "DAG7F98Tuh5N6kBZyWRNH9PG1oNZ8mp6XroNzMNZ",
+        "approvedAt": 211,
+        "provenRule": "0xccc6c597899c9e0dc76770e4e288fd9796431140c8cd4facc9f01daeaac0bb62"
+      }
+    }
+  }
+}

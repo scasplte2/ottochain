@@ -1,0 +1,31 @@
+{
+  "name": "tune-up-voucher.asset",
+  "version": "1.0.0",
+  "behavior": 22,
+  "supply": {
+    "mintPolicy": {
+      "==": [
+        1,
+        1
+      ]
+    },
+    "burnPolicy": {
+      "==": [
+        1,
+        1
+      ]
+    }
+  },
+  "morphisms": {
+    "TRANSFER": {
+      "visibility": "PUBLIC"
+    },
+    "COMPOSE": {
+      "visibility": "PUBLIC"
+    }
+  },
+  "stateShape": {
+    "typeName": "TuneUpVoucher",
+    "fields": []
+  }
+}
