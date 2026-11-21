@@ -57,3 +57,7 @@ scripts, new lint rules, or new items in `process-observations.md`. Newest at th
 
 - Worksheet: docs/worksheets/2026-11-21-mandate-narrated-film.md
 - Render the voice first and derive each cue from its actual PCM length. Transcribing the mixed track caught an ambiguous pronunciation of co-signer. Preserve the dry narration alongside a local review film for future edits.
+
+### 2026-11-21 — diagnose Tessellation release resolution
+
+- In a JAR download failure, record the Maven version and the final release tag together. The rule110 log resolved 4.0.0 but generated the cache key `tessellation-jars-v`. One resolver for the warmer and E2E lanes makes the failure reproducible from either workflow.

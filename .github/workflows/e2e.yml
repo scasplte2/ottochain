@@ -159,42 +159,10 @@ jobs:
       #   metakit POM on Maven Central → tessellation-sdk version
       - name: Resolve tessellation version
         id: versions
-        run: |
-          METAKIT_VER=$(grep 'val metakit =' project/Dependencies.scala | head -1 | grep -o '"[^"]*"' | tr -d '"')
-          echo "metakit=${METAKIT_VER}" >> $GITHUB_OUTPUT
-
-          # Allow workflow_dispatch override
-          if [ -n "${{ inputs.tessellation_version }}" ]; then
-            TESS_VER="${{ inputs.tessellation_version }}"
-            TESS_VER="${TESS_VER#v}"
-            echo "Dependency chain: ottochain → metakit ${METAKIT_VER} → tessellation ${TESS_VER} (override)"
-          else
-            # tessellation-sdk version straight from the metakit POM on Maven Central.
-            TESS_VER=$(curl -sf "https://repo1.maven.org/maven2/io/constellationnetwork/metakit_2.13/${METAKIT_VER}/metakit_2.13-${METAKIT_VER}.pom" \
-              | grep -A1 'tessellation-sdk' | grep '<version>' | grep -o '[0-9][^<]*' | head -1)
-            echo "Dependency chain: ottochain → metakit ${METAKIT_VER} → tessellation ${TESS_VER}"
-          fi
-
-          # TEMPORARY PATCH: metakit may point at a tessellation version (e.g. 4.0.0 final) that has no
-          # published GitHub release JARs yet, only the Maven-published SDK library. If the resolved
-          # version has no release, fall back to the latest published release of the same major.minor so
-          # the cluster can still fetch runnable gl0/gl1 JARs. Remove once versions/published artifacts
-          # are realigned across repos (or pin explicitly via the tessellation_version input).
-          if ! curl -sf "https://api.github.com/repos/Constellation-Labs/tessellation/releases/tags/v${TESS_VER}" >/dev/null 2>&1; then
-            MM=$(echo "$TESS_VER" | grep -oE '^[0-9]+\.[0-9]+')
-            FALLBACK=$(curl -sf "https://api.github.com/repos/Constellation-Labs/tessellation/releases?per_page=50" \
-              | grep -oE '"tag_name": *"v[^"]+"' | grep -oE 'v[0-9][^"]*' | sed 's/^v//' \
-              | grep "^${MM}\\." | sort -V | tail -1)
-            echo "::warning::tessellation v${TESS_VER} has no published release; falling back to latest published ${MM}.x release: ${FALLBACK}"
-            TESS_VER="${FALLBACK}"
-          fi
-          echo "tessellation=${TESS_VER}" >> $GITHUB_OUTPUT
-
-          # Compute the release TAG to fetch — the v4.0.0 → rc.10 asset-availability mapping lives here so
-          # the JAR cache key (below) matches exactly what is downloaded.
-          TESS_TAG="v${TESS_VER}"
-          [ "$TESS_TAG" = "v4.0.0" ] && TESS_TAG="v4.0.0-rc.10"
-          echo "tess_tag=${TESS_TAG}" >> $GITHUB_OUTPUT
+        env:
+          TESS_VERSION_OVERRIDE: ${{ inputs.tessellation_version }}
+          GH_TOKEN: ${{ github.token }}
+        run: bash bin/resolve-e2e-tessellation
 
       # Clone tessellation develop for Docker infrastructure (compose-runner, Dockerfiles, scripts).
       # Develop has the latest compose-runner with SKIP_ASSEMBLY support for pre-staged JARs.

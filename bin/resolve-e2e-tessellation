@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Resolve the compose version and the release containing the pre-staged JARs.
+set -euo pipefail
+
+version=${TESS_VERSION_OVERRIDE:-}
+if [[ -z $version ]]; then
+  metakit=$(sed -nE 's/^[[:space:]]*val metakit = "([^"]+)"$/\1/p' project/Dependencies.scala)
+  : "${metakit:?Missing metakit version pin in project/Dependencies.scala}"
+  pom="https://repo.maven.apache.org/maven2/io/constellationnetwork/metakit_2.13/$metakit/metakit_2.13-$metakit.pom"
+  version=$(curl -fsSL --retry 3 "$pom" | python3 -c '
+import sys
+import xml.etree.ElementTree as ET
+deps = ET.parse(sys.stdin).findall("{*}dependencies/{*}dependency")
+print(next((d.findtext("{*}version") for d in deps
+            if d.findtext("{*}artifactId") == "tessellation-sdk_2.13"), ""))
+')
+fi
+version=${version#v}
+if [[ ! $version =~ ^([0-9]+\.[0-9]+)\.[0-9]+([.+-][a-zA-Z0-9.-]+)?$ ]]; then
+  echo "Invalid Tessellation version '$version' from override or metakit POM" >&2
+  exit 1
+fi
+series=${BASH_REMATCH[1]}
+tag="v$version"
+if [[ $version != 4.0.0 ]]; then
+  repo=Constellation-Labs/tessellation
+  status=$(curl -sS --retry 3 -o /dev/null -w '%{http_code}' \
+    -H "Authorization: Bearer ${GH_TOKEN:?}" "https://api.github.com/repos/$repo/releases/tags/$tag")
+  case "$status" in
+    200) ;;
+    404)
+      # Preserve the same-series fallback for SDK versions without a GitHub release.
+      tags=$(gh api --paginate "repos/$repo/releases?per_page=100" --jq '.[].tag_name')
+      fallback=$(printf '%s\n' "$tags" | awk -v prefix="v$series." 'index($0, prefix) == 1' | sort -V | tail -1)
+      if [[ -z $fallback ]]; then
+        echo "No published Tessellation release for $tag or series $series.x" >&2
+        exit 1
+      fi
+      echo "::warning::Tessellation $tag has no release; using $fallback"
+      tag=$fallback
+      version=${tag#v}
+      ;;
+    *) echo "Tessellation release lookup for $tag returned HTTP $status" >&2; exit 1 ;;
+  esac
+fi
+
+# The 4.0.0 SDK uses the JARs published under rc.10.
+if [[ $version == 4.0.0 ]]; then
+  tag=v4.0.0-rc.10
+fi
+
+echo "Tessellation version $version, JAR release $tag"
+printf 'tessellation=%s\ntess_tag=%s\n' "$version" "$tag" >> "${GITHUB_OUTPUT:?}"

@@ -8,11 +8,7 @@
 # here — on push to main and daily (before the 07:00 nightly, ahead of the 7-day eviction window) —
 # gives every PR a cache HIT and it never downloads at all.
 #
-# The cache KEY (`tessellation-jars-<tess_tag>`) and the version-resolve logic below MUST stay
-# byte-identical to the `Resolve tessellation version` + `Cache tessellation release JARs` steps in
-# `e2e.yml`, or the keys diverge and PRs miss again. Both read the same source (project/Dependencies.scala
-# → metakit POM → tessellation-sdk version), so they resolve the same tag automatically; keep the scripts
-# in sync if either is edited.
+# E2E and this workflow use the same resolver and cache key for the release JARs.
 name: Warm tessellation JAR cache
 
 on:
@@ -22,6 +18,7 @@ on:
     # one of those changes (plus the daily schedule below catches metakit's own upstream drift).
     paths:
       - 'project/Dependencies.scala'
+      - 'bin/resolve-e2e-tessellation'
       - '.github/workflows/warm-tess-cache.yml'
   schedule:
     # Daily at 06:00 UTC — an hour before the nightly e2e, and well inside the 7-day cache-eviction window.
@@ -44,39 +41,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # ── KEEP IN SYNC with e2e.yml `Resolve tessellation version` ──────────────────────────────────
       - name: Resolve tessellation version
         id: versions
-        run: |
-          METAKIT_VER=$(grep 'val metakit =' project/Dependencies.scala | head -1 | grep -o '"[^"]*"' | tr -d '"')
-          echo "metakit=${METAKIT_VER}" >> $GITHUB_OUTPUT
-
-          if [ -n "${{ inputs.tessellation_version }}" ]; then
-            TESS_VER="${{ inputs.tessellation_version }}"
-            TESS_VER="${TESS_VER#v}"
-            echo "Dependency chain: ottochain → metakit ${METAKIT_VER} → tessellation ${TESS_VER} (override)"
-          else
-            TESS_VER=$(curl -sf "https://repo1.maven.org/maven2/io/constellationnetwork/metakit_2.13/${METAKIT_VER}/metakit_2.13-${METAKIT_VER}.pom" \
-              | grep -A1 'tessellation-sdk' | grep '<version>' | grep -o '[0-9][^<]*' | head -1)
-            echo "Dependency chain: ottochain → metakit ${METAKIT_VER} → tessellation ${TESS_VER}"
-          fi
-
-          # Same TEMPORARY PATCH as e2e.yml: fall back to the latest published <major.minor>.x release when
-          # the resolved version has no published GitHub release JARs yet.
-          if ! curl -sf "https://api.github.com/repos/Constellation-Labs/tessellation/releases/tags/v${TESS_VER}" >/dev/null 2>&1; then
-            MM=$(echo "$TESS_VER" | grep -oE '^[0-9]+\.[0-9]+')
-            FALLBACK=$(curl -sf "https://api.github.com/repos/Constellation-Labs/tessellation/releases?per_page=50" \
-              | grep -oE '"tag_name": *"v[^"]+"' | grep -oE 'v[0-9][^"]*' | sed 's/^v//' \
-              | grep "^${MM}\\." | sort -V | tail -1)
-            echo "::warning::tessellation v${TESS_VER} has no published release; falling back to latest published ${MM}.x release: ${FALLBACK}"
-            TESS_VER="${FALLBACK}"
-          fi
-          echo "tessellation=${TESS_VER}" >> $GITHUB_OUTPUT
-
-          TESS_TAG="v${TESS_VER}"
-          [ "$TESS_TAG" = "v4.0.0" ] && TESS_TAG="v4.0.0-rc.10"
-          echo "tess_tag=${TESS_TAG}" >> $GITHUB_OUTPUT
-          echo "Warming cache key: tessellation-jars-${TESS_TAG}"
+        env:
+          TESS_VERSION_OVERRIDE: ${{ inputs.tessellation_version }}
+          GH_TOKEN: ${{ github.token }}
+        run: bash bin/resolve-e2e-tessellation
 
       # ── KEEP IN SYNC with e2e.yml `Cache tessellation release JARs` (same key = shared cache) ──────
       - name: Cache tessellation release JARs
