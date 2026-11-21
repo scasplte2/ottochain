@@ -1,0 +1,52 @@
+{
+  "operatorCount": 1,
+  "network": "isolated local devnet",
+  "identifier": "DAG58j4nhYrdUsj2eDgFMaRFDogvmxJKkwxajDwA",
+  "firstIncrementalHash": "8b61d4e27f37d517d404ffb5da2e700fcebe641d95183d66ecd1612ff252c121",
+  "nodes": [
+    {
+      "port": 9000,
+      "role": "GL0",
+      "peerId": "1b4b9f98190ede0d26ec1a2ce736638ffa556b08135403256d47d3c405e08e3bb272fb9172c7bd9f96008dd380ceb6201e965498bc9115bbdf905ad9781dbf18",
+      "state": "Ready"
+    },
+    {
+      "port": 9200,
+      "role": "ML0",
+      "peerId": "1b4b9f98190ede0d26ec1a2ce736638ffa556b08135403256d47d3c405e08e3bb272fb9172c7bd9f96008dd380ceb6201e965498bc9115bbdf905ad9781dbf18",
+      "state": "Ready"
+    },
+    {
+      "port": 9400,
+      "role": "DL1",
+      "peerId": "1b4b9f98190ede0d26ec1a2ce736638ffa556b08135403256d47d3c405e08e3bb272fb9172c7bd9f96008dd380ceb6201e965498bc9115bbdf905ad9781dbf18",
+      "state": "Ready"
+    },
+    {
+      "port": 9410,
+      "role": "DL1",
+      "peerId": "8dc987df37287cbfeb177e1593878a74db4e658506c491022187cb5c9cd840b8d788c938fd03e69d33f48d093d4cfc64591d04e1cf5553d8d7f65381ec93011e",
+      "state": "Ready"
+    },
+    {
+      "port": 9420,
+      "role": "DL1",
+      "peerId": "96410098053654f15a6db714c7457264c3b0358f04f86d4dc636cb7d549461c76a0ce948d1458acfa07a24e806fbda0635ded465d867e521c8d8d14fc0ac9c47",
+      "state": "Ready"
+    }
+  ],
+  "containers": [
+    "ca3ad84dace6 dl1-mandate1120b-2",
+    "f22400dd785b dl1-mandate1120b-1",
+    "6e41b5e0a995 dl1-mandate1120b-0",
+    "574b5a6f2eef ml0-mandate1120b-0",
+    "72c58c7bdae0 gl0-mandate1120b-0",
+    "10a223422615 dl1-mandate1120-2",
+    "210ee8e290bf dl1-mandate1120-1",
+    "caf350b58e2c dl1-mandate1120-0",
+    "5b40e502b42a ml0-mandate1120-1",
+    "6d56f9fe3239 ml0-mandate1120-0",
+    "427c51671670 gl0-mandate1120-0"
+  ],
+  "snapshotCrossCheck": "Second ML0 stopped after downloaded calculated state failed to match the snapshot. Successful run uses only port 9200."
+}

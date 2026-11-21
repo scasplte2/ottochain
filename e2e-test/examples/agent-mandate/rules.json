@@ -1,0 +1,10 @@
+{
+  "remainingCents": 10000,
+  "soloLimitCents": 2500,
+  "suppliers": [
+    "supplier-a",
+    "supplier-b"
+  ],
+  "expiresAt": 100000,
+  "lastRequestNumber": 0
+}

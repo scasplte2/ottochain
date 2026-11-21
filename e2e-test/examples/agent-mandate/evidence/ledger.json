@@ -1,0 +1,180 @@
+[
+  {
+    "label": "created",
+    "fiber": "fb9388d7-0d1d-4a2b-8cda-46e48fe26021",
+    "ordinal": 101,
+    "checkpoint": 101,
+    "snapshotHash": "4f4103df5a1c9545e43e95438e87a6e283660e71b7c83e9c92220ab37199d0b9",
+    "signedRequestSha256": "05f4dad24756b52cc5f7537be1a1e2cf6b82a3379cc841843842ae9a8f2f33e3",
+    "roles": [
+      "owner"
+    ],
+    "addresses": [
+      "DAG3nJQJnDpsFGd4DN1qHsK1Zno4YD24LSpXhbd5"
+    ],
+    "event": "create",
+    "payload": null,
+    "remainingBefore": null,
+    "remainingAfter": 10000,
+    "receipt": "committed"
+  },
+  {
+    "label": "solo",
+    "fiber": "fb9388d7-0d1d-4a2b-8cda-46e48fe26021",
+    "ordinal": 152,
+    "checkpoint": 152,
+    "snapshotHash": "6b0429632aa994e478574dc50d0679478324fe86119bdb87e79af74f4b079fce",
+    "signedRequestSha256": "8627a8ecc075ff55b636542d74479825c300ea82a82ef3db0dcbdc741164b86d",
+    "roles": [
+      "agent"
+    ],
+    "addresses": [
+      "DAG068ibj4rq5Y4SiTyqPLsLikGEbboxfYFoipzJ"
+    ],
+    "event": "authorize",
+    "payload": {
+      "amountCents": 2000,
+      "payee": "supplier-a",
+      "requestNumber": 1
+    },
+    "remainingBefore": 10000,
+    "remainingAfter": 8000,
+    "receipt": "committed"
+  },
+  {
+    "label": "payee-refused",
+    "fiber": "fb9388d7-0d1d-4a2b-8cda-46e48fe26021",
+    "ordinal": 189,
+    "checkpoint": 190,
+    "snapshotHash": "e48068747841786766e273de69f842b3f855bbeecadcb5484d441fd49b32ef3e",
+    "signedRequestSha256": "7fa606d76a8bc066ca4ed4dcfaa1cef51a4251bcbc9579d9cf677e2f34e6d141",
+    "roles": [
+      "agent"
+    ],
+    "addresses": [
+      "DAG068ibj4rq5Y4SiTyqPLsLikGEbboxfYFoipzJ"
+    ],
+    "event": "authorize",
+    "payload": {
+      "amountCents": 2000,
+      "payee": "other",
+      "requestNumber": 2
+    },
+    "remainingBefore": 8000,
+    "remainingAfter": 8000,
+    "receipt": "No guard matched from active on authorize (1 guards tried)"
+  },
+  {
+    "label": "stranger-refused",
+    "fiber": "fb9388d7-0d1d-4a2b-8cda-46e48fe26021",
+    "ordinal": 192,
+    "checkpoint": 192,
+    "snapshotHash": "d525de906496d5c3ac53fac7834dd041e5c5e31aa623eb0ef67cf8e130695784",
+    "signedRequestSha256": "1348d4a3f6b0d6920f6a19af673d74e688bb122ed5a1a83d27f0aaaabc3bb24e",
+    "roles": [
+      "stranger"
+    ],
+    "addresses": [
+      "DAG3MW9zGKTuvaMCysyY8xhZTn9Rv7QD4q2UgpHs"
+    ],
+    "event": "authorize",
+    "payload": {
+      "amountCents": 2000,
+      "payee": "supplier-a",
+      "requestNumber": 2
+    },
+    "remainingBefore": 8000,
+    "remainingAfter": 8000,
+    "receipt": "No guard matched from active on authorize (1 guards tried)"
+  },
+  {
+    "label": "cosigner-required",
+    "fiber": "fb9388d7-0d1d-4a2b-8cda-46e48fe26021",
+    "ordinal": 196,
+    "checkpoint": 197,
+    "snapshotHash": "36b1e9baadd40e7004c78a56b24401dafdac5756fde52e79da041c09ed223a98",
+    "signedRequestSha256": "46e4a46da2ac1c09223c26274c63d41c82eb0db61e79681ffa43e031cbe67cdf",
+    "roles": [
+      "agent"
+    ],
+    "addresses": [
+      "DAG068ibj4rq5Y4SiTyqPLsLikGEbboxfYFoipzJ"
+    ],
+    "event": "authorize",
+    "payload": {
+      "amountCents": 4000,
+      "payee": "supplier-a",
+      "requestNumber": 2
+    },
+    "remainingBefore": 8000,
+    "remainingAfter": 8000,
+    "receipt": "No guard matched from active on authorize (1 guards tried)"
+  },
+  {
+    "label": "authorized",
+    "fiber": "fb9388d7-0d1d-4a2b-8cda-46e48fe26021",
+    "ordinal": 198,
+    "checkpoint": 199,
+    "snapshotHash": "f1680c84bb86dc4b6948d9c0c2309d67cf3b3059bf07569b5c48b8bfb16d42d8",
+    "signedRequestSha256": "ae8901c28ec4d6b47a78e67da5ea684d74bd0a39d1aa0991d17217c0aa35c1e6",
+    "roles": [
+      "agent",
+      "cosigner"
+    ],
+    "addresses": [
+      "DAG068ibj4rq5Y4SiTyqPLsLikGEbboxfYFoipzJ",
+      "DAG34YwQgphqRE7mmKzV1jf5ZQ8Hx4MYnc37mZfd"
+    ],
+    "event": "authorize",
+    "payload": {
+      "amountCents": 4000,
+      "payee": "supplier-a",
+      "requestNumber": 2
+    },
+    "remainingBefore": 8000,
+    "remainingAfter": 4000,
+    "receipt": "committed"
+  },
+  {
+    "label": "revoked",
+    "fiber": "fb9388d7-0d1d-4a2b-8cda-46e48fe26021",
+    "ordinal": 227,
+    "checkpoint": 227,
+    "snapshotHash": "2d37431f0ab3f883d204c9648ca8995553b4b62b6173dc0c3cc85b28cb19af90",
+    "signedRequestSha256": "8c948b4510d614e5f35c6c953ffde5cc4e35b1cb385baa7131333e6a762829e4",
+    "roles": [
+      "owner"
+    ],
+    "addresses": [
+      "DAG3nJQJnDpsFGd4DN1qHsK1Zno4YD24LSpXhbd5"
+    ],
+    "event": "revoke",
+    "payload": {},
+    "remainingBefore": 4000,
+    "remainingAfter": 4000,
+    "receipt": "committed"
+  },
+  {
+    "label": "revoked-refusal",
+    "fiber": "fb9388d7-0d1d-4a2b-8cda-46e48fe26021",
+    "ordinal": 254,
+    "checkpoint": 254,
+    "snapshotHash": "9f48ce529d19c2c90eb5f9b86ba767fb414fc047b2e8ffb0751129a60b0bc5cb",
+    "signedRequestSha256": "2739fcd2c6c407d0d5feba494fee4911940c8d040c6aef7b231a3edd16f5f0cc",
+    "roles": [
+      "agent"
+    ],
+    "addresses": [
+      "DAG068ibj4rq5Y4SiTyqPLsLikGEbboxfYFoipzJ"
+    ],
+    "event": "authorize",
+    "payload": {
+      "amountCents": 1000,
+      "payee": "supplier-b",
+      "requestNumber": 3
+    },
+    "remainingBefore": 4000,
+    "remainingAfter": 4000,
+    "receipt": "No guard matched from revoked on authorize (1 guards tried)"
+  }
+]

@@ -1,0 +1,19 @@
+{
+  "ordinal": 150,
+  "network": "8b61d4e27f37d517d404ffb5da2e700fcebe641d95183d66ecd1612ff252c121",
+  "hash": "98e2dad771892e0296ed9b75edecf3b5299a43537b4b958cad9d84a7dafafdaf",
+  "snapshotSha256": "e8e415cea26c5bfe3fa521544f125a817e2ca1f928717aef13f7b6ac1f0ab9ea",
+  "nodes": [
+    "1b4b9f98190ede0d26ec1a2ce736638ffa556b08135403256d47d3c405e08e3bb272fb9172c7bd9f96008dd380ceb6201e965498bc9115bbdf905ad9781dbf18"
+  ],
+  "fiber": "08347f24-9c57-4947-9055-d329a20d217c",
+  "history": {
+    "ordinal": 151,
+    "network": "8b61d4e27f37d517d404ffb5da2e700fcebe641d95183d66ecd1612ff252c121",
+    "hash": "cf0e906e52673a8a5f1b0d600d39d0cd96bb56e44cea0b7abefaf885ff237eab",
+    "snapshotSha256": "da9b24cd5f5d2913f4ce001667da9002fbe6ccd6bc28fa466d8a5b00e2850b86",
+    "nodes": [
+      "1b4b9f98190ede0d26ec1a2ce736638ffa556b08135403256d47d3c405e08e3bb272fb9172c7bd9f96008dd380ceb6201e965498bc9115bbdf905ad9781dbf18"
+    ]
+  }
+}

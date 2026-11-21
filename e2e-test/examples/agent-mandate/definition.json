@@ -1,0 +1,227 @@
+{
+  "states": {
+    "active": {
+      "id": "active",
+      "isFinal": false
+    },
+    "revoked": {
+      "id": "revoked",
+      "isFinal": false
+    }
+  },
+  "initialState": "active",
+  "transitions": [
+    {
+      "from": "active",
+      "to": "active",
+      "eventName": "authorize",
+      "guard": {
+        "and": [
+          {
+            "in": [
+              {
+                "var": "state.agent"
+              },
+              {
+                "map": [
+                  {
+                    "var": "proofs"
+                  },
+                  {
+                    "var": "address"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "===": [
+              {
+                "typeof": [
+                  {
+                    "var": "event.amountCents"
+                  }
+                ]
+              },
+              "int"
+            ]
+          },
+          {
+            ">": [
+              {
+                "var": "event.amountCents"
+              },
+              0
+            ]
+          },
+          {
+            "<=": [
+              {
+                "var": "event.amountCents"
+              },
+              {
+                "var": "state.remainingCents"
+              }
+            ]
+          },
+          {
+            "in": [
+              {
+                "var": "event.payee"
+              },
+              {
+                "var": "state.suppliers"
+              }
+            ]
+          },
+          {
+            "<": [
+              {
+                "var": "$ordinal"
+              },
+              {
+                "var": "state.expiresAt"
+              }
+            ]
+          },
+          {
+            "===": [
+              {
+                "var": "event.requestNumber"
+              },
+              {
+                "+": [
+                  {
+                    "var": "state.lastRequestNumber"
+                  },
+                  1
+                ]
+              }
+            ]
+          },
+          {
+            "or": [
+              {
+                "<=": [
+                  {
+                    "var": "event.amountCents"
+                  },
+                  {
+                    "var": "state.soloLimitCents"
+                  }
+                ]
+              },
+              {
+                "and": [
+                  {
+                    "!==": [
+                      {
+                        "var": "state.agent"
+                      },
+                      {
+                        "var": "state.cosigner"
+                      }
+                    ]
+                  },
+                  {
+                    "in": [
+                      {
+                        "var": "state.cosigner"
+                      },
+                      {
+                        "map": [
+                          {
+                            "var": "proofs"
+                          },
+                          {
+                            "var": "address"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "effect": {
+        "remainingCents": {
+          "-": [
+            {
+              "var": "state.remainingCents"
+            },
+            {
+              "var": "event.amountCents"
+            }
+          ]
+        },
+        "lastRequestNumber": {
+          "var": "event.requestNumber"
+        },
+        "lastAuthorization": {
+          "amountCents": {
+            "var": "event.amountCents"
+          },
+          "payee": {
+            "var": "event.payee"
+          },
+          "requestNumber": {
+            "var": "event.requestNumber"
+          },
+          "signers": {
+            "map": [
+              {
+                "var": "proofs"
+              },
+              {
+                "var": "address"
+              }
+            ]
+          },
+          "ordinal": {
+            "var": "$ordinal"
+          }
+        }
+      },
+      "dependencies": []
+    },
+    {
+      "from": "active",
+      "to": "revoked",
+      "eventName": "revoke",
+      "guard": {
+        "in": [
+          {
+            "var": "state.owner"
+          },
+          {
+            "map": [
+              {
+                "var": "proofs"
+              },
+              {
+                "var": "address"
+              }
+            ]
+          }
+        ]
+      },
+      "effect": {
+        "revokedAt": {
+          "var": "$ordinal"
+        }
+      },
+      "dependencies": []
+    },
+    {
+      "from": "revoked",
+      "to": "revoked",
+      "eventName": "authorize",
+      "guard": false,
+      "effect": {},
+      "dependencies": []
+    }
+  ]
+}
