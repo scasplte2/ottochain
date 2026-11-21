@@ -1,3 +1,3 @@
 import {makeProject} from '@motion-canvas/core';
-import styleframe from './scenes/styleframe?scene';
-export default makeProject({scenes: [styleframe]});
+import film from './scenes/film?scene';
+export default makeProject({scenes: [film]});

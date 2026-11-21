@@ -352,16 +352,27 @@ export function chip(c: C, s: string, x: number, y: number, color: string, alpha
   return w;
 }
 
-/** Lower-third caption with a soft backing bar. */
+/** Lower-third caption with a soft backing bar; wraps onto two balanced lines when too wide. */
 export function caption(c: C, s: string, w: number, h: number, alpha: number) {
   if (alpha <= 0) return;
-  const size = 38;
-  const tw = measure(c, s, size, 600);
+  const size = 36, max = w - 240;
+  let lines = [s];
+  if (measure(c, s, size, 600) > max) {
+    const words = s.split(' ');
+    let best = 1, bestDiff = Infinity;
+    for (let i = 1; i < words.length; i++) {
+      const d = Math.abs(measure(c, words.slice(0, i).join(' '), size, 600) - measure(c, words.slice(i).join(' '), size, 600));
+      if (d < bestDiff) { bestDiff = d; best = i; }
+    }
+    lines = [words.slice(0, best).join(' '), words.slice(best).join(' ')];
+  }
+  const tw = Math.max(...lines.map(l => measure(c, l, size, 600)));
+  const bh = 22 + lines.length * 46;
   c.save();
   c.globalAlpha = alpha;
-  roundRect(c, w / 2 - tw / 2 - 28, h - 112, tw + 56, 64, 14);
-  c.fillStyle = 'rgba(4,10,22,0.72)';
+  roundRect(c, w / 2 - tw / 2 - 28, h - 58 - bh, tw + 56, bh, 14);
+  c.fillStyle = 'rgba(4,10,22,0.74)';
   c.fill();
   c.restore();
-  text(c, s, w / 2, h - 68, size, {weight: 600, align: 'center', alpha});
+  lines.forEach((l, i) => text(c, l, w / 2, h - 58 - bh + 46 + i * 46, size, {weight: 600, align: 'center', alpha}));
 }
