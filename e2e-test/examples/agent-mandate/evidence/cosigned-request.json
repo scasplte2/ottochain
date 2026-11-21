@@ -1,0 +1,24 @@
+{
+  "proofs": [
+    {
+      "id": "1e23c582f1262076035bafe748a06432e87d184249aae9141ccb325235ebc2dab78eafe9159a4d93d32e185105a14cf9ee1e1a12c1c97267926146270f3e2cf1",
+      "signature": "30440220072a29d99ad328d1c6e935374448bbd3951acbd4b6d7b84a96d68f10e8ecf2bf02206b28a4425c8655995bc737e7747498f6a2b8f49a9480defc5f2dafe9ea9170c8"
+    },
+    {
+      "id": "8b5e4a4ff464b34cb30efa07fa705fd1b42dbb9132548233ed723de56fcb174ef043bc42492fb9895143bab685685980755a4245d6db388dbf56d1b5630999dc",
+      "signature": "304402207d04776c895273d23aa606685fcbd4567a867822351ee82bb94c26d6d32cd64c022052f0f9eb1245175ea35b56fbf4b309fa382a8103abb40e13687a92d842e5802c"
+    }
+  ],
+  "value": {
+    "TransitionStateMachine": {
+      "eventName": "authorize",
+      "fiberId": "fb9388d7-0d1d-4a2b-8cda-46e48fe26021",
+      "payload": {
+        "amountCents": 4000,
+        "payee": "supplier-a",
+        "requestNumber": 2
+      },
+      "targetSequenceNumber": 1
+    }
+  }
+}
