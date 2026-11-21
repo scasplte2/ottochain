@@ -1,0 +1,197 @@
+{
+  "fps": 24,
+  "frames": 3648,
+  "sections": [
+    {
+      "id": "workshop",
+      "start": 0,
+      "end": 307,
+      "captions": [
+        {
+          "frame": 0,
+          "text": "Imagine you own a bike shop. A customer is coming back this afternoon, and her bike still needs brake pads."
+        },
+        {
+          "frame": 160,
+          "text": "You\u2019re under another bike. So you let your purchasing agent order a box from one of your regular suppliers."
+        }
+      ]
+    },
+    {
+      "id": "shipping",
+      "start": 307,
+      "end": 591,
+      "captions": [
+        {
+          "frame": 307,
+          "text": "Across town, the supplier has the parts packed. An order came from the agent, but there\u2019s one question before the box leaves the dock."
+        },
+        {
+          "frame": 499,
+          "text": "Did the shop owner actually give the agent permission to buy this?"
+        }
+      ]
+    },
+    {
+      "id": "open",
+      "start": 591,
+      "end": 852,
+      "captions": [
+        {
+          "frame": 591,
+          "text": "Let\u2019s test that question. We changed the supplier on a twenty-dollar test order. The agent signed it anyway."
+        },
+        {
+          "frame": 748,
+          "text": "Will it go through? First, look at the permission the owner actually signed."
+        }
+      ]
+    },
+    {
+      "id": "issue",
+      "start": 852,
+      "end": 1155,
+      "captions": [
+        {
+          "frame": 852,
+          "text": "The owner signs a mandate with a hundred dollars of test budget and two approved suppliers."
+        },
+        {
+          "frame": 982,
+          "text": "The agent can authorize up to twenty-five dollars alone. Above that, a second person must sign the same request."
+        }
+      ]
+    },
+    {
+      "id": "model",
+      "start": 1155,
+      "end": 1450,
+      "captions": [
+        {
+          "frame": 1155,
+          "text": "We gave a local language model two tools: read the mandate, and submit an invoice."
+        },
+        {
+          "frame": 1274,
+          "text": "It declined supplier C. In a separate run, it submitted twenty dollars for supplier A, and the ledger accepted."
+        }
+      ]
+    },
+    {
+      "id": "solo",
+      "start": 1450,
+      "end": 1723,
+      "captions": [
+        {
+          "frame": 1450,
+          "text": "Now follow one recorded mandate from start to finish. First, the agent asks for twenty dollars for supplier A."
+        },
+        {
+          "frame": 1627,
+          "text": "The checks pass. The budget falls from a hundred dollars to eighty."
+        }
+      ]
+    },
+    {
+      "id": "refusal",
+      "start": 1723,
+      "end": 2115,
+      "captions": [
+        {
+          "frame": 1723,
+          "text": "Then the agent signs for the same amount, payable to someone else. This is our simulated compromised agent."
+        },
+        {
+          "frame": 1884,
+          "text": "We replayed all eight rules against the recorded request. Seven passed. The supplier check failed."
+        },
+        {
+          "frame": 2031,
+          "text": "The ledger recorded the refusal. Eighty dollars remained."
+        }
+      ]
+    },
+    {
+      "id": "stranger",
+      "start": 2115,
+      "end": 2237,
+      "captions": [
+        {
+          "frame": 2115,
+          "text": "What if a stranger names the right supplier? The signing key is wrong. The budget holds."
+        }
+      ]
+    },
+    {
+      "id": "cosign",
+      "start": 2237,
+      "end": 2547,
+      "captions": [
+        {
+          "frame": 2237,
+          "text": "Next comes a forty-dollar invoice. With just the agent\u2019s signature, the ledger refuses it."
+        },
+        {
+          "frame": 2372,
+          "text": "The designated second signer signs the very same request. Now the request goes through, and forty dollars remain."
+        }
+      ]
+    },
+    {
+      "id": "revoke",
+      "start": 2547,
+      "end": 2689,
+      "captions": [
+        {
+          "frame": 2547,
+          "text": "The owner revokes the mandate. Even a fresh ten-dollar request for an approved supplier fails."
+        }
+      ]
+    },
+    {
+      "id": "proof",
+      "start": 2689,
+      "end": 3055,
+      "captions": [
+        {
+          "frame": 2689,
+          "text": "Back at the shipping desk, the supplier can check the forty-dollar order. First, verify both signatures on that request."
+        },
+        {
+          "frame": 2864,
+          "text": "Then follow the record through its proof to the pinned snapshot. It shows the authorization, and a later record shows the revocation."
+        }
+      ]
+    },
+    {
+      "id": "tamper",
+      "start": 3055,
+      "end": 3215,
+      "captions": [
+        {
+          "frame": 3055,
+          "text": "Change the saved balance by one cent. The record no longer matches its proof, and the verifier rejects it."
+        }
+      ]
+    },
+    {
+      "id": "close",
+      "start": 3215,
+      "end": 3648,
+      "captions": [
+        {
+          "frame": 3215,
+          "text": "The supplier can now see which order the shop authorized and when that permission ended."
+        },
+        {
+          "frame": 3333,
+          "text": "This demo used one local snapshot source. Independent validator quorum verification is still open."
+        },
+        {
+          "frame": 3501,
+          "text": "The signed request and both checkpoints are in the repository. You can replay the decision yourself."
+        }
+      ]
+    }
+  ]
+}

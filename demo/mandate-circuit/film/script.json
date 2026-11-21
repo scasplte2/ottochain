@@ -1,0 +1,92 @@
+[
+  {
+    "id": "workshop",
+    "lines": [
+      "Imagine you own a bike shop. A customer is coming back this afternoon, and her bike still needs brake pads.",
+      "You’re under another bike. So you let your purchasing agent order a box from one of your regular suppliers."
+    ]
+  },
+  {
+    "id": "shipping",
+    "lines": [
+      "Across town, the supplier has the parts packed. An order came from the agent, but there’s one question before the box leaves the dock.",
+      "Did the shop owner actually give the agent permission to buy this?"
+    ]
+  },
+  {
+    "id": "open",
+    "lines": [
+      "Let’s test that question. We changed the supplier on a twenty-dollar test order. The agent signed it anyway.",
+      "Will it go through? First, look at the permission the owner actually signed."
+    ]
+  },
+  {
+    "id": "issue",
+    "lines": [
+      "The owner signs a mandate with a hundred dollars of test budget and two approved suppliers.",
+      "The agent can authorize up to twenty-five dollars alone. Above that, a second person must sign the same request."
+    ]
+  },
+  {
+    "id": "model",
+    "lines": [
+      "We gave a local language model two tools: read the mandate, and submit an invoice.",
+      "It declined supplier C. In a separate run, it submitted twenty dollars for supplier A, and the ledger accepted."
+    ]
+  },
+  {
+    "id": "solo",
+    "lines": [
+      "Now follow one recorded mandate from start to finish. First, the agent asks for twenty dollars for supplier A.",
+      "The checks pass. The budget falls from a hundred dollars to eighty."
+    ]
+  },
+  {
+    "id": "refusal",
+    "lines": [
+      "Then the agent signs for the same amount, payable to someone else. This is our simulated compromised agent.",
+      "We replayed all eight rules against the recorded request. Seven passed. The supplier check failed.",
+      "The ledger recorded the refusal. Eighty dollars remained."
+    ]
+  },
+  {
+    "id": "stranger",
+    "lines": [
+      "What if a stranger names the right supplier? The signing key is wrong. The budget holds."
+    ]
+  },
+  {
+    "id": "cosign",
+    "lines": [
+      "Next comes a forty-dollar invoice. With just the agent’s signature, the ledger refuses it.",
+      "The designated second signer signs the very same request. Now the request goes through, and forty dollars remain."
+    ]
+  },
+  {
+    "id": "revoke",
+    "lines": [
+      "The owner revokes the mandate. Even a fresh ten-dollar request for an approved supplier fails."
+    ]
+  },
+  {
+    "id": "proof",
+    "lines": [
+      "Back at the shipping desk, the supplier can check the forty-dollar order. First, verify both signatures on that request.",
+      "Then follow the record through its proof to the pinned snapshot. It shows the authorization, and a later record shows the revocation."
+    ]
+  },
+  {
+    "id": "tamper",
+    "lines": [
+      "Change the saved balance by one cent. The record no longer matches its proof, and the verifier rejects it."
+    ]
+  },
+  {
+    "id": "close",
+    "lines": [
+      "The supplier can now see which order the shop authorized and when that permission ended.",
+      "This demo used one local snapshot source. Independent validator quorum verification is still open.",
+      "The signed request and both checkpoints are in the repository. You can replay the decision yourself."
+    ]
+  }
+]

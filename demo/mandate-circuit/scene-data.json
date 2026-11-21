@@ -1,0 +1,65 @@
+{
+  "gates": [
+    {
+      "label": "Agent signed",
+      "wire": "signature",
+      "pass": true
+    },
+    {
+      "label": "Whole cents",
+      "wire": "amount",
+      "pass": true
+    },
+    {
+      "label": "Positive amount",
+      "wire": "amount",
+      "pass": true
+    },
+    {
+      "label": "Within budget",
+      "wire": "amount",
+      "pass": true
+    },
+    {
+      "label": "Listed supplier",
+      "wire": "payee",
+      "pass": false
+    },
+    {
+      "label": "Before expiry",
+      "wire": "logic",
+      "pass": true
+    },
+    {
+      "label": "Next request",
+      "wire": "logic",
+      "pass": true
+    },
+    {
+      "label": "Solo or co-signed",
+      "wire": "signature",
+      "pass": true
+    }
+  ],
+  "terminal": [
+    "receipt  #189  refused",
+    "JLVM     7/8 clauses pass",
+    "record   #190  $80"
+  ],
+  "previousPayee": "supplier-a",
+  "request": {
+    "amountCents": 2000,
+    "payee": "other",
+    "requestNumber": 2
+  },
+  "ordinal": 189,
+  "checkpoint": 190,
+  "previous": 152,
+  "balance": 80,
+  "startBudget": 100,
+  "suppliers": [
+    "supplier-a",
+    "supplier-b"
+  ],
+  "receipt": "No guard matched from active on authorize (1 guards tried)"
+}
