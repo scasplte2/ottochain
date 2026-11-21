@@ -19,7 +19,7 @@ import sendSignedUpdate from './lib/sendDataTransaction.ts';
 import getMetagraphEnv from './lib/metagraphEnv.ts';
 import type { StatesMap, Wallets, GeneratorFn, ValidatorFn } from './lib/types.ts';
 import { HttpClient, OttoMetagraphClient } from '@ottochain/sdk';
-// Light-client verification of committed state proofs (SDK ≥ 2.7.0) — used by assertStateProof.
+import { verifyStateProof } from '@ottochain/sdk/core';
 import { waitForRefusedEvent } from './lib/refusedEvent.ts';
 import { provedField } from './lib/provedField.ts';
 // WIRE record types (from `/core` = ottochain/types) — the exact shapes the client's typed getters

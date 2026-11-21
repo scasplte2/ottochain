@@ -24,6 +24,7 @@ rediscovering the incantation — and encodes the recovery steps for when it goe
 | `bin/preflight [--fast]` | every CI gate locally, in CI's order. Must exit 0 before you push. |
 | `bin/test <module\|all> [glob]` | module tests by friendly name (l0/l1/dl1/shared/models), batch mode. |
 | `bin/regen-openapi` | regenerate the OpenAPI contracts + report drift. |
+| `bin/resolve-e2e-tessellation` | resolve the release tag used by E2E compose and the JAR cache warmer. |
 | `bin/pr-watch <pr#>` | poll a PR's checks to a terminal state; dump failing logs. A PR isn't done until this exits 0. |
 | `bin/tasks [label]` | list open issues by label (agent-ready, cheap-model-ok, needs-senior, blast-radius). |
 | `bin/agent-review <persona> [range]` | run one review persona over a diff (`--dry-run` prints the prompt). |
