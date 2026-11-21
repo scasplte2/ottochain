@@ -24,9 +24,12 @@ jobs:
   # PR feedback fast without letting the heavy paths drift between merges.
   prepare:
     name: Select e2e lanes
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     outputs:
       lanes: ${{ steps.select.outputs.lanes }}
+      tess_tag: ${{ steps.versions.outputs.tess_tag }}
     steps:
       - id: select
         env:
@@ -98,6 +101,18 @@ jobs:
           echo "lanes=$LANES" >>"$GITHUB_OUTPUT"
           echo "Selected lanes:"; echo "$LANES" | jq -r '.[].name'
 
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Resolve tessellation version
+        id: versions
+        env:
+          TESS_VERSION_OVERRIDE: ${{ inputs.tessellation_version }}
+          GH_TOKEN: ${{ github.token }}
+        run: bash bin/resolve-e2e-tessellation
+
   # Lightweight, cluster-free gate: type-check the e2e harness against the PUBLISHED @ottochain/sdk.
   # The harness runs under tsx (which erases types), so without this a drift between the SDK's export
   # surface and the harness (e.g. a renamed/removed type) would silently pass CI and only bite a user.
@@ -121,6 +136,8 @@ jobs:
   e2e:
     name: E2E Tests (${{ matrix.lane.name }})
     needs: prepare
+    env:
+      TESS_TAG: ${{ needs.prepare.outputs.tess_tag }}
     runs-on: ubuntu-latest
     timeout-minutes: ${{ matrix.lane.timeout }}
     strategy:
@@ -154,16 +171,6 @@ jobs:
       - name: Install just
         uses: extractions/setup-just@v4
 
-      # Resolve tessellation version from the dependency chain:
-      #   ottochain → metakit (version in Dependencies.scala)
-      #   metakit POM on Maven Central → tessellation-sdk version
-      - name: Resolve tessellation version
-        id: versions
-        env:
-          TESS_VERSION_OVERRIDE: ${{ inputs.tessellation_version }}
-          GH_TOKEN: ${{ github.token }}
-        run: bash bin/resolve-e2e-tessellation
-
       # Clone tessellation develop for Docker infrastructure (compose-runner, Dockerfiles, scripts).
       # Develop has the latest compose-runner with SKIP_ASSEMBLY support for pre-staged JARs.
       # We do NOT build tessellation — all deps resolve from Maven Central.
@@ -180,16 +187,16 @@ jobs:
         uses: actions/cache@v6
         with:
           path: tess-jars
-          key: tessellation-jars-${{ steps.versions.outputs.tess_tag }}
+          key: tessellation-jars-${{ env.TESS_TAG }}
 
       # Download pre-built GL0/GL1/keytool/wallet JARs from the tessellation GitHub release (cache MISS only).
       # metakit + tessellation-sdk resolve from Maven Central via sbt — no publishLocal needed.
       - name: Download tessellation release JARs
         if: steps.cache-tess-jars.outputs.cache-hit != 'true'
         run: |
-          BASE_URL="https://github.com/Constellation-Labs/tessellation/releases/download/${{ steps.versions.outputs.tess_tag }}"
+          BASE_URL="https://github.com/Constellation-Labs/tessellation/releases/download/${TESS_TAG}"
           mkdir -p tess-jars
-          echo "Downloading tessellation JARs from release ${{ steps.versions.outputs.tess_tag }}..."
+          echo "Downloading tessellation JARs from release ${TESS_TAG}..."
           declare -A JAR_MAP=(
             ["cl-node.jar"]="gl0.jar"
             ["cl-dag-l1.jar"]="gl1.jar"
@@ -272,7 +279,7 @@ jobs:
           # is not needed — ML0 snapshot consensus is already EventTrigger-driven by DL1 data
           # blocks, so a currency-tx drip would be redundant (and Tessellation's tx mempool does
           # not pipeline unaccepted txs, which deadlocked the drip on Conflict{ordinal}).
-          just up --hypergraph-release="${{ steps.versions.outputs.tess_tag }}" \
+          just up --hypergraph-release="${TESS_TAG}" \
             --skip-assembly --metagraph="${GITHUB_WORKSPACE}" --dl1 --data \
             --env="${RUNNER_TEMP}/dl1-extra.env"
 
