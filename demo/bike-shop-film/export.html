@@ -1,0 +1,30 @@
+<!doctype html><meta charset="utf-8"><title>Bike shop film export</title>
+<script type="module">
+import '@fontsource/inter/400.css';
+import '@fontsource/inter/500.css';
+import '@fontsource/inter/600.css';
+import '@fontsource/inter/700.css';
+import '@fontsource/inter/800.css';
+import '@fontsource/inter/900.css';
+import '@fontsource/jetbrains-mono/400.css';
+import '@fontsource/jetbrains-mono/700.css';
+import '@fontsource/jetbrains-mono/800.css';
+import {Renderer, Vector2} from '@motion-canvas/core';
+import project from './project?project';
+window.exportScene = async function (seconds, fps) {
+  for (const w of [400, 500, 600, 700, 800, 900]) await document.fonts.load(`${w} 40px Inter`);
+  for (const w of [400, 700, 800]) await document.fonts.load(`${w} 20px "JetBrains Mono"`);
+  await document.fonts.ready;
+  project.logger.onLogged.subscribe(e => { if (e.level === 'error') console.error(e.message, e.stack); });
+  project.meta.rendering.exporter.exporters.push({
+    id: 'video-pipe', displayName: 'Local video pipe',
+    create: async () => ({handleFrame: (canvas, frame) => window.encodeFrame(frame, canvas.toDataURL('image/png'))}),
+  });
+  const renderer = new Renderer(project);
+  let result;
+  renderer.onFinished.subscribe(v => (result = v));
+  await renderer.render({name: 'film', range: [0, seconds - 1 / fps], fps, size: new Vector2(1920, 1080),
+    resolutionScale: 1, colorSpace: 'srgb', background: '#050b17', exporter: {name: 'video-pipe'}});
+  return result;
+};
+</script>
