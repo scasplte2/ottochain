@@ -1,9 +1,23 @@
 [
   {
+    "id": "workshop",
+    "lines": [
+      "Imagine you own a bike shop. A customer is coming back this afternoon, and her bike still needs brake pads.",
+      "You’re under another bike. So you let your purchasing agent order a box from one of your regular suppliers."
+    ]
+  },
+  {
+    "id": "shipping",
+    "lines": [
+      "Across town, the supplier has the parts packed. An order came from the agent, but there’s one question before the box leaves the dock.",
+      "Did the shop owner actually give the agent permission to buy this?"
+    ]
+  },
+  {
     "id": "open",
     "lines": [
-      "An agent signs an invoice for twenty dollars. The key is genuine. But the supplier is wrong.",
-      "Should the payment go through? On OttoChain, the owner has already written the answer."
+      "Let’s test that question. We changed the supplier on a twenty-dollar test order. The agent signed it anyway.",
+      "Will it go through? First, look at the permission the owner actually signed."
     ]
   },
   {
@@ -57,7 +71,7 @@
   {
     "id": "proof",
     "lines": [
-      "How can the supplier check that? First, verify both signatures on the forty-dollar request.",
+      "Back at the shipping desk, the supplier can check the forty-dollar order. First, verify both signatures on that request.",
       "Then follow the record through its proof to the pinned snapshot. It shows the authorization, and a later record shows the revocation."
     ]
   },
@@ -70,6 +84,7 @@
   {
     "id": "close",
     "lines": [
+      "The supplier can now see which order the shop authorized and when that permission ended.",
       "This demo used one local snapshot source. Independent validator quorum verification is still open.",
       "The signed request and both checkpoints are in the repository. You can replay the decision yourself."
     ]

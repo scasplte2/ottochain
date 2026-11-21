@@ -10,3 +10,11 @@ Worktree `ottochain-mandate-circuit` on the preview branch at `d3c4a10`, draft P
 | Export | Motion Canvas full export with synchronized captions, gate ticks and narration. 2,897 frames at 24 fps. | `.workspace/mandate-circuit/full/ottochain-mandate-narrated.mp4`. |
 
 Final export SHA-256 `d2748ca75fa4d8c54488cf923ffd53e04d7e53e8f92948a4dbf3b20ec3906efe`. FFprobe measured 120.708 s for video and audio. The final mix measured −16.4 LUFS integrated and −2.1 dB true peak. Local Whisper base.en transcribed the exported MP4 from the opening question through the closing replay instructions. Visually inspected representative frames from all eleven scenes and verified the final H.264 stream was byte-identical after audio mastering. Both streams decoded to completion. The full scene also passed a separate TypeScript check.
+
+## Story edit
+
+James requested the motivation before the mechanism. The extended cut starts with a customer waiting for a bike repair and the shop owner delegating a brake-pad order. The parts request appears again at the shipping desk. That supplier’s decision leads into the signed-invoice test. After revocation the film returns to the desk and answers the opening question using the verified $40 transaction and subsequent revocation. The opening two scenes are labeled as an illustrated scenario.
+
+Kokoro generated the full 13-scene voice track on Euler’s RTX 5090. The illustrated setup runs from 0:00 to 0:24.625. The full timeline contains 3,648 frames at 24 fps. Latest local review path is `.workspace/mandate-circuit/story/ottochain-agent-mandate-story.mp4`. See the adjacent `narration.wav` for the isolated full-length narration.
+
+Final story SHA-256 `ad2ac775deba016c312e451dedd5fd51fe666f89672c975a81f7256d082b9ec4`. Both streams decoded to completion and measured exactly 152 seconds. The mixed soundtrack measured −16.5 LUFS and −0.8 dB true peak. Inspected the repair stand, packing desk, test case, return to the supplier and closing answer. Whisper transcribed the opening, callback and conclusion from the exported MP4. A separate transcription of the tamper scene confirmed “one cent”.

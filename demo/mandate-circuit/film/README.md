@@ -1,10 +1,10 @@
 # Narrated mandate walkthrough
 
-The eleven scenes follow the recorded mandate from issuance through revocation and offline supplier verification. The local model’s two invoices are separate runs. The compromised-agent submission is the signed four-wallet fixture. Read `script.json` for the complete spoken copy. The display uses the same sentence boundaries as the voice track.
+The 2:32 film opens with an illustrated bike-shop scenario. A customer needs brake pads and the owner delegates the order. At the shipping desk, the supplier has to decide whether the shop authorized the purchase. The film tests that question on the recorded mandate and returns to the supplier for the answer. The local model’s two invoices are separate runs. The compromised-agent submission is the signed four-wallet fixture. Read `script.json` for the complete spoken copy. The display uses the same sentence boundaries as the voice track.
 
 ## Local playback and render
 
-Euler’s review copy is `.workspace/mandate-circuit/full/ottochain-mandate-narrated.mp4`. The adjacent `narration.wav` is the isolated, 24 kHz voice track. The recorded video uses Motion Canvas, 1920 × 1080 at 24 fps, H.264 and AAC. Replay the receipt, snapshot and tamper checks on Node 24 before exporting.
+Euler’s review copy is `.workspace/mandate-circuit/story/ottochain-agent-mandate-story.mp4`. The adjacent `narration.wav` is the isolated, 24 kHz voice track. The recorded video uses Motion Canvas, 1920 × 1080 at 24 fps, H.264 and AAC. Replay the receipt, snapshot and tamper checks on Node 24 before exporting.
 
 ```sh
 # From the repo root
@@ -13,7 +13,7 @@ npm ci --prefix demo/mandate-circuit --no-audit --no-fund
 node demo/mandate-circuit/film/capture.mjs
 cd demo/mandate-circuit
 # Point CHROMIUM_PATH at the local headless Chromium binary if needed.
-node render.mjs ../../.workspace/mandate-circuit/full/review-copy.mp4 --film ../../.workspace/mandate-circuit/full
+node render.mjs ../../.workspace/mandate-circuit/story/review-copy.mp4 --film ../../.workspace/mandate-circuit/story
 ```
 
 The second directory argument holds `narration.wav` and its matching `timing.json`. The exporter streams frames to FFmpeg, mixes the local narration with the gate sounds and checks the frame count. Use a fresh output filename.

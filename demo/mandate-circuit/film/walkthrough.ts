@@ -4,6 +4,7 @@ import {P,box,text,path,circle,light,mark,receiptCard,ramp,board,detail} from '.
 import data from './evidence.json';
 import timing from './timing.json';
 import preview from '../scene-data.json';
+import {setup} from './setup';
 
 type C=CanvasRenderingContext2D;
 const r=data.records;
@@ -109,7 +110,7 @@ function revoke(c:C,u:number){
   snapshots(c,[[r.revoked.ordinal,'Owner revoked',P.gold],[r['revoked-refusal'].ordinal,'Retry refused',P.red]],u);
 }
 function proof(c:C,u:number,bad:boolean){
-  heading(c,bad?'Change one cent':'The supplier checks the evidence',bad?'An edit to the saved record breaks the cryptographic proof.':'Replay from the pinned capture, offline.');
+  heading(c,bad?'Change one cent':'Back at the shipping desk',bad?'An edit to the saved record breaks the cryptographic proof.':'The supplier replays the signed order and both checkpoints, offline.');
   const stops=[124,440,756,1072], steps=bad?['Edited record','Trie leaf','State root','Snapshot']:['Signed request','Record & trie','State root','Snapshot'];
   stops.forEach((x,i)=>{
     const active=u>i*.12, col=bad?(i<2?P.red:P.line):P.green;
@@ -125,7 +126,13 @@ function proof(c:C,u:number,bad:boolean){
   if(bad){text(c,'$40.00  →  $40.01',1185,395,33,P.red,660);}
 }
 function end(c:C,u:number){
-  label(c,'SUPPLIER VERIFICATION',59,226,P.green);text(c,'Replay the decision.',52,348,90,P.white,720);
+  label(c,'THE SUPPLIER’S ANSWER',59,226,P.green);text(c,'The $40 order checks out.',52,348,84,P.white,720);
+  if(u<.32){
+    text(c,'Approved at #'+r.authorized.ordinal,60,451,44,P.green,650);
+    text(c,'Revoked by #'+r.revoked.ordinal,60,525,40,P.muted,550);
+    snapshots(c,[[r.authorized.ordinal,'Co-signed order',P.green],[r.revoked.ordinal,'Owner revoked',P.gold]],u*3);
+    return;
+  }
   text(c,'1 snapshot source   /   1 local operator',60,432,35,P.muted);
   text(c,'Validator signature threshold unchecked',61,484,29,P.muted);
   box(c,60,548,1478,128,13,P.panel,P.line);label(c,'FROM e2e-test  /  AFTER npm ci',82,587,P.gold);
@@ -148,6 +155,8 @@ class Film extends Node {
     c.save();c.scale(1.2,1.2);c.translate(-800,-450);c.fillStyle=P.bg;c.fillRect(0,0,1600,900);
     c.fillStyle='#273639';for(let y=99;y<779;y+=23)for(let x=12;x<1590;x+=23)c.fillRect(x,y,1,1);
     switch(s.id){
+    case 'workshop': setup(c,u,true);break;
+    case 'shipping': setup(c,u,false);break;
     case 'open': intro(c,u);break;
     case 'issue': issuance(c,u);break;
     case 'model': actualModel(c,u);break;
@@ -161,7 +170,7 @@ class Film extends Node {
     case 'close': end(c,u);break;
     }
     text(c,'OTTOCHAIN',55,54,23,P.white,750);path(c,[[212,30],[212,56]],P.line);
-    label(c,'AGENT MANDATE',233,53);text(c,'Animation of recorded ledger events',1080,51,20,P.muted);
+    label(c,'AGENT MANDATE',233,53);text(c,['workshop','shipping'].includes(s.id)?'Illustrated scenario':'Animation of recorded ledger events',1080,51,20,P.muted);
     path(c,[[54,77],[1546,77]],P.line,1);path(c,[[54,785],[1546,785]],P.line,1);
     const cue=s.captions.filter(k=>k.frame<=frame).at(-1)!;captions(c,cue.text);
     path(c,[[54,889],[1546,889]],P.line,2);path(c,[[54,889],[54+1492*frame/timing.frames,889]],P.gold,2);
