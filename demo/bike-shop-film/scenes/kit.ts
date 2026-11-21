@@ -134,18 +134,59 @@ export function polyline(c: C, pts: Pt[], color: string, width: number, alpha = 
   c.restore();
 }
 
-/** A PCB-style trace: dark base, plus an optional energised overlay with bloom. */
-export function trace(c: C, pts: Pt[], energy = 0, color = K.cyan, width = 3) {
-  polyline(c, pts, K.trace, width + 3);
-  polyline(c, pts, '#0a1426', width - 1);
+/** A PCB-style trace: dark base, plus an optional energised overlay with bloom.
+ *  `reveal` < 1 draws only the leading fraction of the path ("printing" the circuit) with a spark at its tip. */
+export function trace(c: C, pts: Pt[], energy = 0, color = K.cyan, width = 3, reveal = 1) {
+  if (reveal <= 0) return;
+  const p = reveal >= 1 ? pts : prefix(pts, reveal);
+  polyline(c, p, K.trace, width + 3);
+  polyline(c, p, '#0a1426', width - 1);
+  if (reveal < 1) spark(c, p[p.length - 1], color);
   if (energy > 0) {
     c.save();
     c.shadowColor = color;
     c.shadowBlur = 22;
-    polyline(c, pts, color, width, 0.55 * energy);
+    polyline(c, p, color, width, 0.55 * energy);
     c.restore();
-    polyline(c, pts, '#ffffff', 1, 0.35 * energy);
+    polyline(c, p, '#ffffff', 1, 0.35 * energy);
   }
+}
+
+/** A thin wire that also prints on. */
+export function wire(c: C, pts: Pt[], color: string, width: number, alpha: number, reveal: number) {
+  if (reveal <= 0) return;
+  const p = reveal >= 1 ? pts : prefix(pts, reveal);
+  polyline(c, p, color, width, alpha);
+  if (reveal < 1) spark(c, p[p.length - 1], K.cyan, 0.7);
+}
+
+export function spark(c: C, [x, y]: Pt, color: string, scale = 1) {
+  c.save();
+  c.globalCompositeOperation = 'lighter';
+  const g = c.createRadialGradient(x, y, 0, x, y, 16 * scale);
+  g.addColorStop(0, 'rgba(255,255,255,0.95)');
+  g.addColorStop(0.3, color);
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  c.fillStyle = g;
+  c.beginPath(); c.arc(x, y, 16 * scale, 0, Math.PI * 2); c.fill();
+  c.restore();
+}
+
+/** The leading fraction f of a polyline, as its own polyline. */
+export function prefix(pts: Pt[], f: number): Pt[] {
+  const ls = lengths(pts);
+  let d = clamp(f) * ls.reduce((a, b) => a + b, 0);
+  const out: Pt[] = [pts[0]];
+  for (let i = 0; i < ls.length; i++) {
+    if (d <= ls[i]) {
+      const u = ls[i] ? d / ls[i] : 0;
+      out.push([pts[i][0] + (pts[i + 1][0] - pts[i][0]) * u, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * u]);
+      return out;
+    }
+    out.push(pts[i + 1]);
+    d -= ls[i];
+  }
+  return out;
 }
 
 function lengths(pts: Pt[]) {
@@ -242,6 +283,7 @@ export function ping(c: C, x: number, y: number, u: number, color: string, max =
 }
 
 export function check(c: C, x: number, y: number, s: number, color: string, u = 1) {
+  if (u <= 0) return;
   const pts: Pt[] = [[x - s, y], [x - s * 0.3, y + s * 0.7], [x + s, y - s * 0.8]];
   const ls = lengths(pts), total = ls[0] + ls[1];
   c.save();
@@ -253,6 +295,7 @@ export function check(c: C, x: number, y: number, s: number, color: string, u = 
 }
 
 export function cross(c: C, x: number, y: number, s: number, color: string, u = 1) {
+  if (u <= 0) return;
   c.save();
   c.shadowColor = color; c.shadowBlur = 14;
   c.strokeStyle = color; c.lineWidth = 3.6; c.lineCap = 'round';

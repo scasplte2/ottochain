@@ -7,7 +7,7 @@ import facts from '../../mandate-circuit/scene-data.json';
 import ottoSrc from '../assets/otto.png';
 import {
   C, K, Pt, background, burst, caption, check, chip, clamp, comet, cross, easeOutBack, easeOutExpo, measure,
-  panel, ping, polyline, ramp, roundRect, smooth, text, trace, window01,
+  panel, ping, polyline, ramp, roundRect, smooth, text, trace, window01, wire,
 } from './kit';
 
 const W = 1920, H = 1080, DURATION = 20;
@@ -94,7 +94,7 @@ function gateModule(c: C, t: number) {
   text(c, 'MANDATE · authorize', gates.x, gates.y - 52, 16, {mono: true, weight: 700, color: K.muted, alpha: a, spacing: 2});
   text(c, 'every rule must pass', gates.x + gates.w, gates.y - 52, 16, {color: K.dim, align: 'right', alpha: a});
   // spine
-  trace(c, spineFull, 0);
+  trace(c, spineFull, 0, K.cyan, 3, ramp(t, 1.3, 0.7));
   const spineEnergy = ramp(t, T.arrive, 0.3) * (1 - ramp(t, T.verdict + 0.3, 0.8) * 0.6);
   const reach = clamp((t - T.gate0 + 0.2) / ((facts.gates.length - 1) * T.gateStep + 0.7));
   if (spineEnergy > 0) {
@@ -107,7 +107,7 @@ function gateModule(c: C, t: number) {
     const lit = ramp(t, when, 0.25);
     const color = g.pass ? K.mint : K.red;
     const branch: Pt[] = [[spineX, y], [gates.x, y]];
-    trace(c, branch, lit * (g.pass ? 0.8 : 1), color, 2.5);
+    trace(c, branch, lit * (g.pass ? 0.8 : 1), color, 2.5, ramp(t, 1.55 + i * 0.07, 0.35));
     comet(c, branch, (t - when + 0.3) / 0.3, K.cyan, {size: 5, tail: 0.5});
     const failAccent = !g.pass ? ramp(t, when, 0.15) : 0;
     c.save();
@@ -134,7 +134,7 @@ function gateModule(c: C, t: number) {
   const verdict = ramp(t, T.verdict, 0.3);
   facts.gates.forEach((g, i) => {
     const y = rowY(i);
-    polyline(c, [[gates.x + gates.w, y], [andNode[0] - 40, y], [andNode[0] - 40, andNode[1]], [andNode[0] - 34, andNode[1]]], K.trace, 2, a);
+    wire(c, [[gates.x + gates.w, y], [andNode[0] - 40, y], [andNode[0] - 40, andNode[1]], [andNode[0] - 34, andNode[1]]], K.trace, 2, 1, ramp(t, 1.9 + i * 0.05, 0.5));
     if (t > gateTime(i)) polyline(c, [[gates.x + gates.w, y], [andNode[0] - 40, y]], g.pass ? K.mint : K.red, 2, 0.5);
   });
   c.save(); c.globalAlpha = a;
@@ -157,7 +157,7 @@ function gateModule(c: C, t: number) {
 
 function deskModule(c: C, t: number) {
   const a = ramp(t, 1.6, 0.8);
-  trace(c, toDesk, 0);
+  trace(c, toDesk, 0, K.cyan, 3, ramp(t, 2.3, 0.6));
   panel(c, desk.x, desk.y, desk.w, desk.h, {alpha: a * 0.85, dashed: true});
   text(c, 'SUPPLIER ORDER DESK', desk.x + 26, desk.y + 44, 16, {mono: true, weight: 700, color: K.muted, alpha: a, spacing: 2});
   text(c, 'waiting for orders', desk.x + 26, desk.y + 80, 22, {color: K.dim, alpha: a});
@@ -190,7 +190,7 @@ function gaugeModule(c: C, t: number) {
 function ledgerStrip(c: C, t: number) {
   const a = ramp(t, 2, 0.8);
   text(c, 'LEDGER · SNAPSHOTS', strip.x0, strip.y - 34, 15, {mono: true, weight: 700, color: K.muted, alpha: a, spacing: 2});
-  polyline(c, [[strip.x0, strip.y], [strip.x1, strip.y]], K.trace, 3, a);
+  wire(c, [[strip.x0, strip.y], [strip.x1, strip.y]], K.trace, 3, 1, ramp(t, 2.0, 1.0));
   const spacing = 120, base = facts.ordinal - 7, drift = Math.min(t, T.ledger) * 6;
   for (let k = 0; k < 16; k++) {
     const n = base + k, x = strip.x0 + 40 + k * spacing - drift;
@@ -213,7 +213,7 @@ function ledgerStrip(c: C, t: number) {
 }
 
 function launch(c: C, t: number) {
-  trace(c, launchPath, ramp(t, T.launch, 0.2) * (1 - ramp(t, T.arrive + 0.8, 1)), K.yellow);
+  trace(c, launchPath, ramp(t, T.launch, 0.2) * (1 - ramp(t, T.arrive + 0.8, 1)), K.yellow, 3, ramp(t, 2.2, 0.7));
   comet(c, launchPath, (t - T.launch) / (T.arrive - T.launch), K.yellow, {size: 8, tail: 0.25});
 }
 
