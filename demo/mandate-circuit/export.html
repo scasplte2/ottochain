@@ -1,0 +1,18 @@
+<!doctype html><meta charset="utf-8"><title>Mandate circuit export</title>
+<script type="module">
+import {Renderer, Vector2} from '@motion-canvas/core';
+import project from './project?project';
+window.exportScene = async function () {
+  project.logger.onLogged.subscribe(entry => { if(entry.level === 'error') console.error(entry.message, entry.stack); });
+  project.meta.rendering.exporter.exporters.push({
+    id: 'video-pipe', displayName: 'Local video pipe',
+    create: async () => ({handleFrame: (canvas, frame) => window.encodeFrame(frame, canvas.toDataURL('image/png'))})
+  });
+  const renderer = new Renderer(project);
+  let result;
+  renderer.onFinished.subscribe(value => result = value);
+  await renderer.render({name: 'refusal', range: [0,479/24], fps:24, size:new Vector2(1920,1080),
+    resolutionScale:1,colorSpace:'srgb',background:'#0e191d',exporter:{name:'video-pipe'}});
+  return result;
+};
+</script>

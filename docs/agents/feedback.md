@@ -47,3 +47,8 @@ scripts, new lint rules, or new items in `process-observations.md`. Newest at th
 - Worksheet: docs/worksheets/2026-11-20-sentient-agent-mandate.md
 - An ordinal query at the current head returned a valid absence. The catalog records the parent. Capturing the record witness first, then anchoring a later catalog to its own snapshot, made the historical check reproducible.
 - The current Tessellation launcher performs host dependency setup and Docker cleanup with shared names. Give the local e2e recipe an isolated project, preflight-only dependency check and explicit teardown of recorded resource IDs.
+
+### 2026-11-21 — explain a refusal from the committed guard
+
+- Worksheet: docs/worksheets/2026-11-21-mandate-circuit-preview.md
+- Preserve the preceding verified record and signer identities when recording a refused request. They let the supplier reproduce each clause in the pinned JLVM. The receipt gives the ledger verdict and the local replay identifies the failed predicate.
