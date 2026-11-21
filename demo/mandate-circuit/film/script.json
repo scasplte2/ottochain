@@ -1,0 +1,77 @@
+[
+  {
+    "id": "open",
+    "lines": [
+      "An agent signs an invoice for twenty dollars. The key is genuine. But the supplier is wrong.",
+      "Should the payment go through? On OttoChain, the owner has already written the answer."
+    ]
+  },
+  {
+    "id": "issue",
+    "lines": [
+      "The owner signs a mandate with a hundred dollars of test budget and two approved suppliers.",
+      "The agent can authorize up to twenty-five dollars alone. Above that, a second person must sign the same request."
+    ]
+  },
+  {
+    "id": "model",
+    "lines": [
+      "We gave a local language model two tools: read the mandate, and submit an invoice.",
+      "It declined supplier C. In a separate run, it submitted twenty dollars for supplier A, and the ledger accepted."
+    ]
+  },
+  {
+    "id": "solo",
+    "lines": [
+      "Now follow one recorded mandate from start to finish. First, the agent asks for twenty dollars for supplier A.",
+      "The checks pass. The budget falls from a hundred dollars to eighty."
+    ]
+  },
+  {
+    "id": "refusal",
+    "lines": [
+      "Then the agent signs for the same amount, payable to someone else. This is our simulated compromised agent.",
+      "We replayed all eight rules against the recorded request. Seven passed. The supplier check failed.",
+      "The ledger recorded the refusal. Eighty dollars remained."
+    ]
+  },
+  {
+    "id": "stranger",
+    "lines": [
+      "What if a stranger names the right supplier? The signing key is wrong. The budget holds."
+    ]
+  },
+  {
+    "id": "cosign",
+    "lines": [
+      "Next comes a forty-dollar invoice. With just the agent’s signature, the ledger refuses it.",
+      "The designated second signer signs the very same request. Now the request goes through, and forty dollars remain."
+    ]
+  },
+  {
+    "id": "revoke",
+    "lines": [
+      "The owner revokes the mandate. Even a fresh ten-dollar request for an approved supplier fails."
+    ]
+  },
+  {
+    "id": "proof",
+    "lines": [
+      "How can the supplier check that? First, verify both signatures on the forty-dollar request.",
+      "Then follow the record through its proof to the pinned snapshot. It shows the authorization, and a later record shows the revocation."
+    ]
+  },
+  {
+    "id": "tamper",
+    "lines": [
+      "Change the saved balance by one cent. The record no longer matches its proof, and the verifier rejects it."
+    ]
+  },
+  {
+    "id": "close",
+    "lines": [
+      "This demo used one local snapshot source. Independent validator quorum verification is still open.",
+      "The signed request and both checkpoints are in the repository. You can replay the decision yourself."
+    ]
+  }
+]

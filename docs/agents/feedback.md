@@ -52,3 +52,8 @@ scripts, new lint rules, or new items in `process-observations.md`. Newest at th
 
 - Worksheet: docs/worksheets/2026-11-21-mandate-circuit-preview.md
 - Preserve the preceding verified record and signer identities when recording a refused request. They let the supplier reproduce each clause in the pinned JLVM. The receipt gives the ledger verdict and the local replay identifies the failed predicate.
+
+### 2026-11-21 — time circuit captions against generated speech
+
+- Worksheet: docs/worksheets/2026-11-21-mandate-narrated-film.md
+- Render the voice first and derive each cue from its actual PCM length. Transcribing the mixed track caught an ambiguous pronunciation of co-signer. Preserve the dry narration alongside a local review film for future edits.

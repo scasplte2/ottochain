@@ -1,5 +1,7 @@
 # The refused invoice
 
+For the complete narrated film, including voice generation, the timed script and local playback path, see [the walkthrough](film/README.md).
+
 A 20-second Motion Canvas scene for the 0:40–1:00 segment of the mandate film. The invoice, action ordinal and budget come from PR #218’s recorded four-wallet run. The simulated compromised agent is the deterministic signer in that test. In the separate model transcript Qwen declined the disallowed supplier. The clip uses captions, soft gate ticks and a refusal tone. James can record the following pickup against the cut.
 
 | Time | Founder narration |

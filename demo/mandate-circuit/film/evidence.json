@@ -1,0 +1,212 @@
+{
+  "records": {
+    "created": {
+      "ordinal": 101,
+      "checkpoint": 101,
+      "before": 0,
+      "after": 100,
+      "payload": null,
+      "roles": [
+        "owner"
+      ],
+      "clauses": [],
+      "state": "active"
+    },
+    "solo": {
+      "ordinal": 152,
+      "checkpoint": 152,
+      "before": 100,
+      "after": 80,
+      "payload": {
+        "amountCents": 2000,
+        "payee": "supplier-a",
+        "requestNumber": 1
+      },
+      "roles": [
+        "agent"
+      ],
+      "clauses": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "state": "active"
+    },
+    "payee-refused": {
+      "ordinal": 189,
+      "checkpoint": 190,
+      "before": 80,
+      "after": 80,
+      "payload": {
+        "amountCents": 2000,
+        "payee": "other",
+        "requestNumber": 2
+      },
+      "roles": [
+        "agent"
+      ],
+      "clauses": [
+        true,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true
+      ],
+      "state": "active"
+    },
+    "stranger-refused": {
+      "ordinal": 192,
+      "checkpoint": 192,
+      "before": 80,
+      "after": 80,
+      "payload": {
+        "amountCents": 2000,
+        "payee": "supplier-a",
+        "requestNumber": 2
+      },
+      "roles": [
+        "stranger"
+      ],
+      "clauses": [
+        false,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "state": "active"
+    },
+    "cosigner-required": {
+      "ordinal": 196,
+      "checkpoint": 197,
+      "before": 80,
+      "after": 80,
+      "payload": {
+        "amountCents": 4000,
+        "payee": "supplier-a",
+        "requestNumber": 2
+      },
+      "roles": [
+        "agent"
+      ],
+      "clauses": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        false
+      ],
+      "state": "active"
+    },
+    "authorized": {
+      "ordinal": 198,
+      "checkpoint": 199,
+      "before": 80,
+      "after": 40,
+      "payload": {
+        "amountCents": 4000,
+        "payee": "supplier-a",
+        "requestNumber": 2
+      },
+      "roles": [
+        "agent",
+        "cosigner"
+      ],
+      "clauses": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "state": "active"
+    },
+    "revoked": {
+      "ordinal": 227,
+      "checkpoint": 227,
+      "before": 40,
+      "after": 40,
+      "payload": {},
+      "roles": [
+        "owner"
+      ],
+      "clauses": [],
+      "state": "revoked"
+    },
+    "revoked-refusal": {
+      "ordinal": 254,
+      "checkpoint": 254,
+      "before": 40,
+      "after": 40,
+      "payload": {
+        "amountCents": 1000,
+        "payee": "supplier-b",
+        "requestNumber": 3
+      },
+      "roles": [
+        "agent"
+      ],
+      "clauses": [
+        false
+      ],
+      "state": "revoked"
+    }
+  },
+  "decision": [
+    "VERIFIED  Request 2 · supplier-a · $40.00 test authorization",
+    "Agent and co-signer signed identical request bytes",
+    "Committed action at 198 · $40.00 remaining at 199",
+    "Revoked by 227 · $40.00 remaining",
+    "1 ML0 snapshot source · one local operator",
+    "Trusted capture pins · validator threshold unchecked"
+  ],
+  "tamper": [
+    "PASS genuine checkpoint",
+    "REJECT changed record · leaf dataDigest != sha256(JCS(record))",
+    "REJECT expected fiber key · response key 'fiber/fb9388d7-0d1d-4a2b-8cda-46e48fe26021' != expected 'fiber/00000000-0000-0000-0000-000000000000'",
+    "REJECT snapshot identity · Pinned ledger snapshot identity mismatch",
+    "REJECT snapshot bytes · Pinned ledger snapshot identity mismatch",
+    "REJECT ordinal · Record ordinal or root mismatch",
+    "REJECT MPT root · Record ordinal or root mismatch",
+    "REJECT catalog proof key · Catalog attestation failed",
+    "REJECT network · Pinned ledger snapshot identity mismatch",
+    "REJECT changed convenience field"
+  ],
+  "payeeGuard": {
+    "in": [
+      {
+        "var": "event.payee"
+      },
+      {
+        "var": "state.suppliers"
+      }
+    ]
+  },
+  "model": {
+    "name": "qwen-turbo:q6",
+    "ordinal": 271,
+    "after": 80
+  },
+  "suppliers": [
+    "supplier-a",
+    "supplier-b"
+  ],
+  "soloLimit": 25
+}

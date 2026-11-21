@@ -140,7 +140,7 @@ function board(c:C,t:number) {
   text(c,'TERMINAL  /  REPLAY STDOUT',1119,654,17,P.muted,600,true);
   facts.terminal.forEach((line,i)=>{if(t>=[10.4,10.9,15.7][i])text(c,line,1119,692+i*31,22,i===0?P.red:P.green,550,true);});
 }
-function detail(c:C,t:number) {
+function detail(c:C,t:number,clauseText='in ( event.payee, state.suppliers )') {
   const alpha=ramp(t,11.35,.45)*(1-ramp(t,15.35,.65));if(alpha<=0)return;
   c.save();c.globalAlpha=alpha;
   box(c,46,235,1510,385,18,'#17252a',P.pink);
@@ -157,7 +157,7 @@ function detail(c:C,t:number) {
   box(c,1222,454,253,87,12,'#512d2f',P.red);mark(c,1254,498,false,P.red);
   text(c,'FALSE',1280,513,39,P.red,650,true);
   text(c,'definition.json',87,605,21,P.muted,500,true);
-  text(c,'in ( event.payee, state.suppliers )',333,605,23,P.white,500,true);
+  text(c,clauseText,333,605,23,P.white,500,true);
   c.restore();
 }
 function intro(c:C,t:number) {
@@ -186,3 +186,6 @@ export default makeScene2D(function*(view){
   const time=createSignal(0);view.add(new Circuit(time));
   yield* tween(20, value=>time(value*20));
 });
+
+// Shared drawing primitives and the approved refusal sequence used by the full film.
+export {P, box, text, path, circle, light, mark, receiptCard, ramp, board, detail};
