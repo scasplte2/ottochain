@@ -272,7 +272,7 @@ jobs:
           # is not needed — ML0 snapshot consensus is already EventTrigger-driven by DL1 data
           # blocks, so a currency-tx drip would be redundant (and Tessellation's tx mempool does
           # not pipeline unaccepted txs, which deadlocked the drip on Conflict{ordinal}).
-          just up --hypergraph-release="v${{ steps.versions.outputs.tessellation }}" \
+          just up --hypergraph-release="${{ steps.versions.outputs.tess_tag }}" \
             --skip-assembly --metagraph="${GITHUB_WORKSPACE}" --dl1 --data \
             --env="${RUNNER_TEMP}/dl1-extra.env"
 

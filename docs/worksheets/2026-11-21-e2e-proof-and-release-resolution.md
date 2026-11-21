@@ -13,6 +13,8 @@ Repair the published-SDK typecheck and the rule110 JAR download in [main run 449
 ## Verification
 
 - `npm ci` and `npm run typecheck` in `e2e-test` passed.
-- The real Maven POM produced `tessellation=4.0.0` and `tess_tag=v4.0.0-rc.10`. The GitHub release lists cl-node, cl-dag-l1, cl-keytool and cl-wallet JARs.
+- The real Maven POM resolved SDK 4.0.0 to `tess_tag=v4.0.0-rc.10`. The GitHub release lists cl-node, cl-dag-l1, cl-keytool and cl-wallet JARs.
 - Eight isolated resolver cases covered the known mapping, exact override, latest same-series fallback, fallback to a mapped version, missing series, HTTP 403, malformed override and missing POM dependency. Every error left the Actions output file empty.
 - `actionlint -shellcheck= .github/workflows/{e2e,warm-tess-cache}.yml` passed.
+- A passing rule110 job (124100457309) also used rc.10 for compose. Pass the same resolved tag to compose, the cache and the JAR download.
+- Full `bin/preflight` passed all five gates on Euler. Wire-compat review confirmed the SDK export, nullifier proof key and dependency pins agree.
