@@ -74,20 +74,6 @@
             ]
           },
           {
-            "!": [
-              {
-                "has": [
-                  {
-                    "var": "state.spentNullifiers"
-                  },
-                  {
-                    "var": "event.nullifier"
-                  }
-                ]
-              }
-            ]
-          },
-          {
             "===": [
               {
                 "var": "event.message"
@@ -123,17 +109,17 @@
             "var": "state"
           },
           {
-            "spentNullifiers": {
-              "set": [
-                {
-                  "var": "state.spentNullifiers"
-                },
-                {
-                  "var": "event.nullifier"
-                },
-                true
-              ]
-            },
+            "_consumeNullifier": [
+              {
+                "substr": [
+                  {
+                    "var": "event.nullifier"
+                  },
+                  2,
+                  64
+                ]
+              }
+            ],
             "fills": {
               "+": [
                 {

@@ -16,6 +16,8 @@ import xyz.kd5ujc.schema.Updates.OttochainMessage
 import xyz.kd5ujc.schema.api.{CommitIndexResponse, HashResult, VersionInfo}
 import xyz.kd5ujc.schema.{CalculatedState, CommitIndex, OnChain}
 
+import monocle.Monocle.toAppliedFocusOps
+
 /** Service meta + raw-state logic: version info, message hashing, on-chain + calculated state. */
 class MetaHandler[F[_]: Async](
   checkpointService: CheckpointService[F, CalculatedState]
@@ -47,7 +49,7 @@ class MetaHandler[F[_]: Async](
       // /v1/checkpoint is the only whole-state JSON serialization surface, so the set is EXCLUDED here — a
       // handler-level slim ONLY (the canonical encoder / committed hashing paths are untouched). Nullifier
       // reads are served by the dedicated GET /v1/nullifiers/{domain}/{nf} route + committed state proofs.
-      cp.copy(state = cp.state.copy(nullifiers = SortedMap.empty)).asRight[DataApplicationValidationError]
+      cp.focus(_.state.nullifiers).replace(SortedMap.empty).asRight[DataApplicationValidationError]
     }
 
   /**
