@@ -10,7 +10,8 @@ import '@fontsource/jetbrains-mono/400.css';
 import '@fontsource/jetbrains-mono/700.css';
 import '@fontsource/jetbrains-mono/800.css';
 import {Renderer, Vector2} from '@motion-canvas/core';
-import project from './project?project';
+const vertical = location.search.includes('vertical');
+const project = (vertical ? await import('./project-vertical?project') : await import('./project?project')).default;
 window.exportScene = async function (seconds, fps, from = 0) {
   for (const w of [400, 500, 600, 700, 800, 900]) await document.fonts.load(`${w} 40px Inter`);
   for (const w of [400, 700, 800]) await document.fonts.load(`${w} 20px "JetBrains Mono"`);
@@ -23,7 +24,7 @@ window.exportScene = async function (seconds, fps, from = 0) {
   const renderer = new Renderer(project);
   let result;
   renderer.onFinished.subscribe(v => (result = v));
-  await renderer.render({name: 'film', range: [from, from + seconds - 1 / fps], fps, size: new Vector2(1920, 1080),
+  await renderer.render({name: 'film', range: [from, from + seconds - 1 / fps], fps, size: vertical ? new Vector2(1080, 1920) : new Vector2(1920, 1080),
     resolutionScale: 1, colorSpace: 'srgb', background: '#050b17', exporter: {name: 'video-pipe'}});
   return result;
 };

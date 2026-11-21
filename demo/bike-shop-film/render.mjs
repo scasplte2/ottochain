@@ -33,7 +33,7 @@ try {
     await new Promise((res, rej) => encoder.stdin.write(Buffer.from(image.split(',')[1], 'base64'), e => (e ? rej(e) : res())));
     if (count % 60 === 0) process.stdout.write(`\rframe ${count}`);
   });
-  await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/export.html`);
+  await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/export.html${process.env.VERTICAL ? '?vertical' : ''}`);
   await page.waitForFunction(() => typeof window.exportScene === 'function', null, {timeout: 60000});
   const result = await page.evaluate(async ([s, f, a]) => await window.exportScene(s, f, a), [seconds, fps, Number(fromArg)]);
   assert.equal(result, 0, 'Motion Canvas export failed');

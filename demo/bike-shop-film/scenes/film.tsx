@@ -639,42 +639,80 @@ function ottoHalo(c: C, t: number) {
   }
 }
 
-// ── the board ──────────────────────────────────────────────────────────────────────────────────
+// ── frame composition (shared by the Motion Canvas scene, the vertical cut and the web board) ──
+/** Everything in world space (the caller applies the camera). */
+export function drawWorld(c: C, t: number) {
+  ledger(c, t);
+  shop(c, t);
+  stakesWorld(c, t);
+  registry(c, t);
+  rosa(c, t);
+  wallet(c, t);
+  desk(c, t);
+  trade(c, t);
+  verifier(c, t);
+  mandate(c, t);
+  agentLane(c, t);
+}
+
+/** One full 1920×1080 frame with the origin at the top-left. `otto` draws the guide when no Img node does. */
+export function drawFrame(c: C, t: number, opts: {otto?: HTMLImageElement; captions?: boolean} = {}) {
+  c.save();
+  background(c, W, H, t);
+  const cam = camera(t);
+  let shake = 0;
+  for (const at of [L('poisoned', 4), LF('verify', 2, 0.45)]) if (t > at && t < at + 0.4) shake = Math.sin((t - at) * 70) * 6 * (1 - (t - at) / 0.4);
+  c.save();
+  c.translate(W / 2 + shake, H / 2);
+  c.scale(cam.z, cam.z);
+  c.translate(-cam.cx, -cam.cy);
+  drawWorld(c, t);
+  c.restore();
+  hud(c, t);
+  questionHud(c, t);
+  climax(c, t);
+  closeCard(c, t);
+  if (opts.captions !== false) captions(c, t);
+  ottoHalo(c, t);
+  if (opts.otto && opts.otto.complete) {
+    const o = ottoState(t);
+    if (o.a > 0) {
+      const r = 122 * o.s * (0.9 + 0.1 * easeOutBack(clamp(o.a)));
+      c.save(); c.globalAlpha = o.a; c.beginPath(); c.arc(o.x, o.y, r, 0, Math.PI * 2); c.clip();
+      c.drawImage(opts.otto, o.x - r, o.y - r, 2 * r, 2 * r); c.restore();
+    }
+  }
+  coldOpen(c, t);
+  c.restore();
+}
+
+/** All narration lines on the main timeline (for re-cut captions). */
+export function filmLines() { return timing.acts.flatMap(a => a.lines); }
+
+// ── 60-second vertical cut: an edit decision list over the main timeline ──────────────────────
+export type Segment = {id: string; from: number; to: number; start: number; cam: [number, number, number]; climax?: number};
+const RAW: Omit<Segment, 'start'>[] = [
+  {id: 'scene', from: S('scene') - 0.2, to: LE('scene', 3) + 0.5, cam: [760, 560, 0.7]},
+  {id: 'mandate', from: L('mandate', 1) - 0.4, to: LE('mandate', 1) + 0.5, cam: [2230, 1010, 0.98]},
+  {id: 'poisoned', from: L('poisoned', 0) - 0.3, to: LE('poisoned', 5) + 1.4, cam: [2060, 1010, 0.9], climax: L('poisoned', 5) - 0.2},
+  {id: 'verify', from: L('verify', 1) - 0.3, to: LE('verify', 2) + 0.7, cam: [3260, 1540, 1.3]},
+  {id: 'close', from: L('close', 1) - 0.4, to: E('close'), cam: [1870, 1060, 0.5]},
+];
+export const EDL: Segment[] = (() => {
+  let acc = 0;
+  return RAW.map(r => { const seg = {...r, start: acc}; acc += r.to - r.from; return seg; });
+})();
+export const VERTICAL_DURATION = EDL.reduce((a, s) => a + (s.to - s.from), 0);
+export function segmentAt(v: number): Segment {
+  return [...EDL].reverse().find(s => v >= s.start) ?? EDL[0];
+}
+
 class Board extends Node {
   constructor(private readonly time: () => number) { super({}); }
   protected draw(c: C) {
-    const t = this.time();
     c.save();
     c.translate(-W / 2, -H / 2);
-    background(c, W, H, t);
-    const cam = camera(t);
-    const shake = (() => {
-      for (const at of [L('poisoned', 4), LF('verify', 2, 0.45)]) if (t > at && t < at + 0.4) return Math.sin((t - at) * 70) * 6 * (1 - (t - at) / 0.4);
-      return 0;
-    })();
-    c.save();
-    c.translate(W / 2 + shake, H / 2);
-    c.scale(cam.z, cam.z);
-    c.translate(-cam.cx, -cam.cy);
-    ledger(c, t);
-    shop(c, t);
-    stakesWorld(c, t);
-    registry(c, t);
-    rosa(c, t);
-    wallet(c, t);
-    desk(c, t);
-    trade(c, t);
-    verifier(c, t);
-    mandate(c, t);
-    agentLane(c, t);
-    c.restore();
-    hud(c, t);
-    questionHud(c, t);
-    climax(c, t);
-    closeCard(c, t);
-    captions(c, t);
-    ottoHalo(c, t);
-    coldOpen(c, t);
+    drawFrame(c, this.time());
     c.restore();
   }
 }
