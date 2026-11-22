@@ -371,7 +371,7 @@ export function caption(c: C, s: string, w: number, h: number, alpha: number) {
   c.save();
   c.globalAlpha = alpha;
   roundRect(c, w / 2 - tw / 2 - 28, h - 58 - bh, tw + 56, bh, 14);
-  c.fillStyle = 'rgba(4,10,22,0.74)';
+  c.fillStyle = 'rgba(4,10,22,0.92)';
   c.fill();
   c.restore();
   lines.forEach((l, i) => text(c, l, w / 2, h - 58 - bh + 46 + i * 46, size, {weight: 600, align: 'center', alpha}));

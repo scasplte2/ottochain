@@ -18,9 +18,9 @@ James Aman's voice with his recorded consent.
 | 1. Record | `runner.ts --target local --only bike-shop --wallets maya,agent,spoke,guild,rosa --parallel false` with `e2e-test/examples/bike-shop/record.ts` running alongside | gap-free snapshot timeline (kept outside the repo; ~38 MB) |
 | 2. Capture proofs | `examples/agent-mandate/verify-mandate.ts capture …` per fiber, while the chain is live | `e2e-test/examples/bike-shop/evidence/*.bundle.json` |
 | 3. Derive | `node derive.mjs <timeline.jsonl>` (per-clause JLVM replay of the poisoned invoice must agree with the ledger) | `film-data.json` |
-| 4. Narrate | `<voxcpm-venv>/bin/python narrate.py script.json output/voice <ref.wav> <ref-transcript.txt>` then `asr_check.py` | `output/voice/narration.wav`, `timing.json` |
-| 5. Sound | `node sfx-film.mjs output/film-sfx.wav`, mix with the narration (see worksheet) | `output/film-mix.wav` |
-| 6. Film | `node render.mjs output/film.mp4 187 30 output/film-mix.wav` | 1920×1080 |
+| 4. Narrate | `<voxcpm-venv>/bin/python narrate_acts.py script.json output/voice-v4 <ref.wav> <ref-transcript.txt> --takes 3` (one pass per act), `<whisper-venv>/bin/python select_takes.py script.json output/voice-v4` (smoothest take per act), `<voxcpm-venv>/bin/python assemble.py script.json output/voice-v4`, then `select_takes.py … --check` (pause gate); copy `output/voice-v4/timing.json` to `timing.json` | `output/voice-v4/narration.wav`, `timing.json` |
+| 5. Sound | `node sfx-film.mjs output/film-sfx.wav`, then `ffmpeg -i <narration.wav> -i output/film-sfx.wav -filter_complex "[0:a]loudnorm=I=-16:TP=-1.5:LRA=9,aresample=48000,pan=stereo\|c0=c0\|c1=c0[v];[1:a]volume=0.55[s];[v][s]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.89[a]" -map "[a]" -ar 48000 output/film-mix.wav` | `output/film-mix.wav` |
+| 6. Film | `node render.mjs output/film.mp4 <timing.json duration> 30 output/film-mix.wav` | 1920×1080 |
 | 7. Vertical | `node cut.mjs output/film-mix.wav output/vertical-mix.wav` then `VERTICAL=1 node render.mjs output/vertical.mp4 <dur> 30 output/vertical-mix.wav` | 1080×1920 |
 | 8. Board | `ffmpeg -i output/film-mix.wav -c:a aac output/film-mix.m4a && npx vite build --config vite.board.config.ts` | `dist/board/` (static) |
 

@@ -121,18 +121,33 @@ Flight recorder: poll ML0 each snapshot during the run → evidence/timeline.jso
 - Known polish items: in the poisoned framing the $500 invoice sits over Rosa's name tag; record.ts doesn't
   stop on SIGTERM through the tsx wrapper (stop the child PID).
 
+- Evening — Narration v4 (final). Line-by-line generation left mid-phrase pauses and read as written
+  prose; James flagged hiccups at ~0:24/~0:53. Pipeline now: `narrate_acts.py` (one VoxCPM2 pass per act,
+  3 takes) → `select_takes.py` (Whisper words aligned to the script; pauses scored by script punctuation;
+  smoothest take wins) → `assemble.py` (tighten over-long pauses, level each act, per-line timings) →
+  `select_takes.py --check` (GATE PASS, 12/12 acts). Script rewritten conversationally on James's note
+  (contractions, no spoken colons or slogan fragments, same lines per act so every cue still lands);
+  close now bridges verify → shop → thesis; verify restates the second question. Cue check: the word
+  under every mid-line `LF()` cue is the same or equivalent to v3's. 190.8 s; vertical 64.9 s.
+  Caption box opacity 0.74 → 0.92 (board detail showed through, pre-existing). Trial scripts
+  (`narrate.py`, `asr_check.py`, `smooth.py`, `pause_check.py`, `voice_audit.py`) and trial outputs removed.
+- Deliverables (local, gitignored): demo/bike-shop-film/output/{ottochain-bike-shop-v2.mp4,
+  ottochain-bike-shop-v2-share.mp4, ottochain-bike-shop-vertical-v2.mp4, thumbnail.png}, dist/board/.
+
 ## Next
-1. James reviews the full film, vertical cut and board.
-2. Cluster baseline (zk-eligibility, riverdale-economy, agent-mandate) then the `bike-shop` example run.
-3. Voice A/B: VoxCPM2 vs Qwen3-TTS vs Ming-3.0 on the same 20–30 s slice + paragraph.
+1. James uploads the v2 film; merge of PR #224 is James's.
 
 ## Blockers
-- Voice reference recording from James (needed only at narration stage).
+- None.
 
 ## PR / watch
-- [ ] PR opened: #___
-- [ ] `bin/pr-watch <pr#>` exited 0
+- [x] PR opened: #224
+- [ ] `bin/pr-watch 224` exited 0 after the narration-v4 commit
 - Agents never merge — merge is James's.
 
-## Cleanup ledger (task-owned resources to remove at the end)
-- (none yet)
+## Cleanup ledger (task-owned resources)
+- Removed: devnet containers/image, tessellation clone, Ming/Qwen venvs, trial narration runs v1–v3 and
+  previews, v1 renders (~16 GB total).
+- Kept: ~/voice-lab/{venv-voxcpm,venv-whisper,ref,ab} (voice clone + reference, needed to regenerate);
+  ~/devnets/bike-shop/evidence-raw/timeline-run3.jsonl.gz + reset.sh (re-derive input);
+  demo/bike-shop-film/output/voice-v4 (selected takes + timing, the source of the final mix).
