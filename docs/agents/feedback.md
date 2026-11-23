@@ -73,3 +73,10 @@ scripts, new lint rules, or new items in `process-observations.md`. Newest at th
 - The runner confirmed Fractionalize/Compose on ML0 but raced DL1's commit index (AssetNotFound on the next morphism). It now gates on DL1 ingesting morphism-created assets — reuse that for any consuming morphism.
 - tessellation's `just up` runs install_dependencies.sh, which appends to ~/.bashrc and installs nvm; call `docker/bin/compose-runner.sh --up …` directly. Its cleanup script removes generic container names and the shared `tessellation_common` network — remove task containers by exact name instead (see ~/devnets reset script pattern in the worksheet).
 - Walk snapshots by ordinal for evidence (`latestLogs` clears each snapshot) and expect each request twice (fan-out to 3 DL1s → a graceful duplicate rejection one ordinal later); use the first applied ordinal.
+
+### 2026-11-21 — fix a narration script's register before tuning its audio
+
+- Worksheet: docs/worksheets/2026-11-21-bike-shop-film.md
+- Three rounds of pause detection, smoothing and take selection on the cloned voice did not fix narration the reviewer called unnatural. Rewriting the script in a spoken register fixed it on the first generation: contractions, no colons read aloud, no slogan fragments, bridges between acts, and callbacks that restate what they refer to.
+- When rewording narration, keep the number of lines per act. Film cues are line fractions (`LF()`), so a fixed line structure keeps every cue on the same or an equivalent word. Check by listing the word spoken at each cue before and after the change.
+- A wait loop that ran `pgrep -f "<job cmdline>"` matched its own shell and never finished. Background the job itself, or match on a PID.
