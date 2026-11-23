@@ -1,0 +1,234 @@
+{
+  "states": {
+    "open": {
+      "id": "open",
+      "isFinal": false
+    }
+  },
+  "initialState": "open",
+  "transitions": [
+    {
+      "from": "open",
+      "to": "open",
+      "eventName": "receive_order",
+      "guard": {
+        "and": [
+          {
+            "!==": [
+              {
+                "var": "$caller"
+              },
+              null
+            ]
+          },
+          {
+            "===": [
+              {
+                "var": "$caller"
+              },
+              {
+                "var": "event.mandateId"
+              }
+            ]
+          }
+        ]
+      },
+      "effect": {
+        "ordersReceived": {
+          "+": [
+            {
+              "var": "state.ordersReceived"
+            },
+            1
+          ]
+        },
+        "lastOrder": {
+          "mandateId": {
+            "var": "event.mandateId"
+          },
+          "requestNumber": {
+            "var": "event.requestNumber"
+          },
+          "item": {
+            "var": "event.item"
+          },
+          "amountCents": {
+            "var": "event.amountCents"
+          },
+          "creditId": {
+            "var": "event.creditId"
+          },
+          "deliveryId": {
+            "var": "event.deliveryId"
+          },
+          "shipTo": {
+            "var": "event.shipTo"
+          },
+          "ordinal": {
+            "var": "$ordinal"
+          }
+        }
+      },
+      "dependencies": []
+    },
+    {
+      "from": "open",
+      "to": "open",
+      "eventName": "dispatch",
+      "guard": {
+        "and": [
+          {
+            "in": [
+              {
+                "var": "state.supplier"
+              },
+              {
+                "map": [
+                  {
+                    "var": "proofs"
+                  },
+                  {
+                    "var": "address"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "===": [
+              {
+                "var": "event.deliveryId"
+              },
+              {
+                "var": "state.lastOrder.deliveryId"
+              }
+            ]
+          },
+          {
+            "===": [
+              {
+                "var": {
+                  "cat": [
+                    "heldAssets.",
+                    {
+                      "var": "state.lastOrder.creditId"
+                    },
+                    ".amount"
+                  ]
+                }
+              },
+              {
+                "var": "state.lastOrder.amountCents"
+              }
+            ]
+          }
+        ]
+      },
+      "effect": {
+        "dispatched": {
+          "+": [
+            {
+              "var": "state.dispatched"
+            },
+            1
+          ]
+        },
+        "_transferAsset": [
+          {
+            "assetId": {
+              "var": "event.goodsId"
+            },
+            "recipient": {
+              "Wallet": {
+                "address": {
+                  "var": "state.lastOrder.shipTo"
+                }
+              }
+            }
+          }
+        ],
+        "_spawn": [
+          {
+            "childId": {
+              "var": "event.deliveryId"
+            },
+            "definition": {
+              "states": {
+                "in_transit": {
+                  "id": "in_transit",
+                  "isFinal": false
+                },
+                "delivered": {
+                  "id": "delivered",
+                  "isFinal": true
+                }
+              },
+              "initialState": "in_transit",
+              "transitions": [
+                {
+                  "from": "in_transit",
+                  "to": "delivered",
+                  "eventName": "deliver",
+                  "guard": {
+                    "in": [
+                      {
+                        "var": "state.supplier"
+                      },
+                      {
+                        "map": [
+                          {
+                            "var": "proofs"
+                          },
+                          {
+                            "var": "address"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "effect": {
+                    "deliveredAt": {
+                      "var": "$ordinal"
+                    },
+                    "_triggers": [
+                      {
+                        "targetMachineId": {
+                          "var": "state.mandateId"
+                        },
+                        "eventName": "delivery_received",
+                        "payload": {
+                          "requestNumber": {
+                            "var": "state.requestNumber"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "dependencies": []
+                }
+              ]
+            },
+            "initialData": {
+              "orderDesk": {
+                "var": "machineId"
+              },
+              "mandateId": {
+                "var": "state.lastOrder.mandateId"
+              },
+              "requestNumber": {
+                "var": "state.lastOrder.requestNumber"
+              },
+              "item": {
+                "var": "state.lastOrder.item"
+              },
+              "supplier": {
+                "var": "state.supplier"
+              }
+            }
+          }
+        ]
+      },
+      "dependencies": []
+    }
+  ]
+}

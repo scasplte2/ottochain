@@ -1,0 +1,164 @@
+{
+  "stateMessage": {
+    "typeName": "PurchasingMandate",
+    "fields": [
+      {
+        "name": "owner",
+        "number": 1,
+        "typeName": "string",
+        "repeated": false,
+        "optional": false
+      },
+      {
+        "name": "agent",
+        "number": 2,
+        "typeName": "string",
+        "repeated": false,
+        "optional": false
+      },
+      {
+        "name": "approvedSuppliers",
+        "number": 3,
+        "typeName": "string",
+        "repeated": true,
+        "optional": false
+      },
+      {
+        "name": "perOrderLimitCents",
+        "number": 4,
+        "typeName": "int64",
+        "repeated": false,
+        "optional": false
+      },
+      {
+        "name": "remainingCents",
+        "number": 5,
+        "typeName": "int64",
+        "repeated": false,
+        "optional": false
+      },
+      {
+        "name": "expiresAt",
+        "number": 6,
+        "typeName": "int64",
+        "repeated": false,
+        "optional": false
+      },
+      {
+        "name": "lastRequestNumber",
+        "number": 7,
+        "typeName": "int64",
+        "repeated": false,
+        "optional": false
+      },
+      {
+        "name": "openOrder",
+        "number": 8,
+        "typeName": "OpenOrder",
+        "repeated": false,
+        "optional": true
+      },
+      {
+        "name": "lastDelivery",
+        "number": 9,
+        "typeName": "LastDelivery",
+        "repeated": false,
+        "optional": true
+      },
+      {
+        "name": "revokedAt",
+        "number": 10,
+        "typeName": "int64",
+        "repeated": false,
+        "optional": true
+      },
+      {
+        "name": "pausedAt",
+        "number": 11,
+        "typeName": "int64",
+        "repeated": false,
+        "optional": true
+      },
+      {
+        "name": "resumedAt",
+        "number": 12,
+        "typeName": "int64",
+        "repeated": false,
+        "optional": true
+      }
+    ]
+  },
+  "commands": {
+    "authorize": {
+      "typeName": "Authorize",
+      "fields": [
+        {
+          "name": "requestNumber",
+          "number": 1,
+          "typeName": "int64",
+          "repeated": false,
+          "optional": false
+        },
+        {
+          "name": "amountCents",
+          "number": 2,
+          "typeName": "int64",
+          "repeated": false,
+          "optional": false
+        },
+        {
+          "name": "payee",
+          "number": 3,
+          "typeName": "string",
+          "repeated": false,
+          "optional": false
+        },
+        {
+          "name": "creditId",
+          "number": 4,
+          "typeName": "string",
+          "repeated": false,
+          "optional": false
+        },
+        {
+          "name": "deliveryId",
+          "number": 5,
+          "typeName": "string",
+          "repeated": false,
+          "optional": false
+        },
+        {
+          "name": "item",
+          "number": 6,
+          "typeName": "string",
+          "repeated": false,
+          "optional": false
+        }
+      ]
+    },
+    "delivery_received": {
+      "typeName": "DeliveryReceived",
+      "fields": [
+        {
+          "name": "requestNumber",
+          "number": 1,
+          "typeName": "int64",
+          "repeated": false,
+          "optional": true
+        }
+      ]
+    },
+    "revoke": {
+      "typeName": "Revoke",
+      "fields": []
+    },
+    "pause": {
+      "typeName": "Pause",
+      "fields": []
+    },
+    "resume": {
+      "typeName": "Resume",
+      "fields": []
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "name": "warranty.asset",
+  "version": "1.0.0",
+  "behavior": 0,
+  "supply": {
+    "mintPolicy": {
+      "==": [
+        1,
+        1
+      ]
+    },
+    "burnPolicy": {
+      "==": [
+        1,
+        1
+      ]
+    }
+  },
+  "morphisms": {
+    "BURN": {
+      "visibility": "PUBLIC"
+    }
+  },
+  "stateShape": {
+    "typeName": "Warranty",
+    "fields": []
+  }
+}

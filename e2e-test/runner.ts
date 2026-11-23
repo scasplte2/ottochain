@@ -1100,6 +1100,7 @@ async function runFlow(
         let assetMsg: unknown;
         let morphismKind: string | undefined;
         let fracFirstShard: string | undefined;
+        let producedIds: string[] = [];
         if (step.action === 'createAssetPolicy') {
           const policy = (await loadFileOrModule(path.join(examplesDir, example.dir, step.policy!), loadContext)) as Record<string, unknown>;
           const lib = await import('./lib/asset/createAssetPolicy.ts');
@@ -1114,6 +1115,9 @@ async function runFlow(
           assetId = (morphism.assetId as string) ?? assetId;
           morphismKind = String(morphism.kind ?? '').toUpperCase();
           fracFirstShard = Array.isArray(morphism.shardIds) ? String((morphism.shardIds as unknown[])[0]) : undefined;
+          // Assets a morphism CREATES (Fractionalize shards, a Compose composite) — gated on DL1 below.
+          producedIds = [...(Array.isArray(morphism.shardIds) ? (morphism.shardIds as unknown[]).map(String) : []),
+            ...(morphism.compositeId ? [String(morphism.compositeId)] : [])];
           // Morphisms are sequenced by (assetId, targetSequenceNumber): target the asset's current seq.
           // Raw read by design (as are the other `assets/{id}/state-proof` reads in this asset block):
           // the whole `AssetRecord` is pulled from a FIELD-LESS state-proof, but the typed
@@ -1129,10 +1133,10 @@ async function runFlow(
         }
 
         // Consuming morphisms REMOVE the source record, so they can't be confirmed by a source-seq
-        // advance: FRACTIONALIZE confirms via the first output shard's EXISTENCE; BURN/DECOMPOSE via the
+        // advance: FRACTIONALIZE confirms via the first output shard's EXISTENCE; BURN/DECOMPOSE/COMPOSE via the
         // source's ABSENCE (handled below). Non-consuming (Stake/Transfer/Wrap) keep seq-advance.
         const fractionalize = step.action === 'applyMorphism' && morphismKind === 'FRACTIONALIZE';
-        const burnAbsence = step.action === 'applyMorphism' && (morphismKind === 'BURN' || morphismKind === 'DECOMPOSE');
+        const burnAbsence = step.action === 'applyMorphism' && (morphismKind === 'BURN' || morphismKind === 'DECOMPOSE' || morphismKind === 'COMPOSE');
         const policyName = step.name as string | undefined;
         const confirmPath =
           step.action === 'createAssetPolicy'
@@ -1208,6 +1212,10 @@ async function runFlow(
           }
           if (!gone) { sw(' ✗\n'); throw new Error(`ML0 confirmation failed for ${step.action} (${assetId}): source still present (not removed)`); }
           sw(' ✓\n');
+          // A COMPOSE also CREATES the composite: gate on DL1 ingesting it before a follow-up morphism.
+          for (const produced of producedIds) {
+            await waitForDl1AssetSync(dl1Urls, produced, maxRetries, retryDelayMs, `${step.action} ${produced}`, slog);
+          }
           sl(' \x1b[32mOK\x1b[0m');
           return;
         }
@@ -1235,6 +1243,11 @@ async function runFlow(
         // and would 400 "unknown asset" if it raced ahead of the mint's ML0→GL0→DL1 propagation.
         if (step.action === 'mintAsset' && assetId) {
           await waitForDl1AssetSync(dl1Urls, assetId, maxRetries, retryDelayMs, `${step.action} ${assetId}`, slog);
+        }
+        // Same race for assets a morphism CREATES: a Transfer of a fresh shard (or composite) right after the
+        // Fractionalize (or Compose) reaches DL1 before the new assetCommit and is rejected AssetNotFound.
+        for (const produced of producedIds) {
+          await waitForDl1AssetSync(dl1Urls, produced, maxRetries, retryDelayMs, `${step.action} ${produced}`, slog);
         }
         sl(' \x1b[32mOK\x1b[0m');
         return;

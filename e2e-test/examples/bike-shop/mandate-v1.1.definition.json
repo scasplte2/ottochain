@@ -1,0 +1,356 @@
+{
+  "states": {
+    "active": {
+      "id": "active",
+      "isFinal": false
+    },
+    "revoked": {
+      "id": "revoked",
+      "isFinal": false
+    },
+    "paused": {
+      "id": "paused",
+      "isFinal": false
+    }
+  },
+  "initialState": "active",
+  "transitions": [
+    {
+      "from": "active",
+      "to": "active",
+      "eventName": "authorize",
+      "guard": {
+        "and": [
+          {
+            "in": [
+              {
+                "var": "state.agent"
+              },
+              {
+                "map": [
+                  {
+                    "var": "proofs"
+                  },
+                  {
+                    "var": "address"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "===": [
+              {
+                "typeof": [
+                  {
+                    "var": "event.amountCents"
+                  }
+                ]
+              },
+              "int"
+            ]
+          },
+          {
+            ">": [
+              {
+                "var": "event.amountCents"
+              },
+              0
+            ]
+          },
+          {
+            "<=": [
+              {
+                "var": "event.amountCents"
+              },
+              {
+                "var": "state.perOrderLimitCents"
+              }
+            ]
+          },
+          {
+            "<=": [
+              {
+                "var": "event.amountCents"
+              },
+              {
+                "var": "state.remainingCents"
+              }
+            ]
+          },
+          {
+            "in": [
+              {
+                "var": "event.payee"
+              },
+              {
+                "var": "state.approvedSuppliers"
+              }
+            ]
+          },
+          {
+            "<": [
+              {
+                "var": "$ordinal"
+              },
+              {
+                "var": "state.expiresAt"
+              }
+            ]
+          },
+          {
+            "===": [
+              {
+                "var": "event.requestNumber"
+              },
+              {
+                "+": [
+                  {
+                    "var": "state.lastRequestNumber"
+                  },
+                  1
+                ]
+              }
+            ]
+          },
+          {
+            "===": [
+              {
+                "var": {
+                  "cat": [
+                    "heldAssets.",
+                    {
+                      "var": "event.creditId"
+                    },
+                    ".amount"
+                  ]
+                }
+              },
+              {
+                "var": "event.amountCents"
+              }
+            ]
+          }
+        ]
+      },
+      "effect": {
+        "remainingCents": {
+          "-": [
+            {
+              "var": "state.remainingCents"
+            },
+            {
+              "var": "event.amountCents"
+            }
+          ]
+        },
+        "lastRequestNumber": {
+          "var": "event.requestNumber"
+        },
+        "openOrder": {
+          "requestNumber": {
+            "var": "event.requestNumber"
+          },
+          "payee": {
+            "var": "event.payee"
+          },
+          "item": {
+            "var": "event.item"
+          },
+          "amountCents": {
+            "var": "event.amountCents"
+          },
+          "creditId": {
+            "var": "event.creditId"
+          },
+          "deliveryId": {
+            "var": "event.deliveryId"
+          },
+          "signers": {
+            "map": [
+              {
+                "var": "proofs"
+              },
+              {
+                "var": "address"
+              }
+            ]
+          },
+          "ordinal": {
+            "var": "$ordinal"
+          }
+        },
+        "_transferAsset": [
+          {
+            "assetId": {
+              "var": "event.creditId"
+            },
+            "recipient": {
+              "Fiber": {
+                "fiberId": {
+                  "var": "event.payee"
+                }
+              }
+            }
+          }
+        ],
+        "_triggers": [
+          {
+            "targetMachineId": {
+              "var": "event.payee"
+            },
+            "eventName": "receive_order",
+            "payload": {
+              "mandateId": {
+                "var": "machineId"
+              },
+              "requestNumber": {
+                "var": "event.requestNumber"
+              },
+              "item": {
+                "var": "event.item"
+              },
+              "amountCents": {
+                "var": "event.amountCents"
+              },
+              "creditId": {
+                "var": "event.creditId"
+              },
+              "deliveryId": {
+                "var": "event.deliveryId"
+              },
+              "shipTo": {
+                "var": "state.owner"
+              }
+            }
+          }
+        ]
+      },
+      "dependencies": []
+    },
+    {
+      "from": "active",
+      "to": "active",
+      "eventName": "delivery_received",
+      "guard": {
+        "===": [
+          {
+            "var": "$caller"
+          },
+          {
+            "var": "state.openOrder.deliveryId"
+          }
+        ]
+      },
+      "effect": {
+        "lastDelivery": {
+          "requestNumber": {
+            "var": "state.openOrder.requestNumber"
+          },
+          "item": {
+            "var": "state.openOrder.item"
+          },
+          "deliveryId": {
+            "var": "$caller"
+          },
+          "ordinal": {
+            "var": "$ordinal"
+          }
+        }
+      },
+      "dependencies": []
+    },
+    {
+      "from": "active",
+      "to": "revoked",
+      "eventName": "revoke",
+      "guard": {
+        "in": [
+          {
+            "var": "state.owner"
+          },
+          {
+            "map": [
+              {
+                "var": "proofs"
+              },
+              {
+                "var": "address"
+              }
+            ]
+          }
+        ]
+      },
+      "effect": {
+        "revokedAt": {
+          "var": "$ordinal"
+        }
+      },
+      "dependencies": []
+    },
+    {
+      "from": "revoked",
+      "to": "revoked",
+      "eventName": "authorize",
+      "guard": false,
+      "effect": {},
+      "dependencies": []
+    },
+    {
+      "from": "active",
+      "to": "paused",
+      "eventName": "pause",
+      "guard": {
+        "in": [
+          {
+            "var": "state.owner"
+          },
+          {
+            "map": [
+              {
+                "var": "proofs"
+              },
+              {
+                "var": "address"
+              }
+            ]
+          }
+        ]
+      },
+      "effect": {
+        "pausedAt": {
+          "var": "$ordinal"
+        }
+      },
+      "dependencies": []
+    },
+    {
+      "from": "paused",
+      "to": "active",
+      "eventName": "resume",
+      "guard": {
+        "in": [
+          {
+            "var": "state.owner"
+          },
+          {
+            "map": [
+              {
+                "var": "proofs"
+              },
+              {
+                "var": "address"
+              }
+            ]
+          }
+        ]
+      },
+      "effect": {
+        "resumedAt": {
+          "var": "$ordinal"
+        }
+      },
+      "dependencies": []
+    }
+  ]
+}
